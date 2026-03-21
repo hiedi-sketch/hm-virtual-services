@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useGetDashboard, useCreateTask, useListClients, useListInvoices, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatCurrency } from "@/lib/utils";
-import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check } from "lucide-react";
+import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check, Calendar, TriangleAlert } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const quickTaskSchema = z.object({
@@ -58,6 +58,7 @@ export default function Dashboard() {
   const [editingGoals, setEditingGoals] = useState(false);
   const [draftIncome, setDraftIncome] = useState("");
   const [draftClients, setDraftClients] = useState("");
+  const [overdueDismissed, setOverdueDismissed] = useState(false);
 
   const openGoalEdit = () => {
     setDraftIncome(String(goals.incomeGoal));
@@ -126,12 +127,51 @@ export default function Dashboard() {
   const incomeGoalMet = totalPaid >= goals.incomeGoal && goals.incomeGoal > 0;
   const clientGoalMet = totalClients >= goals.clientGoal && goals.clientGoal > 0;
 
+  // Invoice date buckets — compare as local date strings (YYYY-MM-DD)
+  const todayStr = new Date().toLocaleDateString("sv-SE"); // "sv-SE" gives YYYY-MM-DD
+  const in7Days = new Date();
+  in7Days.setDate(in7Days.getDate() + 7);
+  const in7DaysStr = in7Days.toLocaleDateString("sv-SE");
+
+  const clientMap = Object.fromEntries((clients ?? []).map(c => [c.id, c.name]));
+
+  const overdueInvoices = invoices.filter(
+    i => i.status === "unpaid" && i.due_date < todayStr
+  );
+  const upcomingInvoices = invoices.filter(
+    i => i.status === "unpaid" && i.due_date >= todayStr && i.due_date <= in7DaysStr
+  ).sort((a, b) => a.due_date.localeCompare(b.due_date));
+
+  const overdueTotal = overdueInvoices.reduce((s, i) => s + i.amount, 0);
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-display font-bold text-slate-900">Dashboard</h1>
         <p className="text-slate-500 mt-1">Here's an overview of your business this month.</p>
       </div>
+
+      {/* Overdue banner */}
+      {overdueInvoices.length > 0 && !overdueDismissed && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+          <TriangleAlert className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-700">
+              {overdueInvoices.length} overdue invoice{overdueInvoices.length !== 1 ? "s" : ""} — {formatCurrency(overdueTotal)} outstanding
+            </p>
+            <p className="text-xs text-red-500 mt-0.5">
+              {overdueInvoices.map(i => clientMap[i.client_id] ?? `Client #${i.client_id}`).join(", ")}
+            </p>
+          </div>
+          <button
+            onClick={() => setOverdueDismissed(true)}
+            className="shrink-0 text-red-300 hover:text-red-500 transition-colors"
+            aria-label="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -205,6 +245,56 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Upcoming due invoices */}
+      {upcomingInvoices.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
+            <Calendar className="w-4 h-4 text-amber-500" />
+            <h2 className="font-semibold text-slate-900 text-sm">Due in the next 7 days</h2>
+            <span className="ml-auto text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+              {upcomingInvoices.length} invoice{upcomingInvoices.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <ul className="divide-y divide-slate-50">
+            {upcomingInvoices.map(inv => {
+              const dueDate = new Date(inv.due_date + "T00:00:00");
+              const diffDays = Math.round((dueDate.getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+              const dueSoon = diffDays <= 2;
+              return (
+                <li key={inv.id} className="flex items-center gap-3 px-5 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">
+                      {clientMap[inv.client_id] ?? `Client #${inv.client_id}`}
+                    </p>
+                    {inv.description && (
+                      <p className="text-xs text-slate-400 truncate">{inv.description}</p>
+                    )}
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${
+                    dueSoon
+                      ? "bg-red-50 text-red-600 border-red-200"
+                      : "bg-amber-50 text-amber-700 border-amber-200"
+                  }`}>
+                    {diffDays === 0 ? "Due today" : diffDays === 1 ? "Due tomorrow" : `Due in ${diffDays} days`}
+                  </span>
+                  <span className="text-sm font-semibold text-slate-900 shrink-0 w-20 text-right">
+                    {formatCurrency(inv.amount)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50">
+            <button
+              onClick={() => navigate("/invoices")}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              View all invoices →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Goals */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
