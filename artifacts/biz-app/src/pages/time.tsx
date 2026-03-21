@@ -24,9 +24,14 @@ export default function TimeTracking() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+  const getTodayLocal = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
   const { register, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { date: new Date().toISOString().split('T')[0], duration_minutes: 15 }
+    defaultValues: { date: getTodayLocal(), duration_minutes: 15 }
   });
 
   const selectedClientId = watch("client_id");
@@ -38,7 +43,7 @@ export default function TimeTracking() {
         queryClient.invalidateQueries({ queryKey: getListTimeEntriesQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
         toast({ title: "Time entry logged" });
-        reset({ date: new Date().toISOString().split('T')[0], duration_minutes: 15, client_id: selectedClientId }); // Keep date and client, reset rest
+        reset({ date: getTodayLocal(), duration_minutes: 15, client_id: selectedClientId });
       },
       onError: (err) => {
         toast({ title: "Failed to log time", description: err.message, variant: "destructive" });
@@ -177,7 +182,7 @@ export default function TimeTracking() {
                       </div>
                       <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
                         <Calendar className="w-3.5 h-3.5" />
-                        {new Date(entry.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(entry.date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </div>
                     </div>
                   </div>

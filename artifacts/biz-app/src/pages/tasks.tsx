@@ -115,7 +115,7 @@ export default function Tasks() {
                         {task.due_date && (
                           <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                             <Calendar className="w-3.5 h-3.5" />
-                            {new Date(task.due_date).toLocaleDateString()}
+                            {new Date(task.due_date + 'T00:00:00').toLocaleDateString()}
                           </span>
                         )}
                         {task.assigned_to && (
