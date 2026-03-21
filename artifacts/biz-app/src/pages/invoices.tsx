@@ -18,6 +18,7 @@ import {
   Clock,
   FileText,
   ChevronDown,
+  Download,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -121,6 +122,28 @@ export default function Invoices() {
   const totalUnpaid = invoices.filter(i => i.status === "unpaid").reduce((s, i) => s + i.amount, 0);
 
   const getClientName = (id: number) => clients.find(c => c.id === id)?.name ?? `Client #${id}`;
+
+  const [downloadingId, setDownloadingId] = useState<number | null>(null);
+
+  const downloadPdf = async (inv: Invoice) => {
+    if (downloadingId !== null) return;
+    setDownloadingId(inv.id);
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}/pdf`, { credentials: "include" });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `invoice-${inv.id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Failed to download PDF", variant: "destructive" });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -363,6 +386,20 @@ export default function Invoices() {
                   >
                     {inv.status === "paid" ? "Paid" : overdue ? "Overdue" : "Unpaid"}
                   </span>
+
+                  {/* Download PDF */}
+                  <button
+                    onClick={() => downloadPdf(inv)}
+                    disabled={downloadingId === inv.id}
+                    className="shrink-0 text-slate-300 hover:text-blue-500 transition-colors"
+                    title="Download PDF"
+                  >
+                    {downloadingId === inv.id ? (
+                      <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin inline-block" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                  </button>
 
                   {/* Delete */}
                   <button
