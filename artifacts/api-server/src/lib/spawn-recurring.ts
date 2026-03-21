@@ -3,46 +3,67 @@ import { tasksTable, clientsTable } from "@workspace/db";
 import { eq, isNotNull, and, or } from "drizzle-orm";
 import { logger } from "./logger";
 
-function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+/** Returns today's date as "YYYY-MM-DD" in UTC — immune to server TZ settings. */
+function todayUTCStr(): string {
+  return new Date().toISOString().split("T")[0]!;
 }
 
-function isWeekday(d: Date): boolean {
-  const day = d.getDay();
+/** Parse a YYYY-MM-DD string as UTC midnight (no timezone shift). */
+function parseDateUTC(dateStr: string): number {
+  return Date.parse(dateStr + "T00:00:00Z");
+}
+
+function isWeekdayUTC(ms: number): boolean {
+  const day = new Date(ms).getUTCDay();
   return day >= 1 && day <= 5;
 }
 
 function isDue(recurrence: string, lastGeneratedAt: string | null): boolean {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (recurrence === "weekdays" && !isWeekday(today)) return false;
+  const todayStr = todayUTCStr();
+  const todayMs = parseDateUTC(todayStr);
+
+  if (recurrence === "weekdays" && !isWeekdayUTC(todayMs)) return false;
   if (!lastGeneratedAt) return true;
-  const last = new Date(lastGeneratedAt + "T00:00:00");
-  const diffDays = Math.floor((today.getTime() - last.getTime()) / 86_400_000);
+
+  const lastMs = parseDateUTC(lastGeneratedAt);
+  const diffDays = Math.floor((todayMs - lastMs) / 86_400_000);
+
   if (recurrence === "daily") return diffDays >= 1;
   if (recurrence === "weekdays") return diffDays >= 1;
   if (recurrence === "weekly") return diffDays >= 7;
-  if (recurrence === "monthly") return diffDays >= 30;
+  if (recurrence === "monthly") return diffDays >= 28;
   if (recurrence === "annually") return diffDays >= 365;
   return false;
 }
 
+/** Compute the next due date (YYYY-MM-DD) using UTC arithmetic. */
 function nextDueDate(recurrence: string): string {
-  const d = new Date();
+  const todayStr = todayUTCStr();
+  const [y, m, d] = todayStr.split("-").map(Number) as [number, number, number];
+
+  const toStr = (date: Date) => date.toISOString().split("T")[0]!;
+  const MS = 86_400_000;
+
   if (recurrence === "daily") {
-    d.setDate(d.getDate() + 1);
-  } else if (recurrence === "weekdays") {
-    d.setDate(d.getDate() + 1);
-    while (!isWeekday(d)) d.setDate(d.getDate() + 1);
-  } else if (recurrence === "weekly") {
-    d.setDate(d.getDate() + 7);
-  } else if (recurrence === "monthly") {
-    d.setMonth(d.getMonth() + 1);
-  } else if (recurrence === "annually") {
-    d.setFullYear(d.getFullYear() + 1);
+    return toStr(new Date(Date.UTC(y, m - 1, d + 1)));
   }
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (recurrence === "weekdays") {
+    let next = new Date(Date.UTC(y, m - 1, d + 1));
+    while (!isWeekdayUTC(next.getTime())) {
+      next = new Date(next.getTime() + MS);
+    }
+    return toStr(next);
+  }
+  if (recurrence === "weekly") {
+    return toStr(new Date(Date.UTC(y, m - 1, d + 7)));
+  }
+  if (recurrence === "monthly") {
+    return toStr(new Date(Date.UTC(y, m, d)));   // m (1-indexed) = 0-indexed next month
+  }
+  if (recurrence === "annually") {
+    return toStr(new Date(Date.UTC(y + 1, m - 1, d)));
+  }
+  return todayStr;
 }
 
 /**
@@ -54,7 +75,7 @@ function nextDueDate(recurrence: string): string {
  * Returns the list of newly created tasks.
  */
 export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSelect)[]> {
-  const today = todayStr();
+  const today = todayUTCStr();
 
   const completedRecurring = await db
     .select()

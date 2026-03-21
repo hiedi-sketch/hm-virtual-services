@@ -2,6 +2,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useListTasks, useListInvoices, useListTimeEntries } from "@workspace/api-client-react";
 import { CheckSquare, Clock, FileText, LogOut, Briefcase } from "lucide-react";
 
+function fmtDate(dateStr: string): string {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-800",
@@ -119,7 +127,7 @@ export default function ClientPortal() {
                   <div>
                     <p className="text-sm font-medium text-slate-800">{task.title}</p>
                     {task.due_date && (
-                      <p className="text-xs text-slate-400 mt-0.5">Due {task.due_date}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Due {fmtDate(task.due_date)}</p>
                     )}
                   </div>
                   <StatusBadge status={task.status} />
@@ -143,7 +151,7 @@ export default function ClientPortal() {
                   <div>
                     <p className="text-sm font-medium text-slate-800">{inv.description || `Invoice #${inv.id}`}</p>
                     {inv.due_date && (
-                      <p className="text-xs text-slate-400 mt-0.5">Due {inv.due_date}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">Due {fmtDate(inv.due_date)}</p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">

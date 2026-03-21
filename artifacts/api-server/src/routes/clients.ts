@@ -60,9 +60,11 @@ router.get("/dashboard", requireAdmin, async (req, res) => {
   const clients = await db.select().from(clientsTable).orderBy(clientsTable.name);
 
   const now = new Date();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth(); // 0-indexed
+  const monthStart = `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  const nextMonthDate = new Date(Date.UTC(y, m + 1, 1));
+  const monthEnd = `${nextMonthDate.getUTCFullYear()}-${String(nextMonthDate.getUTCMonth() + 1).padStart(2, "0")}-01`;
 
   const timeByClient = await db
     .select({
