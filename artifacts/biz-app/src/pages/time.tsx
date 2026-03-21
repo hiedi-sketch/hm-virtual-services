@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   useListTimeEntries,
   useCreateTimeEntry,
@@ -211,6 +211,9 @@ export default function TimeTracking() {
   const [activeTab, setActiveTab] = useState<"timer" | "manual">("timer");
   const [editingId, setEditingId] = useState<number | null>(null);
 
+  // Ref used to pass client_id into the shared onSuccess handler without typed callback params
+  const pendingClientIdRef = useRef<number | null>(null);
+
   const timerTasks = tasks?.filter(
     t => t.client_id === Number(timerClientId) && t.status === "pending"
   ) || [];
@@ -220,11 +223,39 @@ export default function TimeTracking() {
     queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
   };
 
+  // Automation: check budget status for a client after logging time
+  const checkBudget = (clientId: number) => {
+    fetch(`/api/automations/budget-status?client_id=${clientId}`, { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then((b: { clientName: string; hoursUsed: number; budget: number; status: string } | null) => {
+        if (!b || b.budget <= 0) return;
+        if (b.status === "over") {
+          toast({
+            title: `${b.clientName} is over budget`,
+            description: `${b.hoursUsed}h logged of ${b.budget}h monthly budget.`,
+            variant: "destructive",
+          });
+        } else if (b.status === "near") {
+          toast({
+            title: `${b.clientName} is nearing their budget`,
+            description: `${b.hoursUsed}h of ${b.budget}h used — over 90%.`,
+          });
+        }
+      })
+      .catch(() => {});
+  };
+
   const createMutation = useCreateTimeEntry({
     mutation: {
-      onSuccess: invalidateAll,
+      onSuccess: () => {
+        invalidateAll();
+        const clientId = pendingClientIdRef.current;
+        if (clientId) checkBudget(clientId);
+        pendingClientIdRef.current = null;
+      },
       onError: () => {
         toast({ title: "Failed to log time", variant: "destructive" });
+        pendingClientIdRef.current = null;
       },
     },
   });
@@ -282,6 +313,7 @@ export default function TimeTracking() {
     const mins = elapsedMinutes(activeTimer.startedAt);
     const dateStr = getDateLocal(activeTimer.startedAt);
 
+    pendingClientIdRef.current = activeTimer.clientId;
     createMutation.mutate({
       data: {
         client_id: activeTimer.clientId,
@@ -312,6 +344,7 @@ export default function TimeTracking() {
   };
 
   const onManualSubmit = (data: ManualValues) => {
+    pendingClientIdRef.current = data.client_id;
     createMutation.mutate({ data }, {
       onSuccess: () => {
         toast({ title: "Time entry logged" });

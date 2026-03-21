@@ -136,6 +136,10 @@ export default function Tasks() {
       .then((spawned: unknown) => {
         if (Array.isArray(spawned) && spawned.length > 0) {
           invalidateTasks();
+          toast({
+            title: `${(spawned as unknown[]).length} recurring task${(spawned as unknown[]).length !== 1 ? "s" : ""} auto-scheduled`,
+            description: "Next occurrences were queued based on recurrence rules.",
+          });
         }
       })
       .catch(() => {});

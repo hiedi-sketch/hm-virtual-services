@@ -65,13 +65,36 @@ export default function Dashboard() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
-  // Trigger recurring task generation on page load (fire-and-forget)
+  // Run page-load automations: spawn recurring tasks + check budget/overdue state
   useEffect(() => {
-    fetch("/api/tasks/spawn-recurring", { method: "POST", credentials: "include" })
-      .then(r => r.json())
-      .then((spawned: unknown) => {
-        if (Array.isArray(spawned) && spawned.length > 0) {
+    type AutoResult = {
+      recurringTasksSpawned: number;
+      overdueTaskCount: number;
+      overBudgetClients: { name: string; hoursUsed: number; budget: number }[];
+      nearBudgetClients: { name: string; hoursUsed: number; budget: number }[];
+    };
+    fetch("/api/automations/run", { method: "POST", credentials: "include" })
+      .then(r => r.json() as Promise<AutoResult>)
+      .then(result => {
+        if (result.recurringTasksSpawned > 0) {
           queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+          toast({
+            title: `${result.recurringTasksSpawned} recurring task${result.recurringTasksSpawned !== 1 ? "s" : ""} auto-scheduled`,
+            description: "Next occurrences were queued automatically.",
+          });
+        }
+        for (const c of result.overBudgetClients ?? []) {
+          toast({
+            title: `${c.name} is over budget`,
+            description: `${c.hoursUsed}h used of ${c.budget}h monthly budget.`,
+            variant: "destructive",
+          });
+        }
+        for (const c of result.nearBudgetClients ?? []) {
+          toast({
+            title: `${c.name} is nearing their budget`,
+            description: `${c.hoursUsed}h used of ${c.budget}h — over 90% consumed.`,
+          });
         }
       })
       .catch(() => {});
@@ -139,11 +162,34 @@ export default function Dashboard() {
 
   const createTimeEntry = useCreateTimeEntry({
     mutation: {
-      onSuccess: () => {
+      onSuccess: (_data, variables) => {
         resetTime({ date: new Date().toLocaleDateString("sv-SE") });
         setQuickPanel(null);
         toast({ title: "Time logged successfully" });
         queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+
+        // Automation: check if client is near/over their monthly budget
+        const clientId = variables.data.client_id;
+        if (clientId) {
+          fetch(`/api/automations/budget-status?client_id=${clientId}`, { credentials: "include" })
+            .then(r => r.ok ? r.json() : null)
+            .then((b: { clientName: string; hoursUsed: number; budget: number; status: string } | null) => {
+              if (!b || b.budget <= 0) return;
+              if (b.status === "over") {
+                toast({
+                  title: `${b.clientName} is over budget`,
+                  description: `${b.hoursUsed}h logged of ${b.budget}h monthly budget.`,
+                  variant: "destructive",
+                });
+              } else if (b.status === "near") {
+                toast({
+                  title: `${b.clientName} is nearing their budget`,
+                  description: `${b.hoursUsed}h of ${b.budget}h used — over 90%.`,
+                });
+              }
+            })
+            .catch(() => {});
+        }
       },
       onError: () => {
         toast({ title: "Failed to log time", variant: "destructive" });
