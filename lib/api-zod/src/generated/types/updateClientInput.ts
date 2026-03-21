@@ -11,4 +11,9 @@ export interface UpdateClientInput {
   name?: string;
   email?: string;
   service_type?: UpdateClientInputServiceType;
+  monthly_fee?: number;
+  monthly_hour_budget?: number;
+  bk_fee?: number | null;
+  va_hourly_rate?: number | null;
+  va_hour_limit?: number | null;
 }

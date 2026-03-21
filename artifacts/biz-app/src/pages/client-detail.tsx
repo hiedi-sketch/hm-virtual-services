@@ -82,6 +82,9 @@ export default function ClientDetail() {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editServiceType, setEditServiceType] = useState<"bookkeeping" | "va" | "hybrid">("va");
+  const [editBkFee, setEditBkFee] = useState<string>("");
+  const [editVaRate, setEditVaRate] = useState<string>("");
+  const [editVaLimit, setEditVaLimit] = useState<string>("");
 
   const { data: client, isLoading: clientLoading } = useGetClient(clientId);
   const { data: tasks, isLoading: tasksLoading } = useListTasks({ clientId });
@@ -172,18 +175,33 @@ export default function ClientDetail() {
     setEditName(client.name);
     setEditEmail(client.email);
     setEditServiceType(client.service_type as "bookkeeping" | "va" | "hybrid");
+    setEditBkFee(client.bk_fee != null ? String(client.bk_fee) : "");
+    setEditVaRate(client.va_hourly_rate != null ? String(client.va_hourly_rate) : "");
+    setEditVaLimit(client.va_hour_limit != null ? String(client.va_hour_limit) : "");
     setShowEditProfile(true);
   };
 
   const handleEditProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const hasBookkeeping = editServiceType === "bookkeeping" || editServiceType === "hybrid";
+    const hasVA = editServiceType === "va" || editServiceType === "hybrid";
+    const bkFee = hasBookkeeping && editBkFee ? parseFloat(editBkFee) : null;
+    const vaRate = hasVA && editVaRate ? parseFloat(editVaRate) : null;
+    const vaLimit = hasVA && editVaLimit ? parseFloat(editVaLimit) : null;
+    const totalFee = ((bkFee ?? 0) + (vaRate ?? 0) * (vaLimit ?? 0)) || (client?.monthly_fee ?? 0);
+    const totalHours = (vaLimit ?? client?.monthly_hour_budget) ?? 0;
     updateClientMutation.mutate({
       id: clientId,
       data: {
         name: editName.trim() || undefined,
         email: editEmail.trim() || undefined,
         service_type: editServiceType,
-      },
+        bk_fee: bkFee,
+        va_hourly_rate: vaRate,
+        va_hour_limit: vaLimit,
+        monthly_fee: totalFee > 0 ? totalFee : undefined,
+        monthly_hour_budget: totalHours > 0 ? totalHours : undefined,
+      } as any,
     });
   };
 
@@ -266,12 +284,59 @@ export default function ClientDetail() {
                   value={editServiceType}
                   onChange={e => setEditServiceType(e.target.value as "bookkeeping" | "va" | "hybrid")}
                 >
-                  <option value="bookkeeping">Bookkeeping</option>
-                  <option value="va">Virtual Assistant</option>
-                  <option value="hybrid">Hybrid (VA + Bookkeeping)</option>
+                  <option value="bookkeeping">Bookkeeping (flat fee)</option>
+                  <option value="va">Virtual Assistant (hourly)</option>
+                  <option value="hybrid">Hybrid — BK + VA</option>
                 </select>
               </div>
             </div>
+
+            {/* Bookkeeping package fields */}
+            {(editServiceType === "bookkeeping" || editServiceType === "hybrid") && (
+              <div className="bg-emerald-50 rounded-xl p-3 space-y-2 border border-emerald-100">
+                <p className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">Bookkeeping Package</p>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Flat Monthly Fee ($)</label>
+                  <input
+                    type="number" step="0.01"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editBkFee}
+                    onChange={e => setEditBkFee(e.target.value)}
+                    placeholder="500.00"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* VA package fields */}
+            {(editServiceType === "va" || editServiceType === "hybrid") && (
+              <div className="bg-blue-50 rounded-xl p-3 space-y-2 border border-blue-100">
+                <p className="text-xs font-semibold text-blue-800 uppercase tracking-wider">VA Package</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Hourly Rate ($/hr)</label>
+                    <input
+                      type="number" step="0.01"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={editVaRate}
+                      onChange={e => setEditVaRate(e.target.value)}
+                      placeholder="75.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Monthly Hour Limit</label>
+                    <input
+                      type="number"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      value={editVaLimit}
+                      onChange={e => setEditVaLimit(e.target.value)}
+                      placeholder="20"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-1">
               <button
                 type="submit"
@@ -318,9 +383,28 @@ export default function ClientDetail() {
                 <Pencil className="w-3.5 h-3.5" />
                 Edit Info
               </button>
-              <div className="text-right">
-                <p className="text-xs text-slate-500">Monthly Fee</p>
-                <p className="text-2xl font-bold text-slate-900">{formatCurrency(client.monthly_fee)}</p>
+              <div className="text-right space-y-1">
+                {(client.service_type === "bookkeeping" || client.service_type === "hybrid") && client.bk_fee != null && (
+                  <div>
+                    <p className="text-xs text-slate-400">Bookkeeping</p>
+                    <p className="text-lg font-bold text-emerald-700">{formatCurrency(client.bk_fee)}<span className="text-xs font-normal text-slate-400">/mo</span></p>
+                  </div>
+                )}
+                {(client.service_type === "va" || client.service_type === "hybrid") && (client.va_hourly_rate != null || client.va_hour_limit != null) && (
+                  <div>
+                    <p className="text-xs text-slate-400">VA Package</p>
+                    <p className="text-lg font-bold text-blue-700">
+                      {client.va_hourly_rate != null ? `${formatCurrency(client.va_hourly_rate)}/hr` : "—"}
+                      {client.va_hour_limit != null && <span className="text-xs font-normal text-slate-400 ml-1">· {client.va_hour_limit}h</span>}
+                    </p>
+                  </div>
+                )}
+                {!(client.bk_fee != null || client.va_hourly_rate != null) && (
+                  <div>
+                    <p className="text-xs text-slate-500">Monthly Fee</p>
+                    <p className="text-2xl font-bold text-slate-900">{formatCurrency(client.monthly_fee)}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

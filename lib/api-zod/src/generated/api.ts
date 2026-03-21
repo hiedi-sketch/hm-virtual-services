@@ -24,6 +24,9 @@ export const ListClientsResponseItem = zod.object({
   monthly_hour_budget: zod.number(),
   monthly_fee: zod.number(),
   service_type: zod.enum(["bookkeeping", "va", "hybrid"]),
+  bk_fee: zod.number().nullable().optional(),
+  va_hourly_rate: zod.number().nullable().optional(),
+  va_hour_limit: zod.number().nullable().optional(),
 });
 export const ListClientsResponse = zod.array(ListClientsResponseItem);
 
@@ -36,6 +39,9 @@ export const CreateClientBody = zod.object({
   monthly_hour_budget: zod.number(),
   monthly_fee: zod.number(),
   service_type: zod.enum(["bookkeeping", "va", "hybrid"]),
+  bk_fee: zod.number().nullable().optional(),
+  va_hourly_rate: zod.number().nullable().optional(),
+  va_hour_limit: zod.number().nullable().optional(),
 });
 
 /**
@@ -52,6 +58,9 @@ export const GetClientResponse = zod.object({
   monthly_hour_budget: zod.number(),
   monthly_fee: zod.number(),
   service_type: zod.enum(["bookkeeping", "va", "hybrid"]),
+  bk_fee: zod.number().nullable().optional(),
+  va_hourly_rate: zod.number().nullable().optional(),
+  va_hour_limit: zod.number().nullable().optional(),
 });
 
 /**
@@ -65,6 +74,11 @@ export const UpdateClientBody = zod.object({
   name: zod.string().optional(),
   email: zod.string().optional(),
   service_type: zod.enum(["bookkeeping", "va", "hybrid"]).optional(),
+  monthly_fee: zod.number().optional(),
+  monthly_hour_budget: zod.number().optional(),
+  bk_fee: zod.number().nullable().optional(),
+  va_hourly_rate: zod.number().nullable().optional(),
+  va_hour_limit: zod.number().nullable().optional(),
 });
 
 export const UpdateClientResponse = zod.object({
@@ -74,6 +88,9 @@ export const UpdateClientResponse = zod.object({
   monthly_hour_budget: zod.number(),
   monthly_fee: zod.number(),
   service_type: zod.enum(["bookkeeping", "va", "hybrid"]),
+  bk_fee: zod.number().nullable().optional(),
+  va_hourly_rate: zod.number().nullable().optional(),
+  va_hour_limit: zod.number().nullable().optional(),
 });
 
 /**

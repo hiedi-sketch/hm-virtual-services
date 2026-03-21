@@ -14,4 +14,7 @@ export interface Client {
   monthly_hour_budget: number;
   monthly_fee: number;
   service_type: ClientServiceType;
+  bk_fee?: number | null;
+  va_hourly_rate?: number | null;
+  va_hour_limit?: number | null;
 }

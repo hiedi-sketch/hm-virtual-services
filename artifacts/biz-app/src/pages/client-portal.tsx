@@ -9,13 +9,17 @@ import {
   CheckSquare, Clock, FileText, LogOut, Briefcase,
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
   Plus, X, User, Sparkles, LayoutDashboard, Send,
-  KeyRound, ShieldCheck, Paperclip,
+  KeyRound, ShieldCheck, Paperclip, DollarSign,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentsTab } from "@/components/DocumentsTab";
 
 // ---------- types ----------
-type ClientRecord = { id: number; name: string; monthly_hour_budget: number; monthly_fee: number; email?: string };
+type ClientRecord = {
+  id: number; name: string; email?: string;
+  monthly_hour_budget: number; monthly_fee: number; service_type?: string;
+  bk_fee?: number | null; va_hourly_rate?: number | null; va_hour_limit?: number | null;
+};
 type ServiceRequest = { id: number; type: string; subject: string; message: string; status: string; created_at: string };
 
 const SERVICE_TYPES: Record<string, string> = {
@@ -178,6 +182,7 @@ export default function ClientPortal() {
         {activeTab === "overview" && (
           <OverviewTab
             user={user}
+            clientRecord={clientRecord}
             hoursThisMonth={hoursThisMonth}
             hoursBudget={hoursBudget}
             hoursPct={hoursPct}
@@ -225,16 +230,24 @@ export default function ClientPortal() {
 // OVERVIEW TAB
 // ================================================================
 function OverviewTab({
-  user, hoursThisMonth, hoursBudget, hoursPct, hoursColor,
+  user, clientRecord, hoursThisMonth, hoursBudget, hoursPct, hoursColor,
   pendingTasks, completedTasks, overdueTasks, overdueInvoices,
   totalOwed, totalPaid, unpaidInvoices, paidInvoices, todayStr,
   goToTasks, goToInvoices,
 }: {
-  user: any; hoursThisMonth: number; hoursBudget: number; hoursPct: number; hoursColor: string;
+  user: any; clientRecord?: ClientRecord;
+  hoursThisMonth: number; hoursBudget: number; hoursPct: number; hoursColor: string;
   pendingTasks: any[]; completedTasks: any[]; overdueTasks: any[]; overdueInvoices: any[];
   totalOwed: number; totalPaid: number; unpaidInvoices: any[]; paidInvoices: any[];
   todayStr: string; goToTasks: () => void; goToInvoices: () => void;
 }) {
+  const hasBK = !!(clientRecord?.bk_fee || clientRecord?.service_type === "bookkeeping" || clientRecord?.service_type === "hybrid");
+  const hasVA = !!(clientRecord?.va_hourly_rate || clientRecord?.service_type === "va" || clientRecord?.service_type === "hybrid");
+  const vaLimit = clientRecord?.va_hour_limit ?? clientRecord?.monthly_hour_budget ?? 0;
+  const vaRate = clientRecord?.va_hourly_rate ?? 0;
+  const bkFee = clientRecord?.bk_fee ?? (hasBK && !hasVA ? (clientRecord?.monthly_fee ?? 0) : 0);
+  const vaHoursPct = vaLimit > 0 ? Math.min(100, Math.round((hoursThisMonth / vaLimit) * 100)) : 0;
+  const vaHoursColor = vaHoursPct >= 100 ? "bg-red-500" : vaHoursPct >= 85 ? "bg-amber-500" : "bg-blue-500";
   const [showAllTasks, setShowAllTasks] = useState(false);
   const displayedTasks = showAllTasks ? pendingTasks : pendingTasks.slice(0, 5);
 
@@ -325,6 +338,80 @@ function OverviewTab({
           {totalPaid > 0 && <p className="text-xs text-slate-400 mt-2">{fmtCurrency(totalPaid)} paid</p>}
         </div>
       </div>
+
+      {/* Service Packages */}
+      {(hasBK || hasVA) && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Your Service Packages</h2>
+          <div className={`grid gap-4 ${hasBK && hasVA ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+
+            {/* Bookkeeping package */}
+            {hasBK && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-emerald-50 rounded-xl">
+                    <DollarSign className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bookkeeping</p>
+                    <p className="text-sm font-bold text-slate-900">Flat-Rate Package</p>
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-slate-900">
+                  {bkFee > 0 ? fmtCurrency(bkFee) : "—"}
+                  <span className="text-sm font-medium text-slate-400 ml-1">/month</span>
+                </p>
+                <p className="text-xs text-slate-500 mt-2">Fixed monthly fee · includes full-service bookkeeping</p>
+              </div>
+            )}
+
+            {/* VA package */}
+            {hasVA && (
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-2 bg-blue-50 rounded-xl">
+                    <Clock className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Virtual Assistant</p>
+                    <p className="text-sm font-bold text-slate-900">Hourly Package</p>
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  {vaRate > 0 && (
+                    <p className="text-3xl font-bold text-slate-900">
+                      {fmtCurrency(vaRate)}<span className="text-sm font-medium text-slate-400">/hr</span>
+                    </p>
+                  )}
+                  {vaLimit > 0 && (
+                    <span className="text-sm font-medium text-slate-500">· {vaLimit}h limit</span>
+                  )}
+                </div>
+                {/* Hours progress */}
+                {vaLimit > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-500">{hoursThisMonth}h used this month</span>
+                      <span className={vaHoursPct >= 100 ? "text-red-600 font-semibold" : vaHoursPct >= 85 ? "text-amber-600 font-semibold" : "text-slate-400"}>
+                        {vaLimit - hoursThisMonth > 0 ? `${Math.round((vaLimit - hoursThisMonth) * 10) / 10}h left` : "Limit reached"}
+                      </span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${vaHoursColor}`} style={{ width: `${vaHoursPct}%` }} />
+                    </div>
+                    <p className="text-xs text-slate-400">{vaHoursPct}% of {vaLimit}h monthly limit</p>
+                  </div>
+                )}
+                {vaRate > 0 && vaLimit > 0 && (
+                  <p className="text-xs text-slate-500 mt-2 border-t border-slate-100 pt-2">
+                    Package value: <span className="font-semibold text-slate-700">{fmtCurrency(vaRate * vaLimit)}/month</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Recent open tasks */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
