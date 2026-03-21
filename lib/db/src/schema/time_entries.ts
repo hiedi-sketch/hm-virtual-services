@@ -6,6 +6,7 @@ export const timeEntriesTable = pgTable("time_entries", {
   id: serial("id").primaryKey(),
   client_id: integer("client_id").notNull(),
   task_id: integer("task_id"),
+  user_id: integer("user_id"),
   duration_minutes: integer("duration_minutes").notNull(),
   date: text("date").notNull(),
   started_at: text("started_at"),

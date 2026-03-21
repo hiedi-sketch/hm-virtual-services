@@ -26,9 +26,11 @@ import {
   Pencil,
   Check,
   X,
+  User as UserIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const TIMER_KEY = "flowstate_timer";
 
@@ -187,6 +189,8 @@ function EditEntryRow({
 }
 
 export default function TimeTracking() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
   const { data: entries, isLoading: entriesLoading } = useListTimeEntries();
   const { data: clients } = useListClients();
   const { data: tasks } = useListTasks();
@@ -604,6 +608,12 @@ export default function TimeTracking() {
                             <p className="text-xs text-slate-500 truncate">{entry.task_title}</p>
                           ) : (
                             <p className="text-xs text-slate-400 italic">General</p>
+                          )}
+                          {isAdmin && entry.logged_by && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                              <UserIcon className="w-3 h-3" />
+                              {entry.logged_by}
+                            </span>
                           )}
                           {entry.started_at && entry.ended_at && (
                             <p className="text-xs text-slate-400 mt-0.5">

@@ -2,8 +2,8 @@ import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { usersTable, clientsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { requireAdmin } from "../middleware/auth";
+import { eq, ne } from "drizzle-orm";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 import { z } from "zod";
 
 const router: IRouter = Router();
@@ -22,6 +22,16 @@ const updateUserSchema = z.object({
   role: z.enum(["admin", "team_member", "client"]).optional(),
   client_id: z.number().int().nullable().optional(),
   password: z.string().min(6).optional(),
+});
+
+// Lightweight endpoint — any logged-in staff can fetch team members for task assignment dropdown
+router.get("/users/team-members", requireAuth, async (req, res) => {
+  const members = await db
+    .select({ id: usersTable.id, name: usersTable.name, role: usersTable.role })
+    .from(usersTable)
+    .where(ne(usersTable.role, "client"))
+    .orderBy(usersTable.name);
+  res.json(members);
 });
 
 router.get("/users", requireAdmin, async (req, res) => {

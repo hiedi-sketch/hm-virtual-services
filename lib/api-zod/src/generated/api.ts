@@ -245,6 +245,8 @@ export const ListTimeEntriesResponseItem = zod.object({
   id: zod.number(),
   client_id: zod.number(),
   task_id: zod.number().nullish(),
+  user_id: zod.number().nullish(),
+  logged_by: zod.string().nullish(),
   duration_minutes: zod.number(),
   date: zod.string(),
   started_at: zod.string().nullish(),

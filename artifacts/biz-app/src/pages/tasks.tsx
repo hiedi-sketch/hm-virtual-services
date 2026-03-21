@@ -8,7 +8,7 @@ import {
   TaskStatus,
   Task,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,10 +21,29 @@ import {
   User as UserIcon,
   Filter,
   RefreshCw,
+  Pencil,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface TeamMember {
+  id: number;
+  name: string;
+  role: string;
+}
+
+function useTeamMembers() {
+  return useQuery<TeamMember[]>({
+    queryKey: ["team-members"],
+    queryFn: async () => {
+      const res = await fetch("/api/users/team-members", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+}
 
 function isWeekday(d: Date): boolean {
   const day = d.getDay();
@@ -79,11 +98,30 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const editSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  description: z.string().optional(),
+  client_id: z.coerce.number().min(1, "Client is required"),
+  assigned_to: z.string().optional(),
+  due_date: z.string().optional(),
+  recurrence: z.preprocess(
+    val => (val === "" ? null : val),
+    z.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullable().optional()
+  ),
+});
+
+type EditValues = z.infer<typeof editSchema>;
+
 export default function Tasks() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+
   const [selectedClientId, setSelectedClientId] = useState<number | undefined>(undefined);
   const { data: tasks, isLoading } = useListTasks({ clientId: selectedClientId });
   const { data: clients } = useListClients();
+  const { data: teamMembers = [] } = useTeamMembers();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -114,7 +152,6 @@ export default function Tasks() {
     },
   });
 
-  // Separate mutation for spawning next recurrence — no modal side-effects
   const spawnNextMutation = useCreateTask({
     mutation: {
       onSuccess: () => {
@@ -128,25 +165,54 @@ export default function Tasks() {
     mutation: {
       onSuccess: () => {
         invalidateTasks();
+        setEditingTask(null);
       },
     },
   });
 
+  // ── Create form ──────────────────────────────────────────────────────────
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
   });
 
   const onSubmit = (data: FormValues) => {
-    createMutation.mutate({
+    // Team members auto-assign to themselves
+    const finalData = !isAdmin
+      ? { ...data, assigned_to: user?.name ?? undefined }
+      : data;
+    createMutation.mutate({ data: { ...finalData, recurrence: finalData.recurrence || null } });
+  };
+
+  // ── Edit form ────────────────────────────────────────────────────────────
+  const { register: registerEdit, handleSubmit: handleEditSubmit, reset: resetEdit, formState: { errors: editErrors } } = useForm<EditValues>({
+    resolver: zodResolver(editSchema),
+  });
+
+  const openEdit = (task: Task) => {
+    setEditingTask(task);
+    resetEdit({
+      title: task.title,
+      description: task.description ?? undefined,
+      client_id: task.client_id,
+      assigned_to: task.assigned_to ?? undefined,
+      due_date: task.due_date ?? undefined,
+      recurrence: (task.recurrence as EditValues["recurrence"]) ?? null,
+    });
+  };
+
+  const onEditSubmit = (data: EditValues) => {
+    if (!editingTask) return;
+    updateMutation.mutate({
+      id: editingTask.id,
       data: { ...data, recurrence: data.recurrence || null },
     });
   };
 
+  // ── Toggle status ────────────────────────────────────────────────────────
   const toggleStatus = (task: Task) => {
     const completing = task.status === "pending";
     updateMutation.mutate({ id: task.id, data: { status: completing ? "complete" : "pending" } });
 
-    // When completing a recurring task, immediately queue the next occurrence
     if (completing && task.recurrence) {
       spawnNextMutation.mutate({
         data: {
@@ -169,22 +235,26 @@ export default function Tasks() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-slate-900">Tasks</h1>
-          <p className="text-slate-500 mt-1">Manage your to-dos across all clients.</p>
+          <p className="text-slate-500 mt-1">
+            {isAdmin ? "Manage tasks across all clients and team members." : "Your assigned tasks."}
+          </p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="flex flex-1 sm:flex-none items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 min-h-[44px] shadow-sm">
-            <Filter className="w-4 h-4 text-slate-400 shrink-0" />
-            <select
-              value={selectedClientId ?? ""}
-              onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : undefined)}
-              className="flex-1 text-sm text-slate-700 bg-transparent border-none outline-none cursor-pointer pr-1 min-w-0"
-            >
-              <option value="">All Clients</option>
-              {clients?.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
+          {isAdmin && (
+            <div className="flex flex-1 sm:flex-none items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 min-h-[44px] shadow-sm">
+              <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+              <select
+                value={selectedClientId ?? ""}
+                onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : undefined)}
+                className="flex-1 text-sm text-slate-700 bg-transparent border-none outline-none cursor-pointer pr-1 min-w-0"
+              >
+                <option value="">All Clients</option>
+                {clients?.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <button onClick={() => setIsModalOpen(true)} className="btn-primary shrink-0">
             <Plus className="w-5 h-5 mr-2" />
             New Task
@@ -221,15 +291,28 @@ export default function Tasks() {
                       <Circle className="w-6 h-6" />
                     </button>
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-slate-900">{task.title}</h4>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="font-medium text-slate-900">{task.title}</h4>
+                        {isAdmin && (
+                          <button
+                            onClick={() => openEdit(task)}
+                            className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"
+                            title="Edit task"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                       {task.description && (
                         <p className="text-sm text-slate-500 mt-1 line-clamp-2">{task.description}</p>
                       )}
 
                       <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <span className="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-                          {task.client_name || "Unknown Client"}
-                        </span>
+                        {isAdmin && (
+                          <span className="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                            {task.client_name || "Unknown Client"}
+                          </span>
+                        )}
                         {task.recurrence && (
                           <span className={cn(
                             "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
@@ -292,9 +375,17 @@ export default function Tasks() {
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-slate-500 line-through decoration-slate-300">{task.title}</h4>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-                          {task.client_name}
-                        </span>
+                        {isAdmin && (
+                          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                            {task.client_name}
+                          </span>
+                        )}
+                        {task.assigned_to && (
+                          <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                            <UserIcon className="w-3 h-3" />
+                            {task.assigned_to}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -305,8 +396,8 @@ export default function Tasks() {
         </div>
       </div>
 
-      {/* New Task Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="New Task">
+      {/* ── New Task Modal ─────────────────────────────────────────────────── */}
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="New Task">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="label-text">Task Title</label>
@@ -342,10 +433,26 @@ export default function Tasks() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label-text">Assigned To (Optional)</label>
-              <input {...register("assigned_to")} className="input-field" placeholder="Jane Doe" />
-            </div>
+            {isAdmin ? (
+              <div>
+                <label className="label-text">Assign To (Optional)</label>
+                <select {...register("assigned_to")} className="input-field">
+                  <option value="">Unassigned</option>
+                  {teamMembers.map(m => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="label-text">Assigned To</label>
+                <input
+                  value={user?.name ?? ""}
+                  readOnly
+                  className="input-field bg-slate-50 text-slate-500 cursor-not-allowed"
+                />
+              </div>
+            )}
 
             <div>
               <label className="label-text flex items-center gap-1.5">
@@ -361,7 +468,7 @@ export default function Tasks() {
           </div>
 
           <div className="pt-4 flex justify-end gap-3">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
+            <button type="button" onClick={() => { setIsModalOpen(false); reset(); }} className="btn-secondary">
               Cancel
             </button>
             <button type="submit" disabled={isSubmitting || createMutation.isPending} className="btn-primary">
@@ -370,6 +477,79 @@ export default function Tasks() {
           </div>
         </form>
       </Modal>
+
+      {/* ── Edit Task Modal (admin only) ───────────────────────────────────── */}
+      {isAdmin && (
+        <Modal isOpen={!!editingTask} onClose={() => setEditingTask(null)} title="Edit Task">
+          <form onSubmit={handleEditSubmit(onEditSubmit)} className="space-y-4">
+            <div>
+              <label className="label-text">Task Title</label>
+              <input {...registerEdit("title")} className="input-field" />
+              {editErrors.title && <p className="text-destructive text-xs mt-1">{editErrors.title.message}</p>}
+            </div>
+
+            <div>
+              <label className="label-text">Description</label>
+              <textarea
+                {...registerEdit("description")}
+                className="input-field min-h-[80px] resize-none"
+                placeholder="Add any details or instructions..."
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label-text">Client</label>
+                <select {...registerEdit("client_id")} className="input-field">
+                  <option value="">Select a client...</option>
+                  {clients?.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {editErrors.client_id && <p className="text-destructive text-xs mt-1">{editErrors.client_id.message}</p>}
+              </div>
+
+              <div>
+                <label className="label-text">Due Date</label>
+                <input type="date" {...registerEdit("due_date")} className="input-field" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label-text">Assign To</label>
+                <select {...registerEdit("assigned_to")} className="input-field">
+                  <option value="">Unassigned</option>
+                  {teamMembers.map(m => (
+                    <option key={m.id} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label-text flex items-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                  Recurrence
+                </label>
+                <select {...registerEdit("recurrence")} className="input-field">
+                  {RECURRENCE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-4 flex justify-end gap-3">
+              <button type="button" onClick={() => setEditingTask(null)} className="btn-secondary">
+                Cancel
+              </button>
+              <button type="submit" disabled={updateMutation.isPending} className="btn-primary">
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
