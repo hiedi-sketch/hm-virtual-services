@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { BarChart2, Download, Clock, CheckSquare, FileText, Loader2, Mail, AlertTriangle, CalendarClock, Users } from "lucide-react";
+import { BarChart2, Download, Clock, CheckSquare, FileText, Loader2, Mail, AlertTriangle, CalendarClock, Users, Timer, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import * as XLSX from "xlsx";
+
+type ExportFormat = "csv" | "xlsx";
 
 interface ReportDef {
   key: string;
   title: string;
   description: string;
-  filename: string;
   endpoint: string;
   icon: React.ElementType;
   color: string;
@@ -19,7 +21,6 @@ const REPORTS: ReportDef[] = [
     key: "client-hours",
     title: "Client Hours",
     description: "Hours used and remaining against each client's monthly package budget for the current month.",
-    filename: "client-hours.csv",
     endpoint: "/api/reports/client-hours",
     icon: Clock,
     color: "text-blue-600",
@@ -30,7 +31,6 @@ const REPORTS: ReportDef[] = [
     key: "tasks",
     title: "Task Status",
     description: "All tasks across every client with current status, due date, and assignment.",
-    filename: "tasks.csv",
     endpoint: "/api/reports/tasks",
     icon: CheckSquare,
     color: "text-violet-600",
@@ -38,15 +38,34 @@ const REPORTS: ReportDef[] = [
     columns: ["Task ID", "Title", "Client", "Status", "Due Date", "Assigned To", "Recurrence"],
   },
   {
+    key: "time-entries",
+    title: "Time Entries",
+    description: "Every logged time entry across all clients with task linkage, duration, and notes.",
+    endpoint: "/api/reports/time-entries",
+    icon: Timer,
+    color: "text-cyan-600",
+    iconBg: "bg-cyan-50",
+    columns: ["Entry ID", "Date", "Client", "Task", "Duration (min)", "Hours", "Started At", "Ended At"],
+  },
+  {
     key: "invoices",
     title: "Invoices",
     description: "All invoices with amounts, payment status, due dates, and client details.",
-    filename: "invoices.csv",
     endpoint: "/api/reports/invoices",
     icon: FileText,
     color: "text-emerald-600",
     iconBg: "bg-emerald-50",
     columns: ["Invoice ID", "Client", "Amount", "Status", "Due Date", "Description"],
+  },
+  {
+    key: "leads",
+    title: "CRM Leads",
+    description: "All leads in the pipeline with status, estimated value, and follow-up dates.",
+    endpoint: "/api/reports/leads",
+    icon: TrendingUp,
+    color: "text-orange-600",
+    iconBg: "bg-orange-50",
+    columns: ["Lead ID", "Name", "Email", "Status", "Est. Value", "Follow-up Date", "Notes"],
   },
 ];
 
@@ -112,17 +131,30 @@ function downloadBlob(blob: Blob, filename: string) {
 export default function Reports() {
   const [downloading, setDownloading] = useState<string | null>(null);
   const [sending, setSending] = useState<string | null>(null);
+  const [format, setFormat] = useState<ExportFormat>("csv");
   const { toast } = useToast();
 
   const handleDownload = async (report: ReportDef) => {
     setDownloading(report.key);
+    const date = new Date().toISOString().split("T")[0];
     try {
       const res = await fetch(report.endpoint, { credentials: "include" });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const blob = await res.blob();
-      const date = new Date().toISOString().split("T")[0];
-      downloadBlob(blob, report.filename.replace(".csv", `-${date}.csv`));
-      toast({ title: `${report.title} exported` });
+      const csvText = await res.text();
+
+      if (format === "xlsx") {
+        const wb = XLSX.read(csvText, { type: "string" });
+        const wbout = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        const blob = new Blob([wbout], {
+          type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        });
+        downloadBlob(blob, `${report.key}-${date}.xlsx`);
+      } else {
+        const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+        downloadBlob(blob, `${report.key}-${date}.csv`);
+      }
+
+      toast({ title: `${report.title} exported as ${format.toUpperCase()}` });
     } catch {
       toast({ title: "Export failed", description: "Could not generate the report.", variant: "destructive" });
     } finally {
@@ -166,9 +198,35 @@ export default function Reports() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-display font-bold text-slate-900">Reports</h1>
-        <p className="text-slate-500 mt-1">Download data exports as CSV files. Each report is generated fresh on request.</p>
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-slate-900">Reports</h1>
+          <p className="text-slate-500 mt-1">Generate fresh data exports on demand. Choose your format below.</p>
+        </div>
+
+        {/* Format toggle */}
+        <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1 self-start sm:self-auto">
+          <button
+            onClick={() => setFormat("csv")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              format === "csv"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            CSV
+          </button>
+          <button
+            onClick={() => setFormat("xlsx")}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+              format === "xlsx"
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-500 hover:text-slate-700"
+            }`}
+          >
+            Excel
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -214,7 +272,7 @@ export default function Reports() {
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
-                {isLoading ? "Generating…" : "Download CSV"}
+                {isLoading ? "Generating…" : `Download ${format.toUpperCase()}`}
               </button>
             </div>
           );
@@ -282,8 +340,10 @@ export default function Reports() {
         <ul className="space-y-1.5 text-sm text-slate-500">
           <li>• <span className="font-medium text-slate-700">Client Hours</span> — reflects time entries logged this calendar month only.</li>
           <li>• <span className="font-medium text-slate-700">Task Status</span> — includes all tasks regardless of status or date.</li>
+          <li>• <span className="font-medium text-slate-700">Time Entries</span> — all logged time across every client and task, no date filter.</li>
           <li>• <span className="font-medium text-slate-700">Invoices</span> — includes all invoices in the system, paid and unpaid.</li>
-          <li>• Files open in Excel, Google Sheets, or any spreadsheet app.</li>
+          <li>• <span className="font-medium text-slate-700">CRM Leads</span> — all leads across every pipeline stage.</li>
+          <li>• CSV files open in Excel, Google Sheets, or any spreadsheet app. Excel files open natively in Microsoft Excel.</li>
         </ul>
       </div>
     </div>

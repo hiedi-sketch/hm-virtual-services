@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { clientsTable, tasksTable, timeEntriesTable, invoicesTable } from "@workspace/db";
+import { clientsTable, tasksTable, timeEntriesTable, invoicesTable, leadsTable } from "@workspace/db";
 import { eq, and, gte, lt, sql } from "drizzle-orm";
 import { requireAdmin } from "../middleware/auth";
 
@@ -119,6 +119,79 @@ router.get("/reports/invoices", requireAdmin, async (req, res) => {
 
   const date = new Date().toISOString().split("T")[0];
   csvResponse(res, `invoices-${date}.csv`, rows);
+});
+
+// ── Time Entries ────────────────────────────────────────────────────────────
+router.get("/reports/time-entries", requireAdmin, async (req, res) => {
+  const entries = await db
+    .select({
+      id: timeEntriesTable.id,
+      date: timeEntriesTable.date,
+      client_name: clientsTable.name,
+      task_title: tasksTable.title,
+      duration_minutes: timeEntriesTable.duration_minutes,
+      started_at: timeEntriesTable.started_at,
+      ended_at: timeEntriesTable.ended_at,
+    })
+    .from(timeEntriesTable)
+    .leftJoin(clientsTable, eq(timeEntriesTable.client_id, clientsTable.id))
+    .leftJoin(tasksTable, eq(timeEntriesTable.task_id, tasksTable.id))
+    .orderBy(timeEntriesTable.date, timeEntriesTable.id);
+
+  const header = csvRow(["Entry ID", "Date", "Client", "Task", "Duration (min)", "Hours", "Started At", "Ended At"]);
+  const rows = [
+    header,
+    ...entries.map(e =>
+      csvRow([
+        e.id,
+        e.date,
+        e.client_name ?? "",
+        e.task_title ?? "",
+        e.duration_minutes,
+        Math.round((e.duration_minutes / 60) * 100) / 100,
+        e.started_at ?? "",
+        e.ended_at ?? "",
+      ])
+    ),
+  ];
+
+  const date = new Date().toISOString().split("T")[0];
+  csvResponse(res, `time-entries-${date}.csv`, rows);
+});
+
+// ── Leads ──────────────────────────────────────────────────────────────────
+router.get("/reports/leads", requireAdmin, async (req, res) => {
+  const leads = await db
+    .select({
+      id: leadsTable.id,
+      name: leadsTable.name,
+      email: leadsTable.email,
+      status: leadsTable.status,
+      estimated_value: leadsTable.estimated_value,
+      follow_up_date: leadsTable.follow_up_date,
+      notes: leadsTable.notes,
+    })
+    .from(leadsTable)
+    .orderBy(leadsTable.status, leadsTable.name);
+
+  const header = csvRow(["Lead ID", "Name", "Email", "Status", "Est. Value ($)", "Follow-up Date", "Notes"]);
+  const rows = [
+    header,
+    ...leads.map(l =>
+      csvRow([
+        l.id,
+        l.name,
+        l.email ?? "",
+        l.status,
+        l.estimated_value != null ? l.estimated_value.toFixed(2) : "",
+        l.follow_up_date ?? "",
+        l.notes ?? "",
+      ])
+    ),
+  ];
+
+  const date = new Date().toISOString().split("T")[0];
+  csvResponse(res, `leads-${date}.csv`, rows);
 });
 
 export default router;
