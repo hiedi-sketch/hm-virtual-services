@@ -8,6 +8,7 @@ import leadsRouter from "./leads";
 import invoicesRouter from "./invoices";
 import usersRouter from "./users";
 import reportsRouter from "./reports";
+import notificationsRouter from "./notifications";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(leadsRouter);
 router.use(invoicesRouter);
 router.use(usersRouter);
 router.use(reportsRouter);
+router.use(notificationsRouter);
 
 export default router;

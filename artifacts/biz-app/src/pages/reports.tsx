@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BarChart2, Download, Clock, CheckSquare, FileText, Loader2 } from "lucide-react";
+import { BarChart2, Download, Clock, CheckSquare, FileText, Loader2, Mail, AlertTriangle, CalendarClock, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ReportDef {
@@ -50,6 +50,54 @@ const REPORTS: ReportDef[] = [
   },
 ];
 
+interface NotifDef {
+  key: string;
+  title: string;
+  description: string;
+  endpoint: string;
+  icon: React.ElementType;
+  color: string;
+  iconBg: string;
+  btnColor: string;
+  audience: string;
+}
+
+const NOTIFICATIONS: NotifDef[] = [
+  {
+    key: "overdue-tasks",
+    title: "Overdue Task Alerts",
+    description: "Emails each client about their overdue pending tasks. Sends admins a full summary table.",
+    endpoint: "/api/notifications/overdue-tasks",
+    icon: AlertTriangle,
+    color: "text-red-600",
+    iconBg: "bg-red-50",
+    btnColor: "bg-red-600 hover:bg-red-700",
+    audience: "Clients + Admins",
+  },
+  {
+    key: "invoice-reminders",
+    title: "Invoice Reminders",
+    description: "Emails clients with unpaid invoices due within the next 7 days.",
+    endpoint: "/api/notifications/invoice-reminders",
+    icon: CalendarClock,
+    color: "text-amber-600",
+    iconBg: "bg-amber-50",
+    btnColor: "bg-amber-600 hover:bg-amber-700",
+    audience: "Clients",
+  },
+  {
+    key: "followup-reminders",
+    title: "Lead Follow-up Reminders",
+    description: "Emails admins and team members about leads with overdue or today's follow-up dates.",
+    endpoint: "/api/notifications/followup-reminders",
+    icon: Users,
+    color: "text-indigo-600",
+    iconBg: "bg-indigo-50",
+    btnColor: "bg-indigo-600 hover:bg-indigo-700",
+    audience: "Admins + Team",
+  },
+];
+
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -63,6 +111,7 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export default function Reports() {
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [sending, setSending] = useState<string | null>(null);
   const { toast } = useToast();
 
   const handleDownload = async (report: ReportDef) => {
@@ -78,6 +127,40 @@ export default function Reports() {
       toast({ title: "Export failed", description: "Could not generate the report.", variant: "destructive" });
     } finally {
       setDownloading(null);
+    }
+  };
+
+  const handleNotify = async (notif: NotifDef) => {
+    setSending(notif.key);
+    try {
+      const res = await fetch(notif.endpoint, { method: "POST", credentials: "include" });
+      if (!res.ok) {
+        if (res.status === 503) {
+          toast({
+            title: "SMTP not configured",
+            description: "Add your SMTP credentials in environment settings to enable emails.",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw new Error(`Server error ${res.status}`);
+      }
+      const data = await res.json() as { sent?: number; tasks?: number; invoices?: number; leads?: number; message?: string };
+
+      if (data.message) {
+        toast({ title: "No emails sent", description: data.message });
+      } else {
+        const recipients = data.sent ?? 0;
+        const items = data.tasks ?? data.invoices ?? data.leads ?? 0;
+        toast({
+          title: `Emails sent`,
+          description: `Notified ${recipients} recipient${recipients !== 1 ? "s" : ""} about ${items} item${items !== 1 ? "s" : ""}.`,
+        });
+      }
+    } catch {
+      toast({ title: "Failed to send", description: "Could not trigger email notifications.", variant: "destructive" });
+    } finally {
+      setSending(null);
     }
   };
 
@@ -136,6 +219,59 @@ export default function Reports() {
             </div>
           );
         })}
+      </div>
+
+      {/* Email Notifications */}
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Mail className="w-5 h-5 text-slate-700" />
+          <h2 className="text-xl font-display font-bold text-slate-900">Email Notifications</h2>
+        </div>
+        <p className="text-slate-500 text-sm mb-5">
+          Manually trigger batch email notifications. New task emails are sent automatically on task creation.
+          Requires SMTP credentials to be configured.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {NOTIFICATIONS.map(notif => {
+            const Icon = notif.icon;
+            const isLoading = sending === notif.key;
+            return (
+              <div
+                key={notif.key}
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4"
+              >
+                <div className="flex items-start gap-4">
+                  <div className={`p-3 rounded-xl shrink-0 ${notif.iconBg}`}>
+                    <Icon className={`w-5 h-5 ${notif.color}`} />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-slate-900">{notif.title}</h3>
+                    <p className="text-sm text-slate-500 mt-0.5 leading-relaxed">{notif.description}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100 w-fit">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="text-xs text-slate-500 font-medium">Sends to: {notif.audience}</span>
+                </div>
+
+                <button
+                  onClick={() => handleNotify(notif)}
+                  disabled={isLoading || sending !== null}
+                  className={`mt-auto flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl text-white text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${notif.btnColor}`}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Mail className="w-4 h-4" />
+                  )}
+                  {isLoading ? "Sending…" : "Send Now"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">

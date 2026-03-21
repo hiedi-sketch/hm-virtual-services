@@ -4,6 +4,7 @@ import { tasksTable, clientsTable, subtasksTable } from "@workspace/db";
 import { eq, isNotNull, and } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { spawnRecurringTasks } from "../lib/spawn-recurring";
+import { sendMail, template } from "../lib/mailer";
 import {
   CreateTaskBody,
   UpdateTaskBody,
@@ -71,6 +72,42 @@ router.post("/tasks", requireRole("admin", "team_member"), async (req, res) => {
   const body = CreateTaskBody.parse(req.body);
   const [task] = await db.insert(tasksTable).values(body).returning();
   res.status(201).json(task);
+
+  // Fire-and-forget: email the client about their new task
+  if (task?.client_id) {
+    (async () => {
+      try {
+        const [client] = await db
+          .select({ email: clientsTable.email, name: clientsTable.name })
+          .from(clientsTable)
+          .where(eq(clientsTable.id, task.client_id!));
+
+        if (client?.email) {
+          const dueStr = task.due_date
+            ? ` Due: <strong>${new Date(task.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</strong>.`
+            : "";
+
+          await sendMail(
+            client.email,
+            `New task assigned: ${task.title}`,
+            template(`
+              <p>Hi ${client.name ?? "there"},</p>
+              <p>A new task has been assigned to your account:</p>
+              <div style="margin:16px 0;padding:16px;background:#f8fafc;border-left:4px solid #3b82f6;border-radius:4px;">
+                <p style="margin:0;font-size:17px;font-weight:600;">${task.title}</p>
+                ${task.description ? `<p style="margin:8px 0 0;color:#64748b;">${task.description}</p>` : ""}
+                ${dueStr ? `<p style="margin:8px 0 0;color:#475569;">${dueStr}</p>` : ""}
+              </div>
+              <p>Log in to your account to view details or track progress.</p>
+              <p style="margin-top:24px;color:#64748b;">— The Flowstate Team</p>
+            `)
+          );
+        }
+      } catch (err) {
+        console.error("[tasks] Failed to send new-task email:", err);
+      }
+    })();
+  }
 });
 
 // Must be before /tasks/:id routes to avoid Express treating "spawn-recurring" as an :id
