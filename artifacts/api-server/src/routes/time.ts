@@ -7,6 +7,8 @@ import {
   ListTimeEntriesQueryParams,
   ListTimeEntriesResponse,
   DeleteTimeEntryParams,
+  UpdateTimeEntryParams,
+  UpdateTimeEntryBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../middleware/auth";
 
@@ -45,6 +47,32 @@ router.post("/time", requireRole("admin", "team_member"), async (req, res) => {
   const body = CreateTimeEntryBody.parse(req.body);
   const [entry] = await db.insert(timeEntriesTable).values(body).returning();
   res.status(201).json(entry);
+});
+
+router.patch("/time/:id", requireRole("admin", "team_member"), async (req, res) => {
+  const { id } = UpdateTimeEntryParams.parse(req.params);
+  const body = UpdateTimeEntryBody.parse(req.body);
+
+  const [updated] = await db
+    .update(timeEntriesTable)
+    .set(body)
+    .where(eq(timeEntriesTable.id, id))
+    .returning();
+
+  if (!updated) {
+    res.status(404).json({ error: "Time entry not found" });
+    return;
+  }
+
+  // Return with joins for client_name / task_title
+  const [row] = await db
+    .select(withJoins)
+    .from(timeEntriesTable)
+    .leftJoin(clientsTable, eq(timeEntriesTable.client_id, clientsTable.id))
+    .leftJoin(tasksTable, eq(timeEntriesTable.task_id, tasksTable.id))
+    .where(eq(timeEntriesTable.id, id));
+
+  res.json(row ?? updated);
 });
 
 router.delete("/time/:id", requireRole("admin", "team_member"), async (req, res) => {

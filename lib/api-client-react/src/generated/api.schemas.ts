@@ -182,6 +182,13 @@ export interface CreateTimeEntryInput {
   ended_at?: string | null;
 }
 
+export interface UpdateTimeEntryInput {
+  client_id?: number;
+  task_id?: number | null;
+  duration_minutes?: number;
+  date?: string;
+}
+
 export type LeadStatus = (typeof LeadStatus)[keyof typeof LeadStatus];
 
 export const LeadStatus = {

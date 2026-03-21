@@ -321,6 +321,31 @@ paths:
                 $ref: "#/components/schemas/TimeEntry"
 
   /time/{id}:
+    patch:
+      operationId: updateTimeEntry
+      tags: [time]
+      summary: Update a time entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTimeEntryInput"
+      responses:
+        "200":
+          description: Updated time entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+        "404":
+          description: Time entry not found
     delete:
       operationId: deleteTimeEntry
       tags: [time]
@@ -714,6 +739,19 @@ components:
         - client_id
         - duration_minutes
         - date
+
+    UpdateTimeEntryInput:
+      type: object
+      properties:
+        client_id:
+          type: integer
+        task_id:
+          type: integer
+          nullable: true
+        duration_minutes:
+          type: integer
+        date:
+          type: string
 
     Lead:
       type: object

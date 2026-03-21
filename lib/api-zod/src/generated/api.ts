@@ -267,6 +267,32 @@ export const CreateTimeEntryBody = zod.object({
 });
 
 /**
+ * @summary Update a time entry
+ */
+export const UpdateTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTimeEntryBody = zod.object({
+  client_id: zod.number().optional(),
+  task_id: zod.number().nullish(),
+  duration_minutes: zod.number().optional(),
+  date: zod.string().optional(),
+});
+
+export const UpdateTimeEntryResponse = zod.object({
+  id: zod.number(),
+  client_id: zod.number(),
+  task_id: zod.number().nullish(),
+  duration_minutes: zod.number(),
+  date: zod.string(),
+  started_at: zod.string().nullish(),
+  ended_at: zod.string().nullish(),
+  client_name: zod.string().nullish(),
+  task_title: zod.string().nullish(),
+});
+
+/**
  * @summary Delete a time entry
  */
 export const DeleteTimeEntryParams = zod.object({

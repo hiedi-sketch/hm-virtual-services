@@ -43,3 +43,4 @@ export * from "./updateSubtaskInput";
 export * from "./updateTaskInput";
 export * from "./updateTaskInputRecurrence";
 export * from "./updateTaskInputStatus";
+export * from "./updateTimeEntryInput";
