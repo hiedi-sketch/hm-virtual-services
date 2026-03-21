@@ -258,7 +258,10 @@ export default function Tasks() {
                           </span>
                         )}
                       </div>
-                      <SubtaskList taskId={task.id} />
+                      <SubtaskList
+                        taskId={task.id}
+                        onAllComplete={() => toggleStatus(task)}
+                      />
                     </div>
                   </div>
                 ))}

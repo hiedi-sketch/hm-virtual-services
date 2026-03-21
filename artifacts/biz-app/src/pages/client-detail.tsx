@@ -252,7 +252,10 @@ export default function ClientDetail() {
                               </span>
                             )}
                           </div>
-                          <SubtaskList taskId={task.id} />
+                          <SubtaskList
+                            taskId={task.id}
+                            onAllComplete={() => toggleStatus(task)}
+                          />
                         </div>
                       </div>
                     ))}

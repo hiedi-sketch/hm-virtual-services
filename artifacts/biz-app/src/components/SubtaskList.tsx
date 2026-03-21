@@ -13,9 +13,10 @@ import { cn } from "@/lib/utils";
 interface SubtaskListProps {
   taskId: number;
   defaultOpen?: boolean;
+  onAllComplete?: () => void;
 }
 
-export function SubtaskList({ taskId, defaultOpen = false }: SubtaskListProps) {
+export function SubtaskList({ taskId, defaultOpen = false, onAllComplete }: SubtaskListProps) {
   const [open, setOpen] = useState(defaultOpen);
   const [newTitle, setNewTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -33,7 +34,20 @@ export function SubtaskList({ taskId, defaultOpen = false }: SubtaskListProps) {
   });
 
   const updateMutation = useUpdateSubtask({
-    mutation: { onSuccess: invalidate },
+    mutation: {
+      onSuccess: (_, vars) => {
+        invalidate();
+        // After toggling a subtask done, check if all are now complete
+        if (vars.data.done && onAllComplete) {
+          const updated = subtasks.map(s =>
+            s.id === vars.id ? { ...s, done: true } : s
+          );
+          if (updated.length > 0 && updated.every(s => s.done)) {
+            onAllComplete();
+          }
+        }
+      },
+    },
   });
 
   const deleteMutation = useDeleteSubtask({
