@@ -163,7 +163,11 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
   const parsed = UpdateTaskResponse.parse(updated);
   res.json(parsed);
   const actor = req.session.user;
-  logAudit("task", id, "updated", `Task "${updated.title}" updated`, { id: actor?.id, name: actor?.name });
+  const action = body.status === "complete" ? "completed" : "updated";
+  const summary = body.status === "complete"
+    ? `Task "${updated.title}" completed`
+    : `Task "${updated.title}" updated`;
+  logAudit("task", id, action, summary, { id: actor?.id, name: actor?.name });
 });
 
 // --- Subtask routes ---

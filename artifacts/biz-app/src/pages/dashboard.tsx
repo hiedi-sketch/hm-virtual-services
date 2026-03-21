@@ -32,16 +32,16 @@ function timeAgo(isoStr: string): string {
 }
 
 const ACTION_STYLES: Record<string, { icon: typeof PlusCircle; color: string; bg: string }> = {
-  created: { icon: PlusCircle,  color: "text-emerald-600", bg: "bg-emerald-50" },
-  updated: { icon: RefreshCw,   color: "text-blue-600",    bg: "bg-blue-50"    },
-  deleted: { icon: Trash2,      color: "text-red-500",     bg: "bg-red-50"     },
+  created:   { icon: PlusCircle,   color: "text-emerald-600", bg: "bg-emerald-50" },
+  updated:   { icon: RefreshCw,    color: "text-blue-600",    bg: "bg-blue-50"    },
+  completed: { icon: CheckCircle2, color: "text-violet-600",  bg: "bg-violet-50"  },
+  deleted:   { icon: Trash2,       color: "text-red-500",     bg: "bg-red-50"     },
 };
 
 const ENTITY_LABELS: Record<string, string> = {
   task:       "Task",
-  time_entry: "Time",
+  time_entry: "Time Logged",
   invoice:    "Invoice",
-  lead:       "Lead",
 };
 
 const quickTaskSchema = z.object({
@@ -101,9 +101,10 @@ export default function Dashboard() {
   const [, navigate] = useLocation();
 
   const { data: auditLogs = [] } = useQuery<AuditLog[]>({
-    queryKey: ["audit"],
-    queryFn: () => fetch("/api/audit", { credentials: "include" }).then(r => r.json()) as Promise<AuditLog[]>,
+    queryKey: ["activity-feed"],
+    queryFn: () => fetch("/api/activity-feed", { credentials: "include" }).then(r => r.json()) as Promise<AuditLog[]>,
     staleTime: 30 * 1000,
+    refetchInterval: 60_000,
   });
 
   // Run page-load automations: spawn recurring tasks + check budget/overdue state
@@ -1267,17 +1268,17 @@ export default function Dashboard() {
         <div className="flex items-center gap-2 mb-4">
           <Activity className="w-5 h-5 text-slate-700" />
           <h2 className="text-xl font-display font-semibold text-slate-900">Recent Activity</h2>
-          <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5 ml-1">Last 30 days</span>
+          <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5 ml-1">Last 50 actions</span>
         </div>
 
         {auditLogs.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center">
             <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-slate-400 text-sm">No activity yet. Changes to tasks, invoices, leads, and time entries will appear here.</p>
+            <p className="text-slate-400 text-sm">No activity yet. Task changes, time logged, and invoice updates will appear here.</p>
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100">
-            {auditLogs.slice(0, 25).map(log => {
+            {auditLogs.map(log => {
               const style = ACTION_STYLES[log.action] ?? ACTION_STYLES.updated;
               const Icon = style.icon;
               const entityLabel = ENTITY_LABELS[log.entity_type] ?? log.entity_type;
