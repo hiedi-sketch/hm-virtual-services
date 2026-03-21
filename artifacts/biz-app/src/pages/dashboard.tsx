@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useGetDashboard, useCreateTask, useListClients, useListInvoices, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -5,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatCurrency } from "@/lib/utils";
-import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2 } from "lucide-react";
+import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const quickTaskSchema = z.object({
@@ -14,14 +15,65 @@ const quickTaskSchema = z.object({
 });
 type QuickTaskValues = z.infer<typeof quickTaskSchema>;
 
+const GOALS_KEY = "dashboard_goals";
+
+interface Goals {
+  incomeGoal: number;
+  clientGoal: number;
+}
+
+function loadGoals(): Goals {
+  try {
+    const raw = localStorage.getItem(GOALS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return { incomeGoal: 4000, clientGoal: 10 };
+}
+
+function saveGoals(g: Goals) {
+  localStorage.setItem(GOALS_KEY, JSON.stringify(g));
+}
+
+function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
+  const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
+  return (
+    <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+      <div
+        className={`h-full rounded-full ${color}`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { data: dashboard, isLoading } = useGetDashboard();
   const { data: clients } = useListClients();
   const { data: invoices = [] } = useListInvoices();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-
   const [, navigate] = useLocation();
+
+  const [goals, setGoals] = useState<Goals>(loadGoals);
+  const [editingGoals, setEditingGoals] = useState(false);
+  const [draftIncome, setDraftIncome] = useState("");
+  const [draftClients, setDraftClients] = useState("");
+
+  const openGoalEdit = () => {
+    setDraftIncome(String(goals.incomeGoal));
+    setDraftClients(String(goals.clientGoal));
+    setEditingGoals(true);
+  };
+
+  const saveGoalEdit = () => {
+    const updated: Goals = {
+      incomeGoal: Math.max(0, Number(draftIncome) || 0),
+      clientGoal: Math.max(0, Number(draftClients) || 0),
+    };
+    setGoals(updated);
+    saveGoals(updated);
+    setEditingGoals(false);
+  };
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<QuickTaskValues>({
     resolver: zodResolver(quickTaskSchema),
@@ -64,6 +116,15 @@ export default function Dashboard() {
 
   const totalPaid = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
   const totalUnpaid = invoices.filter(i => i.status === "unpaid").reduce((s, i) => s + i.amount, 0);
+  const totalProjected = totalPaid + totalUnpaid;
+
+  // Goal progress
+  const incomePaidPct = goals.incomeGoal > 0 ? Math.min(100, Math.round((totalPaid / goals.incomeGoal) * 100)) : 0;
+  const incomeProjectedPct = goals.incomeGoal > 0 ? Math.min(100, Math.round((totalProjected / goals.incomeGoal) * 100)) : 0;
+  const clientPct = goals.clientGoal > 0 ? Math.min(100, Math.round((totalClients / goals.clientGoal) * 100)) : 0;
+
+  const incomeGoalMet = totalPaid >= goals.incomeGoal && goals.incomeGoal > 0;
+  const clientGoalMet = totalClients >= goals.clientGoal && goals.clientGoal > 0;
 
   return (
     <div className="space-y-8">
@@ -75,7 +136,7 @@ export default function Dashboard() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110" />
+          <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/5 rounded-bl-full -mr-4 -mt-4" />
           <div className="flex items-center gap-4">
             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
               <Users className="w-6 h-6" />
@@ -88,7 +149,7 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-200 transition-colors">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110" />
+          <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full -mr-4 -mt-4" />
           <div className="flex items-center gap-4">
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
               <DollarSign className="w-6 h-6" />
@@ -101,7 +162,7 @@ export default function Dashboard() {
         </div>
 
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-purple-200 transition-colors">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110" />
+          <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/5 rounded-bl-full -mr-4 -mt-4" />
           <div className="flex items-center gap-4">
             <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
               <Clock className="w-6 h-6" />
@@ -116,7 +177,7 @@ export default function Dashboard() {
 
       {/* Invoice Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 group hover:border-emerald-200 transition-colors">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-emerald-200 transition-colors">
           <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
             <CheckCircle2 className="w-5 h-5" />
           </div>
@@ -125,7 +186,7 @@ export default function Dashboard() {
             <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid)}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 group hover:border-amber-200 transition-colors">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-amber-200 transition-colors">
           <div className="p-3 bg-amber-50 text-amber-600 rounded-xl shrink-0">
             <FileText className="w-5 h-5" />
           </div>
@@ -134,15 +195,161 @@ export default function Dashboard() {
             <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalUnpaid)}</p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 group hover:border-blue-200 transition-colors">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-blue-200 transition-colors">
           <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
             <DollarSign className="w-5 h-5" />
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Projected Total</p>
-            <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid + totalUnpaid)}</p>
+            <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalProjected)}</p>
           </div>
         </div>
+      </div>
+
+      {/* Goals */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <Target className="w-5 h-5 text-blue-500" />
+            <h2 className="font-semibold text-slate-900">Monthly Goals</h2>
+          </div>
+          {editingGoals ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={saveGoalEdit}
+                className="flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Save
+              </button>
+              <button
+                onClick={() => setEditingGoals(false)}
+                className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={openGoalEdit}
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              Edit Goals
+            </button>
+          )}
+        </div>
+
+        {editingGoals ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Monthly Income Goal ($)</label>
+              <input
+                type="number"
+                min="0"
+                step="100"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={draftIncome}
+                onChange={e => setDraftIncome(e.target.value)}
+                placeholder="e.g. 4000"
+                autoFocus
+              />
+              <p className="text-xs text-slate-400 mt-1">Tracks paid + projected invoices</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Client Count Target</label>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={draftClients}
+                onChange={e => setDraftClients(e.target.value)}
+                placeholder="e.g. 10"
+              />
+              <p className="text-xs text-slate-400 mt-1">Tracks active client count</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Income Goal */}
+            <div>
+              <div className="flex items-end justify-between mb-1.5">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Monthly Income</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    <span className="text-slate-600 font-medium">{formatCurrency(totalPaid)}</span> collected
+                    {totalUnpaid > 0 && (
+                      <> · <span className="text-slate-500">{formatCurrency(totalProjected)} projected</span></>
+                    )}
+                    <span className="text-slate-400"> of </span>
+                    <span className="font-medium text-slate-600">{formatCurrency(goals.incomeGoal)} goal</span>
+                  </p>
+                </div>
+                <div className="text-right shrink-0 ml-4">
+                  {incomeGoalMet ? (
+                    <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Goal met!</span>
+                  ) : (
+                    <span className="text-sm font-bold text-slate-900">{incomePaidPct}%</span>
+                  )}
+                </div>
+              </div>
+              {/* Stacked bar: paid (solid) + projected (lighter) */}
+              <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden relative">
+                {/* Projected layer */}
+                <div
+                  className="absolute inset-y-0 left-0 bg-blue-200 rounded-full"
+                  style={{ width: `${incomeProjectedPct}%` }}
+                />
+                {/* Paid layer on top */}
+                <div
+                  className={`absolute inset-y-0 left-0 rounded-full ${incomeGoalMet ? "bg-emerald-500" : "bg-blue-500"}`}
+                  style={{ width: `${incomePaidPct}%` }}
+                />
+              </div>
+              {goals.incomeGoal > 0 && (
+                <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Collected</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-200 inline-block" /> Projected</span>
+                </div>
+              )}
+            </div>
+
+            {/* Client Goal */}
+            <div>
+              <div className="flex items-end justify-between mb-1.5">
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Active Clients</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    <span className="text-slate-600 font-medium">{totalClients}</span> of{" "}
+                    <span className="font-medium text-slate-600">{goals.clientGoal} target</span>
+                  </p>
+                </div>
+                <div className="text-right shrink-0 ml-4">
+                  {clientGoalMet ? (
+                    <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Goal met!</span>
+                  ) : (
+                    <span className="text-sm font-bold text-slate-900">{clientPct}%</span>
+                  )}
+                </div>
+              </div>
+              <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${clientGoalMet ? "bg-emerald-500" : "bg-violet-500"}`}
+                  style={{ width: `${clientPct}%` }}
+                />
+              </div>
+              {goals.clientGoal > 0 && (
+                <p className="text-xs text-slate-400 mt-1.5">
+                  {goals.clientGoal - totalClients > 0
+                    ? `${goals.clientGoal - totalClients} more client${goals.clientGoal - totalClients !== 1 ? "s" : ""} to reach target`
+                    : "Client target reached!"}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Quick Add Task */}
@@ -205,7 +412,7 @@ export default function Dashboard() {
                 <div
                   key={client.id}
                   onClick={() => navigate(`/clients/${client.id}`)}
-                  className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm card-hover cursor-pointer hover:border-blue-200 transition-colors"
+                  className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm cursor-pointer hover:border-blue-200 transition-colors"
                 >
                   <div className="flex justify-between items-start mb-4">
                     <div>
@@ -224,7 +431,7 @@ export default function Dashboard() {
                     </div>
                     <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-1000 ${barColor}`}
+                        className={`h-full rounded-full ${barColor}`}
                         style={{ width: `${percentage}%` }}
                       />
                     </div>
