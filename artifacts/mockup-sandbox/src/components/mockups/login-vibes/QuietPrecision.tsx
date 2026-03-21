@@ -5,6 +5,8 @@ export function QuietPrecision() {
   const [showPw, setShowPw] = useState(false);
   const [email, setEmail] = useState("");
   const [pw, setPw] = useState("");
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [pwFocused, setPwFocused] = useState(false);
 
   return (
     <div
@@ -12,11 +14,11 @@ export function QuietPrecision() {
       style={{ fontFamily: "'Inter', sans-serif", backgroundColor: "#f9f9f7" }}
     >
       <div className="w-full max-w-xs">
-        {/* Wordmark — no icon, pure typography */}
+        {/* Wordmark — teal brand color */}
         <div className="mb-16">
           <span
             className="text-xs font-bold uppercase tracking-[0.22em]"
-            style={{ color: "#111" }}
+            style={{ color: "#266b75" }}
           >
             Flowstate
           </span>
@@ -38,7 +40,7 @@ export function QuietPrecision() {
           <div className="space-y-1.5">
             <label
               className="text-xs font-semibold uppercase tracking-widest"
-              style={{ color: "#999" }}
+              style={{ color: emailFocused ? "#266b75" : "#999", transition: "color 0.15s" }}
             >
               Email
             </label>
@@ -47,11 +49,12 @@ export function QuietPrecision() {
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
+                onFocus={() => setEmailFocused(true)}
+                onBlur={() => setEmailFocused(false)}
                 placeholder="you@example.com"
-                className="w-full pb-2.5 text-sm bg-transparent outline-none border-0 border-b placeholder:text-gray-300"
+                className="w-full pb-2.5 text-sm bg-transparent outline-none border-0 border-b placeholder:text-gray-300 text-gray-900 transition-all"
                 style={{
-                  borderBottom: "1.5px solid #d4d4d0",
-                  color: "#111",
+                  borderBottom: `1.5px solid ${emailFocused ? "#7dbdc6" : "#d4d4d0"}`,
                 }}
               />
             </div>
@@ -62,14 +65,14 @@ export function QuietPrecision() {
             <div className="flex justify-between items-center">
               <label
                 className="text-xs font-semibold uppercase tracking-widest"
-                style={{ color: "#999" }}
+                style={{ color: pwFocused ? "#266b75" : "#999", transition: "color 0.15s" }}
               >
                 Password
               </label>
               <button
                 type="button"
-                className="text-xs uppercase tracking-widest font-medium"
-                style={{ color: "#999" }}
+                className="text-xs uppercase tracking-widest font-medium transition-colors"
+                style={{ color: "#266b75" }}
               >
                 Forgot?
               </button>
@@ -79,31 +82,32 @@ export function QuietPrecision() {
                 type={showPw ? "text" : "password"}
                 value={pw}
                 onChange={e => setPw(e.target.value)}
+                onFocus={() => setPwFocused(true)}
+                onBlur={() => setPwFocused(false)}
                 placeholder="••••••••"
-                className="w-full pb-2.5 pr-8 text-sm bg-transparent outline-none border-0 border-b placeholder:text-gray-300"
+                className="w-full pb-2.5 pr-6 text-sm bg-transparent outline-none border-0 border-b placeholder:text-gray-300 text-gray-900 transition-all"
                 style={{
-                  borderBottom: "1.5px solid #d4d4d0",
-                  color: "#111",
+                  borderBottom: `1.5px solid ${pwFocused ? "#7dbdc6" : "#d4d4d0"}`,
                 }}
               />
               <button
                 type="button"
                 onClick={() => setShowPw(v => !v)}
-                className="absolute right-0 top-0"
-                style={{ color: "#aaa" }}
+                className="absolute right-0 top-0 transition-colors"
+                style={{ color: pwFocused ? "#7dbdc6" : "#bbb" }}
               >
                 {showPw ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
 
-          {/* CTA — sharp, charcoal, no radius */}
+          {/* CTA — teal, minimal radius */}
           <div className="pt-4">
             <button
               type="submit"
-              className="w-full py-3 text-sm font-semibold text-white transition-opacity hover:opacity-80"
+              className="w-full py-3 text-sm font-semibold text-white transition-opacity hover:opacity-85"
               style={{
-                backgroundColor: "#111",
+                backgroundColor: "#266b75",
                 borderRadius: "3px",
                 letterSpacing: "0.04em",
               }}
@@ -113,7 +117,7 @@ export function QuietPrecision() {
           </div>
         </form>
 
-        {/* Footer — ultra quiet */}
+        {/* Footer */}
         <div className="mt-16 pt-8" style={{ borderTop: "1px solid #e8e8e4" }}>
           <p className="text-xs" style={{ color: "#bbb" }}>
             © 2025 Flowstate · All rights reserved
