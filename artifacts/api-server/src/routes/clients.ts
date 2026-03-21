@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { clientsTable, timeEntriesTable } from "@workspace/db";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { eq, and, gte, lt, sql } from "drizzle-orm";
 import {
   CreateClientBody,
   GetClientParams,
@@ -47,7 +47,7 @@ router.get("/dashboard", async (req, res) => {
       total_minutes: sql<number>`sum(${timeEntriesTable.duration_minutes})`,
     })
     .from(timeEntriesTable)
-    .where(and(gte(timeEntriesTable.date, monthStart), lte(timeEntriesTable.date, monthEnd)))
+    .where(and(gte(timeEntriesTable.date, monthStart), lt(timeEntriesTable.date, monthEnd)))
     .groupBy(timeEntriesTable.client_id);
 
   const minuteMap: Record<number, number> = {};
@@ -58,7 +58,7 @@ router.get("/dashboard", async (req, res) => {
   const dashboard = clients.map((c) => {
     const minutes = minuteMap[c.id] || 0;
     const hours_used = Math.round((minutes / 60) * 10) / 10;
-    const hours_remaining = Math.max(0, Math.round((c.monthly_hour_budget - hours_used) * 10) / 10);
+    const hours_remaining = Math.round((c.monthly_hour_budget - hours_used) * 10) / 10;
     return {
       ...c,
       hours_used_this_month: hours_used,
