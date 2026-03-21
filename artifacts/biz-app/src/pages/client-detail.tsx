@@ -28,8 +28,10 @@ import {
   Pencil,
   X,
   Check,
+  Paperclip,
 } from "lucide-react";
 import { SubtaskList } from "@/components/SubtaskList";
+import { DocumentsTab } from "@/components/DocumentsTab";
 import { formatCurrency } from "@/lib/utils";
 
 function isWeekday(d: Date): boolean {
@@ -515,6 +517,15 @@ export default function ClientDetail() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Client Documents */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Paperclip className="w-5 h-5 text-slate-500" />
+          <h2 className="text-lg font-semibold text-slate-900">Client Documents</h2>
+        </div>
+        <DocumentsTab clientId={client.id} />
       </div>
     </div>
   );

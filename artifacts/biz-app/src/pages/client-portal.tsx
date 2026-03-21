@@ -9,9 +9,10 @@ import {
   CheckSquare, Clock, FileText, LogOut, Briefcase,
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
   Plus, X, User, Sparkles, LayoutDashboard, Send,
-  KeyRound, ShieldCheck,
+  KeyRound, ShieldCheck, Paperclip,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { DocumentsTab } from "@/components/DocumentsTab";
 
 // ---------- types ----------
 type ClientRecord = { id: number; name: string; monthly_hour_budget: number; monthly_fee: number; email?: string };
@@ -69,7 +70,7 @@ const serviceSchema = z.object({
   message: z.string().min(10, "Please include some detail (at least 10 characters)"),
 });
 
-type Tab = "overview" | "tasks" | "invoices" | "profile" | "services";
+type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents";
 
 // ================================================================
 export default function ClientPortal() {
@@ -120,6 +121,7 @@ export default function ClientPortal() {
     { key: "tasks", label: "Tasks", icon: <CheckSquare className="w-4 h-4" />, badge: pendingTasks.length || undefined },
     { key: "invoices", label: "Invoices", icon: <FileText className="w-4 h-4" />, badge: unpaidInvoices.length || undefined },
     { key: "services", label: "Services", icon: <Sparkles className="w-4 h-4" /> },
+    { key: "documents", label: "Documents", icon: <Paperclip className="w-4 h-4" /> },
     { key: "profile", label: "My Profile", icon: <User className="w-4 h-4" /> },
   ];
 
@@ -207,6 +209,9 @@ export default function ClientPortal() {
         )}
         {activeTab === "services" && (
           <ServicesTab serviceRequests={serviceRequests} queryClient={queryClient} toast={toast} />
+        )}
+        {activeTab === "documents" && (
+          <DocumentsTab />
         )}
         {activeTab === "profile" && (
           <ProfileTab user={user} refreshUser={refreshUser} toast={toast} />

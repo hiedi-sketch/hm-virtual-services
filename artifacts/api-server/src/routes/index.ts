@@ -16,6 +16,7 @@ import externalRouter from "./external";
 import auditRouter from "./audit";
 import serviceRequestsRouter from "./service-requests";
 import appNotificationsRouter from "./app-notifications";
+import uploadsRouter from "./uploads";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use(externalRouter);
 router.use(auditRouter);
 router.use(serviceRequestsRouter);
 router.use(appNotificationsRouter);
+router.use(uploadsRouter);
 
 export default router;

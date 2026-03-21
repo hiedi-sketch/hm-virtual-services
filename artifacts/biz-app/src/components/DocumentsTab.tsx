@@ -1,0 +1,221 @@
+import { useState, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Upload, FileText, FileImage, File, Download, Trash2, AlertCircle, CloudUpload, Loader2
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+
+type FileUploadRecord = {
+  id: number;
+  client_id: number;
+  uploaded_by_user_id: number | null;
+  original_name: string;
+  stored_name: string;
+  mimetype: string;
+  size_bytes: number;
+  created_at: string;
+};
+
+const ALLOWED_TYPES = "application/pdf,image/jpeg,image/png,image/gif,image/webp,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/plain";
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short", day: "numeric", year: "numeric"
+  });
+}
+
+function FileIcon({ mimetype }: { mimetype: string }) {
+  if (mimetype.startsWith("image/")) return <FileImage className="w-5 h-5 text-blue-500" />;
+  if (mimetype === "application/pdf") return <FileText className="w-5 h-5 text-red-500" />;
+  return <File className="w-5 h-5 text-slate-400" />;
+}
+
+interface Props {
+  /** When rendered inside admin/team client-detail page, pass the client's ID to scope uploads */
+  clientId?: number;
+}
+
+export function DocumentsTab({ clientId }: Props) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  const qKey = ["uploads", clientId ?? "mine"];
+
+  const { data: files = [], isLoading } = useQuery<FileUploadRecord[]>({
+    queryKey: qKey,
+    queryFn: async () => {
+      const qs = clientId ? `?client_id=${clientId}` : "";
+      const res = await fetch(`/api/uploads${qs}`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    staleTime: 30_000,
+  });
+
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      if (clientId) fd.append("client_id", String(clientId));
+      const res = await fetch("/api/uploads", {
+        method: "POST",
+        credentials: "include",
+        body: fd,
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Upload failed");
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qKey });
+      toast({ title: "File uploaded successfully" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/uploads/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok && res.status !== 204) throw new Error("Delete failed");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qKey });
+      toast({ title: "File deleted" });
+    },
+    onError: () => {
+      toast({ title: "Delete failed", variant: "destructive" });
+    },
+  });
+
+  function handleFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    Array.from(fileList).forEach(f => uploadMutation.mutate(f));
+  }
+
+  const isAdmin = user?.role === "admin";
+
+  return (
+    <div className="space-y-5">
+      {/* Drop zone */}
+      <div
+        onDragEnter={() => setDragging(true)}
+        onDragLeave={() => setDragging(false)}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDrop={e => {
+          e.preventDefault();
+          setDragging(false);
+          handleFiles(e.dataTransfer.files);
+        }}
+        className={cn(
+          "relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer",
+          dragging ? "border-blue-500 bg-blue-50" : "border-slate-200 hover:border-blue-300 hover:bg-slate-50"
+        )}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ALLOWED_TYPES}
+          className="hidden"
+          onChange={e => handleFiles(e.target.files)}
+        />
+        {uploadMutation.isPending ? (
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="w-9 h-9 text-blue-400 animate-spin" />
+            <p className="text-sm font-medium text-blue-600">Uploading…</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3">
+            <div className="p-3 bg-blue-50 rounded-2xl">
+              <CloudUpload className={cn("w-8 h-8", dragging ? "text-blue-600" : "text-blue-400")} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-700">Drop files here or click to browse</p>
+              <p className="text-xs text-slate-400 mt-1">
+                PDF, Word, Excel, CSV, images, TXT · Max 10 MB per file
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* File list */}
+      {isLoading ? (
+        <div className="text-center py-8 text-slate-400 animate-pulse text-sm">Loading files…</div>
+      ) : files.length === 0 ? (
+        <div className="text-center py-10 bg-white rounded-2xl border border-slate-200">
+          <Upload className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+          <p className="text-sm font-medium text-slate-500">No files yet</p>
+          <p className="text-xs text-slate-400 mt-0.5">Upload receipts, documents, or any relevant files above.</p>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
+            <FileText className="w-4 h-4 text-slate-400" />
+            <span className="text-sm font-semibold text-slate-700">
+              {files.length} file{files.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <ul className="divide-y divide-slate-50">
+            {files.map(f => (
+              <li key={f.id} className="flex items-center gap-3 px-5 py-3.5 group hover:bg-slate-50/60 transition-colors">
+                <FileIcon mimetype={f.mimetype} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-800 truncate">{f.original_name}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {formatBytes(f.size_bytes)} · {formatDate(f.created_at)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <a
+                    href={`/api/uploads/${f.id}/download`}
+                    download={f.original_name}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    title="Download"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete "${f.original_name}"?`)) deleteMutation.mutate(f.id);
+                      }}
+                      disabled={deleteMutation.isPending}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-40"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-xs text-slate-400 text-center flex items-center justify-center gap-1">
+        <AlertCircle className="w-3 h-3" />
+        Files are stored securely and only visible to you and your account team.
+      </p>
+    </div>
+  );
+}
