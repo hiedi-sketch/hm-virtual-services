@@ -2,11 +2,13 @@ import express, { type Express } from "express";
 import cors from "cors";
 import session from "express-session";
 import bcrypt from "bcryptjs";
+import cron from "node-cron";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db";
+import { spawnRecurringTasks } from "./lib/spawn-recurring";
 
 const app: Express = express();
 
@@ -69,5 +71,14 @@ async function seedAdmin() {
 }
 
 seedAdmin();
+
+// Run on startup to catch any tasks that became due while the server was down
+spawnRecurringTasks().catch((err) => logger.error({ err }, "Startup spawn failed"));
+
+// Schedule daily at midnight server time
+cron.schedule("0 0 * * *", () => {
+  logger.info("Running scheduled recurring task spawn");
+  spawnRecurringTasks().catch((err) => logger.error({ err }, "Scheduled spawn failed"));
+});
 
 export default app;

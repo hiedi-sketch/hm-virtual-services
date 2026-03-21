@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   useListTasks,
   useCreateTask,
   useUpdateTask,
   useListClients,
-  useSpawnRecurringTasks,
   getListTasksQueryKey,
   TaskStatus,
   Task,
@@ -88,26 +87,6 @@ export default function Tasks() {
 
   const invalidateTasks = () =>
     queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-
-  // Spawn recurring tasks once on mount
-  const spawnMutation = useSpawnRecurringTasks({
-    mutation: {
-      onSuccess: (spawned) => {
-        if (spawned.length > 0) {
-          invalidateTasks();
-          toast({
-            title: `${spawned.length} recurring task${spawned.length > 1 ? "s" : ""} generated`,
-          });
-        }
-      },
-    },
-  });
-
-  useEffect(() => {
-    spawnMutation.mutate({});
-    // Only on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const createMutation = useCreateTask({
     mutation: {
