@@ -3,9 +3,11 @@ import {
   useGetClient,
   useListTasks,
   useUpdateTask,
+  useCreateTask,
   useGetDashboard,
   getListTasksQueryKey,
   TaskStatus,
+  Task,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +24,14 @@ import {
 } from "lucide-react";
 import { SubtaskList } from "@/components/SubtaskList";
 import { formatCurrency } from "@/lib/utils";
+
+function nextDueDate(recurrence: string): string {
+  const d = new Date();
+  if (recurrence === "daily") d.setDate(d.getDate() + 1);
+  else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
+  else if (recurrence === "monthly") d.setMonth(d.getMonth() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export default function ClientDetail() {
   const params = useParams<{ id: string }>();
@@ -51,8 +61,31 @@ export default function ClientDetail() {
     },
   });
 
-  const toggleStatus = (id: number, currentStatus: TaskStatus) => {
-    updateTask.mutate({ id, data: { status: currentStatus === "pending" ? "complete" : "pending" } });
+  const spawnNextTask = useCreateTask({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+        toast({ title: "Next occurrence scheduled" });
+      },
+    },
+  });
+
+  const toggleStatus = (task: Task) => {
+    const completing = task.status === "pending";
+    updateTask.mutate({ id: task.id, data: { status: completing ? "complete" : "pending" } });
+
+    if (completing && task.recurrence) {
+      spawnNextTask.mutate({
+        data: {
+          title: task.title,
+          description: task.description ?? undefined,
+          client_id: task.client_id,
+          assigned_to: task.assigned_to ?? undefined,
+          recurrence: task.recurrence,
+          due_date: nextDueDate(task.recurrence),
+        },
+      });
+    }
   };
 
   const pendingTasks = tasks?.filter(t => t.status === "pending") ?? [];
@@ -182,8 +215,8 @@ export default function ClientDetail() {
                     {pendingTasks.map(task => (
                       <div key={task.id} className="flex gap-3 items-start p-3 rounded-xl hover:bg-slate-50 transition-colors">
                         <button
-                          onClick={() => toggleStatus(task.id, task.status)}
-                          disabled={updateTask.isPending}
+                          onClick={() => toggleStatus(task)}
+                          disabled={updateTask.isPending || spawnNextTask.isPending}
                           className="mt-0.5 text-slate-300 hover:text-blue-500 transition-colors shrink-0"
                         >
                           <Circle className="w-5 h-5" />
@@ -229,7 +262,7 @@ export default function ClientDetail() {
                     {completedTasks.map(task => (
                       <div key={task.id} className="flex gap-3 items-start p-3 rounded-xl bg-slate-50/50">
                         <button
-                          onClick={() => toggleStatus(task.id, task.status)}
+                          onClick={() => toggleStatus(task)}
                           disabled={updateTask.isPending}
                           className="mt-0.5 text-emerald-500 hover:text-emerald-600 transition-colors shrink-0"
                         >
