@@ -6,8 +6,9 @@ import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Building2, Mail, Briefcase, DollarSign } from "lucide-react";
+import { Plus, Building2, Mail, Briefcase, DollarSign, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -24,6 +25,7 @@ export default function Clients() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   
   const createMutation = useCreateClient({
     mutation: {
@@ -71,16 +73,17 @@ export default function Clients() {
                 <th className="px-6 py-4">Service Type</th>
                 <th className="px-6 py-4">Monthly Budget</th>
                 <th className="px-6 py-4 text-right">Monthly Fee</th>
+                <th className="px-4 py-4" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-slate-400">Loading clients...</td>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400">Loading clients...</td>
                 </tr>
               ) : clients?.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center">
+                  <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Building2 className="w-12 h-12 text-slate-300 mb-3" />
                       <p className="text-slate-500 font-medium">No clients found</p>
@@ -92,9 +95,13 @@ export default function Clients() {
                 </tr>
               ) : (
                 clients?.map(client => (
-                  <tr key={client.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <tr
+                    key={client.id}
+                    onClick={() => navigate(`/clients/${client.id}`)}
+                    className="hover:bg-blue-50/40 transition-colors cursor-pointer group"
+                  >
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900">{client.name}</div>
+                      <div className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{client.name}</div>
                       <div className="text-slate-500 text-xs flex items-center gap-1 mt-0.5">
                         <Mail className="w-3 h-3" /> {client.email}
                       </div>
@@ -112,6 +119,9 @@ export default function Clients() {
                     </td>
                     <td className="px-6 py-4 text-right font-medium text-slate-900">
                       {formatCurrency(client.monthly_fee)}
+                    </td>
+                    <td className="px-4 py-4 text-slate-300 group-hover:text-blue-400 transition-colors">
+                      <ChevronRight className="w-4 h-4" />
                     </td>
                   </tr>
                 ))

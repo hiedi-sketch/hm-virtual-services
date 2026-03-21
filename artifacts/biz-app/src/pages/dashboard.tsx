@@ -1,5 +1,6 @@
 import { useGetDashboard, useCreateTask, useListClients, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -18,6 +19,8 @@ export default function Dashboard() {
   const { data: clients } = useListClients();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const [, navigate] = useLocation();
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<QuickTaskValues>({
     resolver: zodResolver(quickTaskSchema),
@@ -164,7 +167,11 @@ export default function Dashboard() {
                   'bg-slate-100 text-slate-700 border-slate-200';
 
               return (
-                <div key={client.id} className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm card-hover">
+                <div
+                  key={client.id}
+                  onClick={() => navigate(`/clients/${client.id}`)}
+                  className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm card-hover cursor-pointer hover:border-blue-200 transition-colors"
+                >
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="font-semibold text-slate-900 text-lg">{client.name}</h3>

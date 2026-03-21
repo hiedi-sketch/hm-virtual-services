@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
 import Clients from "@/pages/clients";
+import ClientDetail from "@/pages/client-detail";
 import Tasks from "@/pages/tasks";
 import TimeTracking from "@/pages/time";
 import Leads from "@/pages/leads";
@@ -29,6 +30,7 @@ function Router() {
           <Redirect to="/dashboard" />
         </Route>
         <Route path="/dashboard" component={Dashboard} />
+        <Route path="/clients/:id" component={ClientDetail} />
         <Route path="/clients" component={Clients} />
         <Route path="/tasks" component={Tasks} />
         <Route path="/time" component={TimeTracking} />
