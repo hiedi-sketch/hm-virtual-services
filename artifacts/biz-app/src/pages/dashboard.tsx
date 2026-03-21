@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useGetDashboard, useCreateTask, useCreateTimeEntry, useListClients, useListInvoices, useListLeads, useListTasks, getListTasksQueryKey } from "@workspace/api-client-react";
+import { useGetDashboard, getGetDashboardQueryKey, useCreateTask, useCreateTimeEntry, useListClients, useListInvoices, useListLeads, useListTasks, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -143,6 +143,7 @@ export default function Dashboard() {
         resetTime({ date: new Date().toLocaleDateString("sv-SE") });
         setQuickPanel(null);
         toast({ title: "Time logged successfully" });
+        queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
       },
       onError: () => {
         toast({ title: "Failed to log time", variant: "destructive" });
@@ -779,14 +780,18 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Client Utilization */}
+      {/* Package Hours */}
       <div>
-        <h2 className="text-xl font-display font-semibold text-slate-900 mb-4">Client Utilization</h2>
+        <div className="flex items-center gap-2 mb-4">
+          <Clock className="w-5 h-5 text-blue-500" />
+          <h2 className="text-xl font-display font-semibold text-slate-900">Package Hours</h2>
+          <span className="text-xs text-slate-400 font-medium">— current month</span>
+        </div>
         {dashClients.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
             <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-slate-900">No clients yet</h3>
-            <p className="text-slate-500 mt-1">Add clients to see their hours utilization here.</p>
+            <p className="text-slate-500 mt-1">Add clients to track their package hours here.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -798,41 +803,63 @@ export default function Dashboard() {
               const barColor = isOverBudget ? 'bg-red-500' : isNearBudget ? 'bg-amber-500' : 'bg-blue-500';
               const badgeColor = isOverBudget ? 'bg-red-100 text-red-700 border-red-200' :
                 isNearBudget ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                  'bg-slate-100 text-slate-700 border-slate-200';
+                  'bg-emerald-50 text-emerald-700 border-emerald-200';
+              const remainingColor = isOverBudget ? 'text-red-600' : isNearBudget ? 'text-amber-600' : 'text-emerald-600';
+
+              const serviceLabel = client.service_type === "va" ? "VA" : client.service_type === "bookkeeping" ? "Bookkeeping" : "Hybrid";
 
               return (
                 <div
                   key={client.id}
                   onClick={() => navigate(`/clients/${client.id}`)}
-                  className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm cursor-pointer hover:border-blue-200 transition-colors"
+                  className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm cursor-pointer hover:border-blue-200 transition-colors"
                 >
-                  <div className="flex justify-between items-start mb-4">
+                  {/* Header */}
+                  <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h3 className="font-semibold text-slate-900 text-lg">{client.name}</h3>
-                      <p className="text-sm text-slate-500 capitalize">{client.service_type}</p>
+                      <h3 className="font-semibold text-slate-900">{client.name}</h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        <span className="font-medium text-slate-500">{serviceLabel}</span>
+                        {" · "}
+                        {client.monthly_hour_budget}h/mo package
+                      </p>
                     </div>
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${badgeColor}`}>
-                      {percentage}% Used
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${badgeColor}`}>
+                      {percentage}%
                     </span>
                   </div>
 
-                  <div className="mt-6">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-slate-600 font-medium">{client.hours_used_this_month} hrs used</span>
-                      <span className="text-slate-500">{client.hours_remaining} hrs remaining</span>
+                  {/* Hours numbers */}
+                  <div className="flex items-end justify-between mb-2">
+                    <div>
+                      <span className="text-2xl font-bold text-slate-900">{client.hours_used_this_month}</span>
+                      <span className="text-sm text-slate-400 ml-1">/ {client.monthly_hour_budget} hrs</span>
                     </div>
-                    <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full ${barColor}`}
-                        style={{ width: `${percentage}%` }}
-                      />
-                    </div>
+                    <span className={`text-sm font-semibold ${remainingColor}`}>
+                      {isOverBudget
+                        ? `${Math.abs(client.hours_remaining)} hrs over`
+                        : `${client.hours_remaining} hrs left`}
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                      style={{ width: `${percentage}%` }}
+                    />
                   </div>
 
                   {isOverBudget && (
-                    <div className="mt-4 flex items-center gap-2 text-xs font-medium text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-100">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
-                      Client has exceeded monthly budget.
+                    <div className="mt-3 flex items-center gap-2 text-xs font-medium text-red-600 bg-red-50 p-2 rounded-lg border border-red-100">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      Exceeded monthly package
+                    </div>
+                  )}
+                  {isNearBudget && !isOverBudget && (
+                    <div className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-100">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      Approaching package limit
                     </div>
                   )}
                 </div>
