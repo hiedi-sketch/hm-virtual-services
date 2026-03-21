@@ -10,6 +10,8 @@ export const tasksTable = pgTable("tasks", {
   assigned_to: text("assigned_to"),
   status: text("status", { enum: ["pending", "complete"] }).notNull().default("pending"),
   due_date: text("due_date"),
+  recurrence: text("recurrence", { enum: ["daily", "weekly", "monthly"] }),
+  last_generated_at: text("last_generated_at"),
 });
 
 export const insertTaskSchema = createInsertSchema(tasksTable).omit({ id: true });

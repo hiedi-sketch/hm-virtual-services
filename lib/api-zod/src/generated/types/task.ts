@@ -5,6 +5,7 @@
  * Business Manager API
  * OpenAPI spec version: 0.1.0
  */
+import type { TaskRecurrence } from "./taskRecurrence";
 import type { TaskStatus } from "./taskStatus";
 
 export interface Task {
@@ -16,4 +17,6 @@ export interface Task {
   status: TaskStatus;
   due_date?: string | null;
   client_name?: string | null;
+  recurrence?: TaskRecurrence;
+  last_generated_at?: string | null;
 }

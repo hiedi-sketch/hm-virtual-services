@@ -5,6 +5,7 @@
  * Business Manager API
  * OpenAPI spec version: 0.1.0
  */
+import type { UpdateTaskInputRecurrence } from "./updateTaskInputRecurrence";
 import type { UpdateTaskInputStatus } from "./updateTaskInputStatus";
 
 export interface UpdateTaskInput {
@@ -13,4 +14,5 @@ export interface UpdateTaskInput {
   assigned_to?: string | null;
   status?: UpdateTaskInputStatus;
   due_date?: string | null;
+  recurrence?: UpdateTaskInputRecurrence;
 }

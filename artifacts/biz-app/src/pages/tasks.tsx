@@ -1,21 +1,51 @@
-import { useState } from "react";
-import { useListTasks, useCreateTask, useUpdateTask, useListClients, getListTasksQueryKey, TaskStatus } from "@workspace/api-client-react";
+import { useState, useEffect } from "react";
+import {
+  useListTasks,
+  useCreateTask,
+  useUpdateTask,
+  useListClients,
+  useSpawnRecurringTasks,
+  getListTasksQueryKey,
+  TaskStatus,
+} from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, CheckCircle2, Circle, Calendar, User as UserIcon, Filter } from "lucide-react";
+import {
+  Plus,
+  CheckCircle2,
+  Circle,
+  Calendar,
+  User as UserIcon,
+  Filter,
+  RefreshCw,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
+
+const RECURRENCE_OPTIONS = [
+  { value: "", label: "No recurrence" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+];
+
+const RECURRENCE_BADGE: Record<string, string> = {
+  daily: "bg-violet-100 text-violet-700",
+  weekly: "bg-blue-100 text-blue-700",
+  monthly: "bg-teal-100 text-teal-700",
+};
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   client_id: z.coerce.number().min(1, "Client is required"),
   assigned_to: z.string().optional(),
-  due_date: z.string().optional()
+  due_date: z.string().optional(),
+  recurrence: z.enum(["daily", "weekly", "monthly"]).optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -25,12 +55,32 @@ export default function Tasks() {
   const { data: tasks, isLoading } = useListTasks({ clientId: selectedClientId });
   const { data: clients } = useListClients();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   const invalidateTasks = () =>
     queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+
+  // Spawn recurring tasks once on mount
+  const spawnMutation = useSpawnRecurringTasks({
+    mutation: {
+      onSuccess: (spawned) => {
+        if (spawned.length > 0) {
+          invalidateTasks();
+          toast({
+            title: `${spawned.length} recurring task${spawned.length > 1 ? "s" : ""} generated`,
+          });
+        }
+      },
+    },
+  });
+
+  useEffect(() => {
+    spawnMutation.mutate({});
+    // Only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const createMutation = useCreateTask({
     mutation: {
@@ -38,35 +88,39 @@ export default function Tasks() {
         invalidateTasks();
         setIsModalOpen(false);
         reset();
-        toast({ title: "Task created successfully" });
-      }
-    }
+        toast({ title: "Task created" });
+      },
+    },
   });
 
   const updateMutation = useUpdateTask({
     mutation: {
       onSuccess: () => {
         invalidateTasks();
-        toast({ title: "Task status updated" });
-      }
-    }
+      },
+    },
   });
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
-    resolver: zodResolver(formSchema)
+    resolver: zodResolver(formSchema),
   });
 
   const onSubmit = (data: FormValues) => {
-    createMutation.mutate({ data });
+    createMutation.mutate({
+      data: {
+        ...data,
+        recurrence: data.recurrence || null,
+      },
+    });
   };
 
   const toggleStatus = (id: number, currentStatus: TaskStatus) => {
-    const newStatus = currentStatus === 'pending' ? 'complete' : 'pending';
+    const newStatus = currentStatus === "pending" ? "complete" : "pending";
     updateMutation.mutate({ id, data: { status: newStatus } });
   };
 
-  const pendingTasks = tasks?.filter(t => t.status === 'pending') || [];
-  const completedTasks = tasks?.filter(t => t.status === 'complete') || [];
+  const pendingTasks = tasks?.filter(t => t.status === "pending") || [];
+  const completedTasks = tasks?.filter(t => t.status === "complete") || [];
 
   return (
     <div className="space-y-8">
@@ -117,25 +171,36 @@ export default function Tasks() {
               <div className="space-y-2">
                 {pendingTasks.map(task => (
                   <div key={task.id} className="p-4 rounded-xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/30 transition-colors flex gap-4 group">
-                    <button 
+                    <button
                       onClick={() => toggleStatus(task.id, task.status)}
                       disabled={updateMutation.isPending}
-                      className="mt-0.5 text-slate-300 hover:text-blue-500 transition-colors"
+                      className="mt-0.5 text-slate-300 hover:text-blue-500 transition-colors shrink-0"
                     >
                       <Circle className="w-6 h-6" />
                     </button>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-slate-900">{task.title}</h4>
-                      {task.description && <p className="text-sm text-slate-500 mt-1 line-clamp-2">{task.description}</p>}
-                      
-                      <div className="flex flex-wrap items-center gap-3 mt-3">
-                        <span className="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 px-2 py-1 rounded-md">
-                          {task.client_name || 'Unknown Client'}
+                      {task.description && (
+                        <p className="text-sm text-slate-500 mt-1 line-clamp-2">{task.description}</p>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                          {task.client_name || "Unknown Client"}
                         </span>
+                        {task.recurrence && (
+                          <span className={cn(
+                            "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
+                            RECURRENCE_BADGE[task.recurrence]
+                          )}>
+                            <RefreshCw className="w-2.5 h-2.5" />
+                            {task.recurrence.charAt(0).toUpperCase() + task.recurrence.slice(1)}
+                          </span>
+                        )}
                         {task.due_date && (
                           <span className="inline-flex items-center gap-1 text-xs text-slate-500">
                             <Calendar className="w-3.5 h-3.5" />
-                            {new Date(task.due_date + 'T00:00:00').toLocaleDateString()}
+                            {new Date(task.due_date + "T00:00:00").toLocaleDateString()}
                           </span>
                         )}
                         {task.assigned_to && (
@@ -172,17 +237,17 @@ export default function Tasks() {
               <div className="space-y-2">
                 {completedTasks.map(task => (
                   <div key={task.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex gap-4">
-                    <button 
+                    <button
                       onClick={() => toggleStatus(task.id, task.status)}
                       disabled={updateMutation.isPending}
-                      className="mt-0.5 text-emerald-500 hover:text-emerald-600 transition-colors"
+                      className="mt-0.5 text-emerald-500 hover:text-emerald-600 transition-colors shrink-0"
                     >
                       <CheckCircle2 className="w-6 h-6" />
                     </button>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-slate-500 line-through decoration-slate-300">{task.title}</h4>
-                      <div className="flex items-center gap-3 mt-1.5">
-                        <span className="inline-flex items-center text-[10px] uppercase font-bold tracking-wider text-slate-400">
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
                           {task.client_name}
                         </span>
                       </div>
@@ -195,6 +260,7 @@ export default function Tasks() {
         </div>
       </div>
 
+      {/* New Task Modal */}
       <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="New Task">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
@@ -205,7 +271,11 @@ export default function Tasks() {
 
           <div>
             <label className="label-text">Description</label>
-            <textarea {...register("description")} className="input-field min-h-[100px] resize-none" placeholder="Add any details or instructions here..." />
+            <textarea
+              {...register("description")}
+              className="input-field min-h-[80px] resize-none"
+              placeholder="Add any details or instructions here..."
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -219,22 +289,38 @@ export default function Tasks() {
               </select>
               {errors.client_id && <p className="text-destructive text-xs mt-1">{errors.client_id.message}</p>}
             </div>
-            
+
             <div>
               <label className="label-text">Due Date (Optional)</label>
               <input type="date" {...register("due_date")} className="input-field" />
             </div>
           </div>
-          
-          <div>
-            <label className="label-text">Assigned To (Optional)</label>
-            <input {...register("assigned_to")} className="input-field" placeholder="Jane Doe" />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label-text">Assigned To (Optional)</label>
+              <input {...register("assigned_to")} className="input-field" placeholder="Jane Doe" />
+            </div>
+
+            <div>
+              <label className="label-text flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                Recurrence
+              </label>
+              <select {...register("recurrence")} className="input-field">
+                {RECURRENCE_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="pt-4 flex justify-end gap-3">
-            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">Cancel</button>
+            <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary">
+              Cancel
+            </button>
             <button type="submit" disabled={isSubmitting || createMutation.isPending} className="btn-primary">
-              {isSubmitting || createMutation.isPending ? "Creating..." : "Create Task"}
+              {createMutation.isPending ? "Creating..." : "Create Task"}
             </button>
           </div>
         </form>

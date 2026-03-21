@@ -5,6 +5,7 @@
  * Business Manager API
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateTaskInputRecurrence } from "./createTaskInputRecurrence";
 
 export interface CreateTaskInput {
   title: string;
@@ -12,4 +13,5 @@ export interface CreateTaskInput {
   client_id: number;
   assigned_to?: string | null;
   due_date?: string | null;
+  recurrence?: CreateTaskInputRecurrence;
 }

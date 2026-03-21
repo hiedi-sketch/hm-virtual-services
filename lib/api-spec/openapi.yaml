@@ -135,6 +135,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/Task"
 
+  /tasks/spawn-recurring:
+    post:
+      operationId: spawnRecurringTasks
+      tags: [tasks]
+      summary: Check and spawn new tasks for any recurring tasks that are due
+      responses:
+        "200":
+          description: List of newly spawned tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+
   /tasks/{taskId}/subtasks:
     get:
       operationId: listSubtasks
@@ -446,6 +461,13 @@ components:
         client_name:
           type: string
           nullable: true
+        recurrence:
+          type: string
+          enum: [daily, weekly, monthly]
+          nullable: true
+        last_generated_at:
+          type: string
+          nullable: true
       required:
         - id
         - title
@@ -468,6 +490,10 @@ components:
         due_date:
           type: string
           nullable: true
+        recurrence:
+          type: string
+          enum: [daily, weekly, monthly]
+          nullable: true
       required:
         - title
         - client_id
@@ -488,6 +514,10 @@ components:
           enum: [pending, complete]
         due_date:
           type: string
+          nullable: true
+        recurrence:
+          type: string
+          enum: [daily, weekly, monthly]
           nullable: true
 
     TimeEntry:

@@ -620,6 +620,87 @@ export const useCreateTask = <
 };
 
 /**
+ * @summary Check and spawn new tasks for any recurring tasks that are due
+ */
+export const getSpawnRecurringTasksUrl = () => {
+  return `/api/tasks/spawn-recurring`;
+};
+
+export const spawnRecurringTasks = async (
+  options?: RequestInit,
+): Promise<Task[]> => {
+  return customFetch<Task[]>(getSpawnRecurringTasksUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSpawnRecurringTasksMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spawnRecurringTasks>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof spawnRecurringTasks>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["spawnRecurringTasks"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof spawnRecurringTasks>>,
+    void
+  > = () => {
+    return spawnRecurringTasks(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SpawnRecurringTasksMutationResult = NonNullable<
+  Awaited<ReturnType<typeof spawnRecurringTasks>>
+>;
+
+export type SpawnRecurringTasksMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Check and spawn new tasks for any recurring tasks that are due
+ */
+export const useSpawnRecurringTasks = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof spawnRecurringTasks>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof spawnRecurringTasks>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getSpawnRecurringTasksMutationOptions(options));
+};
+
+/**
  * @summary List subtasks for a task
  */
 export const getListSubtasksUrl = (taskId: number) => {

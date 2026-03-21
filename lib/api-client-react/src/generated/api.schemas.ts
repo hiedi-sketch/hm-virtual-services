@@ -71,6 +71,16 @@ export const TaskStatus = {
   complete: "complete",
 } as const;
 
+export type TaskRecurrence =
+  | (typeof TaskRecurrence)[keyof typeof TaskRecurrence]
+  | null;
+
+export const TaskRecurrence = {
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
 export interface Task {
   id: number;
   title: string;
@@ -80,7 +90,19 @@ export interface Task {
   status: TaskStatus;
   due_date?: string | null;
   client_name?: string | null;
+  recurrence?: TaskRecurrence;
+  last_generated_at?: string | null;
 }
+
+export type CreateTaskInputRecurrence =
+  | (typeof CreateTaskInputRecurrence)[keyof typeof CreateTaskInputRecurrence]
+  | null;
+
+export const CreateTaskInputRecurrence = {
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
 
 export interface CreateTaskInput {
   title: string;
@@ -88,6 +110,7 @@ export interface CreateTaskInput {
   client_id: number;
   assigned_to?: string | null;
   due_date?: string | null;
+  recurrence?: CreateTaskInputRecurrence;
 }
 
 export type UpdateTaskInputStatus =
@@ -98,12 +121,23 @@ export const UpdateTaskInputStatus = {
   complete: "complete",
 } as const;
 
+export type UpdateTaskInputRecurrence =
+  | (typeof UpdateTaskInputRecurrence)[keyof typeof UpdateTaskInputRecurrence]
+  | null;
+
+export const UpdateTaskInputRecurrence = {
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+} as const;
+
 export interface UpdateTaskInput {
   title?: string;
   description?: string | null;
   assigned_to?: string | null;
   status?: UpdateTaskInputStatus;
   due_date?: string | null;
+  recurrence?: UpdateTaskInputRecurrence;
 }
 
 export interface TimeEntry {
