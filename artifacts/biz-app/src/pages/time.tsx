@@ -9,7 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 
 const formSchema = z.object({
   client_id: z.coerce.number().min(1, "Please select a client"),
-  task_id: z.coerce.number().optional().nullable(),
+  task_id: z.preprocess(
+    val => (val === "" || val === null || val === undefined) ? null : Number(val),
+    z.number().nullable()
+  ),
   duration_minutes: z.coerce.number().min(1, "Duration must be at least 1 minute"),
   date: z.string().min(1, "Date is required"),
 });
@@ -35,7 +38,8 @@ export default function TimeTracking() {
   });
 
   const selectedClientId = watch("client_id");
-  const availableTasks = tasks?.filter(t => t.client_id === selectedClientId && t.status === 'pending') || [];
+  const selectedClientIdNum = Number(selectedClientId);
+  const availableTasks = tasks?.filter(t => t.client_id === selectedClientIdNum && t.status === 'pending') || [];
 
   const createMutation = useCreateTimeEntry({
     mutation: {
@@ -52,12 +56,7 @@ export default function TimeTracking() {
   });
 
   const onSubmit = (data: FormValues) => {
-    // Convert empty task_id string/number back to null if needed
-    const payload = {
-      ...data,
-      task_id: data.task_id || null
-    };
-    createMutation.mutate({ data: payload });
+    createMutation.mutate({ data });
   };
 
   const formatDuration = (mins: number) => {
@@ -103,14 +102,14 @@ export default function TimeTracking() {
                 <select 
                   {...register("task_id")} 
                   className="input-field bg-slate-50"
-                  disabled={!selectedClientId || availableTasks.length === 0}
+                  disabled={!selectedClientIdNum || availableTasks.length === 0}
                 >
                   <option value="">No specific task...</option>
                   {availableTasks.map(t => (
                     <option key={t.id} value={t.id}>{t.title}</option>
                   ))}
                 </select>
-                {selectedClientId && availableTasks.length === 0 && (
+                {selectedClientIdNum > 0 && availableTasks.length === 0 && (
                   <p className="text-xs text-slate-400 mt-1">No pending tasks for this client.</p>
                 )}
               </div>
