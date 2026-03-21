@@ -25,11 +25,25 @@ import {
 import { SubtaskList } from "@/components/SubtaskList";
 import { formatCurrency } from "@/lib/utils";
 
+function isWeekday(d: Date): boolean {
+  const day = d.getDay();
+  return day >= 1 && day <= 5;
+}
+
 function nextDueDate(recurrence: string): string {
   const d = new Date();
-  if (recurrence === "daily") d.setDate(d.getDate() + 1);
-  else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
-  else if (recurrence === "monthly") d.setMonth(d.getMonth() + 1);
+  if (recurrence === "daily") {
+    d.setDate(d.getDate() + 1);
+  } else if (recurrence === "weekdays") {
+    d.setDate(d.getDate() + 1);
+    while (!isWeekday(d)) d.setDate(d.getDate() + 1);
+  } else if (recurrence === "weekly") {
+    d.setDate(d.getDate() + 7);
+  } else if (recurrence === "monthly") {
+    d.setMonth(d.getMonth() + 1);
+  } else if (recurrence === "annually") {
+    d.setFullYear(d.getFullYear() + 1);
+  }
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

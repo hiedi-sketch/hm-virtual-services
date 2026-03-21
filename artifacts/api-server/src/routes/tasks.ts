@@ -24,23 +24,41 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function isWeekday(d: Date): boolean {
+  const day = d.getDay(); // 0=Sun, 6=Sat
+  return day >= 1 && day <= 5;
+}
+
 function isDue(recurrence: string, lastGeneratedAt: string | null): boolean {
-  if (!lastGeneratedAt) return true;
-  const last = new Date(lastGeneratedAt + "T00:00:00");
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  if (recurrence === "weekdays" && !isWeekday(today)) return false;
+  if (!lastGeneratedAt) return true;
+  const last = new Date(lastGeneratedAt + "T00:00:00");
   const diffDays = Math.floor((today.getTime() - last.getTime()) / 86_400_000);
   if (recurrence === "daily") return diffDays >= 1;
+  if (recurrence === "weekdays") return diffDays >= 1;
   if (recurrence === "weekly") return diffDays >= 7;
   if (recurrence === "monthly") return diffDays >= 30;
+  if (recurrence === "annually") return diffDays >= 365;
   return false;
 }
 
 function nextDueDate(recurrence: string): string {
   const d = new Date();
-  if (recurrence === "daily") d.setDate(d.getDate() + 1);
-  else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
-  else if (recurrence === "monthly") d.setMonth(d.getMonth() + 1);
+  if (recurrence === "daily") {
+    d.setDate(d.getDate() + 1);
+  } else if (recurrence === "weekdays") {
+    // Skip to next weekday
+    d.setDate(d.getDate() + 1);
+    while (!isWeekday(d)) d.setDate(d.getDate() + 1);
+  } else if (recurrence === "weekly") {
+    d.setDate(d.getDate() + 7);
+  } else if (recurrence === "monthly") {
+    d.setMonth(d.getMonth() + 1);
+  } else if (recurrence === "annually") {
+    d.setFullYear(d.getFullYear() + 1);
+  }
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 

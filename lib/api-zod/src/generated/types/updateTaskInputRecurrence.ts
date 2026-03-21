@@ -12,6 +12,8 @@ export type UpdateTaskInputRecurrence =
 
 export const UpdateTaskInputRecurrence = {
   daily: "daily",
+  weekdays: "weekdays",
   weekly: "weekly",
   monthly: "monthly",
+  annually: "annually",
 } as const;

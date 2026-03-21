@@ -27,25 +27,43 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
 
+function isWeekday(d: Date): boolean {
+  const day = d.getDay();
+  return day >= 1 && day <= 5;
+}
+
 function nextDueDate(recurrence: string): string {
   const d = new Date();
-  if (recurrence === "daily") d.setDate(d.getDate() + 1);
-  else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
-  else if (recurrence === "monthly") d.setMonth(d.getMonth() + 1);
+  if (recurrence === "daily") {
+    d.setDate(d.getDate() + 1);
+  } else if (recurrence === "weekdays") {
+    d.setDate(d.getDate() + 1);
+    while (!isWeekday(d)) d.setDate(d.getDate() + 1);
+  } else if (recurrence === "weekly") {
+    d.setDate(d.getDate() + 7);
+  } else if (recurrence === "monthly") {
+    d.setMonth(d.getMonth() + 1);
+  } else if (recurrence === "annually") {
+    d.setFullYear(d.getFullYear() + 1);
+  }
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 const RECURRENCE_OPTIONS = [
   { value: "", label: "No recurrence" },
   { value: "daily", label: "Daily" },
+  { value: "weekdays", label: "Weekdays (Mon–Fri)" },
   { value: "weekly", label: "Weekly" },
   { value: "monthly", label: "Monthly" },
+  { value: "annually", label: "Annually" },
 ];
 
 const RECURRENCE_BADGE: Record<string, string> = {
   daily: "bg-violet-100 text-violet-700",
+  weekdays: "bg-orange-100 text-orange-700",
   weekly: "bg-blue-100 text-blue-700",
   monthly: "bg-teal-100 text-teal-700",
+  annually: "bg-rose-100 text-rose-700",
 };
 
 const formSchema = z.object({
@@ -54,7 +72,7 @@ const formSchema = z.object({
   client_id: z.coerce.number().min(1, "Client is required"),
   assigned_to: z.string().optional(),
   due_date: z.string().optional(),
-  recurrence: z.enum(["daily", "weekly", "monthly"]).optional().nullable(),
+  recurrence: z.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;

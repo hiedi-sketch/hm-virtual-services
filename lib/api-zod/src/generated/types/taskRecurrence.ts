@@ -12,6 +12,8 @@ export type TaskRecurrence =
 
 export const TaskRecurrence = {
   daily: "daily",
+  weekdays: "weekdays",
   weekly: "weekly",
   monthly: "monthly",
+  annually: "annually",
 } as const;

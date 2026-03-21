@@ -463,7 +463,7 @@ components:
           nullable: true
         recurrence:
           type: string
-          enum: [daily, weekly, monthly]
+          enum: [daily, weekdays, weekly, monthly, annually]
           nullable: true
         last_generated_at:
           type: string
@@ -492,7 +492,7 @@ components:
           nullable: true
         recurrence:
           type: string
-          enum: [daily, weekly, monthly]
+          enum: [daily, weekdays, weekly, monthly, annually]
           nullable: true
       required:
         - title
@@ -517,7 +517,7 @@ components:
           nullable: true
         recurrence:
           type: string
-          enum: [daily, weekly, monthly]
+          enum: [daily, weekdays, weekly, monthly, annually]
           nullable: true
 
     TimeEntry:
