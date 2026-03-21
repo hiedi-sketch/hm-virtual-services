@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  CheckSquare, Clock, FileText, LogOut, Briefcase,
+  CheckSquare, Clock, FileText, LogOut,
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
   Plus, X, User, Sparkles, LayoutDashboard, Send,
   KeyRound, ShieldCheck, Paperclip, DollarSign,
@@ -108,7 +108,7 @@ export default function ClientPortal() {
   const hoursThisMonth = Math.round((thisMonthMinutes / 60) * 10) / 10;
   const hoursBudget = clientRecord?.monthly_hour_budget ?? 0;
   const hoursPct = hoursBudget > 0 ? Math.min(100, Math.round((hoursThisMonth / hoursBudget) * 100)) : 0;
-  const hoursColor = hoursPct >= 100 ? "bg-red-500" : hoursPct >= 85 ? "bg-amber-500" : "bg-blue-500";
+  const hoursColor = hoursPct >= 100 ? "bg-red-500" : hoursPct >= 85 ? "bg-amber-500" : "bg-primary";
 
   const completedTasks = tasks.filter(t => t.status === "complete");
   const pendingTasks = tasks.filter(t => t.status !== "complete");
@@ -130,16 +130,14 @@ export default function ClientPortal() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary/10 p-1.5 rounded-lg text-primary">
-              <Briefcase className="w-4 h-4" />
-            </div>
-            <span className="font-bold text-slate-900 text-sm tracking-tight">Flowstate</span>
-            <span className="text-slate-400 text-sm ml-1">· Client Portal</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold uppercase tracking-[0.22em]" style={{ color: "#266b75" }}>Flowstate</span>
+            <span className="text-slate-300 text-sm">·</span>
+            <span className="text-slate-500 text-sm">Client Portal</span>
           </div>
           <div className="flex items-center gap-3">
             <span className="text-sm text-slate-600 hidden sm:block">{user?.name}</span>
@@ -247,7 +245,7 @@ function OverviewTab({
   const vaRate = clientRecord?.va_hourly_rate ?? 0;
   const bkFee = clientRecord?.bk_fee ?? (hasBK && !hasVA ? (clientRecord?.monthly_fee ?? 0) : 0);
   const vaHoursPct = vaLimit > 0 ? Math.min(100, Math.round((hoursThisMonth / vaLimit) * 100)) : 0;
-  const vaHoursColor = vaHoursPct >= 100 ? "bg-red-500" : vaHoursPct >= 85 ? "bg-amber-500" : "bg-blue-500";
+  const vaHoursColor = vaHoursPct >= 100 ? "bg-red-500" : vaHoursPct >= 85 ? "bg-amber-500" : "bg-primary";
   const [showAllTasks, setShowAllTasks] = useState(false);
   const displayedTasks = showAllTasks ? pendingTasks : pendingTasks.slice(0, 5);
 
@@ -287,7 +285,7 @@ function OverviewTab({
         {/* Hours */}
         <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
           <div className="flex items-center gap-2">
-            <div className="bg-blue-50 p-2 rounded-lg shrink-0"><Clock className="w-5 h-5 text-blue-600" /></div>
+            <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: "hsl(188 51% 30% / 0.1)" }}><Clock className="w-5 h-5" style={{ color: "#266b75" }} /></div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Hours Used</p>
               <p className="text-2xl font-bold text-slate-900 leading-none mt-0.5">{hoursThisMonth}h</p>
