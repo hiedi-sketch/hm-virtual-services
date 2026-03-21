@@ -214,6 +214,17 @@ export default function Dashboard() {
     t => t.status !== "complete" && t.due_date != null && t.due_date < todayStr
   );
 
+  // Follow-up reminders: leads (non-closed) with follow_up_date today or within 7 days
+  const followUpLeads = leads.filter(l => {
+    if (l.status === "closed" || !l.follow_up_date) return false;
+    return l.follow_up_date >= todayStr && l.follow_up_date <= in7DaysStr;
+  }).sort((a, b) => (a.follow_up_date ?? "").localeCompare(b.follow_up_date ?? ""));
+
+  const overdueFollowUpLeads = leads.filter(l => {
+    if (l.status === "closed" || !l.follow_up_date) return false;
+    return l.follow_up_date < todayStr;
+  });
+
   // CRM stats
   const totalLeadCount = leads.length;
   const totalPipelineValue = leads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
@@ -238,8 +249,60 @@ export default function Dashboard() {
       </div>
 
       {/* Notifications */}
-      {(overdueInvoices.length > 0 && !overdueDismissed) || (overdueTasks.length > 0 && !overdueTasksDismissed) ? (
+      {((overdueInvoices.length > 0 && !overdueDismissed) || (overdueTasks.length > 0 && !overdueTasksDismissed) || followUpLeads.length > 0 || overdueFollowUpLeads.length > 0) ? (
         <div className="space-y-2">
+          {/* Overdue follow-ups */}
+          {overdueFollowUpLeads.length > 0 && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <Calendar className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-red-700">
+                  {overdueFollowUpLeads.length} overdue follow-up{overdueFollowUpLeads.length !== 1 ? "s" : ""}
+                </p>
+                <p className="text-xs text-red-500 mt-0.5 truncate">
+                  {overdueFollowUpLeads.map(l => l.name).join(" · ")}
+                </p>
+              </div>
+              <button
+                onClick={() => navigate("/leads")}
+                className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700 bg-red-100 hover:bg-red-200 px-2.5 py-1 rounded-lg transition-colors"
+              >
+                View
+              </button>
+            </div>
+          )}
+          {/* Upcoming follow-ups */}
+          {followUpLeads.length > 0 && (
+            <div className="bg-white border border-blue-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-4 h-4 text-blue-500 shrink-0" />
+                <p className="text-sm font-semibold text-blue-700">
+                  {followUpLeads.length} follow-up{followUpLeads.length !== 1 ? "s" : ""} due this week
+                </p>
+                <button
+                  onClick={() => navigate("/leads")}
+                  className="ml-auto text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  View all →
+                </button>
+              </div>
+              <ul className="space-y-1">
+                {followUpLeads.map(l => {
+                  const d = new Date(l.follow_up_date! + "T00:00:00");
+                  const diffDays = Math.round((d.getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+                  return (
+                    <li key={l.id} className="flex items-center gap-2 text-xs text-slate-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                      <span className="font-medium truncate">{l.name}</span>
+                      <span className="ml-auto shrink-0 text-slate-400">
+                        {diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow" : `In ${diffDays} days`}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           {overdueTasks.length > 0 && !overdueTasksDismissed && (
             <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
               <TriangleAlert className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />

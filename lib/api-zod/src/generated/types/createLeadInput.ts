@@ -14,4 +14,5 @@ export interface CreateLeadInput {
   status?: CreateLeadInputStatus;
   lead_source?: string | null;
   notes?: string | null;
+  follow_up_date?: string | null;
 }

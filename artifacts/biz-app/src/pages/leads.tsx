@@ -13,7 +13,7 @@ import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote } from "lucide-react";
+import { Plus, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +24,7 @@ const formSchema = z.object({
   status: z.nativeEnum(LeadStatus).default("new"),
   lead_source: z.string().optional(),
   notes: z.string().optional(),
+  follow_up_date: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -239,7 +240,15 @@ export default function Leads() {
     defaultValues: { status: "new" },
   });
 
-  const onSubmit = (data: FormValues) => createMutation.mutate({ data });
+  const onSubmit = (data: FormValues) => createMutation.mutate({
+    data: {
+      ...data,
+      email: data.email || null,
+      follow_up_date: data.follow_up_date || null,
+      lead_source: data.lead_source || null,
+      notes: data.notes || null,
+    },
+  });
 
   const setStatus = (id: number, status: LeadStatus) =>
     updateMutation.mutate({ id, data: { status } });
@@ -466,6 +475,21 @@ export default function Leads() {
                         </div>
                       </div>
 
+                      {/* Follow-up date */}
+                      {lead.follow_up_date && (
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                          <Calendar className="w-3 h-3 shrink-0 text-blue-400" />
+                          <span>
+                            Follow up:{" "}
+                            <span className="font-medium text-slate-700">
+                              {new Date(lead.follow_up_date + "T00:00:00").toLocaleDateString("en-US", {
+                                month: "short", day: "numeric", year: "numeric",
+                              })}
+                            </span>
+                          </span>
+                        </div>
+                      )}
+
                       {/* Notes */}
                       <LeadNotes leadId={lead.id} notes={lead.notes} />
                     </div>
@@ -521,14 +545,24 @@ export default function Leads() {
             </div>
           </div>
 
-          <div>
-            <label className="label-text">Status</label>
-            <select {...register("status")} className="input-field">
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="proposal">Proposal</option>
-              <option value="closed">Closed (Won)</option>
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label-text">Status</label>
+              <select {...register("status")} className="input-field">
+                <option value="new">New</option>
+                <option value="contacted">Contacted</option>
+                <option value="proposal">Proposal</option>
+                <option value="closed">Closed (Won)</option>
+              </select>
+            </div>
+            <div>
+              <label className="label-text">Follow-up Date (Optional)</label>
+              <input
+                type="date"
+                {...register("follow_up_date")}
+                className="input-field"
+              />
+            </div>
           </div>
 
           <div>

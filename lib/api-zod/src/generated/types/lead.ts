@@ -15,4 +15,5 @@ export interface Lead {
   status: LeadStatus;
   lead_source?: string | null;
   notes?: string | null;
+  follow_up_date?: string | null;
 }

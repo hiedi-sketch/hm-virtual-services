@@ -10,6 +10,7 @@ export const leadsTable = pgTable("leads", {
   status: text("status", { enum: ["new", "contacted", "proposal", "closed"] }).notNull().default("new"),
   lead_source: text("lead_source"),
   notes: text("notes"),
+  follow_up_date: text("follow_up_date"),
 });
 
 export const insertLeadSchema = createInsertSchema(leadsTable).omit({ id: true });
