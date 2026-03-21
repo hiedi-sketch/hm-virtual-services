@@ -15,6 +15,7 @@ import Leads from "@/pages/leads";
 import Invoices from "@/pages/invoices";
 import Team from "@/pages/team";
 import Reports from "@/pages/reports";
+import ApiKeys from "@/pages/api-keys";
 import Login from "@/pages/login";
 import ClientPortal from "@/pages/client-portal";
 
@@ -62,6 +63,7 @@ function Router() {
         <Route path="/leads" component={Leads} />
         {user.role === "admin" && <Route path="/team" component={Team} />}
         {user.role === "admin" && <Route path="/reports" component={Reports} />}
+        {user.role === "admin" && <Route path="/api-keys" component={ApiKeys} />}
         <Route component={NotFound} />
       </Switch>
     </Layout>

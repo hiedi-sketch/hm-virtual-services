@@ -10,6 +10,7 @@ import {
   UserCog,
   LogOut,
   BarChart2,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -23,6 +24,7 @@ const ADMIN_NAV = [
   { href: "/leads", label: "Leads", icon: Megaphone },
   { href: "/reports", label: "Reports", icon: BarChart2 },
   { href: "/team", label: "Team", icon: UserCog },
+  { href: "/api-keys", label: "API Keys", icon: KeyRound },
 ];
 
 const TEAM_MEMBER_NAV = [

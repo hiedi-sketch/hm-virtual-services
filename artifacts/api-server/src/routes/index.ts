@@ -11,6 +11,8 @@ import reportsRouter from "./reports";
 import notificationsRouter from "./notifications";
 import automationsRouter from "./automations";
 import stripeRouter from "./stripe";
+import apikeysRouter from "./apikeys";
+import externalRouter from "./external";
 
 const router: IRouter = Router();
 
@@ -26,5 +28,7 @@ router.use(reportsRouter);
 router.use(notificationsRouter);
 router.use(automationsRouter);
 router.use(stripeRouter);
+router.use(apikeysRouter);
+router.use(externalRouter);
 
 export default router;
