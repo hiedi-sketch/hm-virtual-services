@@ -71,7 +71,10 @@ const formSchema = z.object({
   client_id: z.coerce.number().min(1, "Client is required"),
   assigned_to: z.string().optional(),
   due_date: z.string().optional(),
-  recurrence: z.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).optional().nullable(),
+  recurrence: z.preprocess(
+    val => (val === "" ? null : val),
+    z.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullable().optional()
+  ),
 });
 
 type FormValues = z.infer<typeof formSchema>;
