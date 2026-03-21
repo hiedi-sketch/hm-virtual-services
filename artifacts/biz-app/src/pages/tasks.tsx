@@ -171,13 +171,13 @@ export default function Tasks() {
           <h1 className="text-3xl font-display font-bold text-slate-900">Tasks</h1>
           <p className="text-slate-500 mt-1">Manage your to-dos across all clients.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="flex flex-1 sm:flex-none items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 min-h-[44px] shadow-sm">
             <Filter className="w-4 h-4 text-slate-400 shrink-0" />
             <select
               value={selectedClientId ?? ""}
               onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : undefined)}
-              className="text-sm text-slate-700 bg-transparent border-none outline-none cursor-pointer pr-1"
+              className="flex-1 text-sm text-slate-700 bg-transparent border-none outline-none cursor-pointer pr-1 min-w-0"
             >
               <option value="">All Clients</option>
               {clients?.map(c => (
@@ -185,7 +185,7 @@ export default function Tasks() {
               ))}
             </select>
           </div>
-          <button onClick={() => setIsModalOpen(true)} className="btn-primary">
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary shrink-0">
             <Plus className="w-5 h-5 mr-2" />
             New Task
           </button>

@@ -321,7 +321,7 @@ export default function Dashboard() {
               const diffDays = Math.round((dueDate.getTime() - new Date().setHours(0,0,0,0)) / 86400000);
               const dueSoon = diffDays <= 2;
               return (
-                <li key={inv.id} className="flex items-center gap-3 px-5 py-3">
+                <li key={inv.id} className="flex flex-wrap items-center gap-2 px-5 py-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-800 truncate">
                       {clientMap[inv.client_id] ?? `Client #${inv.client_id}`}
@@ -330,16 +330,18 @@ export default function Dashboard() {
                       <p className="text-xs text-slate-400 truncate">{inv.description}</p>
                     )}
                   </div>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${
-                    dueSoon
-                      ? "bg-red-50 text-red-600 border-red-200"
-                      : "bg-amber-50 text-amber-700 border-amber-200"
-                  }`}>
-                    {diffDays === 0 ? "Due today" : diffDays === 1 ? "Due tomorrow" : `Due in ${diffDays} days`}
-                  </span>
-                  <span className="text-sm font-semibold text-slate-900 shrink-0 w-20 text-right">
-                    {formatCurrency(inv.amount)}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
+                      dueSoon
+                        ? "bg-red-50 text-red-600 border-red-200"
+                        : "bg-amber-50 text-amber-700 border-amber-200"
+                    }`}>
+                      {diffDays === 0 ? "Due today" : diffDays === 1 ? "Due tomorrow" : `Due in ${diffDays} days`}
+                    </span>
+                    <span className="text-sm font-semibold text-slate-900">
+                      {formatCurrency(inv.amount)}
+                    </span>
+                  </div>
                 </li>
               );
             })}
