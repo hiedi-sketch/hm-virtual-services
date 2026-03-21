@@ -24,6 +24,69 @@ const updateUserSchema = z.object({
   password: z.string().min(6).optional(),
 });
 
+// Self-profile update — any authenticated user can update their own name, email, password
+router.patch("/users/me", requireAuth, async (req, res) => {
+  const userId = req.session.user!.id;
+  const schema = z.object({
+    name: z.string().min(1).optional(),
+    email: z.string().email().optional(),
+    current_password: z.string().optional(),
+    new_password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  });
+
+  const body = schema.parse(req.body);
+
+  // If changing password, verify current password first
+  if (body.new_password) {
+    if (!body.current_password) {
+      res.status(400).json({ error: "Current password is required to set a new password" });
+      return;
+    }
+    const [existing] = await db
+      .select({ hash: usersTable.password_hash })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    const valid = existing && await bcrypt.compare(body.current_password, existing.hash);
+    if (!valid) {
+      res.status(400).json({ error: "Current password is incorrect" });
+      return;
+    }
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (body.name) updates["name"] = body.name;
+  if (body.email) updates["email"] = body.email.toLowerCase();
+  if (body.new_password) updates["password_hash"] = await bcrypt.hash(body.new_password, 12);
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "Nothing to update" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(usersTable)
+    .set(updates)
+    .where(eq(usersTable.id, userId))
+    .returning({
+      id: usersTable.id,
+      email: usersTable.email,
+      name: usersTable.name,
+      role: usersTable.role,
+      client_id: usersTable.client_id,
+    });
+
+  if (!updated) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  // Update session so /api/auth/me reflects new name/email immediately
+  req.session.user = { ...req.session.user!, ...updated };
+
+  res.json(updated);
+});
+
 // Lightweight endpoint — any logged-in staff can fetch team members for task assignment dropdown
 router.get("/users/team-members", requireAuth, async (req, res) => {
   const members = await db

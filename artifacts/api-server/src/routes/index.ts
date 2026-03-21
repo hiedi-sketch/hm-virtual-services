@@ -14,6 +14,7 @@ import stripeRouter from "./stripe";
 import apikeysRouter from "./apikeys";
 import externalRouter from "./external";
 import auditRouter from "./audit";
+import serviceRequestsRouter from "./service-requests";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(stripeRouter);
 router.use(apikeysRouter);
 router.use(externalRouter);
 router.use(auditRouter);
+router.use(serviceRequestsRouter);
 
 export default router;

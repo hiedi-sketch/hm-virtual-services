@@ -69,7 +69,20 @@ router.get("/tasks", requireAuth, async (req, res) => {
   res.json(parsed);
 });
 
-router.post("/tasks", requireRole("admin", "team_member"), async (req, res) => {
+router.post("/tasks", requireAuth, async (req, res) => {
+  const user = req.session.user!;
+
+  // Clients may only create tasks for their own client_id
+  if (user.role === "client") {
+    if (!user.client_id) {
+      res.status(403).json({ error: "No client account linked" });
+      return;
+    }
+    req.body.client_id = user.client_id;
+    // Clients cannot assign tasks to team members
+    delete req.body.assigned_to;
+  }
+
   const body = CreateTaskBody.parse(req.body);
   const [task] = await db.insert(tasksTable).values(body).returning();
   res.status(201).json(task);
