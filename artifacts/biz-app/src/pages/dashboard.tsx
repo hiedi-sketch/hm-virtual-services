@@ -322,11 +322,31 @@ export default function Dashboard() {
     closed: leads.filter(l => l.status === "closed").length,
   };
   const CRM_STAGES = [
-    { key: "new" as const, label: "New", dot: "bg-blue-500", pill: "bg-blue-50 text-blue-700 border-blue-200" },
-    { key: "contacted" as const, label: "Contacted", dot: "bg-amber-500", pill: "bg-amber-50 text-amber-700 border-amber-200" },
-    { key: "proposal" as const, label: "Proposal", dot: "bg-violet-500", pill: "bg-violet-50 text-violet-700 border-violet-200" },
-    { key: "closed" as const, label: "Closed", dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    { key: "new" as const, label: "New", dot: "bg-blue-500", bar: "bg-blue-400", pill: "bg-blue-50 text-blue-700 border-blue-200" },
+    { key: "contacted" as const, label: "Contacted", dot: "bg-amber-500", bar: "bg-amber-400", pill: "bg-amber-50 text-amber-700 border-amber-200" },
+    { key: "proposal" as const, label: "Proposal", dot: "bg-violet-500", bar: "bg-violet-400", pill: "bg-violet-50 text-violet-700 border-violet-200" },
+    { key: "closed" as const, label: "Closed", dot: "bg-emerald-500", bar: "bg-emerald-400", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
   ];
+
+  // ── Analytics computed values ─────────────────────────────────────────────
+  const completedTasks = allTasks.filter(t => t.status === "complete").length;
+  const pendingTasks = allTasks.filter(t => t.status !== "complete").length;
+  const totalTaskCount = allTasks.length;
+  const completedPct = totalTaskCount > 0 ? Math.round((completedTasks / totalTaskCount) * 100) : 0;
+
+  const sortedOverdueTasks = [...overdueTasks]
+    .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""))
+    .slice(0, 5);
+
+  const hoursGoal = totalHoursBudgeted; // budgeted hours = natural ceiling
+  const hoursPct = hoursGoal > 0 ? Math.min(100, Math.round((totalHoursUsed / hoursGoal) * 100)) : 0;
+  const topHoursClients = [...dashClients]
+    .sort((a, b) => b.hours_used_this_month - a.hours_used_this_month)
+    .slice(0, 4);
+
+  const closedLeadValue = leads
+    .filter(l => l.status === "closed")
+    .reduce((s, l) => s + (l.estimated_value ?? 0), 0);
 
   return (
     <div className="space-y-8">
@@ -736,6 +756,229 @@ export default function Dashboard() {
 
           </div>
         )}
+      </div>
+
+      {/* ── Analytics ────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        {/* Card 1 — Task Completion */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
+            <h2 className="font-semibold text-slate-900 text-sm">Task Completion</h2>
+            <span className="ml-auto text-xs text-slate-400">{totalTaskCount} total</span>
+          </div>
+
+          <div className="flex items-center gap-6">
+            {/* CSS donut via conic-gradient */}
+            <div className="relative w-24 h-24 shrink-0">
+              <div
+                className="w-full h-full rounded-full"
+                style={{
+                  background: totalTaskCount === 0
+                    ? '#e2e8f0'
+                    : completedPct === 100
+                    ? '#22c55e'
+                    : `conic-gradient(#22c55e 0% ${completedPct}%, #f1f5f9 ${completedPct}% 100%)`,
+                }}
+              />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-16 h-16 rounded-full bg-white flex flex-col items-center justify-center">
+                  <span className="text-xl font-bold text-slate-900 leading-none">{completedPct}%</span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">done</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="flex-1 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="text-sm text-slate-600">Completed</span>
+                </div>
+                <span className="text-sm font-bold text-slate-900">{completedTasks}</span>
+              </div>
+              <div className="h-px bg-slate-100" />
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-200 shrink-0" />
+                  <span className="text-sm text-slate-600">Pending</span>
+                </div>
+                <span className="text-sm font-bold text-slate-900">{pendingTasks}</span>
+              </div>
+              {completedPct === 100 && totalTaskCount > 0 && (
+                <p className="text-xs font-semibold text-emerald-600">All tasks complete!</p>
+              )}
+            </div>
+          </div>
+
+          {/* Mini stacked bar */}
+          {totalTaskCount > 0 && (
+            <div className="h-2 w-full rounded-full overflow-hidden flex bg-slate-100">
+              <div
+                className="h-full bg-emerald-500 transition-all duration-500"
+                style={{ width: `${completedPct}%` }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Card 2 — Lead Pipeline */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+            <h2 className="font-semibold text-slate-900 text-sm">Lead Pipeline</h2>
+            <span className="ml-auto text-xs text-slate-400">{totalLeadCount} leads</span>
+          </div>
+
+          {/* Stacked bar */}
+          <div className="h-4 w-full rounded-full overflow-hidden flex gap-px bg-slate-100">
+            {totalLeadCount === 0 ? (
+              <div className="h-full w-full rounded-full bg-slate-100" />
+            ) : (
+              CRM_STAGES.map(s => {
+                const count = leadsByStatus[s.key];
+                const pct = (count / totalLeadCount) * 100;
+                return pct > 0 ? (
+                  <div
+                    key={s.key}
+                    className={`h-full transition-all duration-500 ${s.bar}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                ) : null;
+              })
+            )}
+          </div>
+
+          {/* Stage breakdown */}
+          <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+            {CRM_STAGES.map(s => (
+              <div key={s.key} className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                  <span className="text-xs text-slate-500">{s.label}</span>
+                </div>
+                <span className="text-xs font-semibold text-slate-800">{leadsByStatus[s.key]}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Value footer */}
+          <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
+            <span className="text-xs text-slate-400">Closed value</span>
+            <span className="text-sm font-bold text-emerald-600">{formatCurrency(closedLeadValue)}</span>
+          </div>
+        </div>
+
+        {/* Card 3 — Hours This Month */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <Clock className="w-4 h-4" />
+            </div>
+            <h2 className="font-semibold text-slate-900 text-sm">Hours This Month</h2>
+            <span className="ml-auto text-xs text-slate-400">{hoursPct}% of budget</span>
+          </div>
+
+          {/* Overall big bar */}
+          <div className="space-y-1.5">
+            <div className="flex items-baseline justify-between">
+              <span className="text-2xl font-bold text-slate-900">{totalHoursUsed}h</span>
+              <span className="text-sm text-slate-400">of {totalHoursBudgeted}h budgeted</span>
+            </div>
+            <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${hoursPct >= 100 ? 'bg-red-500' : hoursPct >= 85 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                style={{ width: `${hoursPct}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Per-client breakdown */}
+          {topHoursClients.length > 0 && (
+            <div className="space-y-2.5 border-t border-slate-100 pt-3">
+              {topHoursClients.map(c => {
+                const cPct = c.monthly_hour_budget > 0
+                  ? Math.min(100, Math.round((c.hours_used_this_month / c.monthly_hour_budget) * 100))
+                  : 0;
+                const color = cPct >= 100 ? 'bg-red-400' : cPct >= 85 ? 'bg-amber-400' : 'bg-blue-400';
+                return (
+                  <div key={c.client_id} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-600 truncate max-w-[65%]">{c.client_name}</span>
+                      <span className="text-xs font-semibold text-slate-800 shrink-0">{c.hours_used_this_month}h / {c.monthly_hour_budget}h</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${cPct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Card 4 — Overdue Tasks */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            <div className={`p-2 rounded-lg ${sortedOverdueTasks.length > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'}`}>
+              <TriangleAlert className="w-4 h-4" />
+            </div>
+            <h2 className="font-semibold text-slate-900 text-sm">Overdue Tasks</h2>
+            {sortedOverdueTasks.length > 0 && (
+              <span className="ml-auto text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">
+                {overdueTasks.length} overdue
+              </span>
+            )}
+          </div>
+
+          {sortedOverdueTasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              </div>
+              <p className="text-sm font-medium text-slate-700">No overdue tasks</p>
+              <p className="text-xs text-slate-400">Everything's on schedule.</p>
+            </div>
+          ) : (
+            <ul className="space-y-2.5">
+              {sortedOverdueTasks.map(t => {
+                const daysLate = t.due_date
+                  ? Math.max(0, Math.floor((Date.now() - new Date(t.due_date + "T00:00:00").getTime()) / 86_400_000))
+                  : 0;
+                return (
+                  <li key={t.id} className="flex items-start gap-3">
+                    <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0 mt-1.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{t.title}</p>
+                      <p className="text-xs text-slate-400">
+                        {clientMap[t.client_id ?? 0] ?? "Unassigned"} · due {t.due_date}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                      {daysLate}d late
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {overdueTasks.length > 5 && (
+            <button
+              onClick={() => navigate("/tasks")}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              +{overdueTasks.length - 5} more overdue — view all →
+            </button>
+          )}
+        </div>
+
       </div>
 
       {/* Quick Actions */}
