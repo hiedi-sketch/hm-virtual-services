@@ -52,6 +52,8 @@ async function buildAll() {
       "oracledb",
       "mongodb-client-encryption",
       "nodemailer",
+      "stripe",
+      "stripe-replit-sync",
       "handlebars",
       "knex",
       "typeorm",

@@ -10,6 +10,7 @@ import usersRouter from "./users";
 import reportsRouter from "./reports";
 import notificationsRouter from "./notifications";
 import automationsRouter from "./automations";
+import stripeRouter from "./stripe";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use(usersRouter);
 router.use(reportsRouter);
 router.use(notificationsRouter);
 router.use(automationsRouter);
+router.use(stripeRouter);
 
 export default router;

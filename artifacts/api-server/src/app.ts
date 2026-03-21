@@ -9,8 +9,53 @@ import { logger } from "./lib/logger";
 import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db";
 import { spawnRecurringTasks } from "./lib/spawn-recurring";
+import { WebhookHandlers } from "./lib/webhookHandlers";
+import { invoicesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const app: Express = express();
+
+// ── Stripe webhook: must be registered BEFORE express.json() ─────────────
+// Stripe sends a raw Buffer body; express.json() would break signature verification.
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const signature = req.headers["stripe-signature"];
+    if (!signature) {
+      res.status(400).json({ error: "Missing stripe-signature" });
+      return;
+    }
+    const sig = Array.isArray(signature) ? signature[0]! : signature;
+    try {
+      // Let stripe-replit-sync process the webhook for its own sync
+      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+
+      // Also handle checkout.session.completed to mark invoices as paid.
+      // stripe-replit-sync already verified the signature above, so we parse the event
+      // directly from the raw body without re-verifying.
+      try {
+        const rawBody = (req.body as Buffer).toString("utf-8");
+        const event = JSON.parse(rawBody) as { type: string; data: { object: Record<string, unknown> } };
+        if (event.type === "checkout.session.completed") {
+          const session = event.data.object as { metadata?: Record<string, string>; payment_status?: string };
+          const invoiceId = Number(session.metadata?.["invoice_id"]);
+          if (invoiceId && session.payment_status === "paid") {
+            await db.update(invoicesTable).set({ status: "paid" }).where(eq(invoicesTable.id, invoiceId));
+            logger.info({ invoiceId }, "Invoice marked paid via Stripe webhook");
+          }
+        }
+      } catch (parseErr) {
+        logger.error({ parseErr }, "Failed to parse Stripe event for invoice update");
+      }
+
+      res.status(200).json({ received: true });
+    } catch (err: any) {
+      logger.error({ err }, "Stripe webhook error");
+      res.status(400).json({ error: "Webhook processing error" });
+    }
+  }
+);
 
 app.use(
   pinoHttp({

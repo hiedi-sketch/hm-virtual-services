@@ -212,6 +212,12 @@ importers:
       pino-http:
         specifier: ^10
         version: 10.5.0
+      stripe:
+        specifier: ^20.4.1
+        version: 20.4.1(@types/node@25.3.5)
+      stripe-replit-sync:
+        specifier: ^1.0.0
+        version: 1.0.0(stripe@20.4.1(@types/node@25.3.5))
       zod:
         specifier: 'catalog:'
         version: 3.25.76

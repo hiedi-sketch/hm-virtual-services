@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useListInvoices,
   useCreateInvoice,
@@ -19,6 +19,7 @@ import {
   FileText,
   ChevronDown,
   Download,
+  CreditCard,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -123,6 +124,52 @@ export default function Invoices() {
 
   const getClientName = (id: number) => clients.find(c => c.id === id)?.name ?? `Client #${id}`;
 
+  // ── Stripe payment ────────────────────────────────────────────────────────
+  const [stripeEnabled, setStripeEnabled] = useState(false);
+  const [payingId, setPayingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/stripe/config", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { enabled: boolean } | null) => { if (d?.enabled) setStripeEnabled(true); })
+      .catch(() => {});
+  }, []);
+
+  // Handle return from Stripe Checkout
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const invoiceId = params.get("invoice");
+    if (payment === "success" && invoiceId) {
+      toast({ title: "Payment received!", description: `Invoice #${invoiceId} is now marked paid.` });
+      invalidate();
+      window.history.replaceState({}, "", window.location.pathname);
+    } else if (payment === "cancelled") {
+      toast({ title: "Payment cancelled", description: "No charge was made." });
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  const payInvoice = async (inv: Invoice) => {
+    if (payingId !== null) return;
+    setPayingId(inv.id);
+    try {
+      const res = await fetch(`/api/stripe/checkout/${inv.id}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok || !data.url) {
+        throw new Error(data.error ?? "Failed to start checkout");
+      }
+      window.location.href = data.url;
+    } catch (err: any) {
+      toast({ title: "Payment failed", description: err.message, variant: "destructive" });
+      setPayingId(null);
+    }
+  };
+
+  // ── PDF download ─────────────────────────────────────────────────────────
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   const downloadPdf = async (inv: Invoice) => {
@@ -386,6 +433,23 @@ export default function Invoices() {
                   >
                     {inv.status === "paid" ? "Paid" : overdue ? "Overdue" : "Unpaid"}
                   </span>
+
+                  {/* Pay via Stripe */}
+                  {stripeEnabled && inv.status !== "paid" && (
+                    <button
+                      onClick={() => payInvoice(inv)}
+                      disabled={payingId === inv.id}
+                      className="shrink-0 flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      title="Pay this invoice"
+                    >
+                      {payingId === inv.id ? (
+                        <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                      ) : (
+                        <CreditCard className="w-3.5 h-3.5" />
+                      )}
+                      Pay
+                    </button>
+                  )}
 
                   {/* Download PDF */}
                   <button
