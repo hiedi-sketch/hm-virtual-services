@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
-import { useGetDashboard, useCreateTask, useListClients, useListInvoices, useListLeads, useListTasks, getListTasksQueryKey } from "@workspace/api-client-react";
+import { useGetDashboard, useCreateTask, useCreateTimeEntry, useListClients, useListInvoices, useListLeads, useListTasks, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { formatCurrency } from "@/lib/utils";
-import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check, Calendar, TriangleAlert, TrendingUp } from "lucide-react";
+import { formatCurrency, cn } from "@/lib/utils";
+import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check, Calendar, TriangleAlert, TrendingUp, Timer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const quickTaskSchema = z.object({
@@ -14,6 +14,15 @@ const quickTaskSchema = z.object({
   client_id: z.coerce.number().min(1, "Please select a client"),
 });
 type QuickTaskValues = z.infer<typeof quickTaskSchema>;
+
+const timeEntrySchema = z.object({
+  client_id: z.coerce.number().min(1, "Select a client"),
+  task_id: z.coerce.number().optional(),
+  duration_minutes: z.coerce.number().min(1, "Enter at least 1 minute"),
+  date: z.string().min(1, "Select a date"),
+  description: z.string().optional(),
+});
+type TimeEntryValues = z.infer<typeof timeEntrySchema>;
 
 const GOALS_KEY = "dashboard_goals";
 
@@ -110,6 +119,47 @@ export default function Dashboard() {
 
   const onSubmit = (data: QuickTaskValues) => {
     createTask.mutate({ data });
+  };
+
+  const [quickPanel, setQuickPanel] = useState<'task' | 'time' | null>(null);
+
+  const {
+    register: registerTime,
+    handleSubmit: handleTimeSubmit,
+    watch: watchTime,
+    reset: resetTime,
+    formState: { errors: timeErrors, isSubmitting: isTimeSubmitting },
+  } = useForm<TimeEntryValues>({
+    resolver: zodResolver(timeEntrySchema),
+    defaultValues: { date: new Date().toLocaleDateString("sv-SE") },
+  });
+
+  const timeClientId = Number(watchTime("client_id")) || 0;
+  const tasksForTime = allTasks.filter(t => !timeClientId || t.client_id === timeClientId);
+
+  const createTimeEntry = useCreateTimeEntry({
+    mutation: {
+      onSuccess: () => {
+        resetTime({ date: new Date().toLocaleDateString("sv-SE") });
+        setQuickPanel(null);
+        toast({ title: "Time logged successfully" });
+      },
+      onError: () => {
+        toast({ title: "Failed to log time", variant: "destructive" });
+      },
+    },
+  });
+
+  const onTimeSubmit = (data: TimeEntryValues) => {
+    createTimeEntry.mutate({
+      data: {
+        client_id: data.client_id,
+        ...(data.task_id ? { task_id: data.task_id } : {}),
+        duration_minutes: data.duration_minutes,
+        date: data.date,
+        ...(data.description ? { description: data.description } : {}),
+      },
+    });
   };
 
   if (isLoading) {
@@ -537,39 +587,132 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Quick Add Task */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <CheckSquare className="w-5 h-5 text-blue-500" />
-          <h2 className="font-semibold text-slate-900">Quick Add Task</h2>
-        </div>
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1">
-            <input
-              {...register("title")}
-              placeholder="Task title…"
-              className="input-field w-full"
-            />
-            {errors.title && <p className="text-destructive text-xs mt-1">{errors.title.message}</p>}
-          </div>
-          <div className="sm:w-52">
-            <select {...register("client_id")} className="input-field w-full">
-              <option value="">Assign to client…</option>
-              {clients?.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            {errors.client_id && <p className="text-destructive text-xs mt-1">{errors.client_id.message}</p>}
-          </div>
+      {/* Quick Actions */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        {/* Trigger buttons */}
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">Quick Actions</span>
           <button
-            type="submit"
-            disabled={isSubmitting || createTask.isPending}
-            className="btn-primary shrink-0"
+            onClick={() => setQuickPanel(quickPanel === 'task' ? null : 'task')}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+              quickPanel === 'task'
+                ? "bg-blue-600 text-white shadow-sm"
+                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+            )}
           >
-            <Plus className="w-4 h-4 mr-1.5" />
-            {createTask.isPending ? "Adding…" : "Add Task"}
+            <CheckSquare className="w-4 h-4" />
+            Add Task
           </button>
-        </form>
+          <button
+            onClick={() => setQuickPanel(quickPanel === 'time' ? null : 'time')}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+              quickPanel === 'time'
+                ? "bg-violet-600 text-white shadow-sm"
+                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+            )}
+          >
+            <Timer className="w-4 h-4" />
+            Log Time
+          </button>
+        </div>
+
+        {/* Add Task panel */}
+        {quickPanel === 'task' && (
+          <div className="px-5 py-4 border-b border-slate-100">
+            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <input
+                  {...register("title")}
+                  placeholder="Task title…"
+                  className="input-field w-full"
+                  autoFocus
+                />
+                {errors.title && <p className="text-destructive text-xs mt-1">{errors.title.message}</p>}
+              </div>
+              <div className="sm:w-48">
+                <select {...register("client_id")} className="input-field w-full">
+                  <option value="">Assign to client…</option>
+                  {clients?.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {errors.client_id && <p className="text-destructive text-xs mt-1">{errors.client_id.message}</p>}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button type="submit" disabled={isSubmitting || createTask.isPending} className="btn-primary">
+                  <Plus className="w-4 h-4 mr-1" />
+                  {createTask.isPending ? "Adding…" : "Add"}
+                </button>
+                <button type="button" onClick={() => { reset(); setQuickPanel(null); }} className="btn-secondary">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Log Time panel */}
+        {quickPanel === 'time' && (
+          <div className="px-5 py-4">
+            <form onSubmit={handleTimeSubmit(onTimeSubmit)} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="label-text">Client</label>
+                  <select {...registerTime("client_id")} className="input-field">
+                    <option value="">Select client…</option>
+                    {clients?.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                  {timeErrors.client_id && <p className="text-destructive text-xs mt-1">{timeErrors.client_id.message}</p>}
+                </div>
+                <div>
+                  <label className="label-text">Task (optional)</label>
+                  <select {...registerTime("task_id")} className="input-field" disabled={!timeClientId}>
+                    <option value="">No specific task</option>
+                    {tasksForTime.map(t => (
+                      <option key={t.id} value={t.id}>{t.title}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="label-text">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    {...registerTime("duration_minutes")}
+                    placeholder="e.g. 60"
+                    className="input-field"
+                  />
+                  {timeErrors.duration_minutes && <p className="text-destructive text-xs mt-1">{timeErrors.duration_minutes.message}</p>}
+                </div>
+                <div>
+                  <label className="label-text">Date</label>
+                  <input type="date" {...registerTime("date")} className="input-field" />
+                  {timeErrors.date && <p className="text-destructive text-xs mt-1">{timeErrors.date.message}</p>}
+                </div>
+                <div>
+                  <label className="label-text">Note (optional)</label>
+                  <input {...registerTime("description")} placeholder="What did you work on?" className="input-field" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => { resetTime({ date: new Date().toLocaleDateString("sv-SE") }); setQuickPanel(null); }} className="btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isTimeSubmitting || createTimeEntry.isPending} className="btn-primary">
+                  <Timer className="w-4 h-4 mr-1" />
+                  {createTimeEntry.isPending ? "Saving…" : "Log Time"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
 
       {/* CRM Pipeline Summary */}
