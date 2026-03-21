@@ -8,6 +8,7 @@ import { z } from "zod";
 import { Plus, CheckCircle2, Circle, Calendar, User as UserIcon, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { SubtaskList } from "@/components/SubtaskList";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -144,6 +145,7 @@ export default function Tasks() {
                           </span>
                         )}
                       </div>
+                      <SubtaskList taskId={task.id} />
                     </div>
                   </div>
                 ))}

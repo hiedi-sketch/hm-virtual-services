@@ -174,6 +174,22 @@ export interface UpdateLeadInput {
   lead_source?: string | null;
 }
 
+export interface Subtask {
+  id: number;
+  task_id: number;
+  title: string;
+  done: boolean;
+}
+
+export interface CreateSubtaskInput {
+  title: string;
+}
+
+export interface UpdateSubtaskInput {
+  title?: string;
+  done?: boolean;
+}
+
 export type ListTasksParams = {
   clientId?: number;
 };

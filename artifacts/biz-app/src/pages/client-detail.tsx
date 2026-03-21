@@ -20,6 +20,7 @@ import {
   Briefcase,
   Mail,
 } from "lucide-react";
+import { SubtaskList } from "@/components/SubtaskList";
 import { formatCurrency } from "@/lib/utils";
 
 export default function ClientDetail() {
@@ -204,6 +205,7 @@ export default function ClientDetail() {
                               </span>
                             )}
                           </div>
+                          <SubtaskList taskId={task.id} />
                         </div>
                       </div>
                     ))}
