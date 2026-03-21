@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import NotFound from "@/pages/not-found";
 
 import Dashboard from "@/pages/dashboard";
+import TeamDashboard from "@/pages/team-dashboard";
 import Clients from "@/pages/clients";
 import ClientDetail from "@/pages/client-detail";
 import Tasks from "@/pages/tasks";
@@ -43,17 +44,18 @@ function Router() {
     );
   }
 
-  // Password reset pages are accessible without authentication
+  // Password reset pages accessible without auth
   if (location === "/forgot-password") return <ForgotPassword />;
   if (location.startsWith("/reset-password")) return <ResetPassword />;
 
-  if (!user) {
-    return <Login />;
-  }
+  if (!user) return <Login />;
 
-  if (user.role === "client") {
-    return <ClientPortal />;
-  }
+  // Client users get the client portal (standalone, no sidebar)
+  if (user.role === "client") return <ClientPortal />;
+
+  // Team members get a dedicated dashboard (standalone, no sidebar)
+  if (user.role === "team_member" && location === "/") return <TeamDashboard />;
+  if (user.role === "team_member" && location === "/team-dashboard") return <TeamDashboard />;
 
   return (
     <Layout>
