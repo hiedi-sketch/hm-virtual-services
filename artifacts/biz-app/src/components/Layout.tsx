@@ -10,6 +10,7 @@ import {
   LogOut,
   BarChart2,
   KeyRound,
+  HardDriveDownload,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +26,7 @@ const ADMIN_NAV = [
   { href: "/reports", label: "Reports", icon: BarChart2 },
   { href: "/team", label: "Team", icon: UserCog },
   { href: "/api-keys", label: "API Keys", icon: KeyRound },
+  { href: "/backup", label: "Backup", icon: HardDriveDownload },
 ];
 
 const TEAM_MEMBER_NAV = [
