@@ -5,7 +5,7 @@ import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, CheckCircle2, Circle, Calendar, User as UserIcon } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Calendar, User as UserIcon, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -20,17 +20,21 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 export default function Tasks() {
-  const { data: tasks, isLoading } = useListTasks();
+  const [selectedClientId, setSelectedClientId] = useState<number | undefined>(undefined);
+  const { data: tasks, isLoading } = useListTasks({ clientId: selectedClientId });
   const { data: clients } = useListClients();
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
+  const invalidateTasks = () =>
+    queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+
   const createMutation = useCreateTask({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+        invalidateTasks();
         setIsModalOpen(false);
         reset();
         toast({ title: "Task created successfully" });
@@ -41,7 +45,7 @@ export default function Tasks() {
   const updateMutation = useUpdateTask({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+        invalidateTasks();
         toast({ title: "Task status updated" });
       }
     }
@@ -70,10 +74,25 @@ export default function Tasks() {
           <h1 className="text-3xl font-display font-bold text-slate-900">Tasks</h1>
           <p className="text-slate-500 mt-1">Manage your to-dos across all clients.</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="btn-primary">
-          <Plus className="w-5 h-5 mr-2" />
-          New Task
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+            <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+            <select
+              value={selectedClientId ?? ""}
+              onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : undefined)}
+              className="text-sm text-slate-700 bg-transparent border-none outline-none cursor-pointer pr-1"
+            >
+              <option value="">All Clients</option>
+              {clients?.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary">
+            <Plus className="w-5 h-5 mr-2" />
+            New Task
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
