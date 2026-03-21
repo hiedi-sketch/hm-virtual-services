@@ -13,6 +13,7 @@ import automationsRouter from "./automations";
 import stripeRouter from "./stripe";
 import apikeysRouter from "./apikeys";
 import externalRouter from "./external";
+import auditRouter from "./audit";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(automationsRouter);
 router.use(stripeRouter);
 router.use(apikeysRouter);
 router.use(externalRouter);
+router.use(auditRouter);
 
 export default router;

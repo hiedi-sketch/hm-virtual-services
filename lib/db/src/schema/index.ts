@@ -5,3 +5,4 @@ export * from "./leads";
 export * from "./invoices";
 export * from "./users";
 export * from "./api_keys";
+export * from "./audit_logs";

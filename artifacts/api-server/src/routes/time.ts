@@ -11,6 +11,7 @@ import {
   UpdateTimeEntryBody,
 } from "@workspace/api-zod";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { logAudit } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -69,6 +70,7 @@ router.post("/time", requireRole("admin", "team_member"), async (req, res) => {
     .returning();
 
   res.status(201).json(entry);
+  logAudit("time_entry", entry.id, "created", `Time entry logged: ${entry.duration_minutes} min on ${entry.date}`, { id: user.id, name: user.name });
 });
 
 router.patch("/time/:id", requireRole("admin", "team_member"), async (req, res) => {
@@ -113,6 +115,7 @@ router.patch("/time/:id", requireRole("admin", "team_member"), async (req, res) 
     .where(eq(timeEntriesTable.id, id));
 
   res.json(row ?? updated);
+  logAudit("time_entry", id, "updated", `Time entry #${id} updated: ${updated.duration_minutes} min`, { id: user.id, name: user.name });
 });
 
 router.delete("/time/:id", requireRole("admin", "team_member"), async (req, res) => {
@@ -138,6 +141,7 @@ router.delete("/time/:id", requireRole("admin", "team_member"), async (req, res)
 
   await db.delete(timeEntriesTable).where(eq(timeEntriesTable.id, id));
   res.status(204).send();
+  logAudit("time_entry", id, "deleted", `Time entry #${id} deleted`, { id: user.id, name: user.name });
 });
 
 export default router;

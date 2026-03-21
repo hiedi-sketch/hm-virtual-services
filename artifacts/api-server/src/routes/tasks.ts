@@ -5,6 +5,7 @@ import { eq, isNotNull, and } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { spawnRecurringTasks } from "../lib/spawn-recurring";
 import { sendMail, template } from "../lib/mailer";
+import { logAudit } from "../lib/audit";
 import {
   CreateTaskBody,
   UpdateTaskBody,
@@ -72,6 +73,8 @@ router.post("/tasks", requireRole("admin", "team_member"), async (req, res) => {
   const body = CreateTaskBody.parse(req.body);
   const [task] = await db.insert(tasksTable).values(body).returning();
   res.status(201).json(task);
+  const actor = req.session.user;
+  logAudit("task", task.id, "created", `Task "${task.title}" created`, { id: actor?.id, name: actor?.name });
 
   // Fire-and-forget: email the client about their new task
   if (task?.client_id) {
@@ -146,6 +149,8 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
 
   const parsed = UpdateTaskResponse.parse(updated);
   res.json(parsed);
+  const actor = req.session.user;
+  logAudit("task", id, "updated", `Task "${updated.title}" updated`, { id: actor?.id, name: actor?.name });
 });
 
 // --- Subtask routes ---

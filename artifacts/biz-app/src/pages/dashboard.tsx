@@ -1,13 +1,48 @@
 import { useState, useEffect } from "react";
 import { useGetDashboard, getGetDashboardQueryKey, useCreateTask, useCreateTimeEntry, useListClients, useListInvoices, useListLeads, useListTasks, getListTasksQueryKey } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatCurrency, cn } from "@/lib/utils";
-import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check, Calendar, TriangleAlert, TrendingUp, Timer } from "lucide-react";
+import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check, Calendar, TriangleAlert, TrendingUp, Timer, Activity, PlusCircle, RefreshCw, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+interface AuditLog {
+  id: number;
+  entity_type: string;
+  entity_id: number;
+  action: string;
+  summary: string;
+  user_id: number | null;
+  user_name: string | null;
+  created_at: string;
+}
+
+function timeAgo(isoStr: string): string {
+  const diff = Date.now() - new Date(isoStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+const ACTION_STYLES: Record<string, { icon: typeof PlusCircle; color: string; bg: string }> = {
+  created: { icon: PlusCircle,  color: "text-emerald-600", bg: "bg-emerald-50" },
+  updated: { icon: RefreshCw,   color: "text-blue-600",    bg: "bg-blue-50"    },
+  deleted: { icon: Trash2,      color: "text-red-500",     bg: "bg-red-50"     },
+};
+
+const ENTITY_LABELS: Record<string, string> = {
+  task:       "Task",
+  time_entry: "Time",
+  invoice:    "Invoice",
+  lead:       "Lead",
+};
 
 const quickTaskSchema = z.object({
   title: z.string().min(1, "Task title is required"),
@@ -64,6 +99,12 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
+  const { data: auditLogs = [] } = useQuery<AuditLog[]>({
+    queryKey: ["audit"],
+    queryFn: () => fetch("/api/audit", { credentials: "include" }).then(r => r.json()) as Promise<AuditLog[]>,
+    staleTime: 30 * 1000,
+  });
 
   // Run page-load automations: spawn recurring tasks + check budget/overdue state
   useEffect(() => {
@@ -971,6 +1012,51 @@ export default function Dashboard() {
                       Approaching package limit
                     </div>
                   )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Activity */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Activity className="w-5 h-5 text-slate-700" />
+          <h2 className="text-xl font-display font-semibold text-slate-900">Recent Activity</h2>
+          <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5 ml-1">Last 30 days</span>
+        </div>
+
+        {auditLogs.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center">
+            <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+            <p className="text-slate-400 text-sm">No activity yet. Changes to tasks, invoices, leads, and time entries will appear here.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100">
+            {auditLogs.slice(0, 25).map(log => {
+              const style = ACTION_STYLES[log.action] ?? ACTION_STYLES.updated;
+              const Icon = style.icon;
+              const entityLabel = ENTITY_LABELS[log.entity_type] ?? log.entity_type;
+              return (
+                <div key={log.id} className="flex items-start gap-4 px-5 py-3.5">
+                  <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${style.bg}`}>
+                    <Icon className={`w-3.5 h-3.5 ${style.color}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-800 leading-snug">{log.summary}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${style.bg} ${style.color}`}>
+                        {entityLabel}
+                      </span>
+                      {log.user_name && (
+                        <span className="text-xs text-slate-400">by {log.user_name}</span>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-xs text-slate-400 shrink-0 pt-0.5 tabular-nums">
+                    {timeAgo(log.created_at)}
+                  </span>
                 </div>
               );
             })}

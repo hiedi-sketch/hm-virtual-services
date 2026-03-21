@@ -11,6 +11,7 @@ import {
   DeleteInvoiceParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
+import { logAudit } from "../lib/audit";
 
 const router: IRouter = Router();
 
@@ -252,6 +253,8 @@ router.post("/invoices", requireAdmin, async (req, res) => {
   const body = CreateInvoiceBody.parse(req.body);
   const [invoice] = await db.insert(invoicesTable).values(body).returning();
   res.status(201).json(invoice);
+  const actor = req.session.user;
+  logAudit("invoice", invoice.id, "created", `Invoice #${invoice.id} created ($${Number(invoice.amount).toFixed(2)})`, { id: actor?.id, name: actor?.name });
 });
 
 router.patch("/invoices/:id", requireAdmin, async (req, res) => {
@@ -267,12 +270,17 @@ router.patch("/invoices/:id", requireAdmin, async (req, res) => {
     return;
   }
   res.json(updated);
+  const actor = req.session.user;
+  const statusNote = body.status ? ` → ${body.status}` : "";
+  logAudit("invoice", id, "updated", `Invoice #${id} updated${statusNote}`, { id: actor?.id, name: actor?.name });
 });
 
 router.delete("/invoices/:id", requireAdmin, async (req, res) => {
   const { id } = DeleteInvoiceParams.parse(req.params);
   await db.delete(invoicesTable).where(eq(invoicesTable.id, id));
   res.status(204).send();
+  const actor = req.session.user;
+  logAudit("invoice", id, "deleted", `Invoice #${id} deleted`, { id: actor?.id, name: actor?.name });
 });
 
 export default router;
