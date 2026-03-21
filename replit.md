@@ -44,26 +44,32 @@ artifacts-monorepo/
 - **Clients** (`/clients`) — Add and view clients (name, email, monthly hour budget, fee, service type)
 - **Tasks** (`/tasks`) — Create and manage tasks across all clients, mark complete
 - **Time Tracking** (`/time`) — Manual time entry form with client/task selection, view recent entries
-- **Leads CRM** (`/leads`) — Add and manage leads (name, email, estimated value, status, source)
+- **Leads CRM** (`/leads`) — 4-stage pipeline (New/Contacted/Proposal/Closed), per-status summary, inline status switcher, delete, lead source + estimated value
+- **Invoices** (`/invoices`) — Create invoices, track paid/unpaid/overdue, filter by client/status, one-click status toggle, delete
 
 ## Data Models
 
 - **Clients**: id, name, email, monthly_hour_budget, monthly_fee, service_type (bookkeeping/va/hybrid)
-- **Tasks**: id, title, description, client_id, assigned_to, status (pending/complete), due_date
+- **Tasks**: id, title, description, client_id, assigned_to, status (pending/complete), due_date, recurrence fields
 - **TimeEntries**: id, client_id, task_id (optional), duration_minutes, date
-- **Leads**: id, name, email, estimated_value, status (new/contacted/closed), lead_source
+- **Leads**: id, name, email, estimated_value, status (new/contacted/proposal/closed), lead_source
+- **Invoices**: id, client_id, amount, status (paid/unpaid), due_date, description
 
 ## API Routes
 
 All under `/api`:
 - `GET/POST /clients` — List/create clients
-- `GET /clients/:id` — Get single client
+- `GET/PATCH /clients/:id` — Get/update single client
 - `GET /dashboard` — Dashboard data with hours used/remaining per client (current month)
 - `GET/POST /tasks` — List/create tasks
-- `PATCH /tasks/:id` — Update task (mark complete)
+- `PATCH /tasks/:id` — Update task (mark complete, update fields)
 - `GET/POST /time` — List/create time entries
 - `GET/POST /leads` — List/create leads
-- `PATCH /leads/:id` — Update lead status
+- `PATCH /leads/:id` — Update lead (status, fields)
+- `DELETE /leads/:id` — Delete lead
+- `GET/POST /invoices` — List/create invoices (GET supports ?clientId filter)
+- `PATCH /invoices/:id` — Update invoice (status, amount, etc.)
+- `DELETE /invoices/:id` — Delete invoice
 
 ## TypeScript & Composite Projects
 

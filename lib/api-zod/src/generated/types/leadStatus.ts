@@ -11,5 +11,6 @@ export type LeadStatus = (typeof LeadStatus)[keyof typeof LeadStatus];
 export const LeadStatus = {
   new: "new",
   contacted: "contacted",
+  proposal: "proposal",
   closed: "closed",
 } as const;

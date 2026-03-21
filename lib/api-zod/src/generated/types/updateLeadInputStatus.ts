@@ -12,5 +12,6 @@ export type UpdateLeadInputStatus =
 export const UpdateLeadInputStatus = {
   new: "new",
   contacted: "contacted",
+  proposal: "proposal",
   closed: "closed",
 } as const;

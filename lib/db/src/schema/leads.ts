@@ -7,7 +7,7 @@ export const leadsTable = pgTable("leads", {
   name: text("name").notNull(),
   email: text("email"),
   estimated_value: real("estimated_value"),
-  status: text("status", { enum: ["new", "contacted", "closed"] }).notNull().default("new"),
+  status: text("status", { enum: ["new", "contacted", "proposal", "closed"] }).notNull().default("new"),
   lead_source: text("lead_source"),
 });
 

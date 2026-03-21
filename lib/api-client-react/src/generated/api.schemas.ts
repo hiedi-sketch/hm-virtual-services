@@ -92,8 +92,10 @@ export type TaskRecurrence =
 
 export const TaskRecurrence = {
   daily: "daily",
+  weekdays: "weekdays",
   weekly: "weekly",
   monthly: "monthly",
+  annually: "annually",
 } as const;
 
 export interface Task {
@@ -115,8 +117,10 @@ export type CreateTaskInputRecurrence =
 
 export const CreateTaskInputRecurrence = {
   daily: "daily",
+  weekdays: "weekdays",
   weekly: "weekly",
   monthly: "monthly",
+  annually: "annually",
 } as const;
 
 export interface CreateTaskInput {
@@ -142,8 +146,10 @@ export type UpdateTaskInputRecurrence =
 
 export const UpdateTaskInputRecurrence = {
   daily: "daily",
+  weekdays: "weekdays",
   weekly: "weekly",
   monthly: "monthly",
+  annually: "annually",
 } as const;
 
 export interface UpdateTaskInput {
@@ -177,6 +183,7 @@ export type LeadStatus = (typeof LeadStatus)[keyof typeof LeadStatus];
 export const LeadStatus = {
   new: "new",
   contacted: "contacted",
+  proposal: "proposal",
   closed: "closed",
 } as const;
 
@@ -195,6 +202,7 @@ export type CreateLeadInputStatus =
 export const CreateLeadInputStatus = {
   new: "new",
   contacted: "contacted",
+  proposal: "proposal",
   closed: "closed",
 } as const;
 
@@ -212,6 +220,7 @@ export type UpdateLeadInputStatus =
 export const UpdateLeadInputStatus = {
   new: "new",
   contacted: "contacted",
+  proposal: "proposal",
   closed: "closed",
 } as const;
 
@@ -221,42 +230,6 @@ export interface UpdateLeadInput {
   estimated_value?: number | null;
   status?: UpdateLeadInputStatus;
   lead_source?: string | null;
-}
-
-export type InvoiceStatus =
-  (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
-
-export const InvoiceStatus = {
-  paid: "paid",
-  unpaid: "unpaid",
-} as const;
-
-export interface Invoice {
-  id: number;
-  client_id: number;
-  amount: number;
-  status: InvoiceStatus;
-  due_date: string;
-  description?: string | null;
-}
-
-export interface CreateInvoiceInput {
-  client_id: number;
-  amount: number;
-  status?: InvoiceStatus;
-  due_date: string;
-  description?: string | null;
-}
-
-export interface UpdateInvoiceInput {
-  amount?: number;
-  status?: InvoiceStatus;
-  due_date?: string;
-  description?: string | null;
-}
-
-export interface ListInvoicesParams {
-  clientId?: number;
 }
 
 export interface Subtask {
@@ -275,10 +248,61 @@ export interface UpdateSubtaskInput {
   done?: boolean;
 }
 
+export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
+
+export const InvoiceStatus = {
+  paid: "paid",
+  unpaid: "unpaid",
+} as const;
+
+export interface Invoice {
+  id: number;
+  client_id: number;
+  amount: number;
+  status: InvoiceStatus;
+  due_date: string;
+  description?: string | null;
+}
+
+export type CreateInvoiceInputStatus =
+  (typeof CreateInvoiceInputStatus)[keyof typeof CreateInvoiceInputStatus];
+
+export const CreateInvoiceInputStatus = {
+  paid: "paid",
+  unpaid: "unpaid",
+} as const;
+
+export interface CreateInvoiceInput {
+  client_id: number;
+  amount: number;
+  status?: CreateInvoiceInputStatus;
+  due_date: string;
+  description?: string | null;
+}
+
+export type UpdateInvoiceInputStatus =
+  (typeof UpdateInvoiceInputStatus)[keyof typeof UpdateInvoiceInputStatus];
+
+export const UpdateInvoiceInputStatus = {
+  paid: "paid",
+  unpaid: "unpaid",
+} as const;
+
+export interface UpdateInvoiceInput {
+  amount?: number;
+  status?: UpdateInvoiceInputStatus;
+  due_date?: string;
+  description?: string | null;
+}
+
 export type ListTasksParams = {
   clientId?: number;
 };
 
 export type ListTimeEntriesParams = {
+  clientId?: number;
+};
+
+export type ListInvoicesParams = {
   clientId?: number;
 };

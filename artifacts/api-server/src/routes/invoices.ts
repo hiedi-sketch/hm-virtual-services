@@ -3,7 +3,7 @@ import { db } from "@workspace/db";
 import { invoicesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
-  ListInvoicesParams,
+  ListInvoicesQueryParams,
   CreateInvoiceBody,
   UpdateInvoiceParams,
   UpdateInvoiceBody,
@@ -13,7 +13,7 @@ import {
 const router: IRouter = Router();
 
 router.get("/invoices", async (req, res) => {
-  const { clientId } = ListInvoicesParams.parse(req.query);
+  const { clientId } = ListInvoicesQueryParams.parse(req.query);
   const rows = clientId
     ? await db.select().from(invoicesTable).where(eq(invoicesTable.client_id, clientId))
     : await db.select().from(invoicesTable);

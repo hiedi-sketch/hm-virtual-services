@@ -67,6 +67,15 @@ export const UpdateClientBody = zod.object({
   service_type: zod.enum(["bookkeeping", "va", "hybrid"]).optional(),
 });
 
+export const UpdateClientResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string(),
+  monthly_hour_budget: zod.number(),
+  monthly_fee: zod.number(),
+  service_type: zod.enum(["bookkeeping", "va", "hybrid"]),
+});
+
 /**
  * @summary Get dashboard data with client hour summaries
  */
@@ -98,7 +107,9 @@ export const ListTasksResponseItem = zod.object({
   status: zod.enum(["pending", "complete"]),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
-  recurrence: zod.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullish(),
+  recurrence: zod
+    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
+    .nullish(),
   last_generated_at: zod.string().nullish(),
 });
 export const ListTasksResponse = zod.array(ListTasksResponseItem);
@@ -112,7 +123,9 @@ export const CreateTaskBody = zod.object({
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
   due_date: zod.string().nullish(),
-  recurrence: zod.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullish(),
+  recurrence: zod
+    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
+    .nullish(),
 });
 
 /**
@@ -127,7 +140,9 @@ export const SpawnRecurringTasksResponseItem = zod.object({
   status: zod.enum(["pending", "complete"]),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
-  recurrence: zod.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullish(),
+  recurrence: zod
+    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
+    .nullish(),
   last_generated_at: zod.string().nullish(),
 });
 export const SpawnRecurringTasksResponse = zod.array(
@@ -199,7 +214,9 @@ export const UpdateTaskBody = zod.object({
   assigned_to: zod.string().nullish(),
   status: zod.enum(["pending", "complete"]).optional(),
   due_date: zod.string().nullish(),
-  recurrence: zod.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullish(),
+  recurrence: zod
+    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
+    .nullish(),
 });
 
 export const UpdateTaskResponse = zod.object({
@@ -211,7 +228,9 @@ export const UpdateTaskResponse = zod.object({
   status: zod.enum(["pending", "complete"]),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
-  recurrence: zod.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullish(),
+  recurrence: zod
+    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
+    .nullish(),
   last_generated_at: zod.string().nullish(),
 });
 
@@ -251,7 +270,7 @@ export const ListLeadsResponseItem = zod.object({
   name: zod.string(),
   email: zod.string().nullish(),
   estimated_value: zod.number().nullish(),
-  status: zod.enum(["new", "contacted", "closed"]),
+  status: zod.enum(["new", "contacted", "proposal", "closed"]),
   lead_source: zod.string().nullish(),
 });
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem);
@@ -263,7 +282,7 @@ export const CreateLeadBody = zod.object({
   name: zod.string(),
   email: zod.string().nullish(),
   estimated_value: zod.number().nullish(),
-  status: zod.enum(["new", "contacted", "closed"]).optional(),
+  status: zod.enum(["new", "contacted", "proposal", "closed"]).optional(),
   lead_source: zod.string().nullish(),
 });
 
@@ -278,16 +297,33 @@ export const UpdateLeadBody = zod.object({
   name: zod.string().optional(),
   email: zod.string().nullish(),
   estimated_value: zod.number().nullish(),
-  status: zod.enum(["new", "contacted", "closed"]).optional(),
+  status: zod.enum(["new", "contacted", "proposal", "closed"]).optional(),
   lead_source: zod.string().nullish(),
+});
+
+export const UpdateLeadResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  email: zod.string().nullish(),
+  estimated_value: zod.number().nullish(),
+  status: zod.enum(["new", "contacted", "proposal", "closed"]),
+  lead_source: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a lead
+ */
+export const DeleteLeadParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
  * @summary List all invoices
  */
-export const ListInvoicesParams = zod.object({
+export const ListInvoicesQueryParams = zod.object({
   clientId: zod.coerce.number().optional(),
 });
+
 export const ListInvoicesResponseItem = zod.object({
   id: zod.number(),
   client_id: zod.number(),
@@ -315,10 +351,20 @@ export const CreateInvoiceBody = zod.object({
 export const UpdateInvoiceParams = zod.object({
   id: zod.coerce.number(),
 });
+
 export const UpdateInvoiceBody = zod.object({
   amount: zod.number().optional(),
   status: zod.enum(["paid", "unpaid"]).optional(),
   due_date: zod.string().optional(),
+  description: zod.string().nullish(),
+});
+
+export const UpdateInvoiceResponse = zod.object({
+  id: zod.number(),
+  client_id: zod.number(),
+  amount: zod.number(),
+  status: zod.enum(["paid", "unpaid"]),
+  due_date: zod.string(),
   description: zod.string().nullish(),
 });
 
@@ -327,13 +373,4 @@ export const UpdateInvoiceBody = zod.object({
  */
 export const DeleteInvoiceParams = zod.object({
   id: zod.coerce.number(),
-});
-
-export const UpdateLeadResponse = zod.object({
-  id: zod.number(),
-  name: zod.string(),
-  email: zod.string().nullish(),
-  estimated_value: zod.number().nullish(),
-  status: zod.enum(["new", "contacted", "closed"]),
-  lead_source: zod.string().nullish(),
 });

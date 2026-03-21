@@ -6,6 +6,7 @@ import {
   CreateLeadBody,
   UpdateLeadBody,
   UpdateLeadParams,
+  DeleteLeadParams,
   ListLeadsResponse,
   UpdateLeadResponse,
 } from "@workspace/api-zod";
@@ -41,6 +42,12 @@ router.patch("/leads/:id", async (req, res) => {
 
   const parsed = UpdateLeadResponse.parse(updated);
   res.json(parsed);
+});
+
+router.delete("/leads/:id", async (req, res) => {
+  const { id } = DeleteLeadParams.parse(req.params);
+  await db.delete(leadsTable).where(eq(leadsTable.id, id));
+  res.status(204).send();
 });
 
 export default router;
