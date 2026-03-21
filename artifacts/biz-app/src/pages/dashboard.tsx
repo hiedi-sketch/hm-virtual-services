@@ -362,82 +362,116 @@ export default function Dashboard() {
             </div>
           </div>
         ) : (
-          <div className="space-y-5">
-            {/* Income Goal */}
-            <div>
-              <div className="flex items-end justify-between mb-1.5">
-                <div>
-                  <p className="text-sm font-medium text-slate-700">Monthly Income</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    <span className="text-slate-600 font-medium">{formatCurrency(totalPaid)}</span> collected
-                    {totalUnpaid > 0 && (
-                      <> · <span className="text-slate-500">{formatCurrency(totalProjected)} projected</span></>
-                    )}
-                    <span className="text-slate-400"> of </span>
-                    <span className="font-medium text-slate-600">{formatCurrency(goals.incomeGoal)} goal</span>
-                  </p>
-                </div>
-                <div className="text-right shrink-0 ml-4">
-                  {incomeGoalMet ? (
-                    <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Goal met!</span>
-                  ) : (
-                    <span className="text-sm font-bold text-slate-900">{incomePaidPct}%</span>
-                  )}
-                </div>
-              </div>
-              {/* Stacked bar: paid (solid) + projected (lighter) */}
-              <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden relative">
-                {/* Projected layer */}
-                <div
-                  className="absolute inset-y-0 left-0 bg-blue-200 rounded-full"
-                  style={{ width: `${incomeProjectedPct}%` }}
-                />
-                {/* Paid layer on top */}
-                <div
-                  className={`absolute inset-y-0 left-0 rounded-full ${incomeGoalMet ? "bg-emerald-500" : "bg-blue-500"}`}
-                  style={{ width: `${incomePaidPct}%` }}
-                />
-              </div>
-              {goals.incomeGoal > 0 && (
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-400">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Collected</span>
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-200 inline-block" /> Projected</span>
-                </div>
-              )}
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
 
-            {/* Client Goal */}
-            <div>
-              <div className="flex items-end justify-between mb-1.5">
-                <div>
-                  <p className="text-sm font-medium text-slate-700">Active Clients</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    <span className="text-slate-600 font-medium">{totalClients}</span> of{" "}
-                    <span className="font-medium text-slate-600">{goals.clientGoal} target</span>
-                  </p>
+            {/* ── Monthly Income Goal ── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Monthly Income</p>
+                {incomeGoalMet ? (
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Goal met!</span>
+                ) : (
+                  <span className="text-xs font-medium text-slate-400">{incomePaidPct}% collected</span>
+                )}
+              </div>
+
+              {/* Big numbers */}
+              <div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid)}</span>
+                  <span className="text-sm text-slate-400">collected</span>
                 </div>
-                <div className="text-right shrink-0 ml-4">
-                  {clientGoalMet ? (
-                    <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Goal met!</span>
-                  ) : (
-                    <span className="text-sm font-bold text-slate-900">{clientPct}%</span>
-                  )}
+                {totalUnpaid > 0 && (
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-base font-semibold text-blue-500">+{formatCurrency(totalUnpaid)}</span>
+                    <span className="text-xs text-slate-400">unpaid → {formatCurrency(totalProjected)} projected</span>
+                  </div>
+                )}
+                <div className="text-xs text-slate-400 mt-0.5">
+                  of <span className="font-semibold text-slate-600">{formatCurrency(goals.incomeGoal)}</span> goal
                 </div>
               </div>
-              <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${clientGoalMet ? "bg-emerald-500" : "bg-violet-500"}`}
-                  style={{ width: `${clientPct}%` }}
-                />
+
+              {/* Stacked bar: projected (light) behind collected (solid) */}
+              <div className="space-y-1">
+                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden relative">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-blue-200 rounded-full transition-all duration-500"
+                    style={{ width: `${incomeProjectedPct}%` }}
+                  />
+                  <div
+                    className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${incomeGoalMet ? "bg-emerald-500" : "bg-blue-500"}`}
+                    style={{ width: `${incomePaidPct}%` }}
+                  />
+                </div>
+                {goals.incomeGoal > 0 && (
+                  <div className="flex items-center gap-3 text-xs text-slate-400">
+                    <span className="flex items-center gap-1">
+                      <span className={`w-2 h-2 rounded-full inline-block ${incomeGoalMet ? "bg-emerald-500" : "bg-blue-500"}`} />
+                      Collected
+                    </span>
+                    {totalUnpaid > 0 && (
+                      <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-200 inline-block" />
+                        Unpaid / projected
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-              {goals.clientGoal > 0 && (
-                <p className="text-xs text-slate-400 mt-1.5">
-                  {goals.clientGoal - totalClients > 0
-                    ? `${goals.clientGoal - totalClients} more client${goals.clientGoal - totalClients !== 1 ? "s" : ""} to reach target`
-                    : "Client target reached!"}
+
+              {/* Gap to goal */}
+              {!incomeGoalMet && goals.incomeGoal > 0 && (
+                <p className="text-xs text-slate-400">
+                  <span className="font-semibold text-slate-600">{formatCurrency(goals.incomeGoal - totalProjected > 0 ? goals.incomeGoal - totalProjected : 0)}</span>
+                  {" "}still needed to reach goal
                 </p>
               )}
             </div>
+
+            {/* ── Active Clients Goal ── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Active Clients</p>
+                {clientGoalMet ? (
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Goal met!</span>
+                ) : (
+                  <span className="text-xs font-medium text-slate-400">{clientPct}% of target</span>
+                )}
+              </div>
+
+              {/* Big numbers */}
+              <div>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-2xl font-bold text-slate-900">{totalClients}</span>
+                  <span className="text-sm text-slate-400">
+                    / <span className="font-semibold text-slate-600">{goals.clientGoal}</span> target
+                  </span>
+                </div>
+                <div className="text-xs text-slate-400 mt-0.5">active clients this month</div>
+              </div>
+
+              {/* Bar */}
+              <div className="space-y-1">
+                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${clientGoalMet ? "bg-emerald-500" : "bg-violet-500"}`}
+                    style={{ width: `${clientPct}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Gap to goal */}
+              {goals.clientGoal > 0 && (
+                <p className="text-xs text-slate-400">
+                  {clientGoalMet
+                    ? "Client target reached!"
+                    : <><span className="font-semibold text-slate-600">{goals.clientGoal - totalClients}</span> more client{goals.clientGoal - totalClients !== 1 ? "s" : ""} to reach target</>
+                  }
+                </p>
+              )}
+            </div>
+
           </div>
         )}
       </div>
