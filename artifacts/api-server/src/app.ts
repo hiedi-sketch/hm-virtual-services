@@ -95,6 +95,14 @@ app.use(
   }),
 );
 
+// Refresh lastActivity timestamp on every authenticated request
+app.use((req, _res, next) => {
+  if (req.session?.user) {
+    req.session.lastActivity = Date.now();
+  }
+  next();
+});
+
 app.use("/api", router);
 
 async function seedAdmin() {

@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
+import { Switch, Route, Router as WouterRouter, Redirect, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,6 +17,8 @@ import Team from "@/pages/team";
 import Reports from "@/pages/reports";
 import ApiKeys from "@/pages/api-keys";
 import Login from "@/pages/login";
+import ForgotPassword from "@/pages/forgot-password";
+import ResetPassword from "@/pages/reset-password";
 import ClientPortal from "@/pages/client-portal";
 
 const queryClient = new QueryClient({
@@ -31,6 +33,7 @@ const queryClient = new QueryClient({
 
 function Router() {
   const { user, loading } = useAuth();
+  const [location] = useLocation();
 
   if (loading) {
     return (
@@ -39,6 +42,10 @@ function Router() {
       </div>
     );
   }
+
+  // Password reset pages are accessible without authentication
+  if (location === "/forgot-password") return <ForgotPassword />;
+  if (location.startsWith("/reset-password")) return <ResetPassword />;
 
   if (!user) {
     return <Login />;

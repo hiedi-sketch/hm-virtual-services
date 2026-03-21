@@ -6,3 +6,4 @@ export * from "./invoices";
 export * from "./users";
 export * from "./api_keys";
 export * from "./audit_logs";
+export * from "./password_reset_tokens";

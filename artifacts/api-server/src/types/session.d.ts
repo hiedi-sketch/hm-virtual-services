@@ -9,5 +9,6 @@ declare module "express-session" {
       role: "admin" | "team_member" | "client";
       client_id: number | null;
     };
+    lastActivity: number;
   }
 }
