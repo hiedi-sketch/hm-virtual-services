@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useGetDashboard, useCreateTask, useListClients, useListInvoices, useListLeads, getListTasksQueryKey } from "@workspace/api-client-react";
+import { useGetDashboard, useCreateTask, useListClients, useListInvoices, useListLeads, useListTasks, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
@@ -51,6 +51,7 @@ export default function Dashboard() {
   const { data: clients } = useListClients();
   const { data: invoices = [] } = useListInvoices();
   const { data: leads = [] } = useListLeads();
+  const { data: allTasks = [] } = useListTasks();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -72,6 +73,7 @@ export default function Dashboard() {
   const [draftIncome, setDraftIncome] = useState("");
   const [draftClients, setDraftClients] = useState("");
   const [overdueDismissed, setOverdueDismissed] = useState(false);
+  const [overdueTasksDismissed, setOverdueTasksDismissed] = useState(false);
 
   const openGoalEdit = () => {
     setDraftIncome(String(goals.incomeGoal));
@@ -157,6 +159,10 @@ export default function Dashboard() {
 
   const overdueTotal = overdueInvoices.reduce((s, i) => s + i.amount, 0);
 
+  const overdueTasks = allTasks.filter(
+    t => t.status !== "complete" && t.due_date != null && t.due_date < todayStr
+  );
+
   // CRM stats
   const totalLeadCount = leads.length;
   const totalPipelineValue = leads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
@@ -180,27 +186,51 @@ export default function Dashboard() {
         <p className="text-slate-500 mt-1">Here's an overview of your business this month.</p>
       </div>
 
-      {/* Overdue banner */}
-      {overdueInvoices.length > 0 && !overdueDismissed && (
-        <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-          <TriangleAlert className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-red-700">
-              {overdueInvoices.length} overdue invoice{overdueInvoices.length !== 1 ? "s" : ""} — {formatCurrency(overdueTotal)} outstanding
-            </p>
-            <p className="text-xs text-red-500 mt-0.5">
-              {overdueInvoices.map(i => clientMap[i.client_id] ?? `Client #${i.client_id}`).join(", ")}
-            </p>
-          </div>
-          <button
-            onClick={() => setOverdueDismissed(true)}
-            className="shrink-0 text-red-300 hover:text-red-500 transition-colors"
-            aria-label="Dismiss"
-          >
-            <X className="w-4 h-4" />
-          </button>
+      {/* Notifications */}
+      {(overdueInvoices.length > 0 && !overdueDismissed) || (overdueTasks.length > 0 && !overdueTasksDismissed) ? (
+        <div className="space-y-2">
+          {overdueTasks.length > 0 && !overdueTasksDismissed && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+              <TriangleAlert className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-700">
+                  {overdueTasks.length} overdue task{overdueTasks.length !== 1 ? "s" : ""}
+                </p>
+                <p className="text-xs text-amber-600 mt-0.5 truncate">
+                  {overdueTasks.map(t => t.title).join(" · ")}
+                </p>
+              </div>
+              <button
+                onClick={() => setOverdueTasksDismissed(true)}
+                className="shrink-0 text-amber-300 hover:text-amber-500 transition-colors"
+                aria-label="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          {overdueInvoices.length > 0 && !overdueDismissed && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <TriangleAlert className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-red-700">
+                  {overdueInvoices.length} overdue invoice{overdueInvoices.length !== 1 ? "s" : ""} — {formatCurrency(overdueTotal)} outstanding
+                </p>
+                <p className="text-xs text-red-500 mt-0.5">
+                  {overdueInvoices.map(i => clientMap[i.client_id] ?? `Client #${i.client_id}`).join(", ")}
+                </p>
+              </div>
+              <button
+                onClick={() => setOverdueDismissed(true)}
+                className="shrink-0 text-red-300 hover:text-red-500 transition-colors"
+                aria-label="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      ) : null}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
