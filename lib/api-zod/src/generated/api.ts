@@ -247,6 +247,8 @@ export const ListTimeEntriesResponseItem = zod.object({
   task_id: zod.number().nullish(),
   duration_minutes: zod.number(),
   date: zod.string(),
+  started_at: zod.string().nullish(),
+  ended_at: zod.string().nullish(),
   client_name: zod.string().nullish(),
   task_title: zod.string().nullish(),
 });
@@ -260,6 +262,15 @@ export const CreateTimeEntryBody = zod.object({
   task_id: zod.number().nullish(),
   duration_minutes: zod.number(),
   date: zod.string(),
+  started_at: zod.string().nullish(),
+  ended_at: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete a time entry
+ */
+export const DeleteTimeEntryParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**

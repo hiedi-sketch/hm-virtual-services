@@ -167,6 +167,8 @@ export interface TimeEntry {
   task_id?: number | null;
   duration_minutes: number;
   date: string;
+  started_at?: string | null;
+  ended_at?: string | null;
   client_name?: string | null;
   task_title?: string | null;
 }
@@ -176,6 +178,8 @@ export interface CreateTimeEntryInput {
   task_id?: number | null;
   duration_minutes: number;
   date: string;
+  started_at?: string | null;
+  ended_at?: string | null;
 }
 
 export type LeadStatus = (typeof LeadStatus)[keyof typeof LeadStatus];

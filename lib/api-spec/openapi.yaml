@@ -320,6 +320,21 @@ paths:
               schema:
                 $ref: "#/components/schemas/TimeEntry"
 
+  /time/{id}:
+    delete:
+      operationId: deleteTimeEntry
+      tags: [time]
+      summary: Delete a time entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Time entry deleted
+
   /leads:
     get:
       operationId: listLeads
@@ -659,6 +674,12 @@ components:
           type: integer
         date:
           type: string
+        started_at:
+          type: string
+          nullable: true
+        ended_at:
+          type: string
+          nullable: true
         client_name:
           type: string
           nullable: true
@@ -683,6 +704,12 @@ components:
           type: integer
         date:
           type: string
+        started_at:
+          type: string
+          nullable: true
+        ended_at:
+          type: string
+          nullable: true
       required:
         - client_id
         - duration_minutes

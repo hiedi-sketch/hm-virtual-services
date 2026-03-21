@@ -8,6 +8,8 @@ export const timeEntriesTable = pgTable("time_entries", {
   task_id: integer("task_id"),
   duration_minutes: integer("duration_minutes").notNull(),
   date: text("date").notNull(),
+  started_at: text("started_at"),
+  ended_at: text("ended_at"),
 });
 
 export const insertTimeEntrySchema = createInsertSchema(timeEntriesTable).omit({ id: true });
