@@ -65,6 +65,26 @@ router.post("/service-requests", requireAuth, async (req, res) => {
     })
     .returning();
 
+  // In-app notifications for admins (fire-and-forget)
+  (async () => {
+    try {
+      const { notifyAdmins } = await import("../lib/notify");
+      const [clientRecord] = await db
+        .select({ name: clientsTable.name })
+        .from(clientsTable)
+        .where(eq(clientsTable.id, user.client_id!));
+      const clientName = clientRecord?.name ?? user.name;
+      const typeLabel = TYPE_LABELS[body.data.type] ?? body.data.type;
+      await notifyAdmins({
+        type: "service_request",
+        title: `New ${typeLabel} from ${clientName}`,
+        message: body.data.subject,
+        entityType: "service_request",
+        entityId: record.id,
+      });
+    } catch { /* ignore */ }
+  })();
+
   // Notify admins via email (fire-and-forget)
   (async () => {
     try {

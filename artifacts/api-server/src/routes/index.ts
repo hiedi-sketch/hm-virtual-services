@@ -15,6 +15,7 @@ import apikeysRouter from "./apikeys";
 import externalRouter from "./external";
 import auditRouter from "./audit";
 import serviceRequestsRouter from "./service-requests";
+import appNotificationsRouter from "./app-notifications";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use(apikeysRouter);
 router.use(externalRouter);
 router.use(auditRouter);
 router.use(serviceRequestsRouter);
+router.use(appNotificationsRouter);
 
 export default router;

@@ -8,3 +8,4 @@ export * from "./api_keys";
 export * from "./audit_logs";
 export * from "./password_reset_tokens";
 export * from "./service_requests";
+export * from "./app_notifications";

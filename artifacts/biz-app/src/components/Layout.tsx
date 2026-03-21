@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const ADMIN_NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -88,9 +89,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
-          {/* User info */}
+          {/* Notification bell + user info */}
           {user && (
             <div className="flex items-center gap-2 shrink-0 ml-auto pl-2 border-l border-slate-100">
+              <NotificationBell />
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-xs font-medium text-slate-700 leading-tight">{user.name}</span>
                 <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full mt-0.5", ROLE_BADGE[user.role])}>

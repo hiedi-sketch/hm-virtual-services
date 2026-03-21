@@ -255,6 +255,21 @@ router.post("/invoices", requireAdmin, async (req, res) => {
   res.status(201).json(invoice);
   const actor = req.session.user;
   logAudit("invoice", invoice.id, "created", `Invoice #${invoice.id} created ($${Number(invoice.amount).toFixed(2)})`, { id: actor?.id, name: actor?.name });
+
+  // Notify all admins about the new invoice
+  const { notifyAdmins } = await import("../lib/notify");
+  (async () => {
+    try {
+      const [client] = await db.select({ name: clientsTable.name }).from(clientsTable).where(eq(clientsTable.id, body.client_id));
+      await notifyAdmins({
+        type: "invoice_created",
+        title: `Invoice #${invoice.id} created`,
+        message: `$${Number(invoice.amount).toFixed(2)} invoice created${client?.name ? ` for ${client.name}` : ""}.`,
+        entityType: "invoice",
+        entityId: invoice.id,
+      });
+    } catch { /* ignore */ }
+  })();
 });
 
 router.patch("/invoices/:id", requireAdmin, async (req, res) => {
@@ -273,6 +288,27 @@ router.patch("/invoices/:id", requireAdmin, async (req, res) => {
   const actor = req.session.user;
   const statusNote = body.status ? ` → ${body.status}` : "";
   logAudit("invoice", id, "updated", `Invoice #${id} updated${statusNote}`, { id: actor?.id, name: actor?.name });
+
+  // Notify admins on meaningful status changes
+  if (body.status) {
+    const { notifyAdmins } = await import("../lib/notify");
+    (async () => {
+      try {
+        const [client] = await db
+          .select({ name: clientsTable.name })
+          .from(clientsTable)
+          .where(eq(clientsTable.id, updated.client_id));
+        const statusLabel = body.status === "paid" ? "marked as paid" : `updated to ${body.status}`;
+        await notifyAdmins({
+          type: "invoice_updated",
+          title: `Invoice #${id} ${statusLabel}`,
+          message: `$${Number(updated.amount).toFixed(2)} invoice${client?.name ? ` for ${client.name}` : ""} was ${statusLabel}.`,
+          entityType: "invoice",
+          entityId: id,
+        });
+      } catch { /* ignore */ }
+    })();
+  }
 });
 
 router.delete("/invoices/:id", requireAdmin, async (req, res) => {
