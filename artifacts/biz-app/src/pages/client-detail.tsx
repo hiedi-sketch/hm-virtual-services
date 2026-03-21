@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useGetClient,
   useListTasks,
   useUpdateTask,
   useCreateTask,
+  useUpdateClient,
   useGetDashboard,
   getListTasksQueryKey,
+  getGetClientQueryKey,
   TaskStatus,
   Task,
 } from "@workspace/api-client-react";
@@ -21,6 +24,10 @@ import {
   AlertCircle,
   Briefcase,
   Mail,
+  Plus,
+  Pencil,
+  X,
+  Check,
 } from "lucide-react";
 import { SubtaskList } from "@/components/SubtaskList";
 import { formatCurrency } from "@/lib/utils";
@@ -47,12 +54,32 @@ function nextDueDate(recurrence: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+const SERVICE_LABELS: Record<string, string> = {
+  bookkeeping: "Bookkeeping",
+  va: "Virtual Assistant",
+  hybrid: "Hybrid (VA + Bookkeeping)",
+};
+
 export default function ClientDetail() {
   const params = useParams<{ id: string }>();
   const clientId = Number(params.id);
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  // UI state
+  const [showNewTaskForm, setShowNewTaskForm] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+
+  // New task form state
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskDesc, setNewTaskDesc] = useState("");
+  const [newTaskDueDate, setNewTaskDueDate] = useState("");
+
+  // Edit profile form state (initialised when edit opens)
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editServiceType, setEditServiceType] = useState<"bookkeeping" | "va" | "hybrid">("va");
 
   const { data: client, isLoading: clientLoading } = useGetClient(clientId);
   const { data: tasks, isLoading: tasksLoading } = useListTasks({ clientId });
@@ -84,6 +111,29 @@ export default function ClientDetail() {
     },
   });
 
+  const createTaskMutation = useCreateTask({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+        setNewTaskTitle("");
+        setNewTaskDesc("");
+        setNewTaskDueDate("");
+        setShowNewTaskForm(false);
+        toast({ title: "Task created", description: "It will appear in the admin task list." });
+      },
+    },
+  });
+
+  const updateClientMutation = useUpdateClient({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetClientQueryKey(clientId) });
+        setShowEditProfile(false);
+        toast({ title: "Profile updated" });
+      },
+    },
+  });
+
   const toggleStatus = (task: Task) => {
     const completing = task.status === "pending";
     updateTask.mutate({ id: task.id, data: { status: completing ? "complete" : "pending" } });
@@ -100,6 +150,39 @@ export default function ClientDetail() {
         },
       });
     }
+  };
+
+  const handleNewTaskSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    createTaskMutation.mutate({
+      data: {
+        title: newTaskTitle.trim(),
+        description: newTaskDesc.trim() || undefined,
+        due_date: newTaskDueDate || undefined,
+        client_id: clientId,
+      },
+    });
+  };
+
+  const openEditProfile = () => {
+    if (!client) return;
+    setEditName(client.name);
+    setEditEmail(client.email);
+    setEditServiceType(client.service_type as "bookkeeping" | "va" | "hybrid");
+    setShowEditProfile(true);
+  };
+
+  const handleEditProfileSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateClientMutation.mutate({
+      id: clientId,
+      data: {
+        name: editName.trim() || undefined,
+        email: editEmail.trim() || undefined,
+        service_type: editServiceType,
+      },
+    });
   };
 
   const pendingTasks = tasks?.filter(t => t.status === "pending") ?? [];
@@ -142,30 +225,104 @@ export default function ClientDetail() {
 
       {/* Client Header */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold shrink-0">
-              {client.name.charAt(0).toUpperCase()}
+        {showEditProfile ? (
+          <form onSubmit={handleEditProfileSubmit} className="space-y-4">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-semibold text-slate-900">Edit Profile</h2>
+              <button
+                type="button"
+                onClick={() => setShowEditProfile(false)}
+                className="text-slate-400 hover:text-slate-700 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">{client.name}</h1>
-              <div className="flex flex-wrap items-center gap-3 mt-1">
-                <span className="flex items-center gap-1.5 text-sm text-slate-500">
-                  <Mail className="w-3.5 h-3.5" />
-                  {client.email}
-                </span>
-                <span className="flex items-center gap-1.5 text-sm text-slate-500">
-                  <Briefcase className="w-3.5 h-3.5" />
-                  <span className="capitalize">{client.service_type}</span>
-                </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Name</label>
+                <input
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  placeholder="Client name"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                <input
+                  type="email"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Service Type</label>
+                <select
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  value={editServiceType}
+                  onChange={e => setEditServiceType(e.target.value as "bookkeeping" | "va" | "hybrid")}
+                >
+                  <option value="bookkeeping">Bookkeeping</option>
+                  <option value="va">Virtual Assistant</option>
+                  <option value="hybrid">Hybrid (VA + Bookkeeping)</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={updateClientMutation.isPending}
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Save Changes
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowEditProfile(false)}
+                className="text-sm text-slate-500 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-bold shrink-0">
+                {client.name.charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">{client.name}</h1>
+                <div className="flex flex-wrap items-center gap-3 mt-1">
+                  <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                    <Mail className="w-3.5 h-3.5" />
+                    {client.email}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                    <Briefcase className="w-3.5 h-3.5" />
+                    {SERVICE_LABELS[client.service_type] ?? client.service_type}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 shrink-0">
+              <button
+                onClick={openEditProfile}
+                className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Edit Info
+              </button>
+              <div className="text-right">
+                <p className="text-xs text-slate-500">Monthly Fee</p>
+                <p className="text-2xl font-bold text-slate-900">{formatCurrency(client.monthly_fee)}</p>
               </div>
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <p className="text-sm text-slate-500">Monthly Fee</p>
-            <p className="text-2xl font-bold text-slate-900">{formatCurrency(client.monthly_fee)}</p>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Hours Stats */}
@@ -205,10 +362,74 @@ export default function ClientDetail() {
 
       {/* Tasks */}
       <div>
-        <h2 className="text-xl font-semibold text-slate-900 mb-4">Tasks</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-slate-900">Tasks</h2>
+          <button
+            onClick={() => setShowNewTaskForm(v => !v)}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {showNewTaskForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+            {showNewTaskForm ? "Cancel" : "Request Task"}
+          </button>
+        </div>
+
+        {/* New Task Form */}
+        {showNewTaskForm && (
+          <form onSubmit={handleNewTaskSubmit} className="mb-6 bg-white rounded-2xl border border-blue-200 shadow-sm p-5 space-y-3">
+            <p className="text-sm font-medium text-slate-700">New task request — will appear in the admin task list.</p>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Task Title <span className="text-red-400">*</span></label>
+              <input
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. Reconcile March invoices"
+                value={newTaskTitle}
+                onChange={e => setNewTaskTitle(e.target.value)}
+                autoFocus
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Description (optional)</label>
+              <textarea
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                rows={2}
+                placeholder="Any extra details…"
+                value={newTaskDesc}
+                onChange={e => setNewTaskDesc(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Due Date (optional)</label>
+              <input
+                type="date"
+                className="border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                value={newTaskDueDate}
+                onChange={e => setNewTaskDueDate(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={createTaskMutation.isPending || !newTaskTitle.trim()}
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {createTaskMutation.isPending ? "Creating…" : "Create Task"}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowNewTaskForm(false); setNewTaskTitle(""); setNewTaskDesc(""); setNewTaskDueDate(""); }}
+                className="text-sm text-slate-500 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
         {tasksLoading ? (
           <div className="h-32 bg-white rounded-2xl border border-slate-100 animate-pulse" />
-        ) : tasks?.length === 0 ? (
+        ) : tasks?.length === 0 && !showNewTaskForm ? (
           <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-10 text-center">
             <p className="text-slate-500">No tasks for this client yet.</p>
           </div>

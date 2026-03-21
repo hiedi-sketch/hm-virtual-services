@@ -5,6 +5,8 @@ import { eq, and, gte, lt, sql } from "drizzle-orm";
 import {
   CreateClientBody,
   GetClientParams,
+  UpdateClientParams,
+  UpdateClientBody,
   ListClientsResponse,
   GetDashboardResponse,
 } from "@workspace/api-zod";
@@ -31,6 +33,21 @@ router.get("/clients/:id", async (req, res) => {
     return;
   }
   res.json(client);
+});
+
+router.patch("/clients/:id", async (req, res) => {
+  const { id } = UpdateClientParams.parse(req.params);
+  const body = UpdateClientBody.parse(req.body);
+  const [updated] = await db
+    .update(clientsTable)
+    .set(body)
+    .where(eq(clientsTable.id, id))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Client not found" });
+    return;
+  }
+  res.json(updated);
 });
 
 router.get("/dashboard", async (req, res) => {

@@ -81,6 +81,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Client"
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update client information
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateClientInput"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
 
   /dashboard:
     get:
@@ -406,6 +429,17 @@ components:
         - monthly_hour_budget
         - monthly_fee
         - service_type
+
+    UpdateClientInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        service_type:
+          type: string
+          enum: [bookkeeping, va, hybrid]
 
     ClientDashboard:
       type: object

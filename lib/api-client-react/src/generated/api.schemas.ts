@@ -44,6 +44,21 @@ export interface CreateClientInput {
   service_type: CreateClientInputServiceType;
 }
 
+export type UpdateClientInputServiceType =
+  (typeof UpdateClientInputServiceType)[keyof typeof UpdateClientInputServiceType];
+
+export const UpdateClientInputServiceType = {
+  bookkeeping: "bookkeeping",
+  va: "va",
+  hybrid: "hybrid",
+} as const;
+
+export interface UpdateClientInput {
+  name?: string;
+  email?: string;
+  service_type?: UpdateClientInputServiceType;
+}
+
 export type ClientDashboardServiceType =
   (typeof ClientDashboardServiceType)[keyof typeof ClientDashboardServiceType];
 

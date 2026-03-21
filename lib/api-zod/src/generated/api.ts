@@ -55,6 +55,19 @@ export const GetClientResponse = zod.object({
 });
 
 /**
+ * @summary Update client information
+ */
+export const UpdateClientParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateClientBody = zod.object({
+  name: zod.string().optional(),
+  email: zod.string().optional(),
+  service_type: zod.enum(["bookkeeping", "va", "hybrid"]).optional(),
+});
+
+/**
  * @summary Get dashboard data with client hour summaries
  */
 export const GetDashboardResponseItem = zod.object({
