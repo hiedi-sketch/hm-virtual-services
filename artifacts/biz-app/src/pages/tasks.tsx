@@ -7,6 +7,7 @@ import {
   useSpawnRecurringTasks,
   getListTasksQueryKey,
   TaskStatus,
+  Task,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Modal } from "@/components/Modal";
@@ -25,6 +26,14 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
+
+function nextDueDate(recurrence: string): string {
+  const d = new Date();
+  if (recurrence === "daily") d.setDate(d.getDate() + 1);
+  else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
+  else if (recurrence === "monthly") d.setMonth(d.getMonth() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 const RECURRENCE_OPTIONS = [
   { value: "", label: "No recurrence" },
@@ -93,6 +102,16 @@ export default function Tasks() {
     },
   });
 
+  // Separate mutation for spawning next recurrence — no modal side-effects
+  const spawnNextMutation = useCreateTask({
+    mutation: {
+      onSuccess: () => {
+        invalidateTasks();
+        toast({ title: "Next occurrence scheduled" });
+      },
+    },
+  });
+
   const updateMutation = useUpdateTask({
     mutation: {
       onSuccess: () => {
@@ -107,16 +126,27 @@ export default function Tasks() {
 
   const onSubmit = (data: FormValues) => {
     createMutation.mutate({
-      data: {
-        ...data,
-        recurrence: data.recurrence || null,
-      },
+      data: { ...data, recurrence: data.recurrence || null },
     });
   };
 
-  const toggleStatus = (id: number, currentStatus: TaskStatus) => {
-    const newStatus = currentStatus === "pending" ? "complete" : "pending";
-    updateMutation.mutate({ id, data: { status: newStatus } });
+  const toggleStatus = (task: Task) => {
+    const completing = task.status === "pending";
+    updateMutation.mutate({ id: task.id, data: { status: completing ? "complete" : "pending" } });
+
+    // When completing a recurring task, immediately queue the next occurrence
+    if (completing && task.recurrence) {
+      spawnNextMutation.mutate({
+        data: {
+          title: task.title,
+          description: task.description ?? undefined,
+          client_id: task.client_id,
+          assigned_to: task.assigned_to ?? undefined,
+          recurrence: task.recurrence,
+          due_date: nextDueDate(task.recurrence),
+        },
+      });
+    }
   };
 
   const pendingTasks = tasks?.filter(t => t.status === "pending") || [];
@@ -172,8 +202,8 @@ export default function Tasks() {
                 {pendingTasks.map(task => (
                   <div key={task.id} className="p-4 rounded-xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/30 transition-colors flex gap-4 group">
                     <button
-                      onClick={() => toggleStatus(task.id, task.status)}
-                      disabled={updateMutation.isPending}
+                      onClick={() => toggleStatus(task)}
+                      disabled={updateMutation.isPending || spawnNextMutation.isPending}
                       className="mt-0.5 text-slate-300 hover:text-blue-500 transition-colors shrink-0"
                     >
                       <Circle className="w-6 h-6" />
@@ -238,7 +268,7 @@ export default function Tasks() {
                 {completedTasks.map(task => (
                   <div key={task.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50 flex gap-4">
                     <button
-                      onClick={() => toggleStatus(task.id, task.status)}
+                      onClick={() => toggleStatus(task)}
                       disabled={updateMutation.isPending}
                       className="mt-0.5 text-emerald-500 hover:text-emerald-600 transition-colors shrink-0"
                     >
