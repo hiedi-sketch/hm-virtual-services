@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGetDashboard, useCreateTask, useListClients, useListInvoices, useListLeads, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -54,6 +54,18 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
+  // Trigger recurring task generation on page load (fire-and-forget)
+  useEffect(() => {
+    fetch("/api/tasks/spawn-recurring", { method: "POST", credentials: "include" })
+      .then(r => r.json())
+      .then((spawned: unknown) => {
+        if (Array.isArray(spawned) && spawned.length > 0) {
+          queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [goals, setGoals] = useState<Goals>(loadGoals);
   const [editingGoals, setEditingGoals] = useState(false);

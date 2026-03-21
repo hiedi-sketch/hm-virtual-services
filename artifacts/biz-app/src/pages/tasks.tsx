@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useListTasks,
   useCreateTask,
@@ -90,6 +90,18 @@ export default function Tasks() {
 
   const invalidateTasks = () =>
     queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+
+  // Trigger recurring task generation on page load (fire-and-forget)
+  useEffect(() => {
+    fetch("/api/tasks/spawn-recurring", { method: "POST", credentials: "include" })
+      .then(r => r.json())
+      .then((spawned: unknown) => {
+        if (Array.isArray(spawned) && spawned.length > 0) {
+          invalidateTasks();
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const createMutation = useCreateTask({
     mutation: {
