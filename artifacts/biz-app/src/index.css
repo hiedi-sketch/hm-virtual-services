@@ -1,0 +1,80 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: 'Inter', sans-serif;
+  --font-display: 'Plus Jakarta Sans', sans-serif;
+
+  --color-background: hsl(210 33% 99%); /* slate-50 */
+  --color-foreground: hsl(222 47% 11%);
+  
+  --color-primary: hsl(221 83% 53%); /* blue-600 */
+  --color-primary-foreground: hsl(210 40% 98%);
+  
+  --color-secondary: hsl(214 32% 91%); /* slate-200 */
+  --color-secondary-foreground: hsl(222 47% 11%);
+  
+  --color-muted: hsl(214 32% 91%);
+  --color-muted-foreground: hsl(215 16% 47%);
+  
+  --color-accent: hsl(221 83% 53%);
+  --color-accent-foreground: hsl(210 40% 98%);
+  
+  --color-destructive: hsl(0 84% 60%);
+  --color-destructive-foreground: hsl(210 40% 98%);
+  
+  --color-border: hsl(214 32% 91%);
+  --color-ring: hsl(221 83% 53%);
+  
+  --color-card: hsl(0 0% 100%);
+  --color-card-foreground: hsl(222 47% 11%);
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply font-semibold tracking-tight text-foreground;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
+  }
+  
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/20;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-900 
+           placeholder:text-slate-400 shadow-sm
+           focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary
+           transition-all duration-200;
+  }
+
+  .label-text {
+    @apply block text-sm font-medium text-slate-700 mb-1.5;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-medium
+           bg-primary text-primary-foreground shadow-sm shadow-primary/20
+           hover:bg-primary/90 hover:shadow-md hover:-translate-y-0.5
+           active:translate-y-0 active:shadow-sm
+           disabled:opacity-50 disabled:pointer-events-none
+           transition-all duration-200;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-medium
+           bg-white text-slate-700 border border-slate-200 shadow-sm
+           hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300
+           active:bg-slate-100 disabled:opacity-50 disabled:pointer-events-none
+           transition-all duration-200;
+  }
+}

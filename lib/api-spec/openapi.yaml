@@ -1,22 +1,28 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Business Manager API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: clients
+    description: Client management
+  - name: tasks
+    description: Task management
+  - name: time
+    description: Time tracking
+  - name: leads
+    description: CRM leads
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +30,231 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List all clients
+      responses:
+        "200":
+          description: List of clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Create a new client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateClientInput"
+      responses:
+        "201":
+          description: Created client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+
+  /clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get a client by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [clients]
+      summary: Get dashboard data with client hour summaries
+      responses:
+        "200":
+          description: Dashboard data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClientDashboard"
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List all tasks
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a new task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskInput"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task (e.g. mark complete)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskInput"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /time:
+    get:
+      operationId: listTimeEntries
+      tags: [time]
+      summary: List time entries
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of time entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TimeEntry"
+    post:
+      operationId: createTimeEntry
+      tags: [time]
+      summary: Log a time entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTimeEntryInput"
+      responses:
+        "201":
+          description: Created time entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeEntry"
+
+  /leads:
+    get:
+      operationId: listLeads
+      tags: [leads]
+      summary: List all leads
+      responses:
+        "200":
+          description: List of leads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lead"
+    post:
+      operationId: createLead
+      tags: [leads]
+      summary: Create a new lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLeadInput"
+      responses:
+        "201":
+          description: Created lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+
+  /leads/{id}:
+    patch:
+      operationId: updateLead
+      tags: [leads]
+      summary: Update a lead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLeadInput"
+      responses:
+        "200":
+          description: Updated lead
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +265,250 @@ components:
       required:
         - status
 
+    Client:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        monthly_hour_budget:
+          type: number
+        monthly_fee:
+          type: number
+        service_type:
+          type: string
+          enum: [bookkeeping, va, hybrid]
+      required:
+        - id
+        - name
+        - email
+        - monthly_hour_budget
+        - monthly_fee
+        - service_type
+
+    CreateClientInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        monthly_hour_budget:
+          type: number
+        monthly_fee:
+          type: number
+        service_type:
+          type: string
+          enum: [bookkeeping, va, hybrid]
+      required:
+        - name
+        - email
+        - monthly_hour_budget
+        - monthly_fee
+        - service_type
+
+    ClientDashboard:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        monthly_hour_budget:
+          type: number
+        monthly_fee:
+          type: number
+        service_type:
+          type: string
+          enum: [bookkeeping, va, hybrid]
+        hours_used_this_month:
+          type: number
+        hours_remaining:
+          type: number
+      required:
+        - id
+        - name
+        - email
+        - monthly_hour_budget
+        - monthly_fee
+        - service_type
+        - hours_used_this_month
+        - hours_remaining
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        client_id:
+          type: integer
+        assigned_to:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, complete]
+        due_date:
+          type: string
+          nullable: true
+        client_name:
+          type: string
+          nullable: true
+      required:
+        - id
+        - title
+        - client_id
+        - status
+
+    CreateTaskInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        client_id:
+          type: integer
+        assigned_to:
+          type: string
+          nullable: true
+        due_date:
+          type: string
+          nullable: true
+      required:
+        - title
+        - client_id
+
+    UpdateTaskInput:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        assigned_to:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, complete]
+        due_date:
+          type: string
+          nullable: true
+
+    TimeEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        client_id:
+          type: integer
+        task_id:
+          type: integer
+          nullable: true
+        duration_minutes:
+          type: integer
+        date:
+          type: string
+        client_name:
+          type: string
+          nullable: true
+        task_title:
+          type: string
+          nullable: true
+      required:
+        - id
+        - client_id
+        - duration_minutes
+        - date
+
+    CreateTimeEntryInput:
+      type: object
+      properties:
+        client_id:
+          type: integer
+        task_id:
+          type: integer
+          nullable: true
+        duration_minutes:
+          type: integer
+        date:
+          type: string
+      required:
+        - client_id
+        - duration_minutes
+        - date
+
+    Lead:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        estimated_value:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [new, contacted, closed]
+        lead_source:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+        - status
+
+    CreateLeadInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        estimated_value:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [new, contacted, closed]
+        lead_source:
+          type: string
+          nullable: true
+      required:
+        - name
+
+    UpdateLeadInput:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        estimated_value:
+          type: number
+          nullable: true
+        status:
+          type: string
+          enum: [new, contacted, closed]
+        lead_source:
+          type: string
+          nullable: true

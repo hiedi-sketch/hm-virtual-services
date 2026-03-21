@@ -1,0 +1,14 @@
+packages:
+  "framer-motion": "For smooth layout transitions, modal animations, and micro-interactions"
+  "react-hook-form": "For robust form state management and validation"
+  "@hookform/resolvers": "To connect Zod schemas with react-hook-form"
+  "zod": "For strict runtime type validation of form inputs"
+  "date-fns": "For formatting and manipulating dates in the UI"
+  "clsx": "For conditional CSS class merging"
+  "tailwind-merge": "To properly merge Tailwind utility classes"
+
+images: []
+
+notes:
+  - "Assuming @workspace/api-client-react is available in the monorepo and exports standard React Query hooks."
+  - "Assuming wouter is used for routing and @tanstack/react-query is already set up."
