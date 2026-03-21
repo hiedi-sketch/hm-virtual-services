@@ -14,6 +14,7 @@ import TimeTracking from "@/pages/time";
 import Leads from "@/pages/leads";
 import Invoices from "@/pages/invoices";
 import Team from "@/pages/team";
+import Reports from "@/pages/reports";
 import Login from "@/pages/login";
 import ClientPortal from "@/pages/client-portal";
 
@@ -60,6 +61,7 @@ function Router() {
         <Route path="/invoices" component={Invoices} />
         <Route path="/leads" component={Leads} />
         {user.role === "admin" && <Route path="/team" component={Team} />}
+        {user.role === "admin" && <Route path="/reports" component={Reports} />}
         <Route component={NotFound} />
       </Switch>
     </Layout>

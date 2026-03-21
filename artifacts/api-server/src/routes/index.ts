@@ -7,6 +7,7 @@ import timeRouter from "./time";
 import leadsRouter from "./leads";
 import invoicesRouter from "./invoices";
 import usersRouter from "./users";
+import reportsRouter from "./reports";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use(timeRouter);
 router.use(leadsRouter);
 router.use(invoicesRouter);
 router.use(usersRouter);
+router.use(reportsRouter);
 
 export default router;

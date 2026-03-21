@@ -9,6 +9,7 @@ import {
   FileText,
   UserCog,
   LogOut,
+  BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +21,7 @@ const ADMIN_NAV = [
   { href: "/time", label: "Time", icon: Clock },
   { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/leads", label: "Leads", icon: Megaphone },
+  { href: "/reports", label: "Reports", icon: BarChart2 },
   { href: "/team", label: "Team", icon: UserCog },
 ];
 
