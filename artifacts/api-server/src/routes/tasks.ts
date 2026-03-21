@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasksTable, clientsTable, subtasksTable } from "@workspace/db";
-import { eq, isNotNull } from "drizzle-orm";
+import { eq, isNotNull, and } from "drizzle-orm";
 import {
   CreateTaskBody,
   UpdateTaskBody,
@@ -119,17 +119,42 @@ router.post("/tasks", async (req, res) => {
 router.post("/tasks/spawn-recurring", async (req, res) => {
   const today = todayStr();
 
-  const recurringTasks = await db
+  // Only look at COMPLETED recurring tasks — pending ones already visible to the user, no duplicate needed
+  const completedRecurring = await db
     .select()
     .from(tasksTable)
-    .where(isNotNull(tasksTable.recurrence));
+    .where(and(isNotNull(tasksTable.recurrence), eq(tasksTable.status, "complete")));
 
   const spawned: (typeof tasksTable.$inferSelect)[] = [];
 
-  for (const task of recurringTasks) {
+  for (const task of completedRecurring) {
     if (!task.recurrence) continue;
     if (!isDue(task.recurrence, task.last_generated_at)) continue;
 
+    // Mark this completed task as processed (prevent re-triggering on next page load)
+    await db
+      .update(tasksTable)
+      .set({ last_generated_at: today })
+      .where(eq(tasksTable.id, task.id));
+
+    // Skip if a pending instance with same title/client/recurrence already exists
+    // (created by the on-complete handler in the frontend)
+    const existing = await db
+      .select({ id: tasksTable.id })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.title, task.title),
+          eq(tasksTable.client_id, task.client_id),
+          eq(tasksTable.recurrence, task.recurrence),
+          eq(tasksTable.status, "pending"),
+        )
+      )
+      .limit(1);
+
+    if (existing.length > 0) continue;
+
+    // No pending instance exists — create one (catches missed days when app was closed)
     const [newTask] = await db
       .insert(tasksTable)
       .values({
@@ -139,15 +164,10 @@ router.post("/tasks/spawn-recurring", async (req, res) => {
         assigned_to: task.assigned_to,
         status: "pending",
         due_date: nextDueDate(task.recurrence),
-        recurrence: null,
+        recurrence: task.recurrence, // Preserve the recurrence type
         last_generated_at: null,
       })
       .returning();
-
-    await db
-      .update(tasksTable)
-      .set({ last_generated_at: today })
-      .where(eq(tasksTable.id, task.id));
 
     spawned.push(newTask);
   }
