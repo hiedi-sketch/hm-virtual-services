@@ -13,4 +13,5 @@ export interface CreateLeadInput {
   estimated_value?: number | null;
   status?: CreateLeadInputStatus;
   lead_source?: string | null;
+  notes?: string | null;
 }

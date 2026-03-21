@@ -198,6 +198,7 @@ export interface Lead {
   estimated_value?: number | null;
   status: LeadStatus;
   lead_source?: string | null;
+  notes?: string | null;
 }
 
 export type CreateLeadInputStatus =
@@ -216,6 +217,7 @@ export interface CreateLeadInput {
   estimated_value?: number | null;
   status?: CreateLeadInputStatus;
   lead_source?: string | null;
+  notes?: string | null;
 }
 
 export type UpdateLeadInputStatus =
@@ -234,6 +236,7 @@ export interface UpdateLeadInput {
   estimated_value?: number | null;
   status?: UpdateLeadInputStatus;
   lead_source?: string | null;
+  notes?: string | null;
 }
 
 export interface Subtask {

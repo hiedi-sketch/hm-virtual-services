@@ -14,4 +14,5 @@ export interface Lead {
   estimated_value?: number | null;
   status: LeadStatus;
   lead_source?: string | null;
+  notes?: string | null;
 }

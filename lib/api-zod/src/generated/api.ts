@@ -283,6 +283,7 @@ export const ListLeadsResponseItem = zod.object({
   estimated_value: zod.number().nullish(),
   status: zod.enum(["new", "contacted", "proposal", "closed"]),
   lead_source: zod.string().nullish(),
+  notes: zod.string().nullish(),
 });
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem);
 
@@ -295,6 +296,7 @@ export const CreateLeadBody = zod.object({
   estimated_value: zod.number().nullish(),
   status: zod.enum(["new", "contacted", "proposal", "closed"]).optional(),
   lead_source: zod.string().nullish(),
+  notes: zod.string().nullish(),
 });
 
 /**
@@ -310,6 +312,7 @@ export const UpdateLeadBody = zod.object({
   estimated_value: zod.number().nullish(),
   status: zod.enum(["new", "contacted", "proposal", "closed"]).optional(),
   lead_source: zod.string().nullish(),
+  notes: zod.string().nullish(),
 });
 
 export const UpdateLeadResponse = zod.object({
@@ -319,6 +322,7 @@ export const UpdateLeadResponse = zod.object({
   estimated_value: zod.number().nullish(),
   status: zod.enum(["new", "contacted", "proposal", "closed"]),
   lead_source: zod.string().nullish(),
+  notes: zod.string().nullish(),
 });
 
 /**

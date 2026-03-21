@@ -734,6 +734,9 @@ components:
         lead_source:
           type: string
           nullable: true
+        notes:
+          type: string
+          nullable: true
       required:
         - id
         - name
@@ -756,6 +759,9 @@ components:
         lead_source:
           type: string
           nullable: true
+        notes:
+          type: string
+          nullable: true
       required:
         - name
 
@@ -774,6 +780,9 @@ components:
           type: string
           enum: [new, contacted, proposal, closed]
         lead_source:
+          type: string
+          nullable: true
+        notes:
           type: string
           nullable: true
 

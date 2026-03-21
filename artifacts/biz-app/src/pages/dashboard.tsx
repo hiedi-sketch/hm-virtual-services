@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { useGetDashboard, useCreateTask, useListClients, useListInvoices, getListTasksQueryKey } from "@workspace/api-client-react";
+import { useGetDashboard, useCreateTask, useListClients, useListInvoices, useListLeads, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatCurrency } from "@/lib/utils";
-import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check, Calendar, TriangleAlert } from "lucide-react";
+import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check, Calendar, TriangleAlert, TrendingUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const quickTaskSchema = z.object({
@@ -50,6 +50,7 @@ export default function Dashboard() {
   const { data: dashboard, isLoading } = useGetDashboard();
   const { data: clients } = useListClients();
   const { data: invoices = [] } = useListInvoices();
+  const { data: leads = [] } = useListLeads();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -143,6 +144,22 @@ export default function Dashboard() {
   ).sort((a, b) => a.due_date.localeCompare(b.due_date));
 
   const overdueTotal = overdueInvoices.reduce((s, i) => s + i.amount, 0);
+
+  // CRM stats
+  const totalLeadCount = leads.length;
+  const totalPipelineValue = leads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
+  const leadsByStatus = {
+    new: leads.filter(l => l.status === "new").length,
+    contacted: leads.filter(l => l.status === "contacted").length,
+    proposal: leads.filter(l => l.status === "proposal").length,
+    closed: leads.filter(l => l.status === "closed").length,
+  };
+  const CRM_STAGES = [
+    { key: "new" as const, label: "New", dot: "bg-blue-500", pill: "bg-blue-50 text-blue-700 border-blue-200" },
+    { key: "contacted" as const, label: "Contacted", dot: "bg-amber-500", pill: "bg-amber-50 text-amber-700 border-amber-200" },
+    { key: "proposal" as const, label: "Proposal", dot: "bg-violet-500", pill: "bg-violet-50 text-violet-700 border-violet-200" },
+    { key: "closed" as const, label: "Closed", dot: "bg-emerald-500", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  ];
 
   return (
     <div className="space-y-8">
@@ -509,6 +526,70 @@ export default function Dashboard() {
             {createTask.isPending ? "Adding…" : "Add Task"}
           </button>
         </form>
+      </div>
+
+      {/* CRM Pipeline Summary */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-blue-500" />
+            <h2 className="font-semibold text-slate-900">CRM Pipeline</h2>
+          </div>
+          <button
+            onClick={() => navigate("/leads")}
+            className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+          >
+            View all →
+          </button>
+        </div>
+
+        {totalLeadCount === 0 ? (
+          <p className="text-sm text-slate-400 italic">No leads yet. <button onClick={() => navigate("/leads")} className="text-blue-500 hover:underline">Add your first lead →</button></p>
+        ) : (
+          <div className="space-y-4">
+            {/* Top row: total leads + total value */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Leads</p>
+                <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalLeadCount}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Est. Pipeline Value</p>
+                <p className="text-2xl font-bold text-slate-900 mt-0.5">{formatCurrency(totalPipelineValue)}</p>
+              </div>
+            </div>
+
+            {/* Leads by stage */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {CRM_STAGES.map(s => (
+                <div key={s.key} className={`rounded-lg border px-3 py-2.5 ${s.pill}`}>
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
+                    <span className="text-xs font-medium">{s.label}</span>
+                  </div>
+                  <p className="text-xl font-bold">{leadsByStatus[s.key]}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Simple pipeline bar */}
+            {totalLeadCount > 0 && (
+              <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
+                {CRM_STAGES.map(s => {
+                  const pct = (leadsByStatus[s.key] / totalLeadCount) * 100;
+                  return pct > 0 ? (
+                    <div
+                      key={s.key}
+                      className={`h-full ${s.dot} transition-all`}
+                      style={{ width: `${pct}%` }}
+                      title={`${s.label}: ${leadsByStatus[s.key]}`}
+                    />
+                  ) : null;
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Client Utilization */}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   useListLeads,
   useCreateLead,
@@ -13,7 +13,7 @@ import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Target, Mail, TrendingUp, Users, CheckCircle, Trash2 } from "lucide-react";
+import { Plus, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +23,7 @@ const formSchema = z.object({
   estimated_value: z.coerce.number().optional().nullable(),
   status: z.nativeEnum(LeadStatus).default("new"),
   lead_source: z.string().optional(),
+  notes: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -34,6 +35,7 @@ const STATUSES: {
   dot: string;
   col: string;
   pill: string;
+  activeBar: string;
 }[] = [
   {
     value: "new",
@@ -42,6 +44,7 @@ const STATUSES: {
     dot: "bg-blue-500",
     col: "border-blue-200",
     pill: "bg-blue-50 text-blue-700 border-blue-200",
+    activeBar: "bg-blue-500",
   },
   {
     value: "contacted",
@@ -50,6 +53,7 @@ const STATUSES: {
     dot: "bg-amber-500",
     col: "border-amber-200",
     pill: "bg-amber-50 text-amber-700 border-amber-200",
+    activeBar: "bg-amber-500",
   },
   {
     value: "proposal",
@@ -58,6 +62,7 @@ const STATUSES: {
     dot: "bg-violet-500",
     col: "border-violet-200",
     pill: "bg-violet-50 text-violet-700 border-violet-200",
+    activeBar: "bg-violet-500",
   },
   {
     value: "closed",
@@ -66,8 +71,127 @@ const STATUSES: {
     dot: "bg-emerald-500",
     col: "border-emerald-200",
     pill: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    activeBar: "bg-emerald-500",
   },
 ];
+
+const STATUS_ORDER = STATUSES.map(s => s.value);
+
+function StatusTimeline({
+  currentStatus,
+  onSetStatus,
+  isPending,
+}: {
+  currentStatus: LeadStatus;
+  onSetStatus: (s: LeadStatus) => void;
+  isPending: boolean;
+}) {
+  const currentIdx = STATUS_ORDER.indexOf(currentStatus);
+  return (
+    <div className="flex items-center gap-0.5">
+      {STATUSES.map((s, idx) => {
+        const past = idx < currentIdx;
+        const active = idx === currentIdx;
+        const future = idx > currentIdx;
+        return (
+          <div key={s.value} className="flex items-center flex-1 min-w-0">
+            <button
+              onClick={() => currentStatus !== s.value && onSetStatus(s.value)}
+              disabled={isPending}
+              title={s.label}
+              className={cn(
+                "flex-1 h-1.5 rounded-full transition-all",
+                past ? "bg-slate-300 hover:bg-slate-400" :
+                active ? s.activeBar :
+                "bg-slate-100 hover:bg-slate-200"
+              )}
+            />
+            {idx < STATUSES.length - 1 && (
+              <ChevronRight className={cn(
+                "w-3 h-3 shrink-0 mx-0.5",
+                future ? "text-slate-200" : "text-slate-400"
+              )} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LeadNotes({
+  leadId,
+  notes,
+}: {
+  leadId: number;
+  notes: string | null | undefined;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(notes ?? "");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const updateMutation = useUpdateLead({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+      },
+      onError: () => {
+        toast({ title: "Failed to save notes", variant: "destructive" });
+      },
+    },
+  });
+
+  const startEdit = () => {
+    setDraft(notes ?? "");
+    setEditing(true);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+
+  const save = () => {
+    const trimmed = draft.trim();
+    if (trimmed !== (notes ?? "").trim()) {
+      updateMutation.mutate({ id: leadId, data: { notes: trimmed || null } });
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="mt-2">
+        <textarea
+          ref={textareaRef}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={save}
+          onKeyDown={e => { if (e.key === "Escape") { setEditing(false); setDraft(notes ?? ""); } }}
+          rows={3}
+          placeholder="Add notes about this lead…"
+          className="w-full text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 resize-none focus:outline-none focus:border-blue-400 placeholder:text-slate-300"
+        />
+        <p className="text-[10px] text-slate-400 mt-0.5">Blur or Escape to finish</p>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={startEdit}
+      className={cn(
+        "mt-2 w-full text-left text-xs rounded-lg px-2.5 py-2 border transition-colors",
+        notes
+          ? "bg-amber-50 border-amber-100 text-slate-700 hover:border-amber-300"
+          : "bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200"
+      )}
+    >
+      <span className="flex items-start gap-1.5">
+        <StickyNote className="w-3 h-3 shrink-0 mt-0.5 text-slate-400" />
+        <span className="line-clamp-3 whitespace-pre-wrap">{notes || "Add notes…"}</span>
+      </span>
+    </button>
+  );
+}
 
 export default function Leads() {
   const { data: leads, isLoading } = useListLeads();
@@ -312,24 +436,38 @@ export default function Leads() {
                         </div>
                       )}
 
-                      {/* Status Switcher */}
-                      <div className="grid grid-cols-2 gap-1 text-xs font-semibold">
-                        {STATUSES.map(s => (
-                          <button
-                            key={s.value}
-                            onClick={() => lead.status !== s.value && setStatus(lead.id, s.value)}
-                            disabled={updateMutation.isPending}
-                            className={cn(
-                              "py-1 px-2 rounded-md border transition-colors text-center",
-                              lead.status === s.value
-                                ? s.color + " cursor-default"
-                                : "text-slate-400 border-slate-100 hover:bg-slate-50"
-                            )}
-                          >
-                            {s.label}
-                          </button>
-                        ))}
+                      {/* Status Timeline */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pipeline</span>
+                          <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full border", col.pill)}>
+                            {col.label}
+                          </span>
+                        </div>
+                        <StatusTimeline
+                          currentStatus={lead.status}
+                          onSetStatus={(s) => setStatus(lead.id, s)}
+                          isPending={updateMutation.isPending}
+                        />
+                        <div className="flex justify-between mt-1">
+                          {STATUSES.map(s => (
+                            <button
+                              key={s.value}
+                              onClick={() => lead.status !== s.value && setStatus(lead.id, s.value)}
+                              disabled={updateMutation.isPending}
+                              className={cn(
+                                "text-[9px] font-medium transition-colors flex-1 text-center",
+                                s.value === lead.status ? "text-slate-700 font-bold" : "text-slate-300 hover:text-slate-500"
+                              )}
+                            >
+                              {s.label}
+                            </button>
+                          ))}
+                        </div>
                       </div>
+
+                      {/* Notes */}
+                      <LeadNotes leadId={lead.id} notes={lead.notes} />
                     </div>
                   ))
                 )}
@@ -391,6 +529,15 @@ export default function Leads() {
               <option value="proposal">Proposal</option>
               <option value="closed">Closed (Won)</option>
             </select>
+          </div>
+
+          <div>
+            <label className="label-text">Notes (Optional)</label>
+            <textarea
+              {...register("notes")}
+              className="input-field min-h-[80px] resize-none"
+              placeholder="Initial notes about this lead…"
+            />
           </div>
 
           <div className="pt-4 flex justify-end gap-3">
