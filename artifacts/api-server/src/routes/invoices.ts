@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { invoicesTable, clientsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { invoicesTable, clientsTable, tasksTable, timeEntriesTable } from "@workspace/db";
+import { eq, sql } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import {
   ListInvoicesQueryParams,
@@ -31,15 +31,20 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res) => {
     return;
   }
 
+  // ── Fetch invoice + client ─────────────────────────────────────────────
   const [row] = await db
     .select({
       id: invoicesTable.id,
+      client_id: invoicesTable.client_id,
       amount: invoicesTable.amount,
       status: invoicesTable.status,
       due_date: invoicesTable.due_date,
       description: invoicesTable.description,
       client_name: clientsTable.name,
       client_email: clientsTable.email,
+      monthly_fee: clientsTable.monthly_fee,
+      monthly_hour_budget: clientsTable.monthly_hour_budget,
+      service_type: clientsTable.service_type,
     })
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.client_id, clientsTable.id))
@@ -50,79 +55,195 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res) => {
     return;
   }
 
+  // ── Fetch tasks for this client ────────────────────────────────────────
+  const tasks = await db
+    .select({
+      title: tasksTable.title,
+      status: tasksTable.status,
+      due_date: tasksTable.due_date,
+    })
+    .from(tasksTable)
+    .where(eq(tasksTable.client_id, row.client_id))
+    .orderBy(tasksTable.due_date);
+
+  // ── Fetch total hours logged for this client ───────────────────────────
+  const [hoursRow] = await db
+    .select({ total_minutes: sql<number>`coalesce(sum(${timeEntriesTable.duration_minutes}), 0)` })
+    .from(timeEntriesTable)
+    .where(eq(timeEntriesTable.client_id, row.client_id));
+
+  const totalMinutes = Number(hoursRow?.total_minutes ?? 0);
+  const totalHours = (totalMinutes / 60).toFixed(1);
+
+  // ── Helpers ───────────────────────────────────────────────────────────
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString("en-US", {
-      month: "long",
-      day: "numeric",
-      year: "numeric",
+      month: "short", day: "numeric", year: "numeric",
     });
-
   const fmtAmount = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+  const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
+  // ── PDF setup ─────────────────────────────────────────────────────────
   const doc = new PDFDocument({ margin: 60, size: "LETTER" });
+  const L = 60;    // left margin
+  const R = 552;   // right edge
+  const MID = 310; // mid column start
 
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="invoice-${row.id}.pdf"`
-  );
-
+  res.setHeader("Content-Disposition", `attachment; filename="invoice-${row.id}.pdf"`);
   doc.pipe(res);
 
-  // ── Header ────────────────────────────────────────────────────────────
-  doc.fontSize(24).font("Helvetica-Bold").text("INVOICE", { align: "left" });
-  doc.moveDown(0.3);
-  doc.fontSize(12).font("Helvetica").fillColor("#64748b")
-    .text(`Invoice #${row.id}`, { align: "left" });
-  doc.moveDown(1.5);
+  // ── Header bar ────────────────────────────────────────────────────────
+  doc.rect(L, 60, R - L, 50).fillColor("#1e293b").fill();
+  doc.fontSize(22).font("Helvetica-Bold").fillColor("#ffffff")
+    .text("INVOICE", L + 12, 73, { width: 220 });
+  doc.fontSize(10).font("Helvetica").fillColor("#94a3b8")
+    .text("Flowstate", MID, 73, { width: 230, align: "right" });
+  doc.fontSize(10).fillColor("#cbd5e1")
+    .text(`Invoice #${row.id}`, MID, 87, { width: 230, align: "right" });
+  doc.moveDown(0);
+  doc.y = 125;
 
-  // ── Client info ───────────────────────────────────────────────────────
-  doc.fillColor("#000000").font("Helvetica-Bold").fontSize(11).text("Bill To");
-  doc.font("Helvetica").fontSize(11)
-    .text(row.client_name ?? "—")
-    .text(row.client_email ?? "");
-  doc.moveDown(1.5);
+  // ── Bill To  |  Invoice Meta ───────────────────────────────────────────
+  const topY = doc.y;
 
-  // ── Divider ───────────────────────────────────────────────────────────
-  doc.moveTo(60, doc.y).lineTo(552, doc.y).strokeColor("#e2e8f0").lineWidth(1).stroke();
-  doc.moveDown(1);
+  // Left: Bill To
+  doc.font("Helvetica-Bold").fontSize(8).fillColor("#64748b")
+    .text("BILL TO", L, topY, { width: 220 });
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#0f172a")
+    .text(row.client_name ?? "—", L, topY + 14, { width: 220 });
+  doc.font("Helvetica").fontSize(10).fillColor("#475569")
+    .text(row.client_email ?? "", L, topY + 29, { width: 220 });
+  const serviceLabel = row.service_type
+    ? capitalize(row.service_type) + " Services"
+    : "";
+  if (serviceLabel) {
+    doc.fontSize(9).fillColor("#94a3b8")
+      .text(serviceLabel, L, topY + 44, { width: 220 });
+  }
 
-  // ── Details table ─────────────────────────────────────────────────────
-  const labelX = 60;
-  const valueX = 220;
-  const lineH = 22;
+  // Right: Invoice meta
+  const metaX = MID;
+  const metaW = R - MID;
+  const metaLineH = 18;
+  let metaY = topY;
 
-  const row_ = (label: string, value: string) => {
-    const y = doc.y;
-    doc.font("Helvetica-Bold").fontSize(10).fillColor("#64748b")
-      .text(label, labelX, y, { width: 150 });
-    doc.font("Helvetica").fontSize(10).fillColor("#000000")
-      .text(value, valueX, y, { width: 300 });
-    doc.y = y + lineH;
+  const metaRow = (label: string, value: string, bold = false) => {
+    doc.font("Helvetica").fontSize(9).fillColor("#64748b")
+      .text(label, metaX, metaY, { width: 100 });
+    doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(9)
+      .fillColor(bold ? "#0f172a" : "#1e293b")
+      .text(value, metaX + 105, metaY, { width: metaW - 105, align: "right" });
+    metaY += metaLineH;
   };
 
-  row_("Description", row.description || `Invoice #${row.id}`);
-  row_("Amount", fmtAmount(row.amount));
-  row_("Due Date", fmtDate(row.due_date));
-  row_("Status", row.status.toUpperCase());
-  doc.moveDown(1.5);
+  metaRow("Invoice #", `${row.id}`);
+  metaRow("Due Date", fmtDate(row.due_date));
+  metaRow("Status", row.status.toUpperCase(), true);
+  metaRow("Monthly Rate", fmtAmount(row.monthly_fee ?? 0));
+
+  doc.y = Math.max(doc.y, metaY) + 20;
 
   // ── Divider ───────────────────────────────────────────────────────────
-  doc.moveTo(60, doc.y).lineTo(552, doc.y).strokeColor("#e2e8f0").lineWidth(1).stroke();
+  doc.moveTo(L, doc.y).lineTo(R, doc.y).strokeColor("#e2e8f0").lineWidth(0.75).stroke();
   doc.moveDown(1);
 
-  // ── Total ─────────────────────────────────────────────────────────────
-  doc.font("Helvetica-Bold").fontSize(14).fillColor("#000000")
-    .text("Total Due", labelX, doc.y, { width: 150, continued: false });
-  doc.y -= doc.currentLineHeight() + 2;
-  doc.font("Helvetica-Bold").fontSize(14)
-    .text(fmtAmount(row.amount), valueX, doc.y, { width: 300 });
-  doc.moveDown(3);
+  // ── Hours Summary ─────────────────────────────────────────────────────
+  doc.font("Helvetica-Bold").fontSize(9).fillColor("#64748b")
+    .text("SERVICE HOURS", L, doc.y);
+  doc.moveDown(0.5);
+
+  const hoursY = doc.y;
+  // Hours box
+  doc.rect(L, hoursY, R - L, 36).fillColor("#f8fafc").fill();
+  doc.rect(L, hoursY, R - L, 36).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
+
+  doc.font("Helvetica-Bold").fontSize(20).fillColor("#0f172a")
+    .text(totalHours, L + 12, hoursY + 7, { width: 100 });
+  doc.font("Helvetica").fontSize(10).fillColor("#64748b")
+    .text("total hours logged", L + 60, hoursY + 12, { width: 200 });
+  doc.font("Helvetica").fontSize(9).fillColor("#94a3b8")
+    .text(`${totalMinutes} minutes  ·  Budget: ${row.monthly_hour_budget ?? 0}h/mo`,
+      MID, hoursY + 12, { width: metaW, align: "right" });
+
+  doc.y = hoursY + 50;
+
+  // ── Task Summary ──────────────────────────────────────────────────────
+  doc.font("Helvetica-Bold").fontSize(9).fillColor("#64748b")
+    .text("TASK SUMMARY", L, doc.y);
+  doc.moveDown(0.5);
+
+  if (tasks.length === 0) {
+    doc.font("Helvetica").fontSize(10).fillColor("#94a3b8")
+      .text("No tasks on record for this client.", L, doc.y);
+    doc.moveDown(1);
+  } else {
+    // Table header
+    const colTitle = L;
+    const colStatus = 360;
+    const colDue = 450;
+    const tblHeaderY = doc.y;
+    doc.rect(L, tblHeaderY, R - L, 18).fillColor("#f1f5f9").fill();
+    doc.font("Helvetica-Bold").fontSize(8).fillColor("#64748b")
+      .text("TASK", colTitle + 6, tblHeaderY + 5, { width: 270 })
+      .text("STATUS", colStatus, tblHeaderY + 5, { width: 80 })
+      .text("DUE", colDue, tblHeaderY + 5, { width: 90, align: "right" });
+    doc.y = tblHeaderY + 18;
+
+    const maxTasks = 20; // cap so PDF doesn't overflow
+    const shown = tasks.slice(0, maxTasks);
+    shown.forEach((t, i) => {
+      const rowY = doc.y;
+      if (i % 2 === 1) {
+        doc.rect(L, rowY, R - L, 16).fillColor("#fafafa").fill();
+      }
+      const statusColor = t.status === "complete" ? "#16a34a" : "#d97706";
+      doc.font("Helvetica").fontSize(9).fillColor("#1e293b")
+        .text(t.title, colTitle + 6, rowY + 3, { width: 270, ellipsis: true });
+      doc.font("Helvetica-Bold").fontSize(8).fillColor(statusColor)
+        .text(t.status === "complete" ? "Complete" : "Pending",
+          colStatus, rowY + 4, { width: 80 });
+      doc.font("Helvetica").fontSize(8).fillColor("#64748b")
+        .text(t.due_date ? fmtDate(t.due_date) : "—",
+          colDue, rowY + 4, { width: 90, align: "right" });
+      doc.y = rowY + 16;
+    });
+    if (tasks.length > maxTasks) {
+      doc.font("Helvetica").fontSize(8).fillColor("#94a3b8")
+        .text(`… and ${tasks.length - maxTasks} more tasks`, L + 6, doc.y + 3);
+      doc.moveDown(1);
+    }
+    doc.moveDown(0.5);
+  }
+
+  // ── Divider ───────────────────────────────────────────────────────────
+  doc.moveTo(L, doc.y).lineTo(R, doc.y).strokeColor("#e2e8f0").lineWidth(0.75).stroke();
+  doc.moveDown(1);
+
+  // ── Description + Total ───────────────────────────────────────────────
+  if (row.description) {
+    doc.font("Helvetica").fontSize(10).fillColor("#475569")
+      .text(row.description, L, doc.y, { width: R - L });
+    doc.moveDown(1);
+  }
+
+  // Total box
+  const totalBoxY = doc.y;
+  doc.rect(L, totalBoxY, R - L, 44).fillColor("#0f172a").fill();
+  doc.font("Helvetica").fontSize(10).fillColor("#94a3b8")
+    .text("TOTAL DUE", L + 12, totalBoxY + 8, { width: 200 });
+  doc.font("Helvetica-Bold").fontSize(20).fillColor("#ffffff")
+    .text(fmtAmount(row.amount), L + 12, totalBoxY + 18, { width: R - L - 24, align: "right" });
+
+  doc.y = totalBoxY + 58;
 
   // ── Footer ────────────────────────────────────────────────────────────
-  doc.fontSize(9).fillColor("#94a3b8").font("Helvetica")
-    .text("Generated by Flowstate", { align: "center" });
+  doc.fontSize(8).fillColor("#94a3b8").font("Helvetica")
+    .text(
+      `Generated by Flowstate  ·  ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`,
+      L, doc.y, { width: R - L, align: "center" }
+    );
 
   doc.end();
 });
