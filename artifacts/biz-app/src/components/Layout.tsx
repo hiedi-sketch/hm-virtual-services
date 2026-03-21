@@ -6,6 +6,7 @@ import {
   Clock,
   Megaphone,
   Briefcase,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/clients", label: "Clients", icon: Users },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/time", label: "Time", icon: Clock },
+  { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/leads", label: "Leads", icon: Megaphone },
 ];
 

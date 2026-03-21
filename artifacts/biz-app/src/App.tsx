@@ -11,6 +11,7 @@ import ClientDetail from "@/pages/client-detail";
 import Tasks from "@/pages/tasks";
 import TimeTracking from "@/pages/time";
 import Leads from "@/pages/leads";
+import Invoices from "@/pages/invoices";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -34,6 +35,7 @@ function Router() {
         <Route path="/clients" component={Clients} />
         <Route path="/tasks" component={Tasks} />
         <Route path="/time" component={TimeTracking} />
+        <Route path="/invoices" component={Invoices} />
         <Route path="/leads" component={Leads} />
         <Route component={NotFound} />
       </Switch>

@@ -1,11 +1,11 @@
-import { useGetDashboard, useCreateTask, useListClients, getListTasksQueryKey } from "@workspace/api-client-react";
+import { useGetDashboard, useCreateTask, useListClients, useListInvoices, getListTasksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatCurrency } from "@/lib/utils";
-import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare } from "lucide-react";
+import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const quickTaskSchema = z.object({
@@ -17,6 +17,7 @@ type QuickTaskValues = z.infer<typeof quickTaskSchema>;
 export default function Dashboard() {
   const { data: dashboard, isLoading } = useGetDashboard();
   const { data: clients } = useListClients();
+  const { data: invoices = [] } = useListInvoices();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -60,6 +61,9 @@ export default function Dashboard() {
   const totalRevenue = dashClients.reduce((acc, c) => acc + c.monthly_fee, 0);
   const totalHoursBudgeted = dashClients.reduce((acc, c) => acc + c.monthly_hour_budget, 0);
   const totalHoursUsed = dashClients.reduce((acc, c) => acc + c.hours_used_this_month, 0);
+
+  const totalPaid = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
+  const totalUnpaid = invoices.filter(i => i.status === "unpaid").reduce((s, i) => s + i.amount, 0);
 
   return (
     <div className="space-y-8">
@@ -106,6 +110,37 @@ export default function Dashboard() {
               <p className="text-sm font-medium text-slate-500">Total Hours (Used / Budget)</p>
               <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalHoursUsed} <span className="text-slate-400 text-lg">/ {totalHoursBudgeted}</span></h3>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Invoice Stats */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 group hover:border-emerald-200 transition-colors">
+          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
+            <CheckCircle2 className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Invoices Paid</p>
+            <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid)}</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 group hover:border-amber-200 transition-colors">
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl shrink-0">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Outstanding</p>
+            <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalUnpaid)}</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 group hover:border-blue-200 transition-colors">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+            <DollarSign className="w-5 h-5" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Projected Total</p>
+            <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid + totalUnpaid)}</p>
           </div>
         </div>
       </div>

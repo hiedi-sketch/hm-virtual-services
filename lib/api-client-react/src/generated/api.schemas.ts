@@ -223,6 +223,42 @@ export interface UpdateLeadInput {
   lead_source?: string | null;
 }
 
+export type InvoiceStatus =
+  (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
+
+export const InvoiceStatus = {
+  paid: "paid",
+  unpaid: "unpaid",
+} as const;
+
+export interface Invoice {
+  id: number;
+  client_id: number;
+  amount: number;
+  status: InvoiceStatus;
+  due_date: string;
+  description?: string | null;
+}
+
+export interface CreateInvoiceInput {
+  client_id: number;
+  amount: number;
+  status?: InvoiceStatus;
+  due_date: string;
+  description?: string | null;
+}
+
+export interface UpdateInvoiceInput {
+  amount?: number;
+  status?: InvoiceStatus;
+  due_date?: string;
+  description?: string | null;
+}
+
+export interface ListInvoicesParams {
+  clientId?: number;
+}
+
 export interface Subtask {
   id: number;
   task_id: number;

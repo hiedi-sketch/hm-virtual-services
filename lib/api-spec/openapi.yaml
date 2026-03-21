@@ -17,6 +17,8 @@ tags:
     description: Time tracking
   - name: leads
     description: CRM leads
+  - name: invoices
+    description: Invoice tracking
 paths:
   /healthz:
     get:
@@ -375,6 +377,82 @@ paths:
               schema:
                 $ref: "#/components/schemas/Lead"
 
+  /invoices:
+    get:
+      operationId: listInvoices
+      tags: [invoices]
+      summary: List all invoices
+      parameters:
+        - name: clientId
+          in: query
+          required: false
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+    post:
+      operationId: createInvoice
+      tags: [invoices]
+      summary: Create a new invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceInput"
+      responses:
+        "201":
+          description: Created invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  /invoices/{id}:
+    patch:
+      operationId: updateInvoice
+      tags: [invoices]
+      summary: Update an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInvoiceInput"
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+    delete:
+      operationId: deleteInvoice
+      tags: [invoices]
+      summary: Delete an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -691,3 +769,61 @@ components:
           type: string
         done:
           type: boolean
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        client_id:
+          type: integer
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [paid, unpaid]
+        due_date:
+          type: string
+        description:
+          type: string
+          nullable: true
+      required:
+        - id
+        - client_id
+        - amount
+        - status
+        - due_date
+
+    CreateInvoiceInput:
+      type: object
+      properties:
+        client_id:
+          type: integer
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [paid, unpaid]
+        due_date:
+          type: string
+        description:
+          type: string
+          nullable: true
+      required:
+        - client_id
+        - amount
+        - due_date
+
+    UpdateInvoiceInput:
+      type: object
+      properties:
+        amount:
+          type: number
+        status:
+          type: string
+          enum: [paid, unpaid]
+        due_date:
+          type: string
+        description:
+          type: string
+          nullable: true

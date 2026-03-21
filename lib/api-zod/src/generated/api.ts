@@ -282,6 +282,53 @@ export const UpdateLeadBody = zod.object({
   lead_source: zod.string().nullish(),
 });
 
+/**
+ * @summary List all invoices
+ */
+export const ListInvoicesParams = zod.object({
+  clientId: zod.coerce.number().optional(),
+});
+export const ListInvoicesResponseItem = zod.object({
+  id: zod.number(),
+  client_id: zod.number(),
+  amount: zod.number(),
+  status: zod.enum(["paid", "unpaid"]),
+  due_date: zod.string(),
+  description: zod.string().nullish(),
+});
+export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem);
+
+/**
+ * @summary Create a new invoice
+ */
+export const CreateInvoiceBody = zod.object({
+  client_id: zod.number(),
+  amount: zod.number(),
+  status: zod.enum(["paid", "unpaid"]).optional(),
+  due_date: zod.string(),
+  description: zod.string().nullish(),
+});
+
+/**
+ * @summary Update an invoice
+ */
+export const UpdateInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+export const UpdateInvoiceBody = zod.object({
+  amount: zod.number().optional(),
+  status: zod.enum(["paid", "unpaid"]).optional(),
+  due_date: zod.string().optional(),
+  description: zod.string().nullish(),
+});
+
+/**
+ * @summary Delete an invoice
+ */
+export const DeleteInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
 export const UpdateLeadResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
