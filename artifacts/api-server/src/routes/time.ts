@@ -8,6 +8,7 @@ import {
   ListTimeEntriesResponse,
   DeleteTimeEntryParams,
 } from "@workspace/api-zod";
+import { requireAuth, requireRole } from "../middleware/auth";
 
 const router: IRouter = Router();
 
@@ -23,28 +24,30 @@ const withJoins = {
   task_title: tasksTable.title,
 };
 
-router.get("/time", async (req, res) => {
+router.get("/time", requireAuth, async (req, res) => {
   const query = ListTimeEntriesQueryParams.parse(req.query);
+  const user = req.session.user!;
+  const effectiveClientId = user.role === "client" ? (user.client_id ?? undefined) : query.clientId;
 
   const rows = await db
     .select(withJoins)
     .from(timeEntriesTable)
     .leftJoin(clientsTable, eq(timeEntriesTable.client_id, clientsTable.id))
     .leftJoin(tasksTable, eq(timeEntriesTable.task_id, tasksTable.id))
-    .where(query.clientId ? eq(timeEntriesTable.client_id, query.clientId) : undefined)
+    .where(effectiveClientId ? eq(timeEntriesTable.client_id, effectiveClientId) : undefined)
     .orderBy(timeEntriesTable.id);
 
   const parsed = ListTimeEntriesResponse.parse(rows);
   res.json(parsed);
 });
 
-router.post("/time", async (req, res) => {
+router.post("/time", requireRole("admin", "team_member"), async (req, res) => {
   const body = CreateTimeEntryBody.parse(req.body);
   const [entry] = await db.insert(timeEntriesTable).values(body).returning();
   res.status(201).json(entry);
 });
 
-router.delete("/time/:id", async (req, res) => {
+router.delete("/time/:id", requireRole("admin", "team_member"), async (req, res) => {
   const { id } = DeleteTimeEntryParams.parse(req.params);
   await db.delete(timeEntriesTable).where(eq(timeEntriesTable.id, id));
   res.status(204).send();

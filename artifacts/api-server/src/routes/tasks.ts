@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasksTable, clientsTable, subtasksTable } from "@workspace/db";
 import { eq, isNotNull, and } from "drizzle-orm";
+import { requireAuth, requireRole } from "../middleware/auth";
 import {
   CreateTaskBody,
   UpdateTaskBody,
@@ -62,61 +63,55 @@ function nextDueDate(recurrence: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+const taskSelectFields = {
+  id: tasksTable.id,
+  title: tasksTable.title,
+  description: tasksTable.description,
+  client_id: tasksTable.client_id,
+  assigned_to: tasksTable.assigned_to,
+  status: tasksTable.status,
+  due_date: tasksTable.due_date,
+  client_name: clientsTable.name,
+  recurrence: tasksTable.recurrence,
+  last_generated_at: tasksTable.last_generated_at,
+};
+
 // --- Task CRUD ---
 
-router.get("/tasks", async (req, res) => {
+router.get("/tasks", requireAuth, async (req, res) => {
   const query = ListTasksQueryParams.parse(req.query);
+  const user = req.session.user!;
 
-  let rows;
-  if (query.clientId) {
-    rows = await db
-      .select({
-        id: tasksTable.id,
-        title: tasksTable.title,
-        description: tasksTable.description,
-        client_id: tasksTable.client_id,
-        assigned_to: tasksTable.assigned_to,
-        status: tasksTable.status,
-        due_date: tasksTable.due_date,
-        client_name: clientsTable.name,
-        recurrence: tasksTable.recurrence,
-        last_generated_at: tasksTable.last_generated_at,
-      })
-      .from(tasksTable)
-      .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
-      .where(eq(tasksTable.client_id, query.clientId))
-      .orderBy(tasksTable.id);
+  let whereClause;
+  if (user.role === "client" && user.client_id) {
+    whereClause = eq(tasksTable.client_id, user.client_id);
+  } else if (user.role === "team_member" && user.name) {
+    whereClause = query.clientId
+      ? and(eq(tasksTable.client_id, query.clientId), eq(tasksTable.assigned_to, user.name))
+      : eq(tasksTable.assigned_to, user.name);
   } else {
-    rows = await db
-      .select({
-        id: tasksTable.id,
-        title: tasksTable.title,
-        description: tasksTable.description,
-        client_id: tasksTable.client_id,
-        assigned_to: tasksTable.assigned_to,
-        status: tasksTable.status,
-        due_date: tasksTable.due_date,
-        client_name: clientsTable.name,
-        recurrence: tasksTable.recurrence,
-        last_generated_at: tasksTable.last_generated_at,
-      })
-      .from(tasksTable)
-      .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
-      .orderBy(tasksTable.id);
+    whereClause = query.clientId ? eq(tasksTable.client_id, query.clientId) : undefined;
   }
+
+  const rows = await db
+    .select(taskSelectFields)
+    .from(tasksTable)
+    .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
+    .where(whereClause)
+    .orderBy(tasksTable.id);
 
   const parsed = ListTasksResponse.parse(rows);
   res.json(parsed);
 });
 
-router.post("/tasks", async (req, res) => {
+router.post("/tasks", requireRole("admin", "team_member"), async (req, res) => {
   const body = CreateTaskBody.parse(req.body);
   const [task] = await db.insert(tasksTable).values(body).returning();
   res.status(201).json(task);
 });
 
 // Must be before /tasks/:id routes to avoid Express treating "spawn-recurring" as an :id
-router.post("/tasks/spawn-recurring", async (req, res) => {
+router.post("/tasks/spawn-recurring", requireAuth, async (req, res) => {
   const today = todayStr();
 
   // Only look at COMPLETED recurring tasks — pending ones already visible to the user, no duplicate needed
@@ -175,7 +170,7 @@ router.post("/tasks/spawn-recurring", async (req, res) => {
   res.json(spawned);
 });
 
-router.patch("/tasks/:id", async (req, res) => {
+router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res) => {
   const { id } = UpdateTaskParams.parse(req.params);
   const body = UpdateTaskBody.parse(req.body);
 

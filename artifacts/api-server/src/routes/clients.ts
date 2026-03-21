@@ -10,23 +10,29 @@ import {
   ListClientsResponse,
   GetDashboardResponse,
 } from "@workspace/api-zod";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 
 const router: IRouter = Router();
 
-router.get("/clients", async (req, res) => {
+router.get("/clients", requireAdmin, async (req, res) => {
   const clients = await db.select().from(clientsTable).orderBy(clientsTable.name);
   const parsed = ListClientsResponse.parse(clients);
   res.json(parsed);
 });
 
-router.post("/clients", async (req, res) => {
+router.post("/clients", requireAdmin, async (req, res) => {
   const body = CreateClientBody.parse(req.body);
   const [client] = await db.insert(clientsTable).values(body).returning();
   res.status(201).json(client);
 });
 
-router.get("/clients/:id", async (req, res) => {
+router.get("/clients/:id", requireAuth, async (req, res) => {
   const { id } = GetClientParams.parse(req.params);
+  const user = req.session.user!;
+  if (user.role === "client" && user.client_id !== id) {
+    res.status(403).json({ error: "Access denied" });
+    return;
+  }
   const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, id));
   if (!client) {
     res.status(404).json({ error: "Client not found" });
@@ -35,7 +41,7 @@ router.get("/clients/:id", async (req, res) => {
   res.json(client);
 });
 
-router.patch("/clients/:id", async (req, res) => {
+router.patch("/clients/:id", requireAdmin, async (req, res) => {
   const { id } = UpdateClientParams.parse(req.params);
   const body = UpdateClientBody.parse(req.body);
   const [updated] = await db
@@ -50,7 +56,7 @@ router.patch("/clients/:id", async (req, res) => {
   res.json(updated);
 });
 
-router.get("/dashboard", async (req, res) => {
+router.get("/dashboard", requireAdmin, async (req, res) => {
   const clients = await db.select().from(clientsTable).orderBy(clientsTable.name);
 
   const now = new Date();

@@ -10,22 +10,23 @@ import {
   ListLeadsResponse,
   UpdateLeadResponse,
 } from "@workspace/api-zod";
+import { requireAdmin, requireRole } from "../middleware/auth";
 
 const router: IRouter = Router();
 
-router.get("/leads", async (req, res) => {
+router.get("/leads", requireRole("admin", "team_member"), async (req, res) => {
   const leads = await db.select().from(leadsTable).orderBy(leadsTable.id);
   const parsed = ListLeadsResponse.parse(leads);
   res.json(parsed);
 });
 
-router.post("/leads", async (req, res) => {
+router.post("/leads", requireRole("admin", "team_member"), async (req, res) => {
   const body = CreateLeadBody.parse(req.body);
   const [lead] = await db.insert(leadsTable).values(body).returning();
   res.status(201).json(lead);
 });
 
-router.patch("/leads/:id", async (req, res) => {
+router.patch("/leads/:id", requireRole("admin", "team_member"), async (req, res) => {
   const { id } = UpdateLeadParams.parse(req.params);
   const body = UpdateLeadBody.parse(req.body);
 
@@ -44,7 +45,7 @@ router.patch("/leads/:id", async (req, res) => {
   res.json(parsed);
 });
 
-router.delete("/leads/:id", async (req, res) => {
+router.delete("/leads/:id", requireAdmin, async (req, res) => {
   const { id } = DeleteLeadParams.parse(req.params);
   await db.delete(leadsTable).where(eq(leadsTable.id, id));
   res.status(204).send();

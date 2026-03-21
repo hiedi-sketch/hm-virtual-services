@@ -36,40 +36,58 @@ artifacts-monorepo/
 └── package.json            # Root package with hoisted devDeps
 ```
 
+## Authentication
+
+Session-based authentication with three roles:
+- **admin** — Full access to all pages: Dashboard, Clients, Tasks, Time, Invoices, Leads, Team
+- **team_member** — Tasks, Time Tracking, Leads only (tasks filtered to assigned_to = user.name)
+- **client** — Client Portal view only (tasks/invoices/time filtered to their client_id)
+
+Default admin seeded on first startup: `admin@flowstate.app` / `admin123`
+
+Session managed by `express-session` with cookie-based sessions. `credentials: 'include'` set globally in `customFetch`.
+Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts/api-server/src/middleware/auth.ts`.
+
 ## Features
 
 ### Business Manager App (artifacts/biz-app)
 
-- **Dashboard** (`/`) — Client overview with hours used/remaining this month, monthly recurring revenue
-- **Clients** (`/clients`) — Add and view clients (name, email, monthly hour budget, fee, service type)
-- **Tasks** (`/tasks`) — Create and manage tasks across all clients, mark complete
-- **Time Tracking** (`/time`) — Manual time entry form with client/task selection, view recent entries
-- **Leads CRM** (`/leads`) — 4-stage pipeline (New/Contacted/Proposal/Closed), per-status summary, inline status switcher, delete, lead source + estimated value
-- **Invoices** (`/invoices`) — Create invoices, track paid/unpaid/overdue, filter by client/status, one-click status toggle, delete
+- **Login** — Email/password login form with error handling; shown to all unauthenticated visitors
+- **Dashboard** (`/dashboard`) — Client overview with hours used/remaining; admin only
+- **Clients** (`/clients`) — Add and view clients (name, email, monthly hour budget, fee, service type); admin only
+- **Tasks** (`/tasks`) — Create and manage tasks; team_member sees own assigned tasks; client sees their tasks
+- **Time Tracking** (`/time`) — Timer + manual entry; client sees their time only
+- **Leads CRM** (`/leads`) — 4-stage pipeline (New/Contacted/Proposal/Closed); admin + team_member
+- **Invoices** (`/invoices`) — Create invoices, track paid/unpaid/overdue; client sees their invoices only
+- **Team** (`/team`) — User management (create/edit/delete users, assign roles & client links); admin only
+- **Client Portal** — Dedicated portal for client-role users: open tasks, hours used this month, unpaid balance, invoice list
 
 ## Data Models
 
 - **Clients**: id, name, email, monthly_hour_budget, monthly_fee, service_type (bookkeeping/va/hybrid)
 - **Tasks**: id, title, description, client_id, assigned_to, status (pending/complete), due_date, recurrence fields
-- **TimeEntries**: id, client_id, task_id (optional), duration_minutes, date
+- **TimeEntries**: id, client_id, task_id (optional), duration_minutes, date, started_at, ended_at
 - **Leads**: id, name, email, estimated_value, status (new/contacted/proposal/closed), lead_source
 - **Invoices**: id, client_id, amount, status (paid/unpaid), due_date, description
+- **Users**: id, email, password_hash, name, role (admin/team_member/client), client_id (nullable)
 
 ## API Routes
 
-All under `/api`:
-- `GET/POST /clients` — List/create clients
-- `GET/PATCH /clients/:id` — Get/update single client
-- `GET /dashboard` — Dashboard data with hours used/remaining per client (current month)
-- `GET/POST /tasks` — List/create tasks
-- `PATCH /tasks/:id` — Update task (mark complete, update fields)
-- `GET/POST /time` — List/create time entries
-- `GET/POST /leads` — List/create leads
-- `PATCH /leads/:id` — Update lead (status, fields)
-- `DELETE /leads/:id` — Delete lead
-- `GET/POST /invoices` — List/create invoices (GET supports ?clientId filter)
-- `PATCH /invoices/:id` — Update invoice (status, amount, etc.)
-- `DELETE /invoices/:id` — Delete invoice
+All under `/api`. All routes require auth except `/api/auth/*`.
+- `GET/POST /auth/me`, `POST /auth/login`, `POST /auth/logout`
+- `GET/POST /users` — Admin only; list/create users
+- `PATCH/DELETE /users/:id` — Admin only
+- `GET/POST /clients` — Admin only
+- `GET/PATCH /clients/:id` — Admin or client (own only)
+- `GET /dashboard` — Admin only
+- `GET/POST /tasks` — Auth required; role-filtered
+- `PATCH /tasks/:id` — Admin + team_member
+- `GET/POST /time` — Auth required; client sees own; admin/team_member see all
+- `DELETE /time/:id` — Admin + team_member
+- `GET/POST /leads` — Admin + team_member
+- `PATCH /leads/:id` — Admin + team_member; DELETE admin only
+- `GET /invoices` — Auth required; client sees own
+- `POST/PATCH/DELETE /invoices/:id` — Admin only
 
 ## TypeScript & Composite Projects
 
