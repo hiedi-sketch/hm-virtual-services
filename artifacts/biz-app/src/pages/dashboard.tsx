@@ -41,6 +41,7 @@ import {
   Hourglass,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Overlay } from "vaul";
 
 interface AuditLog {
   id: number;
@@ -512,64 +513,17 @@ export default function Dashboard() {
           Here's an overview of your business this month.
         </p>
       </div>
-      {/* Alerts */}
-      <div className="flex flex-wrap gap-4">
-        {/* Box 1 */}
-        <div className="flex-1 min-w-[200px] bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/5 rounded-bl-full -mr-4 -mt-4" />
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-              <Users className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Active Clients</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalClients}</h3>
-            </div>
-          </div>
-        </div>
-
-        {/* Box 2 */}
-        <div className="flex-1 min-w-[200px] bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
-          <div className="absolute right-0 top-0 w-24 h-24 bg-green-500/5 rounded-bl-full -mr-4 -mt-4" />
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-green-50 text-green-600 rounded-xl">
-              <DollarSign className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-slate-500">Revenue</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalRevenue}</h3>
-            </div>
-          </div>
-        </div>
-
-      {/* Box 3 */}
-      <div className="flex-1 min-w-[200px] bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
-        <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/5 rounded-bl-full -mr-4 -mt-4" />
-
-        <div className="flex items-center gap-4">
-          {/* Icon */}
-          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
-            <Clipboard className="w-6 h-6" />
-          </div>
-
-          {/* Text content */}
-          <div>
-            <p className="text-sm font-medium text-slate-500">Tasks</p>
-            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalTasks}</h3>
-          </div>
-        </div>
-      </div>
-      
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
+        <div className="bg-white rounded-2xl p-6 border border-slate-400 shadow-xl relative overflow-hidden group hover:border-emerald-400 transition-colors"
+          onClick={() => navigate("/clients")}>
           <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/5 rounded-bl-full -mr-4 -mt-4" />
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-              <Users className="w-6 h-6" />
+            <div className="p-3 text-[#7dbdc6] rounded-xl">
+              <Users className="w-10 h-10" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">
+              <p className="text-s font-semibold uppercase tracking-wider text-slate-500">
                 Active Clients
               </p>
               <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
@@ -579,14 +533,15 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-200 transition-colors">
+        <div className="bg-white rounded-2xl p-6 border border-slate-400 shadow-xl relative overflow-hidden group hover:border-emerald-400 transition-colors"
+          onClick={() => navigate("/invoices")}>
           <div className="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full -mr-4 -mt-4" />
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
-              <DollarSign className="w-6 h-6" />
+            <div className="p-3 text-[#7dbdc6] rounded-xl">
+              <DollarSign className="w-10 h-10" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">
+              <p className="text-s font-semibold uppercase tracking-wider text-slate-500">
                 Monthly Recurring
               </p>
               <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
@@ -596,14 +551,15 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-purple-200 transition-colors">
+        <div className="bg-white rounded-2xl p-6 border border-slate-400 shadow-xl relative overflow-hidden group hover:border-emerald-400 transition-colors"
+          onClick={() => navigate("/time")}>
           <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/5 rounded-bl-full -mr-4 -mt-4" />
           <div className="flex items-center gap-4">
-            <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
-              <Clock className="w-6 h-6" />
+            <div className="p-3 text-[#7dbdc6] rounded-xl">
+              <Clock className="w-10 h-10" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">
+              <p className="text-s font-semibold uppercase tracking-wider text-slate-500">
                 Total Hours (Used / Budget)
               </p>
               <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
@@ -619,12 +575,14 @@ export default function Dashboard() {
 
       {/* Invoice Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-emerald-200 transition-colors">
-          <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
+        <div className="bg-white rounded-2xl p-5 border border-slate-400 shadow-xl flex items-center gap-4 hover:border-emerald-400 transition-colors"
+           onClick={() => navigate("/invoices")}
+          >
+          <div className="p-3 text-[#7dbdc6] rounded-xl shrink-0">
+            <CheckCircle2 className="w-10 h-10" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <p className="text-s font-semibold uppercase tracking-wider text-slate-500">
               Invoices Paid
             </p>
             <p className="text-2xl font-bold text-slate-900">
@@ -632,12 +590,14 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-amber-200 transition-colors">
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl shrink-0">
-            <FileText className="w-5 h-5" />
+        <div className="bg-white rounded-2xl p-5 border border-slate-400 shadow-xl flex items-center gap-4 hover:border-emerald-400 transition-colors"
+           onClick={() => navigate("/invoices")}
+          >
+          <div className="p-3 text-[#7dbdc6] rounded-xl shrink-0">
+            <FileText className="w-10 h-10 " />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <p className="text-s font-semibold uppercase tracking-wider text-slate-500">
               Outstanding
             </p>
             <p className="text-2xl font-bold text-slate-900">
@@ -645,12 +605,14 @@ export default function Dashboard() {
             </p>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-blue-200 transition-colors">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-            <DollarSign className="w-5 h-5" />
+        <div className="bg-white rounded-2xl p-5 border border-slate-400 shadow-xl flex items-center gap-4 hover:border-emerald-400 transition-colors"
+           onClick={() => navigate("/invoices")}
+          >
+          <div className="p-3 text-[#7dbdc6] rounded-xl shrink-0">
+            <DollarSign className="w-10 h-10" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <p className="text-s font-semibold uppercase tracking-wider text-slate-500">
               Projected Total
             </p>
             <p className="text-2xl font-bold text-slate-900">
@@ -1724,7 +1686,7 @@ export default function Dashboard() {
                   </span>
                 </div>
               );
-                    })}
+            })}
           </div>
         )}
       </div>
