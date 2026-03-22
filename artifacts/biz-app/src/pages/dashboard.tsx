@@ -37,8 +37,8 @@ import {
   PlusCircle,
   RefreshCw,
   Trash2,
-  Wallet,
   Hourglass,
+  BadgeDollarSign,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -590,39 +590,39 @@ export default function Dashboard() {
             {/* Top row: title + icon left, view all right */}
             <div className="w-full flex justify-between items-center">
               <div className="flex items-center gap-1">
-                {/* Hourglass icon */}
-                <Hourglass className="w-4 h-4 text-amber-500" />
-                <p className="text-sm font-semibold text-amber-700">
-                  Task Summary
-                </p>
-              </div>
+               {/* Hourglass icon */}
+               <Hourglass className="w-4 h-4 text-amber-500" />
+              <p className="text-sm font-semibold text-amber-700">
+               Task Summary
+              </p>
+           </div>
 
-              <span className="text-xs font-medium text-amber-600 hover:text-amber-700">
-                View All →
-              </span>
-            </div>
+         <span className="text-xs font-medium text-amber-600 hover:text-amber-700">
+        View All →
+      </span>
+    </div>
 
-            {/* Counts */}
-            <div className="flex justify-between mt-2 text-xs text-amber-600">
-              <div className="flex flex-col items-center">
-                <span className="font-bold text-amber-700">{overdueTasks.length}</span>
-                <span>Overdue</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="font-bold text-amber-700">{tasksDueToday.length}</span>
-                <span>Due Today</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="font-bold text-amber-700">{tasksDueTomorrow.length}</span>
-                <span>Due Tomorrow</span>
-              </div>
-            </div>
-          </div>
-          )}          
+      {/* Counts */}
+      <div className="flex justify-between mt-2 text-xs text-amber-600">
+        <div className="flex flex-col items-center">
+         <span className="font-bold text-amber-700">{overdueTasks.length}</span>
+         <span>Overdue</span>
+      </div>
+      <div className="flex flex-col items-center">
+        <span className="font-bold text-amber-700">{tasksDueToday.length}</span>
+        <span>Due Today</span>
+      </div>
+      <div className="flex flex-col items-center">
+        <span className="font-bold text-amber-700">{tasksDueTomorrow.length}</span>
+        <span>Due Tomorrow</span>
+      </div>
+    </div>
+  </div>
+  )}
+    
           {overdueInvoices.length > 0 && !overdueDismissed && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              {/* Wallet */}
-              <Wallet className="w-4 h-4 text-green-500" />
+              <BadgeDollarSign className="w-4 h-4 text-green-500" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-red-700">
                   {overdueInvoices.length} overdue invoice
@@ -648,7 +648,6 @@ export default function Dashboard() {
           )}
         </div>
       ) : null}
-
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
