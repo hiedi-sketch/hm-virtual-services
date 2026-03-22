@@ -580,6 +580,7 @@ export default function Dashboard() {
               </ul>
             </div>
           )}
+          {(overdueTasks.length > 0 || tasksDueToday.length > 0 || tasksDueTomorrow.length > 0) && (
           <div
             onClick={() => navigate("/tasks")}
             className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-amber-100 transition-colors"
@@ -610,6 +611,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
+          )}
           {overdueInvoices.length > 0 && !overdueDismissed && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
               <TriangleAlert className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
