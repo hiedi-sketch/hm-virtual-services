@@ -200,6 +200,12 @@ export default function Dashboard() {
   const [draftClients, setDraftClients] = useState("");
   const [overdueDismissed, setOverdueDismissed] = useState(false);
   const [overdueTasksDismissed, setOverdueTasksDismissed] = useState(false);
+  const [flashOverdue, setFlashOverdue] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => setFlashOverdue(false), 1500);
+    return () => clearTimeout(t);
+  }, []);
 
   const openGoalEdit = () => {
     setDraftIncome(String(goals.incomeGoal));
@@ -513,6 +519,27 @@ export default function Dashboard() {
           Here's an overview of your business this month.
         </p>
       </div>
+      <div
+        className={`bg-white rounded-2xl p-5 border shadow-xl flex items-center gap-4 hover:border-red-400 transition-all duration-500 cursor-pointer ${
+          flashOverdue
+            ? "border-red-600 ring-4 ring-red-300 animate-pulse"
+            : "border-red-800"
+        }`}
+        onClick={() => navigate("/tasks")}
+      >
+        <div className="p-3 text-red-800 rounded-xl shrink-0">
+          <CheckCircle2 className="w-10 h-10" />
+        </div>
+        <div>
+          <p className="text-s font-semibold uppercase tracking-wider text-slate-500">
+            OVERDUE TASKS
+          </p>
+          <p className="text-2xl font-bold text-slate-900">
+            {overdueTasks.length}
+          </p>
+        </div>
+      </div>
+      
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl p-6 border border-slate-400 shadow-xl relative overflow-hidden group hover:border-emerald-400 transition-colors"
@@ -1138,7 +1165,11 @@ export default function Dashboard() {
         </div>
 
         {/* Card 4 — Overdue Tasks */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+        <div className={`bg-white rounded-2xl border shadow-sm p-6 flex flex-col gap-4 transition-all duration-500 ${
+          flashOverdue && sortedOverdueTasks.length > 0
+            ? "border-red-400 ring-2 ring-red-200 animate-pulse"
+            : "border-slate-200"
+        }`}>
           <div className="flex items-center gap-2">
             <div
               className={`p-2 rounded-lg ${sortedOverdueTasks.length > 0 ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-400"}`}
