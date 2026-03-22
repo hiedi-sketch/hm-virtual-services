@@ -37,6 +37,7 @@ import {
   PlusCircle,
   RefreshCw,
   Trash2,
+  Wallet,
   Hourglass,
   BadgeDollarSign,
 } from "lucide-react";
@@ -618,11 +619,11 @@ export default function Dashboard() {
       </div>
     </div>
   </div>
-  )}
-    
+  )}          
           {overdueInvoices.length > 0 && !overdueDismissed && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <BadgeDollarSign className="w-4 h-4 text-green-500" />
+              {/* Wallet */}
+              <Wallet className="w-4 h-4 text-green-500" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-red-700">
                   {overdueInvoices.length} overdue invoice
