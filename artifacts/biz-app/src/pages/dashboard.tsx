@@ -37,6 +37,7 @@ import {
   PlusCircle,
   RefreshCw,
   Trash2,
+  Hourglass,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -585,17 +586,22 @@ export default function Dashboard() {
             onClick={() => navigate("/tasks")}
             className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-amber-100 transition-colors"
           >
-            <div className="flex items-center justify-between">
-              <TriangleAlert className="w-5 h-5 text-amber-500" />
+            {/* Top row; title + icon left, view all right */}
+            <div className="w-full flex justify-between items-center">
+              <div className="flex items-center gap-1">
+                {/* Hourglass icon */}
+                <Hourglass className="w-4 h-4 text-amber-500" />
+                <p className="text-sm font-semibold text-amber-700">
+                  Task Summary
+                </p>
+              </div>
+
               <span className="text-xs font-medium text-amber-600 hover:text-amber-700">
                 View All →
               </span>
             </div>
 
-            <p className="text-sm font-semibold text-amber-700 mt-2">
-              Task Summary
-            </p>
-
+            {/* Counts */}
             <div className="flex justify-between mt-2 text-xs text-amber-600">
               <div className="flex flex-col items-center">
                 <span className="font-bold text-amber-700">{overdueTasks.length}</span>
