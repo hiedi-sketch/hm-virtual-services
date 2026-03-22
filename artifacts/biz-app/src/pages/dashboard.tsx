@@ -1,12 +1,43 @@
 import { useState, useEffect } from "react";
-import { useGetDashboard, getGetDashboardQueryKey, useCreateTask, useCreateTimeEntry, useListClients, useListInvoices, useListLeads, useListTasks, getListTasksQueryKey } from "@workspace/api-client-react";
+import {
+  useGetDashboard,
+  getGetDashboardQueryKey,
+  useCreateTask,
+  useCreateTimeEntry,
+  useListClients,
+  useListInvoices,
+  useListLeads,
+  useListTasks,
+  getListTasksQueryKey,
+} from "@workspace/api-client-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { formatCurrency, cn } from "@/lib/utils";
-import { Users, DollarSign, Clock, AlertCircle, Plus, CheckSquare, FileText, CheckCircle2, Target, Pencil, X, Check, Calendar, TriangleAlert, TrendingUp, Timer, Activity, PlusCircle, RefreshCw, Trash2 } from "lucide-react";
+import {
+  Users,
+  DollarSign,
+  Clock,
+  AlertCircle,
+  Plus,
+  CheckSquare,
+  FileText,
+  CheckCircle2,
+  Target,
+  Pencil,
+  X,
+  Check,
+  Calendar,
+  TriangleAlert,
+  TrendingUp,
+  Timer,
+  Activity,
+  PlusCircle,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface AuditLog {
@@ -31,17 +62,24 @@ function timeAgo(isoStr: string): string {
   return `${days}d ago`;
 }
 
-const ACTION_STYLES: Record<string, { icon: typeof PlusCircle; color: string; bg: string }> = {
-  created:   { icon: PlusCircle,   color: "text-emerald-600", bg: "bg-emerald-50" },
-  updated:   { icon: RefreshCw,    color: "text-blue-600",    bg: "bg-blue-50"    },
-  completed: { icon: CheckCircle2, color: "text-violet-600",  bg: "bg-violet-50"  },
-  deleted:   { icon: Trash2,       color: "text-red-500",     bg: "bg-red-50"     },
+const ACTION_STYLES: Record<
+  string,
+  { icon: typeof PlusCircle; color: string; bg: string }
+> = {
+  created: { icon: PlusCircle, color: "text-emerald-600", bg: "bg-emerald-50" },
+  updated: { icon: RefreshCw, color: "text-blue-600", bg: "bg-blue-50" },
+  completed: {
+    icon: CheckCircle2,
+    color: "text-violet-600",
+    bg: "bg-violet-50",
+  },
+  deleted: { icon: Trash2, color: "text-red-500", bg: "bg-red-50" },
 };
 
 const ENTITY_LABELS: Record<string, string> = {
-  task:       "Task",
+  task: "Task",
   time_entry: "Time Logged",
-  invoice:    "Invoice",
+  invoice: "Invoice",
 };
 
 const quickTaskSchema = z.object({
@@ -78,7 +116,15 @@ function saveGoals(g: Goals) {
   localStorage.setItem(GOALS_KEY, JSON.stringify(g));
 }
 
-function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
+function ProgressBar({
+  value,
+  max,
+  color,
+}: {
+  value: number;
+  max: number;
+  color: string;
+}) {
   const pct = max > 0 ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return (
     <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
@@ -102,7 +148,10 @@ export default function Dashboard() {
 
   const { data: auditLogs = [] } = useQuery<AuditLog[]>({
     queryKey: ["activity-feed"],
-    queryFn: () => fetch("/api/activity-feed", { credentials: "include" }).then(r => r.json()) as Promise<AuditLog[]>,
+    queryFn: () =>
+      fetch("/api/activity-feed", { credentials: "include" }).then((r) =>
+        r.json(),
+      ) as Promise<AuditLog[]>,
     staleTime: 30 * 1000,
     refetchInterval: 60_000,
   });
@@ -116,8 +165,8 @@ export default function Dashboard() {
       nearBudgetClients: { name: string; hoursUsed: number; budget: number }[];
     };
     fetch("/api/automations/run", { method: "POST", credentials: "include" })
-      .then(r => r.json() as Promise<AutoResult>)
-      .then(result => {
+      .then((r) => r.json() as Promise<AutoResult>)
+      .then((result) => {
         if (result.recurringTasksSpawned > 0) {
           queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
           toast({
@@ -165,7 +214,12 @@ export default function Dashboard() {
     setEditingGoals(false);
   };
 
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<QuickTaskValues>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<QuickTaskValues>({
     resolver: zodResolver(quickTaskSchema),
   });
 
@@ -186,7 +240,7 @@ export default function Dashboard() {
     createTask.mutate({ data });
   };
 
-  const [quickPanel, setQuickPanel] = useState<'task' | 'time' | null>(null);
+  const [quickPanel, setQuickPanel] = useState<"task" | "time" | null>(null);
 
   const {
     register: registerTime,
@@ -200,7 +254,9 @@ export default function Dashboard() {
   });
 
   const timeClientId = Number(watchTime("client_id")) || 0;
-  const tasksForTime = allTasks.filter(t => !timeClientId || t.client_id === timeClientId);
+  const tasksForTime = allTasks.filter(
+    (t) => !timeClientId || t.client_id === timeClientId,
+  );
 
   const createTimeEntry = useCreateTimeEntry({
     mutation: {
@@ -213,23 +269,34 @@ export default function Dashboard() {
         // Automation: check if client is near/over their monthly budget
         const clientId = variables.data.client_id;
         if (clientId) {
-          fetch(`/api/automations/budget-status?client_id=${clientId}`, { credentials: "include" })
-            .then(r => r.ok ? r.json() : null)
-            .then((b: { clientName: string; hoursUsed: number; budget: number; status: string } | null) => {
-              if (!b || b.budget <= 0) return;
-              if (b.status === "over") {
-                toast({
-                  title: `${b.clientName} is over budget`,
-                  description: `${b.hoursUsed}h logged of ${b.budget}h monthly budget.`,
-                  variant: "destructive",
-                });
-              } else if (b.status === "near") {
-                toast({
-                  title: `${b.clientName} is nearing their budget`,
-                  description: `${b.hoursUsed}h of ${b.budget}h used — over 90%.`,
-                });
-              }
-            })
+          fetch(`/api/automations/budget-status?client_id=${clientId}`, {
+            credentials: "include",
+          })
+            .then((r) => (r.ok ? r.json() : null))
+            .then(
+              (
+                b: {
+                  clientName: string;
+                  hoursUsed: number;
+                  budget: number;
+                  status: string;
+                } | null,
+              ) => {
+                if (!b || b.budget <= 0) return;
+                if (b.status === "over") {
+                  toast({
+                    title: `${b.clientName} is over budget`,
+                    description: `${b.hoursUsed}h logged of ${b.budget}h monthly budget.`,
+                    variant: "destructive",
+                  });
+                } else if (b.status === "near") {
+                  toast({
+                    title: `${b.clientName} is nearing their budget`,
+                    description: `${b.hoursUsed}h of ${b.budget}h used — over 90%.`,
+                  });
+                }
+              },
+            )
             .catch(() => {});
         }
       },
@@ -256,7 +323,12 @@ export default function Dashboard() {
       <div className="space-y-6 animate-pulse">
         <div className="h-8 bg-slate-200 rounded w-48 mb-8"></div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[1, 2, 3].map(i => <div key={i} className="h-32 bg-white rounded-2xl border border-slate-100"></div>)}
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="h-32 bg-white rounded-2xl border border-slate-100"
+            ></div>
+          ))}
         </div>
         <div className="h-64 bg-white rounded-2xl border border-slate-100 mt-8"></div>
       </div>
@@ -266,20 +338,40 @@ export default function Dashboard() {
   const dashClients = dashboard || [];
   const totalClients = dashClients.length;
   const totalRevenue = dashClients.reduce((acc, c) => acc + c.monthly_fee, 0);
-  const totalHoursBudgeted = dashClients.reduce((acc, c) => acc + c.monthly_hour_budget, 0);
-  const totalHoursUsed = dashClients.reduce((acc, c) => acc + c.hours_used_this_month, 0);
+  const totalHoursBudgeted = dashClients.reduce(
+    (acc, c) => acc + c.monthly_hour_budget,
+    0,
+  );
+  const totalHoursUsed = dashClients.reduce(
+    (acc, c) => acc + c.hours_used_this_month,
+    0,
+  );
 
-  const totalPaid = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
-  const totalUnpaid = invoices.filter(i => i.status === "unpaid").reduce((s, i) => s + i.amount, 0);
+  const totalPaid = invoices
+    .filter((i) => i.status === "paid")
+    .reduce((s, i) => s + i.amount, 0);
+  const totalUnpaid = invoices
+    .filter((i) => i.status === "unpaid")
+    .reduce((s, i) => s + i.amount, 0);
   const totalProjected = totalPaid + totalUnpaid;
 
   // Goal progress
-  const incomePaidPct = goals.incomeGoal > 0 ? Math.min(100, Math.round((totalPaid / goals.incomeGoal) * 100)) : 0;
-  const incomeProjectedPct = goals.incomeGoal > 0 ? Math.min(100, Math.round((totalProjected / goals.incomeGoal) * 100)) : 0;
-  const clientPct = goals.clientGoal > 0 ? Math.min(100, Math.round((totalClients / goals.clientGoal) * 100)) : 0;
+  const incomePaidPct =
+    goals.incomeGoal > 0
+      ? Math.min(100, Math.round((totalPaid / goals.incomeGoal) * 100))
+      : 0;
+  const incomeProjectedPct =
+    goals.incomeGoal > 0
+      ? Math.min(100, Math.round((totalProjected / goals.incomeGoal) * 100))
+      : 0;
+  const clientPct =
+    goals.clientGoal > 0
+      ? Math.min(100, Math.round((totalClients / goals.clientGoal) * 100))
+      : 0;
 
   const incomeGoalMet = totalPaid >= goals.incomeGoal && goals.incomeGoal > 0;
-  const clientGoalMet = totalClients >= goals.clientGoal && goals.clientGoal > 0;
+  const clientGoalMet =
+    totalClients >= goals.clientGoal && goals.clientGoal > 0;
 
   // Invoice date buckets — compare as local date strings (YYYY-MM-DD)
   const todayStr = new Date().toLocaleDateString("sv-SE"); // "sv-SE" gives YYYY-MM-DD
@@ -287,77 +379,143 @@ export default function Dashboard() {
   in7Days.setDate(in7Days.getDate() + 7);
   const in7DaysStr = in7Days.toLocaleDateString("sv-SE");
 
-  const clientMap = Object.fromEntries((clients ?? []).map(c => [c.id, c.name]));
+  const clientMap = Object.fromEntries(
+    (clients ?? []).map((c) => [c.id, c.name]),
+  );
 
   const overdueInvoices = invoices.filter(
-    i => i.status === "unpaid" && i.due_date < todayStr
+    (i) => i.status === "unpaid" && i.due_date < todayStr,
   );
-  const upcomingInvoices = invoices.filter(
-    i => i.status === "unpaid" && i.due_date >= todayStr && i.due_date <= in7DaysStr
-  ).sort((a, b) => a.due_date.localeCompare(b.due_date));
+  const upcomingInvoices = invoices
+    .filter(
+      (i) =>
+        i.status === "unpaid" &&
+        i.due_date >= todayStr &&
+        i.due_date <= in7DaysStr,
+    )
+    .sort((a, b) => a.due_date.localeCompare(b.due_date));
 
   const overdueTotal = overdueInvoices.reduce((s, i) => s + i.amount, 0);
 
   const overdueTasks = allTasks.filter(
-    t => t.status !== "complete" && t.due_date != null && t.due_date < todayStr
+    (t) =>
+      t.status !== "complete" && t.due_date != null && t.due_date < todayStr,
+  );
+
+  const tomorrowStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString("sv-SE");
+  })();
+
+  const tasksDueToday = allTasks.filter(
+    (t) => t.status !== "complete" && t.due_date === todayStr,
+  );
+
+  const tasksDueTomorrow = allTasks.filter(
+    (t) => t.status !== "complete" && t.due_date === tomorrowStr,
   );
 
   // Follow-up reminders: leads (non-closed) with follow_up_date today or within 7 days
-  const followUpLeads = leads.filter(l => {
-    if (l.status === "closed" || !l.follow_up_date) return false;
-    return l.follow_up_date >= todayStr && l.follow_up_date <= in7DaysStr;
-  }).sort((a, b) => (a.follow_up_date ?? "").localeCompare(b.follow_up_date ?? ""));
+  const followUpLeads = leads
+    .filter((l) => {
+      if (l.status === "closed" || !l.follow_up_date) return false;
+      return l.follow_up_date >= todayStr && l.follow_up_date <= in7DaysStr;
+    })
+    .sort((a, b) =>
+      (a.follow_up_date ?? "").localeCompare(b.follow_up_date ?? ""),
+    );
 
-  const overdueFollowUpLeads = leads.filter(l => {
+  const overdueFollowUpLeads = leads.filter((l) => {
     if (l.status === "closed" || !l.follow_up_date) return false;
     return l.follow_up_date < todayStr;
   });
 
   // CRM stats
   const totalLeadCount = leads.length;
-  const totalPipelineValue = leads.reduce((s, l) => s + (l.estimated_value ?? 0), 0);
+  const totalPipelineValue = leads.reduce(
+    (s, l) => s + (l.estimated_value ?? 0),
+    0,
+  );
   const leadsByStatus = {
-    new: leads.filter(l => l.status === "new").length,
-    contacted: leads.filter(l => l.status === "contacted").length,
-    proposal: leads.filter(l => l.status === "proposal").length,
-    closed: leads.filter(l => l.status === "closed").length,
+    new: leads.filter((l) => l.status === "new").length,
+    contacted: leads.filter((l) => l.status === "contacted").length,
+    proposal: leads.filter((l) => l.status === "proposal").length,
+    closed: leads.filter((l) => l.status === "closed").length,
   };
   const CRM_STAGES = [
-    { key: "new" as const, label: "New", dot: "bg-blue-500", bar: "bg-blue-400", pill: "bg-blue-50 text-blue-700 border-blue-200" },
-    { key: "contacted" as const, label: "Contacted", dot: "bg-amber-500", bar: "bg-amber-400", pill: "bg-amber-50 text-amber-700 border-amber-200" },
-    { key: "proposal" as const, label: "Proposal", dot: "bg-violet-500", bar: "bg-violet-400", pill: "bg-violet-50 text-violet-700 border-violet-200" },
-    { key: "closed" as const, label: "Closed", dot: "bg-emerald-500", bar: "bg-emerald-400", pill: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    {
+      key: "new" as const,
+      label: "New",
+      dot: "bg-blue-500",
+      bar: "bg-blue-400",
+      pill: "bg-blue-50 text-blue-700 border-blue-200",
+    },
+    {
+      key: "contacted" as const,
+      label: "Contacted",
+      dot: "bg-amber-500",
+      bar: "bg-amber-400",
+      pill: "bg-amber-50 text-amber-700 border-amber-200",
+    },
+    {
+      key: "proposal" as const,
+      label: "Proposal",
+      dot: "bg-violet-500",
+      bar: "bg-violet-400",
+      pill: "bg-violet-50 text-violet-700 border-violet-200",
+    },
+    {
+      key: "closed" as const,
+      label: "Closed",
+      dot: "bg-emerald-500",
+      bar: "bg-emerald-400",
+      pill: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    },
   ];
 
   // ── Analytics computed values ─────────────────────────────────────────────
-  const completedTasks = allTasks.filter(t => t.status === "complete").length;
-  const pendingTasks = allTasks.filter(t => t.status !== "complete").length;
+  const completedTasks = allTasks.filter((t) => t.status === "complete").length;
+  const pendingTasks = allTasks.filter((t) => t.status !== "complete").length;
   const totalTaskCount = allTasks.length;
-  const completedPct = totalTaskCount > 0 ? Math.round((completedTasks / totalTaskCount) * 100) : 0;
+  const completedPct =
+    totalTaskCount > 0
+      ? Math.round((completedTasks / totalTaskCount) * 100)
+      : 0;
 
   const sortedOverdueTasks = [...overdueTasks]
     .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""))
     .slice(0, 5);
 
   const hoursGoal = totalHoursBudgeted; // budgeted hours = natural ceiling
-  const hoursPct = hoursGoal > 0 ? Math.min(100, Math.round((totalHoursUsed / hoursGoal) * 100)) : 0;
+  const hoursPct =
+    hoursGoal > 0
+      ? Math.min(100, Math.round((totalHoursUsed / hoursGoal) * 100))
+      : 0;
   const topHoursClients = [...dashClients]
     .sort((a, b) => b.hours_used_this_month - a.hours_used_this_month)
     .slice(0, 4);
 
   const closedLeadValue = leads
-    .filter(l => l.status === "closed")
+    .filter((l) => l.status === "closed")
     .reduce((s, l) => s + (l.estimated_value ?? 0), 0);
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-display font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-500 mt-1">Here's an overview of your business this month.</p>
+        <h1 className="text-3xl font-display font-bold text-slate-900">
+          HM Virtual Services Business Hub
+        </h1>
+        <p className="text-slate-500 mt-1">
+          Here's an overview of your business this month.
+        </p>
       </div>
 
       {/* Notifications */}
-      {((overdueInvoices.length > 0 && !overdueDismissed) || (overdueTasks.length > 0 && !overdueTasksDismissed) || followUpLeads.length > 0 || overdueFollowUpLeads.length > 0) ? (
+      {(overdueInvoices.length > 0 && !overdueDismissed) ||
+      (overdueTasks.length > 0 && !overdueTasksDismissed) ||
+      followUpLeads.length > 0 ||
+      overdueFollowUpLeads.length > 0 ? (
         <div className="space-y-2">
           {/* Overdue follow-ups */}
           {overdueFollowUpLeads.length > 0 && (
@@ -365,10 +523,11 @@ export default function Dashboard() {
               <Calendar className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-red-700">
-                  {overdueFollowUpLeads.length} overdue follow-up{overdueFollowUpLeads.length !== 1 ? "s" : ""}
+                  {overdueFollowUpLeads.length} overdue follow-up
+                  {overdueFollowUpLeads.length !== 1 ? "s" : ""}
                 </p>
                 <p className="text-xs text-red-500 mt-0.5 truncate">
-                  {overdueFollowUpLeads.map(l => l.name).join(" · ")}
+                  {overdueFollowUpLeads.map((l) => l.name).join(" · ")}
                 </p>
               </div>
               <button
@@ -385,7 +544,8 @@ export default function Dashboard() {
               <div className="flex items-center gap-2 mb-2">
                 <Calendar className="w-4 h-4 text-blue-500 shrink-0" />
                 <p className="text-sm font-semibold text-blue-700">
-                  {followUpLeads.length} follow-up{followUpLeads.length !== 1 ? "s" : ""} due this week
+                  {followUpLeads.length} follow-up
+                  {followUpLeads.length !== 1 ? "s" : ""} due this week
                 </p>
                 <button
                   onClick={() => navigate("/leads")}
@@ -395,15 +555,24 @@ export default function Dashboard() {
                 </button>
               </div>
               <ul className="space-y-1">
-                {followUpLeads.map(l => {
+                {followUpLeads.map((l) => {
                   const d = new Date(l.follow_up_date! + "T00:00:00");
-                  const diffDays = Math.round((d.getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+                  const diffDays = Math.round(
+                    (d.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000,
+                  );
                   return (
-                    <li key={l.id} className="flex items-center gap-2 text-xs text-slate-600">
+                    <li
+                      key={l.id}
+                      className="flex items-center gap-2 text-xs text-slate-600"
+                    >
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
                       <span className="font-medium truncate">{l.name}</span>
                       <span className="ml-auto shrink-0 text-slate-400">
-                        {diffDays === 0 ? "Today" : diffDays === 1 ? "Tomorrow" : `In ${diffDays} days`}
+                        {diffDays === 0
+                          ? "Today"
+                          : diffDays === 1
+                            ? "Tomorrow"
+                            : `In ${diffDays} days`}
                       </span>
                     </li>
                   );
@@ -411,35 +580,51 @@ export default function Dashboard() {
               </ul>
             </div>
           )}
-          {overdueTasks.length > 0 && !overdueTasksDismissed && (
-            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              <TriangleAlert className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-amber-700">
-                  {overdueTasks.length} overdue task{overdueTasks.length !== 1 ? "s" : ""}
-                </p>
-                <p className="text-xs text-amber-600 mt-0.5 truncate">
-                  {overdueTasks.map(t => t.title).join(" · ")}
-                </p>
-              </div>
-              <button
-                onClick={() => setOverdueTasksDismissed(true)}
-                className="shrink-0 text-amber-300 hover:text-amber-500 transition-colors"
-                aria-label="Dismiss"
-              >
-                <X className="w-4 h-4" />
-              </button>
+          <div
+            onClick={() => navigate("/tasks")}
+            className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-amber-100 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <TriangleAlert className="w-5 h-5 text-amber-500" />
+              <span className="text-xs font-medium text-amber-600 hover:text-amber-700">
+                View All →
+              </span>
             </div>
-          )}
+
+            <p className="text-sm font-semibold text-amber-700 mt-2">
+              Task Summary
+            </p>
+
+            <div className="flex justify-between mt-2 text-xs text-amber-600">
+              <div className="flex flex-col items-center">
+                <span className="font-bold text-amber-700">{overdueTasks.length}</span>
+                <span>Overdue</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="font-bold text-amber-700">{tasksDueToday.length}</span>
+                <span>Due Today</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="font-bold text-amber-700">{tasksDueTomorrow.length}</span>
+                <span>Due Tomorrow</span>
+              </div>
+            </div>
+          </div>
           {overdueInvoices.length > 0 && !overdueDismissed && (
             <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
               <TriangleAlert className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-red-700">
-                  {overdueInvoices.length} overdue invoice{overdueInvoices.length !== 1 ? "s" : ""} — {formatCurrency(overdueTotal)} outstanding
+                  {overdueInvoices.length} overdue invoice
+                  {overdueInvoices.length !== 1 ? "s" : ""} —{" "}
+                  {formatCurrency(overdueTotal)} outstanding
                 </p>
                 <p className="text-xs text-red-500 mt-0.5">
-                  {overdueInvoices.map(i => clientMap[i.client_id] ?? `Client #${i.client_id}`).join(", ")}
+                  {overdueInvoices
+                    .map(
+                      (i) => clientMap[i.client_id] ?? `Client #${i.client_id}`,
+                    )
+                    .join(", ")}
                 </p>
               </div>
               <button
@@ -463,8 +648,12 @@ export default function Dashboard() {
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Active Clients</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalClients}</h3>
+              <p className="text-sm font-medium text-slate-500">
+                Active Clients
+              </p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
+                {totalClients}
+              </h3>
             </div>
           </div>
         </div>
@@ -476,8 +665,12 @@ export default function Dashboard() {
               <DollarSign className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Monthly Recurring</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{formatCurrency(totalRevenue)}</h3>
+              <p className="text-sm font-medium text-slate-500">
+                Monthly Recurring
+              </p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
+                {formatCurrency(totalRevenue)}
+              </h3>
             </div>
           </div>
         </div>
@@ -489,8 +682,15 @@ export default function Dashboard() {
               <Clock className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-500">Total Hours (Used / Budget)</p>
-              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalHoursUsed} <span className="text-slate-400 text-lg">/ {totalHoursBudgeted}</span></h3>
+              <p className="text-sm font-medium text-slate-500">
+                Total Hours (Used / Budget)
+              </p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
+                {totalHoursUsed}{" "}
+                <span className="text-slate-400 text-lg">
+                  / {totalHoursBudgeted}
+                </span>
+              </h3>
             </div>
           </div>
         </div>
@@ -503,8 +703,12 @@ export default function Dashboard() {
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Invoices Paid</p>
-            <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid)}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Invoices Paid
+            </p>
+            <p className="text-2xl font-bold text-slate-900">
+              {formatCurrency(totalPaid)}
+            </p>
           </div>
         </div>
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-amber-200 transition-colors">
@@ -512,8 +716,12 @@ export default function Dashboard() {
             <FileText className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Outstanding</p>
-            <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalUnpaid)}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Outstanding
+            </p>
+            <p className="text-2xl font-bold text-slate-900">
+              {formatCurrency(totalUnpaid)}
+            </p>
           </div>
         </div>
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex items-center gap-4 hover:border-blue-200 transition-colors">
@@ -521,8 +729,12 @@ export default function Dashboard() {
             <DollarSign className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Projected Total</p>
-            <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalProjected)}</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+              Projected Total
+            </p>
+            <p className="text-2xl font-bold text-slate-900">
+              {formatCurrency(totalProjected)}
+            </p>
           </div>
         </div>
       </div>
@@ -532,33 +744,50 @@ export default function Dashboard() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100">
             <Calendar className="w-4 h-4 text-amber-500" />
-            <h2 className="font-semibold text-slate-900 text-sm">Due in the next 7 days</h2>
+            <h2 className="font-semibold text-slate-900 text-sm">
+              Due in the next 7 days
+            </h2>
             <span className="ml-auto text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
-              {upcomingInvoices.length} invoice{upcomingInvoices.length !== 1 ? "s" : ""}
+              {upcomingInvoices.length} invoice
+              {upcomingInvoices.length !== 1 ? "s" : ""}
             </span>
           </div>
           <ul className="divide-y divide-slate-50">
-            {upcomingInvoices.map(inv => {
+            {upcomingInvoices.map((inv) => {
               const dueDate = new Date(inv.due_date + "T00:00:00");
-              const diffDays = Math.round((dueDate.getTime() - new Date().setHours(0,0,0,0)) / 86400000);
+              const diffDays = Math.round(
+                (dueDate.getTime() - new Date().setHours(0, 0, 0, 0)) /
+                  86400000,
+              );
               const dueSoon = diffDays <= 2;
               return (
-                <li key={inv.id} className="flex flex-wrap items-center gap-2 px-5 py-3">
+                <li
+                  key={inv.id}
+                  className="flex flex-wrap items-center gap-2 px-5 py-3"
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-800 truncate">
                       {clientMap[inv.client_id] ?? `Client #${inv.client_id}`}
                     </p>
                     {inv.description && (
-                      <p className="text-xs text-slate-400 truncate">{inv.description}</p>
+                      <p className="text-xs text-slate-400 truncate">
+                        {inv.description}
+                      </p>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-xs font-medium px-2 py-1 rounded-full border ${
-                      dueSoon
-                        ? "bg-red-50 text-red-600 border-red-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200"
-                    }`}>
-                      {diffDays === 0 ? "Due today" : diffDays === 1 ? "Due tomorrow" : `Due in ${diffDays} days`}
+                    <span
+                      className={`text-xs font-medium px-2 py-1 rounded-full border ${
+                        dueSoon
+                          ? "bg-red-50 text-red-600 border-red-200"
+                          : "bg-amber-50 text-amber-700 border-amber-200"
+                      }`}
+                    >
+                      {diffDays === 0
+                        ? "Due today"
+                        : diffDays === 1
+                          ? "Due tomorrow"
+                          : `Due in ${diffDays} days`}
                     </span>
                     <span className="text-sm font-semibold text-slate-900">
                       {formatCurrency(inv.amount)}
@@ -617,61 +846,84 @@ export default function Dashboard() {
         {editingGoals ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Monthly Income Goal ($)</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                Monthly Income Goal ($)
+              </label>
               <input
                 type="number"
                 min="0"
                 step="100"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={draftIncome}
-                onChange={e => setDraftIncome(e.target.value)}
+                onChange={(e) => setDraftIncome(e.target.value)}
                 placeholder="e.g. 4000"
                 autoFocus
               />
-              <p className="text-xs text-slate-400 mt-1">Tracks paid + projected invoices</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Tracks paid + projected invoices
+              </p>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Client Count Target</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                Client Count Target
+              </label>
               <input
                 type="number"
                 min="0"
                 step="1"
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={draftClients}
-                onChange={e => setDraftClients(e.target.value)}
+                onChange={(e) => setDraftClients(e.target.value)}
                 placeholder="e.g. 10"
               />
-              <p className="text-xs text-slate-400 mt-1">Tracks active client count</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Tracks active client count
+              </p>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-
             {/* ── Monthly Income Goal ── */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Monthly Income</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Monthly Income
+                </p>
                 {incomeGoalMet ? (
-                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Goal met!</span>
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    Goal met!
+                  </span>
                 ) : (
-                  <span className="text-xs font-medium text-slate-400">{incomePaidPct}% collected</span>
+                  <span className="text-xs font-medium text-slate-400">
+                    {incomePaidPct}% collected
+                  </span>
                 )}
               </div>
 
               {/* Big numbers */}
               <div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid)}</span>
+                  <span className="text-2xl font-bold text-slate-900">
+                    {formatCurrency(totalPaid)}
+                  </span>
                   <span className="text-sm text-slate-400">collected</span>
                 </div>
                 {totalUnpaid > 0 && (
                   <div className="flex items-baseline gap-1.5 mt-0.5">
-                    <span className="text-base font-semibold text-blue-500">+{formatCurrency(totalUnpaid)}</span>
-                    <span className="text-xs text-slate-400">unpaid → {formatCurrency(totalProjected)} projected</span>
+                    <span className="text-base font-semibold text-blue-500">
+                      +{formatCurrency(totalUnpaid)}
+                    </span>
+                    <span className="text-xs text-slate-400">
+                      unpaid → {formatCurrency(totalProjected)} projected
+                    </span>
                   </div>
                 )}
                 <div className="text-xs text-slate-400 mt-0.5">
-                  of <span className="font-semibold text-slate-600">{formatCurrency(goals.incomeGoal)}</span> goal
+                  of{" "}
+                  <span className="font-semibold text-slate-600">
+                    {formatCurrency(goals.incomeGoal)}
+                  </span>{" "}
+                  goal
                 </div>
               </div>
 
@@ -690,7 +942,9 @@ export default function Dashboard() {
                 {goals.incomeGoal > 0 && (
                   <div className="flex items-center gap-3 text-xs text-slate-400">
                     <span className="flex items-center gap-1">
-                      <span className={`w-2 h-2 rounded-full inline-block ${incomeGoalMet ? "bg-emerald-500" : "bg-blue-500"}`} />
+                      <span
+                        className={`w-2 h-2 rounded-full inline-block ${incomeGoalMet ? "bg-emerald-500" : "bg-blue-500"}`}
+                      />
                       Collected
                     </span>
                     {totalUnpaid > 0 && (
@@ -706,8 +960,14 @@ export default function Dashboard() {
               {/* Gap to goal */}
               {!incomeGoalMet && goals.incomeGoal > 0 && (
                 <p className="text-xs text-slate-400">
-                  <span className="font-semibold text-slate-600">{formatCurrency(goals.incomeGoal - totalProjected > 0 ? goals.incomeGoal - totalProjected : 0)}</span>
-                  {" "}still needed to reach goal
+                  <span className="font-semibold text-slate-600">
+                    {formatCurrency(
+                      goals.incomeGoal - totalProjected > 0
+                        ? goals.incomeGoal - totalProjected
+                        : 0,
+                    )}
+                  </span>{" "}
+                  still needed to reach goal
                 </p>
               )}
             </div>
@@ -715,23 +975,37 @@ export default function Dashboard() {
             {/* ── Active Clients Goal ── */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Active Clients</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Active Clients
+                </p>
                 {clientGoalMet ? (
-                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">Goal met!</span>
+                  <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                    Goal met!
+                  </span>
                 ) : (
-                  <span className="text-xs font-medium text-slate-400">{clientPct}% of target</span>
+                  <span className="text-xs font-medium text-slate-400">
+                    {clientPct}% of target
+                  </span>
                 )}
               </div>
 
               {/* Big numbers */}
               <div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-2xl font-bold text-slate-900">{totalClients}</span>
+                  <span className="text-2xl font-bold text-slate-900">
+                    {totalClients}
+                  </span>
                   <span className="text-sm text-slate-400">
-                    / <span className="font-semibold text-slate-600">{goals.clientGoal}</span> target
+                    /{" "}
+                    <span className="font-semibold text-slate-600">
+                      {goals.clientGoal}
+                    </span>{" "}
+                    target
                   </span>
                 </div>
-                <div className="text-xs text-slate-400 mt-0.5">active clients this month</div>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  active clients this month
+                </div>
               </div>
 
               {/* Bar */}
@@ -747,29 +1021,39 @@ export default function Dashboard() {
               {/* Gap to goal */}
               {goals.clientGoal > 0 && (
                 <p className="text-xs text-slate-400">
-                  {clientGoalMet
-                    ? "Client target reached!"
-                    : <><span className="font-semibold text-slate-600">{goals.clientGoal - totalClients}</span> more client{goals.clientGoal - totalClients !== 1 ? "s" : ""} to reach target</>
-                  }
+                  {clientGoalMet ? (
+                    "Client target reached!"
+                  ) : (
+                    <>
+                      <span className="font-semibold text-slate-600">
+                        {goals.clientGoal - totalClients}
+                      </span>{" "}
+                      more client
+                      {goals.clientGoal - totalClients !== 1 ? "s" : ""} to
+                      reach target
+                    </>
+                  )}
                 </p>
               )}
             </div>
-
           </div>
         )}
       </div>
 
       {/* ── Analytics ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
         {/* Card 1 — Task Completion */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
               <CheckCircle2 className="w-4 h-4" />
             </div>
-            <h2 className="font-semibold text-slate-900 text-sm">Task Completion</h2>
-            <span className="ml-auto text-xs text-slate-400">{totalTaskCount} total</span>
+            <h2 className="font-semibold text-slate-900 text-sm">
+              Task Completion
+            </h2>
+            <span className="ml-auto text-xs text-slate-400">
+              {totalTaskCount} total
+            </span>
           </div>
 
           <div className="flex items-center gap-6">
@@ -778,17 +1062,22 @@ export default function Dashboard() {
               <div
                 className="w-full h-full rounded-full"
                 style={{
-                  background: totalTaskCount === 0
-                    ? '#e2e8f0'
-                    : completedPct === 100
-                    ? '#22c55e'
-                    : `conic-gradient(#22c55e 0% ${completedPct}%, #f1f5f9 ${completedPct}% 100%)`,
+                  background:
+                    totalTaskCount === 0
+                      ? "#e2e8f0"
+                      : completedPct === 100
+                        ? "#22c55e"
+                        : `conic-gradient(#22c55e 0% ${completedPct}%, #f1f5f9 ${completedPct}% 100%)`,
                 }}
               />
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="w-16 h-16 rounded-full bg-white flex flex-col items-center justify-center">
-                  <span className="text-xl font-bold text-slate-900 leading-none">{completedPct}%</span>
-                  <span className="text-[10px] text-slate-400 mt-0.5">done</span>
+                  <span className="text-xl font-bold text-slate-900 leading-none">
+                    {completedPct}%
+                  </span>
+                  <span className="text-[10px] text-slate-400 mt-0.5">
+                    done
+                  </span>
                 </div>
               </div>
             </div>
@@ -800,7 +1089,9 @@ export default function Dashboard() {
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
                   <span className="text-sm text-slate-600">Completed</span>
                 </div>
-                <span className="text-sm font-bold text-slate-900">{completedTasks}</span>
+                <span className="text-sm font-bold text-slate-900">
+                  {completedTasks}
+                </span>
               </div>
               <div className="h-px bg-slate-100" />
               <div className="flex items-center justify-between">
@@ -808,10 +1099,14 @@ export default function Dashboard() {
                   <span className="w-2.5 h-2.5 rounded-full bg-slate-200 shrink-0" />
                   <span className="text-sm text-slate-600">Pending</span>
                 </div>
-                <span className="text-sm font-bold text-slate-900">{pendingTasks}</span>
+                <span className="text-sm font-bold text-slate-900">
+                  {pendingTasks}
+                </span>
               </div>
               {completedPct === 100 && totalTaskCount > 0 && (
-                <p className="text-xs font-semibold text-emerald-600">All tasks complete!</p>
+                <p className="text-xs font-semibold text-emerald-600">
+                  All tasks complete!
+                </p>
               )}
             </div>
           </div>
@@ -833,8 +1128,12 @@ export default function Dashboard() {
             <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
               <TrendingUp className="w-4 h-4" />
             </div>
-            <h2 className="font-semibold text-slate-900 text-sm">Lead Pipeline</h2>
-            <span className="ml-auto text-xs text-slate-400">{totalLeadCount} leads</span>
+            <h2 className="font-semibold text-slate-900 text-sm">
+              Lead Pipeline
+            </h2>
+            <span className="ml-auto text-xs text-slate-400">
+              {totalLeadCount} leads
+            </span>
           </div>
 
           {/* Stacked bar */}
@@ -842,7 +1141,7 @@ export default function Dashboard() {
             {totalLeadCount === 0 ? (
               <div className="h-full w-full rounded-full bg-slate-100" />
             ) : (
-              CRM_STAGES.map(s => {
+              CRM_STAGES.map((s) => {
                 const count = leadsByStatus[s.key];
                 const pct = (count / totalLeadCount) * 100;
                 return pct > 0 ? (
@@ -858,13 +1157,15 @@ export default function Dashboard() {
 
           {/* Stage breakdown */}
           <div className="grid grid-cols-2 gap-y-2 gap-x-4">
-            {CRM_STAGES.map(s => (
+            {CRM_STAGES.map((s) => (
               <div key={s.key} className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <span className={`w-2 h-2 rounded-full ${s.dot}`} />
                   <span className="text-xs text-slate-500">{s.label}</span>
                 </div>
-                <span className="text-xs font-semibold text-slate-800">{leadsByStatus[s.key]}</span>
+                <span className="text-xs font-semibold text-slate-800">
+                  {leadsByStatus[s.key]}
+                </span>
               </div>
             ))}
           </div>
@@ -872,7 +1173,9 @@ export default function Dashboard() {
           {/* Value footer */}
           <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
             <span className="text-xs text-slate-400">Closed value</span>
-            <span className="text-sm font-bold text-emerald-600">{formatCurrency(closedLeadValue)}</span>
+            <span className="text-sm font-bold text-emerald-600">
+              {formatCurrency(closedLeadValue)}
+            </span>
           </div>
         </div>
 
@@ -882,19 +1185,27 @@ export default function Dashboard() {
             <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
               <Clock className="w-4 h-4" />
             </div>
-            <h2 className="font-semibold text-slate-900 text-sm">Hours This Month</h2>
-            <span className="ml-auto text-xs text-slate-400">{hoursPct}% of budget</span>
+            <h2 className="font-semibold text-slate-900 text-sm">
+              Hours This Month
+            </h2>
+            <span className="ml-auto text-xs text-slate-400">
+              {hoursPct}% of budget
+            </span>
           </div>
 
           {/* Overall big bar */}
           <div className="space-y-1.5">
             <div className="flex items-baseline justify-between">
-              <span className="text-2xl font-bold text-slate-900">{totalHoursUsed}h</span>
-              <span className="text-sm text-slate-400">of {totalHoursBudgeted}h budgeted</span>
+              <span className="text-2xl font-bold text-slate-900">
+                {totalHoursUsed}h
+              </span>
+              <span className="text-sm text-slate-400">
+                of {totalHoursBudgeted}h budgeted
+              </span>
             </div>
             <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${hoursPct >= 100 ? 'bg-red-500' : hoursPct >= 85 ? 'bg-amber-500' : 'bg-blue-500'}`}
+                className={`h-full rounded-full transition-all duration-500 ${hoursPct >= 100 ? "bg-red-500" : hoursPct >= 85 ? "bg-amber-500" : "bg-blue-500"}`}
                 style={{ width: `${hoursPct}%` }}
               />
             </div>
@@ -903,19 +1214,38 @@ export default function Dashboard() {
           {/* Per-client breakdown */}
           {topHoursClients.length > 0 && (
             <div className="space-y-2.5 border-t border-slate-100 pt-3">
-              {topHoursClients.map(c => {
-                const cPct = c.monthly_hour_budget > 0
-                  ? Math.min(100, Math.round((c.hours_used_this_month / c.monthly_hour_budget) * 100))
-                  : 0;
-                const color = cPct >= 100 ? 'bg-red-400' : cPct >= 85 ? 'bg-amber-400' : 'bg-blue-400';
+              {topHoursClients.map((c) => {
+                const cPct =
+                  c.monthly_hour_budget > 0
+                    ? Math.min(
+                        100,
+                        Math.round(
+                          (c.hours_used_this_month / c.monthly_hour_budget) *
+                            100,
+                        ),
+                      )
+                    : 0;
+                const color =
+                  cPct >= 100
+                    ? "bg-red-400"
+                    : cPct >= 85
+                      ? "bg-amber-400"
+                      : "bg-blue-400";
                 return (
                   <div key={c.client_id} className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-600 truncate max-w-[65%]">{c.client_name}</span>
-                      <span className="text-xs font-semibold text-slate-800 shrink-0">{c.hours_used_this_month}h / {c.monthly_hour_budget}h</span>
+                      <span className="text-xs text-slate-600 truncate max-w-[65%]">
+                        {c.client_name}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-800 shrink-0">
+                        {c.hours_used_this_month}h / {c.monthly_hour_budget}h
+                      </span>
                     </div>
                     <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${cPct}%` }} />
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${color}`}
+                        style={{ width: `${cPct}%` }}
+                      />
                     </div>
                   </div>
                 );
@@ -927,10 +1257,14 @@ export default function Dashboard() {
         {/* Card 4 — Overdue Tasks */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <div className={`p-2 rounded-lg ${sortedOverdueTasks.length > 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-400'}`}>
+            <div
+              className={`p-2 rounded-lg ${sortedOverdueTasks.length > 0 ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-400"}`}
+            >
               <TriangleAlert className="w-4 h-4" />
             </div>
-            <h2 className="font-semibold text-slate-900 text-sm">Overdue Tasks</h2>
+            <h2 className="font-semibold text-slate-900 text-sm">
+              Overdue Tasks
+            </h2>
             {sortedOverdueTasks.length > 0 && (
               <span className="ml-auto text-xs font-semibold bg-red-50 text-red-700 border border-red-200 px-2 py-0.5 rounded-full">
                 {overdueTasks.length} overdue
@@ -943,22 +1277,36 @@ export default function Dashboard() {
               <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
                 <CheckCircle2 className="w-5 h-5 text-emerald-500" />
               </div>
-              <p className="text-sm font-medium text-slate-700">No overdue tasks</p>
-              <p className="text-xs text-slate-400">Everything's on schedule.</p>
+              <p className="text-sm font-medium text-slate-700">
+                No overdue tasks
+              </p>
+              <p className="text-xs text-slate-400">
+                Everything's on schedule.
+              </p>
             </div>
           ) : (
             <ul className="space-y-2.5">
-              {sortedOverdueTasks.map(t => {
+              {sortedOverdueTasks.map((t) => {
                 const daysLate = t.due_date
-                  ? Math.max(0, Math.floor((Date.now() - new Date(t.due_date + "T00:00:00").getTime()) / 86_400_000))
+                  ? Math.max(
+                      0,
+                      Math.floor(
+                        (Date.now() -
+                          new Date(t.due_date + "T00:00:00").getTime()) /
+                          86_400_000,
+                      ),
+                    )
                   : 0;
                 return (
                   <li key={t.id} className="flex items-start gap-3">
                     <span className="w-1.5 h-1.5 rounded-full bg-red-400 shrink-0 mt-1.5" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">{t.title}</p>
+                      <p className="text-sm font-medium text-slate-800 truncate">
+                        {t.title}
+                      </p>
                       <p className="text-xs text-slate-400">
-                        {clientMap[t.client_id ?? 0] ?? "Unassigned"} · due {t.due_date}
+                        {clientMap[t.client_id ?? 0] ?? "Unassigned"} · due{" "}
+                        {t.due_date}
                       </p>
                     </div>
                     <span className="shrink-0 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded-md whitespace-nowrap">
@@ -979,33 +1327,34 @@ export default function Dashboard() {
             </button>
           )}
         </div>
-
       </div>
 
       {/* Quick Actions */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Trigger buttons */}
         <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">Quick Actions</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">
+            Quick Actions
+          </span>
           <button
-            onClick={() => setQuickPanel(quickPanel === 'task' ? null : 'task')}
+            onClick={() => setQuickPanel(quickPanel === "task" ? null : "task")}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-              quickPanel === 'task'
+              quickPanel === "task"
                 ? "bg-blue-600 text-white shadow-sm"
-                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300",
             )}
           >
             <CheckSquare className="w-4 h-4" />
             Add Task
           </button>
           <button
-            onClick={() => setQuickPanel(quickPanel === 'time' ? null : 'time')}
+            onClick={() => setQuickPanel(quickPanel === "time" ? null : "time")}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-              quickPanel === 'time'
+              quickPanel === "time"
                 ? "bg-violet-600 text-white shadow-sm"
-                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300",
             )}
           >
             <Timer className="w-4 h-4" />
@@ -1014,9 +1363,12 @@ export default function Dashboard() {
         </div>
 
         {/* Add Task panel */}
-        {quickPanel === 'task' && (
+        {quickPanel === "task" && (
           <div className="px-5 py-4 border-b border-slate-100">
-            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col sm:flex-row gap-3">
+            <form
+              onSubmit={handleSubmit(onSubmit)}
+              className="flex flex-col sm:flex-row gap-3"
+            >
               <div className="flex-1">
                 <input
                   {...register("title")}
@@ -1024,23 +1376,47 @@ export default function Dashboard() {
                   className="input-field w-full"
                   autoFocus
                 />
-                {errors.title && <p className="text-destructive text-xs mt-1">{errors.title.message}</p>}
+                {errors.title && (
+                  <p className="text-destructive text-xs mt-1">
+                    {errors.title.message}
+                  </p>
+                )}
               </div>
               <div className="sm:w-48">
-                <select {...register("client_id")} className="input-field w-full">
+                <select
+                  {...register("client_id")}
+                  className="input-field w-full"
+                >
                   <option value="">Assign to client…</option>
-                  {clients?.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                  {clients?.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
                   ))}
                 </select>
-                {errors.client_id && <p className="text-destructive text-xs mt-1">{errors.client_id.message}</p>}
+                {errors.client_id && (
+                  <p className="text-destructive text-xs mt-1">
+                    {errors.client_id.message}
+                  </p>
+                )}
               </div>
               <div className="flex gap-2 shrink-0">
-                <button type="submit" disabled={isSubmitting || createTask.isPending} className="btn-primary">
+                <button
+                  type="submit"
+                  disabled={isSubmitting || createTask.isPending}
+                  className="btn-primary"
+                >
                   <Plus className="w-4 h-4 mr-1" />
                   {createTask.isPending ? "Adding…" : "Add"}
                 </button>
-                <button type="button" onClick={() => { reset(); setQuickPanel(null); }} className="btn-secondary">
+                <button
+                  type="button"
+                  onClick={() => {
+                    reset();
+                    setQuickPanel(null);
+                  }}
+                  className="btn-secondary"
+                >
                   Cancel
                 </button>
               </div>
@@ -1049,26 +1425,44 @@ export default function Dashboard() {
         )}
 
         {/* Log Time panel */}
-        {quickPanel === 'time' && (
+        {quickPanel === "time" && (
           <div className="px-5 py-4">
-            <form onSubmit={handleTimeSubmit(onTimeSubmit)} className="space-y-3">
+            <form
+              onSubmit={handleTimeSubmit(onTimeSubmit)}
+              className="space-y-3"
+            >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="label-text">Client</label>
-                  <select {...registerTime("client_id")} className="input-field">
+                  <select
+                    {...registerTime("client_id")}
+                    className="input-field"
+                  >
                     <option value="">Select client…</option>
-                    {clients?.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                    {clients?.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
-                  {timeErrors.client_id && <p className="text-destructive text-xs mt-1">{timeErrors.client_id.message}</p>}
+                  {timeErrors.client_id && (
+                    <p className="text-destructive text-xs mt-1">
+                      {timeErrors.client_id.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="label-text">Task (optional)</label>
-                  <select {...registerTime("task_id")} className="input-field" disabled={!timeClientId}>
+                  <select
+                    {...registerTime("task_id")}
+                    className="input-field"
+                    disabled={!timeClientId}
+                  >
                     <option value="">No specific task</option>
-                    {tasksForTime.map(t => (
-                      <option key={t.id} value={t.id}>{t.title}</option>
+                    {tasksForTime.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1084,23 +1478,50 @@ export default function Dashboard() {
                     placeholder="e.g. 60"
                     className="input-field"
                   />
-                  {timeErrors.duration_minutes && <p className="text-destructive text-xs mt-1">{timeErrors.duration_minutes.message}</p>}
+                  {timeErrors.duration_minutes && (
+                    <p className="text-destructive text-xs mt-1">
+                      {timeErrors.duration_minutes.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="label-text">Date</label>
-                  <input type="date" {...registerTime("date")} className="input-field" />
-                  {timeErrors.date && <p className="text-destructive text-xs mt-1">{timeErrors.date.message}</p>}
+                  <input
+                    type="date"
+                    {...registerTime("date")}
+                    className="input-field"
+                  />
+                  {timeErrors.date && (
+                    <p className="text-destructive text-xs mt-1">
+                      {timeErrors.date.message}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="label-text">Note (optional)</label>
-                  <input {...registerTime("description")} placeholder="What did you work on?" className="input-field" />
+                  <input
+                    {...registerTime("description")}
+                    placeholder="What did you work on?"
+                    className="input-field"
+                  />
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-1">
-                <button type="button" onClick={() => { resetTime({ date: new Date().toLocaleDateString("sv-SE") }); setQuickPanel(null); }} className="btn-secondary">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetTime({ date: new Date().toLocaleDateString("sv-SE") });
+                    setQuickPanel(null);
+                  }}
+                  className="btn-secondary"
+                >
                   Cancel
                 </button>
-                <button type="submit" disabled={isTimeSubmitting || createTimeEntry.isPending} className="btn-primary">
+                <button
+                  type="submit"
+                  disabled={isTimeSubmitting || createTimeEntry.isPending}
+                  className="btn-primary"
+                >
                   <Timer className="w-4 h-4 mr-1" />
                   {createTimeEntry.isPending ? "Saving…" : "Log Time"}
                 </button>
@@ -1126,27 +1547,48 @@ export default function Dashboard() {
         </div>
 
         {totalLeadCount === 0 ? (
-          <p className="text-sm text-slate-400 italic">No leads yet. <button onClick={() => navigate("/leads")} className="text-blue-500 hover:underline">Add your first lead →</button></p>
+          <p className="text-sm text-slate-400 italic">
+            No leads yet.{" "}
+            <button
+              onClick={() => navigate("/leads")}
+              className="text-blue-500 hover:underline"
+            >
+              Add your first lead →
+            </button>
+          </p>
         ) : (
           <div className="space-y-4">
             {/* Top row: total leads + total value */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Leads</p>
-                <p className="text-2xl font-bold text-slate-900 mt-0.5">{totalLeadCount}</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Total Leads
+                </p>
+                <p className="text-2xl font-bold text-slate-900 mt-0.5">
+                  {totalLeadCount}
+                </p>
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Est. Pipeline Value</p>
-                <p className="text-2xl font-bold text-slate-900 mt-0.5">{formatCurrency(totalPipelineValue)}</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Est. Pipeline Value
+                </p>
+                <p className="text-2xl font-bold text-slate-900 mt-0.5">
+                  {formatCurrency(totalPipelineValue)}
+                </p>
               </div>
             </div>
 
             {/* Leads by stage */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {CRM_STAGES.map(s => (
-                <div key={s.key} className={`rounded-lg border px-3 py-2.5 ${s.pill}`}>
+              {CRM_STAGES.map((s) => (
+                <div
+                  key={s.key}
+                  className={`rounded-lg border px-3 py-2.5 ${s.pill}`}
+                >
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`}
+                    />
                     <span className="text-xs font-medium">{s.label}</span>
                   </div>
                   <p className="text-xl font-bold">{leadsByStatus[s.key]}</p>
@@ -1157,7 +1599,7 @@ export default function Dashboard() {
             {/* Simple pipeline bar */}
             {totalLeadCount > 0 && (
               <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-                {CRM_STAGES.map(s => {
+                {CRM_STAGES.map((s) => {
                   const pct = (leadsByStatus[s.key] / totalLeadCount) * 100;
                   return pct > 0 ? (
                     <div
@@ -1178,29 +1620,58 @@ export default function Dashboard() {
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Clock className="w-5 h-5 text-blue-500" />
-          <h2 className="text-xl font-display font-semibold text-slate-900">Package Hours</h2>
-          <span className="text-xs text-slate-400 font-medium">— current month</span>
+          <h2 className="text-xl font-display font-semibold text-slate-900">
+            Package Hours
+          </h2>
+          <span className="text-xs text-slate-400 font-medium">
+            — current month
+          </span>
         </div>
         {dashClients.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
             <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-lg font-medium text-slate-900">No clients yet</h3>
-            <p className="text-slate-500 mt-1">Add clients to track their package hours here.</p>
+            <h3 className="text-lg font-medium text-slate-900">
+              No clients yet
+            </h3>
+            <p className="text-slate-500 mt-1">
+              Add clients to track their package hours here.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {dashClients.map(client => {
-              const percentage = Math.min(100, Math.round((client.hours_used_this_month / client.monthly_hour_budget) * 100));
+            {dashClients.map((client) => {
+              const percentage = Math.min(
+                100,
+                Math.round(
+                  (client.hours_used_this_month / client.monthly_hour_budget) *
+                    100,
+                ),
+              );
               const isOverBudget = percentage >= 100;
               const isNearBudget = percentage >= 85 && percentage < 100;
 
-              const barColor = isOverBudget ? 'bg-red-500' : isNearBudget ? 'bg-amber-500' : 'bg-blue-500';
-              const badgeColor = isOverBudget ? 'bg-red-100 text-red-700 border-red-200' :
-                isNearBudget ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                  'bg-emerald-50 text-emerald-700 border-emerald-200';
-              const remainingColor = isOverBudget ? 'text-red-600' : isNearBudget ? 'text-amber-600' : 'text-emerald-600';
+              const barColor = isOverBudget
+                ? "bg-red-500"
+                : isNearBudget
+                  ? "bg-amber-500"
+                  : "bg-blue-500";
+              const badgeColor = isOverBudget
+                ? "bg-red-100 text-red-700 border-red-200"
+                : isNearBudget
+                  ? "bg-amber-100 text-amber-700 border-amber-200"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200";
+              const remainingColor = isOverBudget
+                ? "text-red-600"
+                : isNearBudget
+                  ? "text-amber-600"
+                  : "text-emerald-600";
 
-              const serviceLabel = client.service_type === "va" ? "VA" : client.service_type === "bookkeeping" ? "Bookkeeping" : "Hybrid";
+              const serviceLabel =
+                client.service_type === "va"
+                  ? "VA"
+                  : client.service_type === "bookkeeping"
+                    ? "Bookkeeping"
+                    : "Hybrid";
 
               return (
                 <div
@@ -1211,14 +1682,20 @@ export default function Dashboard() {
                   {/* Header */}
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <h3 className="font-semibold text-slate-900">{client.name}</h3>
+                      <h3 className="font-semibold text-slate-900">
+                        {client.name}
+                      </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        <span className="font-medium text-slate-500">{serviceLabel}</span>
+                        <span className="font-medium text-slate-500">
+                          {serviceLabel}
+                        </span>
                         {" · "}
                         {client.monthly_hour_budget}h/mo package
                       </p>
                     </div>
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${badgeColor}`}>
+                    <span
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${badgeColor}`}
+                    >
                       {percentage}%
                     </span>
                   </div>
@@ -1226,8 +1703,12 @@ export default function Dashboard() {
                   {/* Hours numbers */}
                   <div className="flex items-end justify-between mb-2">
                     <div>
-                      <span className="text-2xl font-bold text-slate-900">{client.hours_used_this_month}</span>
-                      <span className="text-sm text-slate-400 ml-1">/ {client.monthly_hour_budget} hrs</span>
+                      <span className="text-2xl font-bold text-slate-900">
+                        {client.hours_used_this_month}
+                      </span>
+                      <span className="text-sm text-slate-400 ml-1">
+                        / {client.monthly_hour_budget} hrs
+                      </span>
                     </div>
                     <span className={`text-sm font-semibold ${remainingColor}`}>
                       {isOverBudget
@@ -1267,34 +1748,53 @@ export default function Dashboard() {
       <div>
         <div className="flex items-center gap-2 mb-4">
           <Activity className="w-5 h-5 text-slate-700" />
-          <h2 className="text-xl font-display font-semibold text-slate-900">Recent Activity</h2>
-          <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5 ml-1">Last 50 actions</span>
+          <h2 className="text-xl font-display font-semibold text-slate-900">
+            Recent Activity
+          </h2>
+          <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5 ml-1">
+            Last 50 actions
+          </span>
         </div>
 
         {auditLogs.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center">
             <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-slate-400 text-sm">No activity yet. Task changes, time logged, and invoice updates will appear here.</p>
+            <p className="text-slate-400 text-sm">
+              No activity yet. Task changes, time logged, and invoice updates
+              will appear here.
+            </p>
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100">
-            {auditLogs.map(log => {
+            {auditLogs.map((log) => {
               const style = ACTION_STYLES[log.action] ?? ACTION_STYLES.updated;
               const Icon = style.icon;
-              const entityLabel = ENTITY_LABELS[log.entity_type] ?? log.entity_type;
+              const entityLabel =
+                ENTITY_LABELS[log.entity_type] ?? log.entity_type;
               return (
-                <div key={log.id} className="flex items-start gap-4 px-5 py-3.5">
-                  <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${style.bg}`}>
+                <div
+                  key={log.id}
+                  className="flex items-start gap-4 px-5 py-3.5"
+                >
+                  <div
+                    className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${style.bg}`}
+                  >
                     <Icon className={`w-3.5 h-3.5 ${style.color}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-slate-800 leading-snug">{log.summary}</p>
+                    <p className="text-sm text-slate-800 leading-snug">
+                      {log.summary}
+                    </p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${style.bg} ${style.color}`}>
+                      <span
+                        className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded ${style.bg} ${style.color}`}
+                      >
                         {entityLabel}
                       </span>
                       {log.user_name && (
-                        <span className="text-xs text-slate-400">by {log.user_name}</span>
+                        <span className="text-xs text-slate-400">
+                          by {log.user_name}
+                        </span>
                       )}
                     </div>
                   </div>
