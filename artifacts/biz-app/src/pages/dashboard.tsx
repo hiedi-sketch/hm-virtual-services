@@ -39,7 +39,6 @@ import {
   Trash2,
   Wallet,
   Hourglass,
-  BadgeDollarSign,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -513,143 +512,54 @@ export default function Dashboard() {
           Here's an overview of your business this month.
         </p>
       </div>
-
-      {/* Notifications */}
-      {(overdueInvoices.length > 0 && !overdueDismissed) ||
-      (overdueTasks.length > 0 && !overdueTasksDismissed) ||
-      followUpLeads.length > 0 ||
-      overdueFollowUpLeads.length > 0 ? (
-        <div className="space-y-2">
-          {/* Overdue follow-ups */}
-          {overdueFollowUpLeads.length > 0 && (
-            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              <Calendar className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-red-700">
-                  {overdueFollowUpLeads.length} overdue follow-up
-                  {overdueFollowUpLeads.length !== 1 ? "s" : ""}
-                </p>
-                <p className="text-xs text-red-500 mt-0.5 truncate">
-                  {overdueFollowUpLeads.map((l) => l.name).join(" · ")}
-                </p>
-              </div>
-              <button
-                onClick={() => navigate("/leads")}
-                className="shrink-0 text-xs font-medium text-red-600 hover:text-red-700 bg-red-100 hover:bg-red-200 px-2.5 py-1 rounded-lg transition-colors"
-              >
-                View
-              </button>
+      {/* Alerts */}
+      <div className="flex flex-wrap gap-4">
+        {/* Box 1 */}
+        <div className="flex-1 min-w-[200px] bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
+          <div className="absolute right-0 top-0 w-24 h-24 bg-blue-500/5 rounded-bl-full -mr-4 -mt-4" />
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+              <Users className="w-6 h-6" />
             </div>
-          )}
-          {/* Upcoming follow-ups */}
-          {followUpLeads.length > 0 && (
-            <div className="bg-white border border-blue-200 rounded-xl px-4 py-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Calendar className="w-4 h-4 text-blue-500 shrink-0" />
-                <p className="text-sm font-semibold text-blue-700">
-                  {followUpLeads.length} follow-up
-                  {followUpLeads.length !== 1 ? "s" : ""} due this week
-                </p>
-                <button
-                  onClick={() => navigate("/leads")}
-                  className="ml-auto text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-                >
-                  View all →
-                </button>
-              </div>
-              <ul className="space-y-1">
-                {followUpLeads.map((l) => {
-                  const d = new Date(l.follow_up_date! + "T00:00:00");
-                  const diffDays = Math.round(
-                    (d.getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000,
-                  );
-                  return (
-                    <li
-                      key={l.id}
-                      className="flex items-center gap-2 text-xs text-slate-600"
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                      <span className="font-medium truncate">{l.name}</span>
-                      <span className="ml-auto shrink-0 text-slate-400">
-                        {diffDays === 0
-                          ? "Today"
-                          : diffDays === 1
-                            ? "Tomorrow"
-                            : `In ${diffDays} days`}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Active Clients</p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalClients}</h3>
             </div>
-          )}
-          {(overdueTasks.length > 0 || tasksDueToday.length > 0 || tasksDueTomorrow.length > 0) && (
-          <div
-            onClick={() => navigate("/tasks")}
-            className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 cursor-pointer hover:bg-amber-100 transition-colors"
-          >
-            {/* Top row: title + icon left, view all right */}
-            <div className="w-full flex justify-between items-center">
-              <div className="flex items-center gap-1">
-               {/* Hourglass icon */}
-               <Hourglass className="w-4 h-4 text-amber-500" />
-              <p className="text-sm font-semibold text-amber-700">
-               Task Summary
-              </p>
-           </div>
-
-         <span className="text-xs font-medium text-amber-600 hover:text-amber-700">
-        View All →
-      </span>
-    </div>
-
-      {/* Counts */}
-      <div className="flex justify-between mt-2 text-xs text-amber-600">
-        <div className="flex flex-col items-center">
-         <span className="font-bold text-amber-700">{overdueTasks.length}</span>
-         <span>Overdue</span>
-      </div>
-      <div className="flex flex-col items-center">
-        <span className="font-bold text-amber-700">{tasksDueToday.length}</span>
-        <span>Due Today</span>
-      </div>
-      <div className="flex flex-col items-center">
-        <span className="font-bold text-amber-700">{tasksDueTomorrow.length}</span>
-        <span>Due Tomorrow</span>
-      </div>
-    </div>
-  </div>
-  )}          
-          {overdueInvoices.length > 0 && !overdueDismissed && (
-            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-              {/* Wallet */}
-              <Wallet className="w-4 h-4 text-green-500" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-red-700">
-                  {overdueInvoices.length} overdue invoice
-                  {overdueInvoices.length !== 1 ? "s" : ""} —{" "}
-                  {formatCurrency(overdueTotal)} outstanding
-                </p>
-                <p className="text-xs text-red-500 mt-0.5">
-                  {overdueInvoices
-                    .map(
-                      (i) => clientMap[i.client_id] ?? `Client #${i.client_id}`,
-                    )
-                    .join(", ")}
-                </p>
-              </div>
-              <button
-                onClick={() => setOverdueDismissed(true)}
-                className="shrink-0 text-red-300 hover:text-red-500 transition-colors"
-                aria-label="Dismiss"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          )}
+          </div>
         </div>
-      ) : null}
 
+        {/* Box 2 */}
+        <div className="flex-1 min-w-[200px] bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
+          <div className="absolute right-0 top-0 w-24 h-24 bg-green-500/5 rounded-bl-full -mr-4 -mt-4" />
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-green-50 text-green-600 rounded-xl">
+              <DollarSign className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-500">Revenue</p>
+              <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalRevenue}</h3>
+            </div>
+          </div>
+        </div>
+
+      {/* Box 3 */}
+      <div className="flex-1 min-w-[200px] bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
+        <div className="absolute right-0 top-0 w-24 h-24 bg-purple-500/5 rounded-bl-full -mr-4 -mt-4" />
+
+        <div className="flex items-center gap-4">
+          {/* Icon */}
+          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl">
+            <Clipboard className="w-6 h-6" />
+          </div>
+
+          {/* Text content */}
+          <div>
+            <p className="text-sm font-medium text-slate-500">Tasks</p>
+            <h3 className="text-2xl font-bold text-slate-900 mt-0.5">{totalTasks}</h3>
+          </div>
+        </div>
+      </div>
+      
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm relative overflow-hidden group hover:border-blue-200 transition-colors">
@@ -1814,7 +1724,7 @@ export default function Dashboard() {
                   </span>
                 </div>
               );
-            })}
+                    })}
           </div>
         )}
       </div>
