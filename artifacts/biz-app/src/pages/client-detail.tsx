@@ -28,6 +28,7 @@ import {
   Check,
   Paperclip,
   DollarSign,
+  Computer,
 } from "lucide-react";
 import { SubtaskList } from "@/components/SubtaskList";
 import { DocumentsTab } from "@/components/DocumentsTab";
@@ -74,6 +75,7 @@ export default function ClientDetail() {
   // Edit profile state
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [editHasBK, setEditHasBK] = useState(false);
   const [editHasVA, setEditHasVA] = useState(false);
   const [editBkFee, setEditBkFee] = useState<string>("");
@@ -192,6 +194,7 @@ export default function ClientDetail() {
       data: {
         name: editName.trim() || undefined,
         email: editEmail.trim() || undefined,
+        phone: editPhone.trim() || undefined,
         service_type: serviceType as any,
         bk_fee: bkFee,
         va_hourly_rate: vaRate,
@@ -243,7 +246,7 @@ export default function ClientDetail() {
       </button>
 
       {/* Client Header */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6">
         {showEditProfile ? (
           <form onSubmit={handleEditProfileSubmit} className="space-y-4">
             <div className="flex items-center justify-between mb-2">
@@ -262,6 +265,16 @@ export default function ClientDetail() {
                 <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
                 <input type="email" className={inputCls} value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="email@example.com" />
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+              <input
+                type="tel"
+                className={inputCls}
+                value={editPhone}
+                onChange={e => setEditPhone(e.target.value)}
+                placeholder="(555) 123-4567"
+                />
             </div>
 
             {/* Service checkboxes */}
@@ -344,13 +357,12 @@ export default function ClientDetail() {
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
                       <DollarSign className="w-3 h-3" />
                       Bookkeeping
-                      {client.bk_fee != null && <span className="ml-1 font-normal text-emerald-600">{formatCurrency(client.bk_fee)}/mo</span>}
                     </span>
                   )}
                   {hasVA && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border"
                       style={{ backgroundColor: "hsl(188 51% 30% / 0.07)", borderColor: "hsl(188 51% 30% / 0.2)", color: "#266b75" }}>
-                      <Clock className="w-3 h-3" />
+                      <Computer className="w-3 h-3" />
                       VA
                       {client.va_hourly_rate != null && <span className="ml-1 font-normal">{formatCurrency(client.va_hourly_rate)}/hr</span>}
                       {client.va_hour_limit != null && <span className="font-normal text-slate-400"> · {client.va_hour_limit}h cap</span>}

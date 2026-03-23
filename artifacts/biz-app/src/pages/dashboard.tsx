@@ -509,6 +509,7 @@ export default function Dashboard() {
     .filter((l) => l.status === "closed")
     .reduce((s, l) => s + (l.estimated_value ?? 0), 0);
 
+  
   return (
     <div className="space-y-8">
       <div>
@@ -519,12 +520,212 @@ export default function Dashboard() {
           Here's an overview of your business this month.
         </p>
       </div>
+      {/* Quick Actions */}
+      <div className="bg-white rounded-2xl border border-slate-400 shadow-xl overflow-hidden">
+        {/* Trigger buttons */}
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-300 bg-slate-50/50">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-800 mr-1">
+            Quick Actions
+          </span>
+          <button
+            onClick={() => setQuickPanel(quickPanel === "task" ? null : "task")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+              quickPanel === "task"
+                ? "bg-[#266b75] text-white shadow-sm"
+                : "bg-white text-slate-700 border border-slate-400 shadow-xl hover:bg-slate-50 hover:border-slate-300",
+            )}
+          >
+            <CheckSquare className="w-4 h-4" />
+            Add Task
+          </button>
+          <button
+            onClick={() => setQuickPanel(quickPanel === "time" ? null : "time")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+              quickPanel === "time"
+                ? "bg-[#266b75] text-white shadow-sm"
+                : "bg-white text-slate-700 border border-slate-400 shadow-xl hover:bg-slate-50 hover:border-slate-300",
+            )}
+          >
+            <Timer className="w-4 h-4" />
+            Log Time
+          </button>
+        </div>
+
+        {/* Add Task panel */}
+        {quickPanel === "task" && (
+          <div className="px-5 py-4 border-b border-slate-400">
+            <form
+              onSubmit={handleSubmit(onSubmit)}
+              className="flex flex-col sm:flex-row gap-3"
+            >
+              <div className="flex-1">
+                <input
+                  {...register("title")}
+                  placeholder="Task title…"
+                  className="input-field w-full"
+                  autoFocus
+                />
+                {errors.title && (
+                  <p className="text-destructive text-xs mt-1">
+                    {errors.title.message}
+                  </p>
+                )}
+              </div>
+              <div className="sm:w-48">
+                <select
+                  {...register("client_id")}
+                  className="input-field w-full"
+                >
+                  <option value="">Assign to client…</option>
+                  {clients?.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.client_id && (
+                  <p className="text-destructive text-xs mt-1">
+                    {errors.client_id.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="submit"
+                  disabled={isSubmitting || createTask.isPending}
+                  className="btn-primary"
+                >
+                  <Plus className="w-4 h-4 mr-1" />
+                  {createTask.isPending ? "Adding…" : "Add"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    reset();
+                    setQuickPanel(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Log Time panel */}
+        {quickPanel === "time" && (
+          <div className="px-5 py-4">
+            <form
+              onSubmit={handleTimeSubmit(onTimeSubmit)}
+              className="space-y-3"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="label-text">Client</label>
+                  <select
+                    {...registerTime("client_id")}
+                    className="input-field"
+                  >
+                    <option value="">Select client…</option>
+                    {clients?.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                  {timeErrors.client_id && (
+                    <p className="text-destructive text-xs mt-1">
+                      {timeErrors.client_id.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="label-text">Task (optional)</label>
+                  <select
+                    {...registerTime("task_id")}
+                    className="input-field"
+                    disabled={!timeClientId}
+                  >
+                    <option value="">No specific task</option>
+                    {tasksForTime.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="label-text">Duration (minutes)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    {...registerTime("duration_minutes")}
+                    placeholder="e.g. 60"
+                    className="input-field"
+                  />
+                  {timeErrors.duration_minutes && (
+                    <p className="text-destructive text-xs mt-1">
+                      {timeErrors.duration_minutes.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="label-text">Date</label>
+                  <input
+                    type="date"
+                    {...registerTime("date")}
+                    className="input-field"
+                  />
+                  {timeErrors.date && (
+                    <p className="text-destructive text-xs mt-1">
+                      {timeErrors.date.message}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="label-text">Note (optional)</label>
+                  <input
+                    {...registerTime("description")}
+                    placeholder="What did you work on?"
+                    className="input-field"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetTime({ date: new Date().toLocaleDateString("sv-SE") });
+                    setQuickPanel(null);
+                  }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isTimeSubmitting || createTimeEntry.isPending}
+                  className="btn-primary"
+                >
+                  <Timer className="w-4 h-4 mr-1" />
+                  {createTimeEntry.isPending ? "Saving…" : "Log Time"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+      </div>
       <div
-        className={`bg-white rounded-2xl p-5 border shadow-xl flex items-center gap-4 hover:border-red-400 transition-all duration-500 cursor-pointer ${
+        className={`"w-full max-w-sm bg-red-100 flex items-center rounded-2xl p-6 border shadow-xl ${
           flashOverdue
-            ? "border-red-600 ring-4 ring-red-300 animate-pulse"
-            : "border-red-800"
-        }`}
+          ? "shadow-red-500/50 shadow-lg border-red-600 animate-[bounce_0.3s_1000]" 
+          : "border-red-800"}`}
         onClick={() => navigate("/tasks")}
       >
         <div className="p-3 text-red-800 rounded-xl shrink-0">
@@ -719,11 +920,11 @@ export default function Dashboard() {
       )}
 
       {/* Goals */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <div className="bg-white rounded-2xl border border-slate-400 shadow-xl p-6">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <Target className="w-5 h-5 text-blue-500" />
-            <h2 className="font-semibold text-slate-900">Monthly Goals</h2>
+            <Target className="w-8 h-8 text-[#266b75]" />
+            <h2 className="font-semibold text-white-">Monthly Goals</h2>
           </div>
           {editingGoals ? (
             <div className="flex items-center gap-2">
@@ -745,7 +946,7 @@ export default function Dashboard() {
           ) : (
             <button
               onClick={openGoalEdit}
-              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors"
+              className="flex items-center gap-1.5 text-xs font-medium bg-[#266b75 text-white-800 hover:text-slate-900 px-3 py-1.5 rounded-lg border border-slate-400 hover:border-slate-300 transition-colors"
             >
               <Pencil className="w-3.5 h-3.5" />
               Edit Goals
@@ -769,7 +970,7 @@ export default function Dashboard() {
                 placeholder="e.g. 4000"
                 autoFocus
               />
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-xs text-slate-800 mt-1">
                 Tracks paid + projected invoices
               </p>
             </div>
@@ -796,7 +997,7 @@ export default function Dashboard() {
             {/* ── Monthly Income Goal ── */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-800">
                   Monthly Income
                 </p>
                 {incomeGoalMet ? (
@@ -804,7 +1005,7 @@ export default function Dashboard() {
                     Goal met!
                   </span>
                 ) : (
-                  <span className="text-xs font-medium text-slate-400">
+                  <span className="text-xs font-medium text-slate-800">
                     {incomePaidPct}% collected
                   </span>
                 )}
@@ -820,7 +1021,7 @@ export default function Dashboard() {
                 </div>
                 {totalUnpaid > 0 && (
                   <div className="flex items-baseline gap-1.5 mt-0.5">
-                    <span className="text-base font-semibold text-blue-500">
+                    <span className="text-base font-bold text-[#7dbdc6]">
                       +{formatCurrency(totalUnpaid)}
                     </span>
                     <span className="text-xs text-slate-400">
@@ -839,13 +1040,13 @@ export default function Dashboard() {
 
               {/* Stacked bar: projected (light) behind collected (solid) */}
               <div className="space-y-1">
-                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden relative">
+                <div className="h-3 w-full bg-slate-200 rounded-full overflow-hidden relative">
                   <div
-                    className="absolute inset-y-0 left-0 bg-blue-200 rounded-full transition-all duration-500"
+                    className="absolute inset-y-0 left-0 bg-slate-300 rounded-full transition-all duration-500"
                     style={{ width: `${incomeProjectedPct}%` }}
                   />
                   <div
-                    className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${incomeGoalMet ? "bg-emerald-500" : "bg-blue-500"}`}
+                    className={`absolute inset-y-0 left-0 rounded-full transition-all duration-500 ${incomeGoalMet ? "bg-emerald-500" : "bg-[#7dbdc6]"}`}
                     style={{ width: `${incomePaidPct}%` }}
                   />
                 </div>
@@ -853,13 +1054,13 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3 text-xs text-slate-400">
                     <span className="flex items-center gap-1">
                       <span
-                        className={`w-2 h-2 rounded-full inline-block ${incomeGoalMet ? "bg-emerald-500" : "bg-blue-500"}`}
+                        className={`w-2 h-2 rounded-full inline-block ${incomeGoalMet ? "bg-emerald-500" : "bg-[#7dbdc6]"}`}
                       />
                       Collected
                     </span>
                     {totalUnpaid > 0 && (
                       <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-200 inline-block" />
+                        <span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />
                         Unpaid / projected
                       </span>
                     )}
@@ -885,7 +1086,7 @@ export default function Dashboard() {
             {/* ── Active Clients Goal ── */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-800">
                   Active Clients
                 </p>
                 {clientGoalMet ? (
@@ -893,7 +1094,7 @@ export default function Dashboard() {
                     Goal met!
                   </span>
                 ) : (
-                  <span className="text-xs font-medium text-slate-400">
+                  <span className="text-xs font-medium text-slate-900">
                     {clientPct}% of target
                   </span>
                 )}
@@ -922,7 +1123,7 @@ export default function Dashboard() {
               <div className="space-y-1">
                 <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-500 ${clientGoalMet ? "bg-emerald-500" : "bg-violet-500"}`}
+                    className={`h-full rounded-full transition-all duration-500 ${clientGoalMet ? "bg-emerald-500" : "bg-[#266b75]"}`}
                     style={{ width: `${clientPct}%` }}
                   />
                 </div>
@@ -953,15 +1154,15 @@ export default function Dashboard() {
       {/* ── Analytics ────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Card 1 — Task Completion */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+        <div className="bg-white rounded-2xl border border-slate-400 shadow-xl p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-              <CheckCircle2 className="w-4 h-4" />
+            <div className="p-2 bg-white text-[#266b75] rounded-lg">
+              <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h2 className="font-semibold text-slate-900 text-sm">
+            <h2 className="font-semibold text-slate-900 text-m">
               Task Completion
             </h2>
-            <span className="ml-auto text-xs text-slate-400">
+            <span className="ml-auto text-xs text-slate-600">
               {totalTaskCount} total
             </span>
           </div>
@@ -974,10 +1175,10 @@ export default function Dashboard() {
                 style={{
                   background:
                     totalTaskCount === 0
-                      ? "#e2e8f0"
+                      ? "#266b75"
                       : completedPct === 100
-                        ? "#22c55e"
-                        : `conic-gradient(#22c55e 0% ${completedPct}%, #f1f5f9 ${completedPct}% 100%)`,
+                        ? "#266b75"
+                        : `conic-gradient(#266b75 0% ${completedPct}%, #c8c7cb ${completedPct}% 100%)`,
                 }}
               />
               <div className="absolute inset-0 flex items-center justify-center">
@@ -996,7 +1197,7 @@ export default function Dashboard() {
             <div className="flex-1 space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#266b75] shrink-0" />
                   <span className="text-sm text-slate-600">Completed</span>
                 </div>
                 <span className="text-sm font-bold text-slate-900">
@@ -1006,7 +1207,7 @@ export default function Dashboard() {
               <div className="h-px bg-slate-100" />
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-slate-200 shrink-0" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#c8c7cb] shrink-0" />
                   <span className="text-sm text-slate-600">Pending</span>
                 </div>
                 <span className="text-sm font-bold text-slate-900">
@@ -1014,7 +1215,7 @@ export default function Dashboard() {
                 </span>
               </div>
               {completedPct === 100 && totalTaskCount > 0 && (
-                <p className="text-xs font-semibold text-emerald-600">
+                <p className="text-xs font-semibold text-[#266b75]">
                   All tasks complete!
                 </p>
               )}
@@ -1023,9 +1224,9 @@ export default function Dashboard() {
 
           {/* Mini stacked bar */}
           {totalTaskCount > 0 && (
-            <div className="h-2 w-full rounded-full overflow-hidden flex bg-slate-100">
+            <div className="h-2 w-full rounded-full overflow-hidden flex bg-[#c8c7cb]">
               <div
-                className="h-full bg-emerald-500 transition-all duration-500"
+                className="h-full bg-[#266b75] transition-all duration-500"
                 style={{ width: `${completedPct}%` }}
               />
             </div>
@@ -1033,15 +1234,15 @@ export default function Dashboard() {
         </div>
 
         {/* Card 2 — Lead Pipeline */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+        <div className="bg-white rounded-2xl border border-slate-400 shadow-xl p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-violet-50 text-violet-600 rounded-lg">
-              <TrendingUp className="w-4 h-4" />
+            <div className="p-2 bg-white text-[#266b75] rounded-lg">
+              <TrendingUp className="w-8 h-8" />
             </div>
-            <h2 className="font-semibold text-slate-900 text-sm">
+            <h2 className="font-semibold text-slate-900 text-m">
               Lead Pipeline
             </h2>
-            <span className="ml-auto text-xs text-slate-400">
+            <span className="ml-auto text-xs text-slate-600">
               {totalLeadCount} leads
             </span>
           </div>
@@ -1090,15 +1291,15 @@ export default function Dashboard() {
         </div>
 
         {/* Card 3 — Hours This Month */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 flex flex-col gap-4">
+        <div className="bg-white rounded-2xl border border-slate-400 shadow-xl p-6 flex flex-col gap-4">
           <div className="flex items-center gap-2">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-              <Clock className="w-4 h-4" />
+            <div className="p-2 bg-white text-[#7dbdc6] rounded-lg">
+              <Clock className="w-8 h-8" />
             </div>
-            <h2 className="font-semibold text-slate-900 text-sm">
+            <h2 className="font-semibold text-slate-900 text-m">
               Hours This Month
             </h2>
-            <span className="ml-auto text-xs text-slate-400">
+            <span className="ml-auto text-xs text-slate-600">
               {hoursPct}% of budget
             </span>
           </div>
@@ -1109,13 +1310,13 @@ export default function Dashboard() {
               <span className="text-2xl font-bold text-slate-900">
                 {totalHoursUsed}h
               </span>
-              <span className="text-sm text-slate-400">
+              <span className="text-sm text-slate-600">
                 of {totalHoursBudgeted}h budgeted
               </span>
             </div>
-            <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+            <div className="h-3 w-full bg-[#c8c7cb] rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-500 ${hoursPct >= 100 ? "bg-red-500" : hoursPct >= 85 ? "bg-amber-500" : "bg-blue-500"}`}
+                className={`h-full rounded-full transition-all duration-500 ${hoursPct >= 100 ? "bg-red-500" : hoursPct >= 85 ? "bg-amber-500" : "bg-[#7dbdc6]"}`}
                 style={{ width: `${hoursPct}%` }}
               />
             </div>
@@ -1140,7 +1341,7 @@ export default function Dashboard() {
                     ? "bg-red-400"
                     : cPct >= 85
                       ? "bg-amber-400"
-                      : "bg-blue-400";
+                      : "bg-[#7dbdc6]";
                 return (
                   <div key={c.client_id} className="space-y-1">
                     <div className="flex items-center justify-between">
@@ -1151,7 +1352,7 @@ export default function Dashboard() {
                         {c.hours_used_this_month}h / {c.monthly_hour_budget}h
                       </span>
                     </div>
-                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-1.5 w-full bg-[#c8c7cb] rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all duration-500 ${color}`}
                         style={{ width: `${cPct}%` }}
@@ -1165,16 +1366,16 @@ export default function Dashboard() {
         </div>
 
         {/* Card 4 — Overdue Tasks */}
-        <div className={`bg-white rounded-2xl border shadow-sm p-6 flex flex-col gap-4 transition-all duration-500 ${
+        <div className={`bg-white rounded-2xl border border-slate-400 shadow-xl p-6 flex flex-col gap-4 transition-all duration-500 ${
           flashOverdue && sortedOverdueTasks.length > 0
             ? "border-red-400 ring-2 ring-red-200 animate-pulse"
-            : "border-slate-200"
+            : "border-slate-400"
         }`}>
           <div className="flex items-center gap-2">
             <div
-              className={`p-2 rounded-lg ${sortedOverdueTasks.length > 0 ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-400"}`}
+              className={`p-2 rounded-lg ${sortedOverdueTasks.length > 0 ? "bg-white text-red-600" : "bg-slate-50 text-slate-400"}`}
             >
-              <TriangleAlert className="w-4 h-4" />
+              <TriangleAlert className="w-8 h-8" />
             </div>
             <h2 className="font-semibold text-slate-900 text-sm">
               Overdue Tasks
@@ -1243,297 +1444,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Trigger buttons */}
-        <div className="flex items-center gap-2 px-5 py-3 border-b border-slate-100 bg-slate-50/50">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">
-            Quick Actions
-          </span>
-          <button
-            onClick={() => setQuickPanel(quickPanel === "task" ? null : "task")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-              quickPanel === "task"
-                ? "bg-blue-600 text-white shadow-sm"
-                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300",
-            )}
-          >
-            <CheckSquare className="w-4 h-4" />
-            Add Task
-          </button>
-          <button
-            onClick={() => setQuickPanel(quickPanel === "time" ? null : "time")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-              quickPanel === "time"
-                ? "bg-violet-600 text-white shadow-sm"
-                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300",
-            )}
-          >
-            <Timer className="w-4 h-4" />
-            Log Time
-          </button>
-        </div>
 
-        {/* Add Task panel */}
-        {quickPanel === "task" && (
-          <div className="px-5 py-4 border-b border-slate-100">
-            <form
-              onSubmit={handleSubmit(onSubmit)}
-              className="flex flex-col sm:flex-row gap-3"
-            >
-              <div className="flex-1">
-                <input
-                  {...register("title")}
-                  placeholder="Task title…"
-                  className="input-field w-full"
-                  autoFocus
-                />
-                {errors.title && (
-                  <p className="text-destructive text-xs mt-1">
-                    {errors.title.message}
-                  </p>
-                )}
-              </div>
-              <div className="sm:w-48">
-                <select
-                  {...register("client_id")}
-                  className="input-field w-full"
-                >
-                  <option value="">Assign to client…</option>
-                  {clients?.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.client_id && (
-                  <p className="text-destructive text-xs mt-1">
-                    {errors.client_id.message}
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button
-                  type="submit"
-                  disabled={isSubmitting || createTask.isPending}
-                  className="btn-primary"
-                >
-                  <Plus className="w-4 h-4 mr-1" />
-                  {createTask.isPending ? "Adding…" : "Add"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    reset();
-                    setQuickPanel(null);
-                  }}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Log Time panel */}
-        {quickPanel === "time" && (
-          <div className="px-5 py-4">
-            <form
-              onSubmit={handleTimeSubmit(onTimeSubmit)}
-              className="space-y-3"
-            >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="label-text">Client</label>
-                  <select
-                    {...registerTime("client_id")}
-                    className="input-field"
-                  >
-                    <option value="">Select client…</option>
-                    {clients?.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  {timeErrors.client_id && (
-                    <p className="text-destructive text-xs mt-1">
-                      {timeErrors.client_id.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="label-text">Task (optional)</label>
-                  <select
-                    {...registerTime("task_id")}
-                    className="input-field"
-                    disabled={!timeClientId}
-                  >
-                    <option value="">No specific task</option>
-                    {tasksForTime.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="label-text">Duration (minutes)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    {...registerTime("duration_minutes")}
-                    placeholder="e.g. 60"
-                    className="input-field"
-                  />
-                  {timeErrors.duration_minutes && (
-                    <p className="text-destructive text-xs mt-1">
-                      {timeErrors.duration_minutes.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="label-text">Date</label>
-                  <input
-                    type="date"
-                    {...registerTime("date")}
-                    className="input-field"
-                  />
-                  {timeErrors.date && (
-                    <p className="text-destructive text-xs mt-1">
-                      {timeErrors.date.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="label-text">Note (optional)</label>
-                  <input
-                    {...registerTime("description")}
-                    placeholder="What did you work on?"
-                    className="input-field"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetTime({ date: new Date().toLocaleDateString("sv-SE") });
-                    setQuickPanel(null);
-                  }}
-                  className="btn-secondary"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isTimeSubmitting || createTimeEntry.isPending}
-                  className="btn-primary"
-                >
-                  <Timer className="w-4 h-4 mr-1" />
-                  {createTimeEntry.isPending ? "Saving…" : "Log Time"}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-      </div>
-
-      {/* CRM Pipeline Summary */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-blue-500" />
-            <h2 className="font-semibold text-slate-900">CRM Pipeline</h2>
-          </div>
-          <button
-            onClick={() => navigate("/leads")}
-            className="text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
-          >
-            View all →
-          </button>
-        </div>
-
-        {totalLeadCount === 0 ? (
-          <p className="text-sm text-slate-400 italic">
-            No leads yet.{" "}
-            <button
-              onClick={() => navigate("/leads")}
-              className="text-blue-500 hover:underline"
-            >
-              Add your first lead →
-            </button>
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {/* Top row: total leads + total value */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Total Leads
-                </p>
-                <p className="text-2xl font-bold text-slate-900 mt-0.5">
-                  {totalLeadCount}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                  Est. Pipeline Value
-                </p>
-                <p className="text-2xl font-bold text-slate-900 mt-0.5">
-                  {formatCurrency(totalPipelineValue)}
-                </p>
-              </div>
-            </div>
-
-            {/* Leads by stage */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {CRM_STAGES.map((s) => (
-                <div
-                  key={s.key}
-                  className={`rounded-lg border px-3 py-2.5 ${s.pill}`}
-                >
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`}
-                    />
-                    <span className="text-xs font-medium">{s.label}</span>
-                  </div>
-                  <p className="text-xl font-bold">{leadsByStatus[s.key]}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Simple pipeline bar */}
-            {totalLeadCount > 0 && (
-              <div className="flex h-2 rounded-full overflow-hidden gap-0.5">
-                {CRM_STAGES.map((s) => {
-                  const pct = (leadsByStatus[s.key] / totalLeadCount) * 100;
-                  return pct > 0 ? (
-                    <div
-                      key={s.key}
-                      className={`h-full ${s.dot} transition-all`}
-                      style={{ width: `${pct}%` }}
-                      title={`${s.label}: ${leadsByStatus[s.key]}`}
-                    />
-                  ) : null;
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Package Hours */}
-      <div>
+          <div>
         <div className="flex items-center gap-2 mb-4">
-          <Clock className="w-5 h-5 text-blue-500" />
+          <Clock className="w-8 h-8 text-[#266b75]" />
           <h2 className="text-xl font-display font-semibold text-slate-900">
             Package Hours
           </h2>
@@ -1542,7 +1456,7 @@ export default function Dashboard() {
           </span>
         </div>
         {dashClients.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
+          <div className="bg-white rounded-2xl border border-dashed border-slate-400 p-12 text-center">
             <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-slate-900">
               No clients yet
@@ -1568,7 +1482,7 @@ export default function Dashboard() {
                 ? "bg-red-500"
                 : isNearBudget
                   ? "bg-amber-500"
-                  : "bg-blue-500";
+                  : "bg-[#266b75]";
               const badgeColor = isOverBudget
                 ? "bg-red-100 text-red-700 border-red-200"
                 : isNearBudget
@@ -1591,7 +1505,7 @@ export default function Dashboard() {
                 <div
                   key={client.id}
                   onClick={() => navigate(`/clients/${client.id}`)}
-                  className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm cursor-pointer hover:border-blue-200 transition-colors"
+                  className="bg-white rounded-2xl p-5 border border-slate-400 shadow-xl cursor-pointer hover:border-blue-200 transition-colors"
                 >
                   {/* Header */}
                   <div className="flex justify-between items-start mb-3">
@@ -1632,7 +1546,7 @@ export default function Dashboard() {
                   </div>
 
                   {/* Progress bar */}
-                  <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-2 w-full bg-[#c8c7cb] rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${barColor}`}
                       style={{ width: `${percentage}%` }}
@@ -1661,7 +1575,7 @@ export default function Dashboard() {
       {/* Recent Activity */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <Activity className="w-5 h-5 text-slate-700" />
+          <Activity className="w-8 h-8 text-[#7dbdc6]" />
           <h2 className="text-xl font-display font-semibold text-slate-900">
             Recent Activity
           </h2>
@@ -1671,7 +1585,7 @@ export default function Dashboard() {
         </div>
 
         {auditLogs.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center">
+          <div className="bg-white rounded-2xl border border-slate-400 shadow-xl p-10 text-center">
             <Activity className="w-8 h-8 text-slate-300 mx-auto mb-2" />
             <p className="text-slate-400 text-sm">
               No activity yet. Task changes, time logged, and invoice updates
@@ -1679,7 +1593,7 @@ export default function Dashboard() {
             </p>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100">
+          <div className="bg-white rounded-2xl border border-slate-400 shadow-xl divide-y divide-slate-100">
             {auditLogs.map((log) => {
               const style = ACTION_STYLES[log.action] ?? ACTION_STYLES.updated;
               const Icon = style.icon;
