@@ -1,39 +1,28 @@
-import { useState } from "react";
-import { useParams, useLocation } from "wouter";
+import { useState, useEffect } from "react";
+import { useParams } from "wouter";
 import {
   useGetClient,
   useListTasks,
   useUpdateTask,
   useCreateTask,
-  useUpdateClient,
-  useGetDashboard,
   getListTasksQueryKey,
-  getGetClientQueryKey,
-  Task,
+  Task as ApiTask,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import {
-  ArrowLeft,
-  Clock,
-  CheckCircle2,
-  Circle,
-  Calendar,
-  User as UserIcon,
-  AlertCircle,
-  Mail,
-  Plus,
-  Pencil,
-  X,
-  Check,
-  Paperclip,
-  DollarSign,
-  Computer,
-} from "lucide-react";
+
+import TaskTable from "./TaskTable";
 import { SubtaskList } from "@/components/SubtaskList";
-import { DocumentsTab } from "@/components/DocumentsTab";
-import { formatCurrency } from "@/lib/utils";
-import TaskTable from "@/components/TaskTable";
+import { Plus, CheckCircle2, Circle } from "lucide-react";
+
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  due_date?: string;
+  assigned_to?: string;
+  completed: boolean;
+}
 
 function isWeekday(d: Date): boolean {
   const day = d.getDay();
@@ -109,68 +98,6 @@ export default function ClientDetail() {
     }
   };
 
-  const spawnNextTask = useCreateTask({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-        toast({ title: "Next occurrence scheduled" });
-      },
-    },
-  });
-
-  const createTaskMutation = useCreateTask({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
-        setNewTaskTitle(""); setNewTaskDesc(""); setNewTaskDueDate("");
-        setShowNewTaskForm(false);
-        toast({ title: "Task created" });
-      },
-    },
-  });
-
-  const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "completed">("all");
-
-  const updateClientMutation = useUpdateClient({
-    mutation: {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetClientQueryKey(clientId) });
-        setShowEditProfile(false);
-        toast({ title: "Profile updated" });
-      },
-    },
-  });
-
-  const toggleStatus = (task: Task) => {
-    const completing = task.status === "pending";
-    updateTask.mutate({ id: task.id, data: { status: completing ? "complete" : "pending" } });
-    if (completing && task.recurrence) {
-      spawnNextTask.mutate({
-        data: {
-          title: task.title,
-          description: task.description ?? undefined,
-          client_id: task.client_id,
-          assigned_to: task.assigned_to ?? undefined,
-          recurrence: task.recurrence,
-          due_date: nextDueDate(task.recurrence),
-        },
-      });
-    }
-  };
-
-  const handleNewTaskSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
-    createTaskMutation.mutate({
-      data: {
-        title: newTaskTitle.trim(),
-        description: newTaskDesc.trim() || undefined,
-        due_date: newTaskDueDate || undefined,
-        client_id: clientId,
-      },
-    });
-  };
-
   const openEditProfile = () => {
     if (!client) return;
     setEditName(client.name);
@@ -213,11 +140,11 @@ export default function ClientDetail() {
     });
   };
 
-  const filteredTasks = tasks?.filter(task => {
-    if (taskFilter === "pending") return !task.completed;
-    if (taskFilter === "completed") return task.completed;
+  const filteredTasks = (tasks ?? []).filter(task => {
+    if (taskFilter === "pending") return task.status !== "complete";
+    if (taskFilter === "completed") return task.status === "complete";
     return true;
-  }) || [];
+  });
 
   if (clientLoading) {
     return (
@@ -361,6 +288,10 @@ export default function ClientDetail() {
                     <Mail className="w-3.5 h-3.5" />
                     {client.email}
                   </span>
+                  <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                    <Phone className="w-3.5 h-3.5" />
+                    {client.phone}
+                  </span>
                 </div>
                 {/* Service package badges */}
                 <div className="flex flex-wrap gap-2 mt-2">
@@ -491,48 +422,69 @@ export default function ClientDetail() {
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
-        {/* Header + Filters */}
-        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-          <span className="font-semibold text-slate-900 text-sm">Client Tasks</span>
+          {/* Header + Filters */}
+          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+            <span className="font-semibold text-slate-900 text-sm">Client Tasks</span>
 
-          <div className="ml-auto flex gap-2">
-            {["all", "pending", "completed"].map(filter => (
-              <button
-                key={filter}
-                onClick={() => setTaskFilter(filter as any)}
-                className={`text-xs px-2 py-1 rounded-full border ${
-                  taskFilter === filter
-                    ? "bg-primary text-white border-primary"
-                    : "bg-white text-slate-500 border-slate-200"
-                }`}
-              >
-                {filter.charAt(0).toUpperCase() + filter.slice(1)}
-              </button>
-            ))}
+            <div className="ml-auto flex gap-2">
+              {["all", "pending", "completed"].map(filter => (
+                <button
+                  key={filter}
+                  onClick={() => setTaskFilter(filter as any)}
+                  className={`text-xs px-2 py-1 rounded-full border ${
+                    taskFilter === filter
+                      ? "bg-primary text-white border-primary"
+                      : "bg-white text-slate-500 border-slate-200"
+                  }`}
+                >
+                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* New Task Form */}
+          {showNewTaskForm && (
+            <form onSubmit={handleNewTaskSubmit} className="p-4 bg-slate-50 space-y-3">
+              <input
+                className="w-full border px-2 py-1 rounded"
+                placeholder="Task Title"
+                value={newTaskTitle}
+                onChange={e => setNewTaskTitle(e.target.value)}
+                required
+              />
+              <input
+                className="w-full border px-2 py-1 rounded"
+                placeholder="Description"
+                value={newTaskDesc}
+                onChange={e => setNewTaskDesc(e.target.value)}
+              />
+              <input
+                type="date"
+                className="w-auto border px-2 py-1 rounded"
+                value={newTaskDueDate}
+                onChange={e => setNewTaskDueDate(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button type="submit" className="btn-primary flex items-center gap-1">
+                  <Plus className="w-4 h-4" /> Create Task
+                </button>
+                <button type="button" onClick={() => setShowNewTaskForm(false)} className="btn-secondary">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Task Table */}
+          <TaskTable
+            tasks={filteredTasks}
+            onToggleStatus={toggleStatus}
+            onUpdateField={updateTaskField}
+          />
         </div>
-        <TaskTable
-          tasks={(tasks ?? [])
-            .filter(t =>
-              taskFilter === "all" ? true :
-              taskFilter === "completed" ? t.status === "complete" :
-              t.status === "pending"
-            )
-            .map(t => ({
-              id: String(t.id),
-              title: t.title,
-              due_date: t.due_date ?? undefined,
-              assigned_to: t.assigned_to ?? undefined,
-              completed: t.status === "complete",
-            }))}
-          onToggleStatus={(tableTask) => {
-            const apiTask = (tasks ?? []).find(t => String(t.id) === tableTask.id);
-            if (apiTask) toggleStatus(apiTask);
-          }}
-          onUpdateField={updateTaskField}
-        />
-       
-      </div>
+      );
+      }
      
       {/* Client Documents */}
       <div className="mt-8">
