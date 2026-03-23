@@ -136,6 +136,11 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
   const { id } = UpdateTaskParams.parse(req.params);
   const body = UpdateTaskBody.parse(req.body);
 
+  if (Object.keys(body).length === 0) {
+    res.status(400).json({ error: "No fields provided to update" });
+    return;
+  }
+
   // When completing a recurring task, stamp last_generated_at = today so the daily
   // scheduler won't count this task as a new spawn source for the current cycle.
   const extraFields: Record<string, unknown> = {};
