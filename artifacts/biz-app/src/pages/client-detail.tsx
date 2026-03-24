@@ -1,28 +1,24 @@
-import { useState, useEffect } from "react";
-import { useParams } from "wouter";
+import { useState } from "react";
+import { useParams, useLocation } from "wouter";
 import {
   useGetClient,
   useListTasks,
   useUpdateTask,
   useCreateTask,
+  useUpdateClient,
+  useGetDashboard,
   getListTasksQueryKey,
-  Task as ApiTask,
+  getGetClientQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-
-import TaskTable from "./TaskTable";
-import { SubtaskList } from "@/components/SubtaskList";
-import { Plus, CheckCircle2, Circle } from "lucide-react";
-
-interface Task {
-  id: string;
-  title: string;
-  description?: string;
-  due_date?: string;
-  assigned_to?: string;
-  completed: boolean;
-}
+import TaskTable from "@/components/TaskTable";
+import { DocumentsTab } from "@/components/DocumentsTab";
+import {
+  Plus, ArrowLeft, X, Paperclip, Mail, Phone, DollarSign,
+  Monitor, Pencil, Check, AlertCircle,
+} from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 function isWeekday(d: Date): boolean {
   const day = d.getDay();
@@ -57,12 +53,12 @@ export default function ClientDetail() {
 
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
+  const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "completed">("all");
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
 
-  // Edit profile state
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
@@ -73,7 +69,7 @@ export default function ClientDetail() {
   const [editVaLimit, setEditVaLimit] = useState<string>("");
 
   const { data: client, isLoading: clientLoading } = useGetClient(clientId);
-  const { data: tasks, isLoading: tasksLoading } = useListTasks({ clientId });
+  const { data: tasks } = useListTasks({ clientId });
   const { data: dashboard } = useGetDashboard();
 
   const dashClient = dashboard?.find(c => c.id === clientId);
@@ -90,12 +86,54 @@ export default function ClientDetail() {
     },
   });
 
+  const createTask = useCreateTask({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
+        setNewTaskTitle("");
+        setNewTaskDesc("");
+        setNewTaskDueDate("");
+        setShowNewTaskForm(false);
+      },
+    },
+  });
+
+  const updateClientMutation = useUpdateClient({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetClientQueryKey(clientId) });
+        setShowEditProfile(false);
+        toast({ title: "Client updated" });
+      },
+    },
+  });
+
+  const toggleStatus = (task: { id: string; completed: boolean }) => {
+    updateTask.mutate({
+      id: Number(task.id),
+      data: { status: task.completed ? "pending" : "complete" },
+    });
+  };
+
   const updateTaskField = (id: string, field: string, value: any) => {
     if (field === "completed") {
       updateTask.mutate({ id: Number(id), data: { status: value ? "complete" : "pending" } });
     } else {
       updateTask.mutate({ id: Number(id), data: { [field]: value } });
     }
+  };
+
+  const handleNewTaskSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    createTask.mutate({
+      data: {
+        title: newTaskTitle.trim(),
+        description: newTaskDesc.trim() || undefined,
+        due_date: newTaskDueDate || undefined,
+        client_id: clientId,
+      } as any,
+    });
   };
 
   const openEditProfile = () => {
@@ -145,6 +183,14 @@ export default function ClientDetail() {
     if (taskFilter === "completed") return task.status === "complete";
     return true;
   });
+
+  const mappedTasks = filteredTasks.map(t => ({
+    id: String(t.id),
+    title: t.title,
+    due_date: t.due_date ?? undefined,
+    assigned_to: t.assigned_to ?? undefined,
+    completed: t.status === "complete",
+  }));
 
   if (clientLoading) {
     return (
@@ -212,7 +258,7 @@ export default function ClientDetail() {
                 value={editPhone}
                 onChange={e => setEditPhone(e.target.value)}
                 placeholder="(555) 123-4567"
-                />
+              />
             </div>
 
             {/* Service checkboxes */}
@@ -226,8 +272,10 @@ export default function ClientDetail() {
                     <div className="text-xs text-slate-400">Flat monthly fee</div>
                   </div>
                 </label>
-                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${editHasVA ? "border-primary/25 bg-primary/5" : "bg-slate-50 border-slate-200"}`}
-                  style={editHasVA ? { backgroundColor: "hsl(188 51% 30% / 0.05)", borderColor: "hsl(188 51% 30% / 0.25)" } : {}}>
+                <label
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${editHasVA ? "border-primary/25 bg-primary/5" : "bg-slate-50 border-slate-200"}`}
+                  style={editHasVA ? { backgroundColor: "hsl(188 51% 30% / 0.05)", borderColor: "hsl(188 51% 30% / 0.25)" } : {}}
+                >
                   <input type="checkbox" checked={editHasVA} onChange={e => setEditHasVA(e.target.checked)} className="mt-0.5 accent-primary" />
                   <div>
                     <div className="text-sm font-medium text-slate-800">Virtual Assistant</div>
@@ -302,9 +350,11 @@ export default function ClientDetail() {
                     </span>
                   )}
                   {hasVA && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border"
-                      style={{ backgroundColor: "hsl(188 51% 30% / 0.07)", borderColor: "hsl(188 51% 30% / 0.2)", color: "#266b75" }}>
-                      <Computer className="w-3 h-3" />
+                    <span
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border"
+                      style={{ backgroundColor: "hsl(188 51% 30% / 0.07)", borderColor: "hsl(188 51% 30% / 0.2)", color: "#266b75" }}
+                    >
+                      <Monitor className="w-3 h-3" />
                       VA
                       {client.va_hourly_rate != null && <span className="ml-1 font-normal">{formatCurrency(client.va_hourly_rate)}/hr</span>}
                       {client.va_hour_limit != null && <span className="font-normal text-slate-400"> · {client.va_hour_limit}h cap</span>}
@@ -326,7 +376,9 @@ export default function ClientDetail() {
                 {hasBK && client.bk_fee != null && (
                   <div>
                     <p className="text-xs text-slate-400">Bookkeeping</p>
-                    <p className="text-lg font-bold text-emerald-700">{formatCurrency(client.bk_fee)}<span className="text-xs font-normal text-slate-400">/mo</span></p>
+                    <p className="text-lg font-bold text-emerald-700">
+                      {formatCurrency(client.bk_fee)}<span className="text-xs font-normal text-slate-400">/mo</span>
+                    </p>
                   </div>
                 )}
                 {hasVA && client.va_hourly_rate != null && (
@@ -420,72 +472,79 @@ export default function ClientDetail() {
         </div>
       )}
 
+      {/* Task Section */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
-          {/* Header + Filters */}
-          <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-            <span className="font-semibold text-slate-900 text-sm">Client Tasks</span>
+        {/* Header + Filters */}
+        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+          <span className="font-semibold text-slate-900 text-sm">Client Tasks</span>
 
-            <div className="ml-auto flex gap-2">
-              {["all", "pending", "completed"].map(filter => (
-                <button
-                  key={filter}
-                  onClick={() => setTaskFilter(filter as any)}
-                  className={`text-xs px-2 py-1 rounded-full border ${
-                    taskFilter === filter
-                      ? "bg-primary text-white border-primary"
-                      : "bg-white text-slate-500 border-slate-200"
-                  }`}
-                >
-                  {filter.charAt(0).toUpperCase() + filter.slice(1)}
-                </button>
-              ))}
-            </div>
+          <div className="ml-auto flex gap-2">
+            {(["all", "pending", "completed"] as const).map(filter => (
+              <button
+                key={filter}
+                onClick={() => setTaskFilter(filter)}
+                className={`text-xs px-2 py-1 rounded-full border ${
+                  taskFilter === filter
+                    ? "bg-primary text-white border-primary"
+                    : "bg-white text-slate-500 border-slate-200"
+                }`}
+              >
+                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+              </button>
+            ))}
           </div>
 
-          {/* New Task Form */}
-          {showNewTaskForm && (
-            <form onSubmit={handleNewTaskSubmit} className="p-4 bg-slate-50 space-y-3">
-              <input
-                className="w-full border px-2 py-1 rounded"
-                placeholder="Task Title"
-                value={newTaskTitle}
-                onChange={e => setNewTaskTitle(e.target.value)}
-                required
-              />
-              <input
-                className="w-full border px-2 py-1 rounded"
-                placeholder="Description"
-                value={newTaskDesc}
-                onChange={e => setNewTaskDesc(e.target.value)}
-              />
-              <input
-                type="date"
-                className="w-auto border px-2 py-1 rounded"
-                value={newTaskDueDate}
-                onChange={e => setNewTaskDueDate(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <button type="submit" className="btn-primary flex items-center gap-1">
-                  <Plus className="w-4 h-4" /> Create Task
-                </button>
-                <button type="button" onClick={() => setShowNewTaskForm(false)} className="btn-secondary">
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Task Table */}
-          <TaskTable
-            tasks={filteredTasks}
-            onToggleStatus={toggleStatus}
-            onUpdateField={updateTaskField}
-          />
+          <button
+            onClick={() => setShowNewTaskForm(v => !v)}
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors ml-2"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Task
+          </button>
         </div>
-      );
-      }
-     
+
+        {/* New Task Form */}
+        {showNewTaskForm && (
+          <form onSubmit={handleNewTaskSubmit} className="p-4 bg-slate-50 space-y-3 border-b border-slate-100">
+            <input
+              className="w-full border px-2 py-1 rounded"
+              placeholder="Task Title"
+              value={newTaskTitle}
+              onChange={e => setNewTaskTitle(e.target.value)}
+              required
+            />
+            <input
+              className="w-full border px-2 py-1 rounded"
+              placeholder="Description"
+              value={newTaskDesc}
+              onChange={e => setNewTaskDesc(e.target.value)}
+            />
+            <input
+              type="date"
+              className="w-auto border px-2 py-1 rounded"
+              value={newTaskDueDate}
+              onChange={e => setNewTaskDueDate(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button type="submit" disabled={createTask.isPending} className="btn-primary flex items-center gap-1">
+                <Plus className="w-4 h-4" /> Create Task
+              </button>
+              <button type="button" onClick={() => setShowNewTaskForm(false)} className="btn-secondary">
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* Task Table */}
+        <TaskTable
+          tasks={mappedTasks}
+          onToggleStatus={toggleStatus}
+          onUpdateField={updateTaskField}
+        />
+      </div>
+
       {/* Client Documents */}
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-4">
