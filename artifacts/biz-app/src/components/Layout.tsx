@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { GlobalTimerBar } from "@/components/GlobalTimerBar";
 import {
   LayoutDashboard,
   Users,
@@ -112,6 +113,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           )}
         </div>
+        <GlobalTimerBar />
       </header>
 
       {/* Page Content */}

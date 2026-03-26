@@ -275,7 +275,7 @@ export const ListTimeEntriesQueryParams = zod.object({
 
 export const ListTimeEntriesResponseItem = zod.object({
   id: zod.number(),
-  client_id: zod.number(),
+  client_id: zod.number().nullish(),
   task_id: zod.number().nullish(),
   user_id: zod.number().nullish(),
   logged_by: zod.string().nullish(),
@@ -292,7 +292,7 @@ export const ListTimeEntriesResponse = zod.array(ListTimeEntriesResponseItem);
  * @summary Log a time entry
  */
 export const CreateTimeEntryBody = zod.object({
-  client_id: zod.number(),
+  client_id: zod.number().nullish(),
   task_id: zod.number().nullish(),
   duration_minutes: zod.number(),
   date: zod.string(),
@@ -316,7 +316,7 @@ export const UpdateTimeEntryBody = zod.object({
 
 export const UpdateTimeEntryResponse = zod.object({
   id: zod.number(),
-  client_id: zod.number(),
+  client_id: zod.number().nullish(),
   task_id: zod.number().nullish(),
   duration_minutes: zod.number(),
   date: zod.string(),

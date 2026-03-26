@@ -30,6 +30,7 @@ import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
 import { useAuth } from "@/contexts/AuthContext";
 import TaskTable from "@/components/TaskTable";
+import { useTimer } from "@/contexts/TimerContext";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -140,6 +141,7 @@ export default function Tasks() {
   const { data: teamMembers = [] } = useTeamMembers();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { startForTask, state: timerState } = useTimer();
 
   // ── Modals ────────────────────────────────────────────────────────────────
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -366,9 +368,14 @@ export default function Tasks() {
           due_date: t.due_date ?? undefined,
           assigned_to: t.assigned_to ?? undefined,
           completed: t.status === "complete",
+          client_id: t.client_id ?? null,
+          client_name: t.client_name ?? null,
         }))}
         onToggleStatus={handleToggleStatus}
         onUpdateField={handleUpdateField}
+        onStartTimer={startForTask}
+        activeTaskId={timerState.taskId}
+        timerStatus={timerState.status}
       />
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}

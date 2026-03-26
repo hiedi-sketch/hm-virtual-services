@@ -4,7 +4,7 @@ import { z } from "zod/v4";
 
 export const timeEntriesTable = pgTable("time_entries", {
   id: serial("id").primaryKey(),
-  client_id: integer("client_id").notNull(),
+  client_id: integer("client_id"),
   task_id: integer("task_id"),
   user_id: integer("user_id"),
   duration_minutes: integer("duration_minutes").notNull(),

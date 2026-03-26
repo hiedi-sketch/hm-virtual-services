@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from "react";
+import { Play, Pause, Square } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Task = {
   id: string;
@@ -6,12 +8,17 @@ type Task = {
   due_date?: string;
   assigned_to?: string;
   completed: boolean;
+  client_id?: number | null;
+  client_name?: string | null;
 };
 
 type TaskTableProps = {
   tasks: Task[];
   onToggleStatus: (task: Task) => void;
   onUpdateField: (id: string, field: string, value: any) => void;
+  onStartTimer?: (taskId: number, taskTitle: string, clientId?: number | null, clientName?: string | null) => void;
+  activeTaskId?: number | null;
+  timerStatus?: "idle" | "running" | "paused";
 };
 
 function statusBadge(completed: boolean) {
@@ -20,7 +27,14 @@ function statusBadge(completed: boolean) {
     : "text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-600";
 }
 
-export default function TaskTable({ tasks, onToggleStatus, onUpdateField }: TaskTableProps) {
+export default function TaskTable({
+  tasks,
+  onToggleStatus,
+  onUpdateField,
+  onStartTimer,
+  activeTaskId,
+  timerStatus,
+}: TaskTableProps) {
   const today = new Date().toISOString().split("T")[0];
 
   const [sortKey, setSortKey] = useState<"title" | "due_date" | "assigned_to">("title");
@@ -75,18 +89,24 @@ export default function TaskTable({ tasks, onToggleStatus, onUpdateField }: Task
                 Assigned{sortIcon("assigned_to")}
               </th>
               <th className="px-6 py-4">Status</th>
+              {onStartTimer && <th className="px-6 py-4 text-center w-24">Timer</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {displayedTasks.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-10 text-center text-slate-400">
+                <td colSpan={onStartTimer ? 6 : 5} className="px-6 py-10 text-center text-slate-400">
                   No tasks found.
                 </td>
               </tr>
             ) : (
               displayedTasks.map((task) => {
                 const isOverdue = !task.completed && task.due_date && task.due_date < today;
+                const numId = Number(task.id);
+                const isThisTaskActive = activeTaskId === numId;
+                const isThisRunning = isThisTaskActive && timerStatus === "running";
+                const isThisPaused = isThisTaskActive && timerStatus === "paused";
+
                 return (
                   <tr key={task.id} className="hover:bg-primary/5 transition-colors group">
                     <td className="px-6 py-4">
@@ -133,6 +153,34 @@ export default function TaskTable({ tasks, onToggleStatus, onUpdateField }: Task
                         <option value="completed">Completed</option>
                       </select>
                     </td>
+                    {onStartTimer && (
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-1">
+                          {isThisRunning ? (
+                            <button
+                              onClick={() => onStartTimer(numId, task.title, task.client_id, task.client_name)}
+                              title="Pause timer"
+                              className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 transition-colors"
+                            >
+                              <Pause className="w-3.5 h-3.5 fill-current" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => onStartTimer(numId, task.title, task.client_id, task.client_name)}
+                              title={isThisPaused ? "Resume timer" : "Start timer for this task"}
+                              className={cn(
+                                "p-1.5 rounded-md transition-colors",
+                                isThisPaused
+                                  ? "text-[#266b75] hover:bg-[#266b75]/10"
+                                  : "text-slate-400 hover:text-[#266b75] hover:bg-[#266b75]/8 opacity-0 group-hover:opacity-100"
+                              )}
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })
