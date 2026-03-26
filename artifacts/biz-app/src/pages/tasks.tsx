@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   useListTasks,
   useCreateTask,
@@ -646,5 +646,136 @@ function TaskRow({
         </td>
       </tr>
     </>
+  );
+}
+
+// ── Admin Task Comment Panel ─────────────────────────────────────────────────
+
+type Comment = {
+  id: number;
+  task_id: number;
+  user_id: number;
+  author_name: string;
+  author_role: string;
+  comment: string;
+  created_at: string;
+};
+
+function AdminTaskCommentPanel({
+  taskId,
+  taskTitle,
+  onClose,
+  queryClient,
+}: {
+  taskId: number;
+  taskTitle: string;
+  onClose: () => void;
+  queryClient: ReturnType<typeof useQueryClient>;
+}) {
+  const [text, setText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+
+  const { data: comments = [], refetch } = useQuery<Comment[]>({
+    queryKey: ["task-comments", taskId],
+    queryFn: async () => {
+      const res = await fetch(`/api/tasks/${taskId}/comments`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load comments");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [comments]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/comments`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ comment: text.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to post comment");
+      setText("");
+      refetch();
+    } catch {
+      toast({ title: "Failed to post comment", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  function fmtTime(d: string) {
+    return new Date(d).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+        <MessageSquare className="w-4 h-4 text-slate-400" />
+        <span className="font-semibold text-slate-900 text-sm">Comments</span>
+        <span className="text-xs text-slate-400 truncate ml-1">— {taskTitle}</span>
+        <button
+          onClick={onClose}
+          className="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="max-h-72 overflow-y-auto p-4 space-y-3">
+        {comments.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-6">No comments yet. Start the conversation.</p>
+        ) : (
+          comments.map(c => {
+            const isAdmin = c.author_role === "admin" || c.author_role === "team_member";
+            return (
+              <div
+                key={c.id}
+                className={cn("flex flex-col max-w-sm gap-0.5", isAdmin ? "items-end ml-auto" : "items-start")}
+              >
+                <span className="text-[10px] text-slate-400 px-1">
+                  {c.author_name} · {fmtTime(c.created_at)}
+                </span>
+                <div
+                  className={cn(
+                    "px-3 py-2 rounded-2xl text-sm leading-snug",
+                    isAdmin
+                      ? "bg-[#266b75] text-white rounded-tr-sm"
+                      : "bg-slate-100 text-slate-800 rounded-tl-sm",
+                  )}
+                >
+                  {c.comment}
+                </div>
+              </div>
+            );
+          })
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <form onSubmit={submit} className="border-t border-slate-100 px-4 py-3 flex items-center gap-2">
+        <input
+          className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary"
+          placeholder="Add a comment…"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          disabled={submitting}
+        />
+        <button
+          type="submit"
+          disabled={!text.trim() || submitting}
+          className="p-2 rounded-lg bg-[#266b75] text-white hover:bg-[#266b75]/90 disabled:opacity-40 transition-colors"
+        >
+          <Send className="w-4 h-4" />
+        </button>
+      </form>
+    </div>
   );
 }
