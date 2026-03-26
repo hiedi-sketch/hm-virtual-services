@@ -22,6 +22,7 @@ export interface Client {
   id: number;
   name: string;
   email: string;
+  phone: string;
   monthly_hour_budget: number;
   monthly_fee: number;
   service_type: ClientServiceType;
@@ -39,6 +40,7 @@ export const CreateClientInputServiceType = {
 export interface CreateClientInput {
   name: string;
   email: string;
+  phone: string;
   monthly_hour_budget: number;
   monthly_fee: number;
   service_type: CreateClientInputServiceType;
@@ -56,6 +58,7 @@ export const UpdateClientInputServiceType = {
 export interface UpdateClientInput {
   name?: string;
   email?: string;
+  phone?: string;
   service_type?: UpdateClientInputServiceType;
 }
 
@@ -72,6 +75,7 @@ export interface ClientDashboard {
   id: number;
   name: string;
   email: string;
+  phone?: string;
   monthly_hour_budget: number;
   monthly_fee: number;
   service_type: ClientDashboardServiceType;

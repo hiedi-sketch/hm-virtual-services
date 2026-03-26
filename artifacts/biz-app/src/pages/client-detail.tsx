@@ -51,6 +51,7 @@ export default function ClientDetail() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
+
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "completed">("all");
@@ -69,8 +70,10 @@ export default function ClientDetail() {
   const [editVaLimit, setEditVaLimit] = useState<string>("");
 
   const { data: client, isLoading: clientLoading } = useGetClient(clientId);
+  console.log("CLIENT DATA:", client);
   const { data: tasks } = useListTasks({ clientId });
   const { data: dashboard } = useGetDashboard();
+
 
   const dashClient = dashboard?.find(c => c.id === clientId);
   const hoursUsed = dashClient?.hours_used_this_month ?? 0;
