@@ -39,16 +39,24 @@ function fmtCurrency(n: number) {
 }
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    pending: "bg-amber-100 text-amber-800",
-    complete: "bg-emerald-100 text-emerald-800",
-    paid: "bg-emerald-100 text-emerald-800",
-    unpaid: "bg-red-100 text-red-800",
-    in_review: "bg-blue-100 text-blue-800",
-    resolved: "bg-slate-100 text-slate-600",
+    pending:     "bg-slate-100 text-slate-700",
+    confirmed:   "bg-blue-50 text-blue-700",
+    in_progress: "bg-amber-50 text-amber-700",
+    complete:    "bg-emerald-100 text-emerald-800",
+    paid:        "bg-emerald-100 text-emerald-800",
+    unpaid:      "bg-red-100 text-red-800",
+    in_review:   "bg-blue-100 text-blue-800",
+    resolved:    "bg-slate-100 text-slate-600",
+  };
+  const labels: Record<string, string> = {
+    pending:     "Pending",
+    confirmed:   "Confirmed",
+    in_progress: "In Progress",
+    complete:    "Completed",
   };
   return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${map[status] ?? "bg-slate-100 text-slate-700"}`}>
-      {status.replace("_", " ")}
+    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${map[status] ?? "bg-slate-100 text-slate-700"}`}>
+      {labels[status] ?? status.replace(/_/g, " ")}
     </span>
   );
 }
@@ -585,7 +593,7 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
   queryClient: any; toast: any;
 }) {
   const [showForm, setShowForm] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "complete">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "confirmed" | "in_progress" | "complete">("all");
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
   const { user } = useAuth();
 
@@ -620,7 +628,7 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
     });
   };
 
-  const filtered = tasks.filter(t => filterStatus === "all" || t.status === filterStatus);
+  const filtered = tasks.filter(t => filterStatus === "all" || t.status === filterStatus as string);
   const pending = tasks.filter(t => t.status !== "complete").length;
   const completed = tasks.filter(t => t.status === "complete").length;
 
@@ -699,18 +707,24 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
       )}
 
       {/* Filter pills */}
-      <div className="flex gap-2">
-        {(["all", "pending", "complete"] as const).map(f => (
+      <div className="flex flex-wrap gap-2">
+        {([
+          { key: "all",         label: `All (${tasks.length})` },
+          { key: "pending",     label: `Pending (${tasks.filter(t => t.status === "pending").length})` },
+          { key: "confirmed",   label: `Confirmed (${tasks.filter(t => t.status === "confirmed").length})` },
+          { key: "in_progress", label: `In Progress (${tasks.filter(t => t.status === "in_progress").length})` },
+          { key: "complete",    label: `Completed (${completed})` },
+        ] as const).map(f => (
           <button
-            key={f}
-            onClick={() => setFilterStatus(f)}
+            key={f.key}
+            onClick={() => setFilterStatus(f.key as any)}
             className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
-              filterStatus === f
+              filterStatus === f.key
                 ? "bg-slate-900 text-white border-slate-900"
                 : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"
             }`}
           >
-            {f === "all" ? `All (${tasks.length})` : f === "pending" ? `Pending (${pending})` : `Completed (${completed})`}
+            {f.label}
           </button>
         ))}
       </div>

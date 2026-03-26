@@ -7,11 +7,19 @@ type Task = {
   title: string;
   due_date?: string;
   assigned_to?: string;
-  completed: boolean;
+  status: string;
+  completed?: boolean;
   client_id?: number | null;
   client_name?: string | null;
   comment_count?: number;
 };
+
+const TASK_STATUS_OPTIONS = [
+  { value: "pending",     label: "Pending" },
+  { value: "confirmed",   label: "Confirmed" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "complete",    label: "Completed" },
+] as const;
 
 type TaskTableProps = {
   tasks: Task[];
@@ -24,10 +32,11 @@ type TaskTableProps = {
   timerStatus?: "idle" | "running" | "paused";
 };
 
-function statusBadge(completed: boolean) {
-  return completed
-    ? "text-xs border border-slate-200 rounded px-2 py-1 bg-emerald-50 text-emerald-700"
-    : "text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-600";
+function statusBadge(status: string) {
+  if (status === "complete")    return "text-xs border rounded px-2 py-1 bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "in_progress") return "text-xs border rounded px-2 py-1 bg-amber-50 text-amber-700 border-amber-200";
+  if (status === "confirmed")   return "text-xs border rounded px-2 py-1 bg-blue-50 text-blue-700 border-blue-200";
+  return "text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-600";
 }
 
 export default function TaskTable({
@@ -109,7 +118,7 @@ export default function TaskTable({
               </tr>
             ) : (
               displayedTasks.map((task) => {
-                const isOverdue = !task.completed && task.due_date && task.due_date < today;
+                const isOverdue = task.status !== "complete" && task.due_date && task.due_date < today;
                 const numId = Number(task.id);
                 const isThisTaskActive = activeTaskId === numId;
                 const isThisRunning = isThisTaskActive && timerStatus === "running";
@@ -120,7 +129,7 @@ export default function TaskTable({
                   <tr key={task.id} className={cn("hover:bg-primary/5 transition-colors group", isCommentActive && "bg-primary/5")}>
                     <td className="px-6 py-4">
                       <button onClick={() => onToggleStatus(task)} className="text-lg leading-none">
-                        {task.completed ? "✅" : "⬜"}
+                        {task.status === "complete" ? "✅" : "⬜"}
                       </button>
                     </td>
                     <td className="px-6 py-4">
@@ -128,7 +137,7 @@ export default function TaskTable({
                         value={task.title}
                         onChange={(e) => onUpdateField(task.id, "title", e.target.value)}
                         className={`w-full bg-transparent outline-none font-semibold ${
-                          task.completed ? "line-through text-slate-400" : "text-slate-900"
+                          task.status === "complete" ? "line-through text-slate-400" : "text-slate-900"
                         }`}
                       />
                     </td>
@@ -152,14 +161,13 @@ export default function TaskTable({
                     </td>
                     <td className="px-6 py-4">
                       <select
-                        value={task.completed ? "completed" : "pending"}
-                        onChange={(e) =>
-                          onUpdateField(task.id, "completed", e.target.value === "completed")
-                        }
-                        className={statusBadge(task.completed)}
+                        value={task.status}
+                        onChange={(e) => onUpdateField(task.id, "status", e.target.value)}
+                        className={statusBadge(task.status)}
                       >
-                        <option value="pending">Pending</option>
-                        <option value="completed">Completed</option>
+                        {TASK_STATUS_OPTIONS.map(o => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </td>
                     {onStartTimer && (

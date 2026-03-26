@@ -110,12 +110,31 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 
 // ── Schemas ─────────────────────────────────────────────────────────────────
 
+const STATUS_OPTIONS = [
+  { value: "pending",     label: "Pending" },
+  { value: "confirmed",   label: "Confirmed" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "complete",    label: "Completed" },
+] as const;
+
+function statusLabel(s: string) {
+  return STATUS_OPTIONS.find(o => o.value === s)?.label ?? s;
+}
+
+function statusBadgeCls(s: string) {
+  if (s === "complete")    return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+  if (s === "in_progress") return "bg-amber-50 text-amber-700 border border-amber-200";
+  if (s === "confirmed")   return "bg-blue-50 text-blue-700 border border-blue-200";
+  return "bg-slate-100 text-slate-600 border border-slate-200";
+}
+
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   client_id: z.coerce.number().min(1, "Client is required"),
   assigned_to: z.string().optional(),
   due_date: z.string().optional(),
+  status: z.string().optional().default("pending"),
   recurrence: z.preprocess(
     val => (val === "" ? null : val),
     z.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullable().optional()
@@ -197,17 +216,18 @@ export default function Tasks() {
       client_id: task.client_id,
       assigned_to: task.assigned_to ?? undefined,
       due_date: task.due_date ?? undefined,
+      status: task.status,
       recurrence: (task.recurrence as EditValues["recurrence"]) ?? null,
     });
   };
 
   const onEditSubmit = (data: EditValues) => {
     if (!editingTask) return;
-    updateMutation.mutate({ id: editingTask.id, data: { ...data, recurrence: data.recurrence || null } });
+    updateMutation.mutate({ id: editingTask.id, data: { ...data, status: data.status || "pending", recurrence: data.recurrence || null } });
   };
 
   const toggleStatus = (task: Task) => {
-    const completing = task.status === "pending";
+    const completing = task.status !== "complete";
     updateMutation.mutate({ id: task.id, data: { status: completing ? "complete" : "pending" } });
     if (completing && task.recurrence) {
       spawnNextMutation.mutate({
@@ -257,8 +277,8 @@ export default function Tasks() {
         return (a.client_name ?? "").localeCompare(b.client_name ?? "");
       }
       if (sortBy === "status") {
-        if (a.status === b.status) return 0;
-        return a.status === "pending" ? -1 : 1;
+        const order: Record<string, number> = { pending: 0, confirmed: 1, in_progress: 2, complete: 3 };
+        return (order[a.status] ?? 0) - (order[b.status] ?? 0);
       }
       return 0;
     });
@@ -278,15 +298,13 @@ export default function Tasks() {
     completed: "You're all caught up.",
   };
 
-  const handleToggleStatus = (tableTask: { id: string; completed: boolean }) => {
-    const original = allTasks.find(t => String(t.id) === tableTask.id);
-    if (original) toggleStatus(original);
+  const handleToggleStatus = (tableTask: { id: string; status: string }) => {
+    const newStatus = tableTask.status === "complete" ? "pending" : "complete";
+    updateMutation.mutate({ id: Number(tableTask.id), data: { status: newStatus } });
   };
 
   const handleUpdateField = (id: string, field: string, value: any) => {
-    const apiField = field === "completed" ? "status" : field;
-    const apiValue = field === "completed" ? (value ? "complete" : "pending") : value;
-    updateMutation.mutate({ id: Number(id), data: { [apiField]: apiValue } });
+    updateMutation.mutate({ id: Number(id), data: { [field]: value } });
   };
 
   return (
@@ -301,7 +319,7 @@ export default function Tasks() {
         </div>
         <button onClick={() => setIsModalOpen(true)} className="btn-primary shrink-0 self-start sm:self-auto">
           <Plus className="w-5 h-5 mr-2" />
-          Add New Task
+          Add Task
         </button>
       </div>
 
@@ -372,7 +390,7 @@ export default function Tasks() {
           title: t.title,
           due_date: t.due_date ?? undefined,
           assigned_to: t.assigned_to ?? undefined,
-          completed: t.status === "complete",
+          status: t.status ?? "pending",
           client_id: t.client_id ?? null,
           client_name: t.client_name ?? null,
         }))}
@@ -399,7 +417,7 @@ export default function Tasks() {
       )}
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}
-      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="Add New Task">
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="Add Task">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="label-text">Task Title</label>
@@ -440,19 +458,25 @@ export default function Tasks() {
               </div>
             )}
             <div>
-              <label className="label-text flex items-center gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                Recurrence
-              </label>
-              <select {...register("recurrence")} className="input-field">
-                {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              <label className="label-text">Status</label>
+              <select {...register("status")} className="input-field">
+                {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <label className="label-text flex items-center gap-1.5">
+              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+              Recurrence
+            </label>
+            <select {...register("recurrence")} className="input-field">
+              {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </div>
           <div className="pt-4 flex justify-end gap-3">
             <button type="button" onClick={() => { setIsModalOpen(false); reset(); }} className="btn-secondary">Cancel</button>
             <button type="submit" disabled={isSubmitting || createMutation.isPending} className="btn-primary">
-              {createMutation.isPending ? "Creating..." : "Create Task"}
+              {createMutation.isPending ? "Adding..." : "Add Task"}
             </button>
           </div>
         </form>
@@ -494,14 +518,20 @@ export default function Tasks() {
                 </select>
               </div>
               <div>
-                <label className="label-text flex items-center gap-1.5">
-                  <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                  Recurrence
-                </label>
-                <select {...registerEdit("recurrence")} className="input-field">
-                  {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <label className="label-text">Status</label>
+                <select {...registerEdit("status")} className="input-field">
+                  {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
+            </div>
+            <div>
+              <label className="label-text flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                Recurrence
+              </label>
+              <select {...registerEdit("recurrence")} className="input-field">
+                {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
             <div className="pt-4 flex justify-end gap-3">
               <button type="button" onClick={() => setEditingTask(null)} className="btn-secondary">Cancel</button>
@@ -598,10 +628,10 @@ function TaskRow({
         {/* Status column */}
         <td className="px-6 py-4 align-top">
           <span className={cn(
-            "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md",
-            isComplete ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600",
+            "inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-md",
+            statusBadgeCls(task.status),
           )}>
-            {isComplete ? "Done" : "Pending"}
+            {statusLabel(task.status)}
           </span>
         </td>
 

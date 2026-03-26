@@ -60,7 +60,7 @@ export default function ClientDetail() {
 
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "completed">("all");
+  const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "confirmed" | "in_progress" | "complete">("all");
   const [showAddService, setShowAddService] = useState(false);
   const [addServiceId, setAddServiceId] = useState("");
   const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
@@ -144,19 +144,15 @@ export default function ClientDetail() {
     },
   });
 
-  const toggleStatus = (task: { id: string; completed: boolean }) => {
+  const toggleStatus = (task: { id: string; status: string }) => {
     updateTask.mutate({
       id: Number(task.id),
-      data: { status: task.completed ? "pending" : "complete" },
+      data: { status: task.status === "complete" ? "pending" : "complete" },
     });
   };
 
   const updateTaskField = (id: string, field: string, value: any) => {
-    if (field === "completed") {
-      updateTask.mutate({ id: Number(id), data: { status: value ? "complete" : "pending" } });
-    } else {
-      updateTask.mutate({ id: Number(id), data: { [field]: value } });
-    }
+    updateTask.mutate({ id: Number(id), data: { [field]: value } });
   };
 
   const handleNewTaskSubmit = (e: React.FormEvent) => {
@@ -220,8 +216,7 @@ export default function ClientDetail() {
   };
 
   const filteredTasks = (tasks ?? []).filter(task => {
-    if (taskFilter === "pending") return task.status !== "complete";
-    if (taskFilter === "completed") return task.status === "complete";
+    if (taskFilter !== "all") return task.status === taskFilter;
     return true;
   });
 
@@ -230,7 +225,7 @@ export default function ClientDetail() {
     title: t.title,
     due_date: t.due_date ?? undefined,
     assigned_to: t.assigned_to ?? undefined,
-    completed: t.status === "complete",
+    status: t.status ?? "pending",
   }));
 
   if (clientLoading) {
@@ -557,17 +552,23 @@ export default function ClientDetail() {
           <span className="font-semibold text-slate-900 text-sm">Client Tasks</span>
 
           <div className="ml-auto flex gap-2">
-            {(["all", "pending", "completed"] as const).map(filter => (
+            {([
+              { key: "all", label: "All" },
+              { key: "pending", label: "Pending" },
+              { key: "confirmed", label: "Confirmed" },
+              { key: "in_progress", label: "In Progress" },
+              { key: "complete", label: "Completed" },
+            ] as const).map(f => (
               <button
-                key={filter}
-                onClick={() => setTaskFilter(filter)}
+                key={f.key}
+                onClick={() => setTaskFilter(f.key)}
                 className={`text-xs px-2 py-1 rounded-full border ${
-                  taskFilter === filter
+                  taskFilter === f.key
                     ? "bg-primary text-white border-primary"
                     : "bg-white text-slate-500 border-slate-200"
                 }`}
               >
-                {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                {f.label}
               </button>
             ))}
           </div>
@@ -577,7 +578,7 @@ export default function ClientDetail() {
             className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors ml-2"
           >
             <Plus className="w-3.5 h-3.5" />
-            New Task
+            Add Task
           </button>
         </div>
 

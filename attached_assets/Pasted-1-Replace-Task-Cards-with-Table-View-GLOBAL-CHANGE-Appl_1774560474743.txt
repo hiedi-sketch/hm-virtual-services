@@ -1,0 +1,98 @@
+1. Replace Task Cards with Table View (GLOBAL CHANGE)
+
+Apply this to ALL areas:
+
+Task Manager page
+Client Details page
+Client Portal
+Requirements:
+Replace all task card layouts with a table view
+Table should include columns:
+Task Name
+Client (if applicable)
+Status
+Due Date
+Assigned To
+Actions (edit/delete/etc.)
+2. Expandable Task Rows (IMPORTANT UX)
+
+Instead of navigating to another section or bottom of page:
+
+Behavior:
+Each task row should be clickable
+Clicking a row expands it inline (accordion-style)
+Expanded View Should Show:
+Subtasks (if any)
+Task description
+Comments/notes
+Activity (optional)
+UX Rules:
+Expansion happens directly under the clicked row
+Smooth animation (optional but preferred)
+Only one row expanded at a time (optional)
+3. Standardized Task Status System
+
+Replace all existing statuses with ONLY these 4:
+
+Pending
+Confirmed
+In Progress
+Completed
+Implementation:
+Update database (tasks table):
+status field should only allow these values (enum)
+Update UI:
+Dropdown/select for status using these options only
+Display status as colored badges:
+
+Suggested Colors:
+
+Pending → Neutral/gray
+Confirmed → Blue
+In Progress → Primary color (#266b75)
+Completed → Green
+4. Consistency Across All Views
+
+Ensure:
+
+Same statuses appear in:
+Admin task manager
+Client detail view
+Client portal
+Same table structure and behavior everywhere
+5. Time Tracking – Full Edit Capability
+
+Update time tracking system to allow full editing of entries.
+
+Editable Fields:
+Start time
+End time
+Duration (auto-recalculate)
+Associated task
+Associated client
+Notes
+Behavior:
+When start or end time is edited:
+Automatically recalculate duration
+Validate:
+End time must be after start time
+UI:
+Add “Edit Time Entry” option (modal or inline)
+Clean form layout consistent with app design
+6. API Updates
+Tasks:
+PUT /tasks/:id (update status, details)
+Time Tracking:
+PUT /time-entries/:id (allow full editing)
+7. UI/UX Consistency
+Match HM Virtual Services Business Suite branding:
+Clean table design
+Subtle borders using #c8c7cb
+Hover row highlight using #7dbdc6
+Keep layout minimal and professional
+8. Deliverables
+Table-based task UI across all pages
+Expandable task rows with subtasks + comments inline
+Standardized 4-status system
+Fully editable time tracking entries
+Updated API + database validation

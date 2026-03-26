@@ -104,6 +104,8 @@ export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
 
 export const TaskStatus = {
   pending: "pending",
+  confirmed: "confirmed",
+  in_progress: "in_progress",
   complete: "complete",
 } as const;
 
