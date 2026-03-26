@@ -69,14 +69,18 @@ export default function Login() {
     >
       <div className="w-full max-w-xs">
 
-        {/* Wordmark */}
-        <div className="mb-16">
-          <span
-            className="text-xs font-bold uppercase"
-            style={{ color: "#266b75", letterSpacing: "0.22em" }}
+        {/* Logo + Wordmark */}
+        <div className="mb-16 flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
+            style={{ background: "#266b75", fontFamily: "Georgia, serif", letterSpacing: "-0.5px" }}
           >
-            Flowstate
-          </span>
+            HM
+          </div>
+          <div>
+            <div className="text-sm font-semibold leading-tight" style={{ color: "#266b75" }}>HM Virtual Services</div>
+            <div className="text-xs" style={{ color: "#999" }}>Suite</div>
+          </div>
         </div>
 
         {/* Heading */}
@@ -216,7 +220,7 @@ export default function Login() {
         {/* Footer */}
         <div className="mt-16 pt-8" style={{ borderTop: "1px solid #e8e8e4" }}>
           <p className="text-xs" style={{ color: "#bbb" }}>
-            Default admin: admin@flowstate.app / admin123
+            Default admin: admin@flowstate.app / admin123 · HM Virtual Services Suite
           </p>
         </div>
 

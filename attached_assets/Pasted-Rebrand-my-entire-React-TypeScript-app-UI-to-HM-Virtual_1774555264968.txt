@@ -1,0 +1,138 @@
+Rebrand my entire React + TypeScript app UI to HM Virtual Services Suite with a clean, modern, “Notion-inspired” design and a bold, professional feel.
+
+1. Brand Identity
+App Name
+
+Replace all references to the app name with:
+
+HM Virtual Services Suite
+Brand Style Direction
+Minimal, clean UI (Notion-inspired)
+Bold, modern, professional
+Lots of whitespace
+Soft borders, subtle shadows
+No clutter
+Color Palette
+
+Use ONLY these colors consistently:
+
+Primary: #266b75
+Secondary: #7dbdc6
+Neutral: #c8c7cb
+Base: #ffffff (white)
+Text: #000000 (black)
+
+Usage Rules:
+
+Primary = buttons, active states, highlights
+Secondary = hover states, accents
+Neutral = borders, dividers, backgrounds
+Keep backgrounds mostly white for a clean look
+2. Logo + Favicon
+Use my uploaded HM Virtual Services logo
+Place logo:
+Top-left navbar
+Login screen
+Client portal header
+Set logo as:
+Favicon (browser tab icon)
+3. Top Navigation Bar
+
+Create a clean, sticky top navbar:
+
+Left side:
+
+Logo
+Text: HM Virtual Services Suite
+
+Right side:
+
+Timer component (existing)
+Notifications icon
+User/profile dropdown
+4. Sidebar Navigation (Upgrade Labels)
+
+Update sidebar to feel more premium:
+
+Dashboard
+Client Hub
+Task Manager
+Billing & Invoices
+Services
+Time Tracking
+Messages
+
+Design:
+
+Minimal icons
+Highlight active page with primary color
+Subtle hover effects using secondary color
+5. Dashboard Copy (IMPORTANT)
+
+Replace generic text with branded messaging:
+
+Header:
+👉 “Let’s get your day running smoothly.”
+Subtext (optional):
+👉 “Here’s what needs your attention today.”
+6. Empty States (Global)
+
+Anywhere there is no data (tasks, invoices, messages, etc.):
+
+Replace with:
+👉 “You’re all caught up.”
+
+Optional subtext:
+
+“Nothing needs your attention right now.”
+7. Buttons + UI Components
+Buttons
+Primary buttons:
+Background: #266b75
+Text: white
+Hover:
+#7dbdc6
+Cards
+White background
+Light border using #c8c7cb
+Soft rounded corners (lg/2xl)
+Subtle shadow
+8. Typography
+Clean sans-serif font (Inter or similar)
+Bold headings
+Plenty of spacing between sections
+9. Client Portal Branding
+
+Update client-facing portal:
+
+Header:
+👉 “Welcome to your HM Virtual Services Portal”
+Use same branding:
+Logo
+Colors
+Clean layout
+Section labels:
+Your Tasks
+Your Billing
+Your Services
+Messages
+10. Microcopy Improvements
+
+Update button text globally:
+
+“Create” → “Add New”
+“Submit” → “Save Changes”
+“Add Task” → “Add New Task”
+“Add Client” → “Add New Client”
+11. Visual Polish
+Add consistent spacing (padding/margins)
+Align all sections cleanly
+Remove cluttered UI elements
+Ensure responsive layout (mobile-friendly)
+12. Deliverables
+Fully rebranded UI
+Updated navbar + sidebar
+Logo + favicon integration
+Updated colors across all components
+Branded copy + empty states
+Client portal styling

@@ -145,7 +145,15 @@ export default function ClientPortal() {
       <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-bold uppercase tracking-[0.22em]" style={{ color: "#266b75" }}>Flowstate</span>
+            <div className="flex items-center gap-2.5">
+              <div
+                className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0"
+                style={{ background: "#266b75", fontFamily: "Georgia, serif", letterSpacing: "-0.5px" }}
+              >
+                HM
+              </div>
+              <span className="text-sm font-semibold" style={{ color: "#266b75" }}>HM Virtual Services Suite</span>
+            </div>
             <span className="text-slate-300 text-sm">·</span>
             <span className="text-slate-500 text-sm">Client Portal</span>
           </div>
@@ -265,7 +273,7 @@ function OverviewTab({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Welcome back, {user?.name?.split(" ")[0]}!</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Welcome to your HM Virtual Services Portal, {user?.name?.split(" ")[0]}.</h1>
         <p className="text-slate-500 text-sm mt-1">Here's your account summary for this month.</p>
       </div>
 
@@ -439,7 +447,8 @@ function OverviewTab({
         {pendingTasks.length === 0 ? (
           <div className="px-5 py-8 text-center">
             <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-700">All caught up!</p>
+            <p className="text-sm font-medium text-slate-700">You're all caught up.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Nothing needs your attention right now.</p>
           </div>
         ) : (
           <>
@@ -711,7 +720,8 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
         {filtered.length === 0 ? (
           <div className="px-5 py-10 text-center">
             <CheckCircle2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">No tasks to show.</p>
+            <p className="text-sm font-medium text-slate-700">You're all caught up.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Nothing needs your attention right now.</p>
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -788,7 +798,8 @@ function InvoicesTab({ invoices, todayStr }: { invoices: any[]; todayStr: string
         {invoices.length === 0 ? (
           <div className="px-5 py-10 text-center">
             <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm text-slate-500">No invoices yet.</p>
+            <p className="text-sm font-medium text-slate-700">You're all caught up.</p>
+            <p className="text-xs text-slate-400 mt-0.5">No invoices to show right now.</p>
           </div>
         ) : (
           <>

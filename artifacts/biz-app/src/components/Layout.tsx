@@ -20,10 +20,10 @@ import { NotificationBell } from "@/components/NotificationBell";
 
 const ADMIN_NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/clients", label: "Clients", icon: Users },
-  { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/time", label: "Time", icon: Clock },
-  { href: "/invoices", label: "Invoices", icon: FileText },
+  { href: "/clients", label: "Client Hub", icon: Users },
+  { href: "/tasks", label: "Task Manager", icon: CheckSquare },
+  { href: "/time", label: "Time Tracking", icon: Clock },
+  { href: "/invoices", label: "Billing & Invoices", icon: FileText },
   { href: "/services", label: "Services", icon: Package },
   { href: "/leads", label: "Leads", icon: Megaphone },
   { href: "/reports", label: "Reports", icon: BarChart2 },
@@ -33,8 +33,8 @@ const ADMIN_NAV = [
 ];
 
 const TEAM_MEMBER_NAV = [
-  { href: "/tasks", label: "Tasks", icon: CheckSquare },
-  { href: "/time", label: "Time", icon: Clock },
+  { href: "/tasks", label: "Task Manager", icon: CheckSquare },
+  { href: "/time", label: "Time Tracking", icon: Clock },
   { href: "/leads", label: "Leads", icon: Megaphone },
 ];
 
@@ -61,13 +61,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* Top Navigation Bar */}
       <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-14 gap-4">
-          {/* Wordmark */}
-          <div className="shrink-0 mr-3">
-            <span
-              className="text-xs font-bold uppercase tracking-[0.22em]"
-              style={{ color: "#266b75" }}
+          {/* Logo + Wordmark */}
+          <div className="shrink-0 mr-3 flex items-center gap-2.5">
+            <div
+              className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0"
+              style={{ background: "#266b75", fontFamily: "Georgia, serif", letterSpacing: "-0.5px" }}
             >
-              Flowstate
+              HM
+            </div>
+            <span
+              className="text-sm font-semibold hidden lg:inline"
+              style={{ color: "#266b75", letterSpacing: "-0.01em" }}
+            >
+              HM Virtual Services
             </span>
           </div>
 

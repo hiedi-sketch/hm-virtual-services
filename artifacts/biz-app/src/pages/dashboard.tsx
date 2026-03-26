@@ -514,10 +514,10 @@ export default function Dashboard() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-display font-bold text-slate-900">
-          HM Virtual Services Business Hub
+          Let's get your day running smoothly.
         </h1>
         <p className="text-slate-500 mt-1">
-          Here's an overview of your business this month.
+          Here's what needs your attention today.
         </p>
       </div>
       {/* Quick Actions */}
