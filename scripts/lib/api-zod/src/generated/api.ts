@@ -312,6 +312,8 @@ export const UpdateTimeEntryBody = zod.object({
   task_id: zod.number().nullish(),
   duration_minutes: zod.number().optional(),
   date: zod.string().optional(),
+  started_at: zod.string().nullish(),
+  ended_at: zod.string().nullish(),
 });
 
 export const UpdateTimeEntryResponse = zod.object({

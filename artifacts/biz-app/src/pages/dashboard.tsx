@@ -152,9 +152,10 @@ export default function Dashboard() {
   const { data: auditLogs = [] } = useQuery<AuditLog[]>({
     queryKey: ["activity-feed"],
     queryFn: () =>
-      fetch("/api/activity-feed", { credentials: "include" }).then((r) =>
-        r.json(),
-      ) as Promise<AuditLog[]>,
+      fetch("/api/activity-feed", { credentials: "include" }).then(async (r) => {
+        const d = await r.json();
+        return Array.isArray(d) ? d : [];
+      }),
     staleTime: 30 * 1000,
     refetchInterval: 60_000,
   });

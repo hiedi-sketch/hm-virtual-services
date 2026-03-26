@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   useListTimeEntries,
   useCreateTimeEntry,
@@ -58,6 +58,8 @@ const editSchema = z.object({
   ),
   duration_minutes: z.coerce.number().min(1, "Must be at least 1 minute"),
   date: z.string().min(1, "Date is required"),
+  started_at: z.string().optional(),
+  ended_at: z.string().optional(),
 });
 
 type ManualValues = z.infer<typeof manualSchema>;
@@ -93,7 +95,14 @@ function getDateLocal(iso: string) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function EditEntryRow({
+function toDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function EditTimeEntryModal({
   entry,
   clients,
   tasks,
@@ -101,90 +110,146 @@ function EditEntryRow({
   onCancel,
   isPending,
 }: {
-  entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string };
+  entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null };
   clients: { id: number; name: string }[] | undefined;
   tasks: { id: number; title: string; client_id: number | null; status: string }[] | undefined;
   onSave: (id: number, data: EditValues) => void;
   onCancel: () => void;
   isPending: boolean;
 }) {
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<EditValues>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<EditValues>({
     resolver: zodResolver(editSchema),
     defaultValues: {
       client_id: entry.client_id,
       task_id: entry.task_id,
       duration_minutes: entry.duration_minutes,
       date: entry.date,
+      started_at: toDatetimeLocal(entry.started_at),
+      ended_at: toDatetimeLocal(entry.ended_at),
     },
   });
 
   const selectedClientId = Number(watch("client_id"));
-  const editTasks = tasks?.filter(t => t.client_id === selectedClientId && t.status === "pending") ?? [];
+  const startedAt = watch("started_at");
+  const endedAt = watch("ended_at");
+  const editTasks = tasks?.filter(t => t.client_id === selectedClientId) ?? [];
+
+  useEffect(() => {
+    if (startedAt && endedAt) {
+      const start = new Date(startedAt).getTime();
+      const end = new Date(endedAt).getTime();
+      if (end > start) {
+        const mins = Math.max(1, Math.round((end - start) / 60000));
+        setValue("duration_minutes", mins);
+      }
+    }
+  }, [startedAt, endedAt, setValue]);
+
+  const onSubmit = (data: EditValues) => {
+    const payload: EditValues = {
+      ...data,
+      started_at: data.started_at ? new Date(data.started_at).toISOString() : undefined,
+      ended_at: data.ended_at ? new Date(data.ended_at).toISOString() : undefined,
+    };
+    onSave(entry.id, payload);
+  };
 
   return (
-    <form
-      onSubmit={handleSubmit(data => onSave(entry.id, data))}
-      className="p-4 bg-blue-50/50 border-b border-blue-100 space-y-3"
-    >
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div>
-          <label className="text-xs font-medium text-slate-500 block mb-1">Client</label>
-          <select {...register("client_id")} className="input-field text-sm py-1.5">
-            <option value="">Select…</option>
-            {clients?.map(c => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          {errors.client_id && <p className="text-destructive text-xs mt-0.5">{errors.client_id.message}</p>}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-900">Edit Time Entry</h2>
+          <button onClick={onCancel} className="text-slate-400 hover:text-slate-700 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
         </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="px-6 py-5 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label-text">Client</label>
+              <select {...register("client_id")} className="input-field">
+                <option value="">Select…</option>
+                {clients?.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {errors.client_id && <p className="text-destructive text-xs mt-1">{errors.client_id.message}</p>}
+            </div>
+            <div>
+              <label className="label-text">Task</label>
+              <select {...register("task_id")} className="input-field" disabled={!selectedClientId}>
+                <option value="">General</option>
+                {editTasks.map(t => (
+                  <option key={t.id} value={t.id}>{t.title}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-        <div>
-          <label className="text-xs font-medium text-slate-500 block mb-1">Task</label>
-          <select {...register("task_id")} className="input-field text-sm py-1.5" disabled={!selectedClientId}>
-            <option value="">General</option>
-            {editTasks.map(t => (
-              <option key={t.id} value={t.id}>{t.title}</option>
-            ))}
-          </select>
-        </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label-text">Start Time</label>
+              <input
+                type="datetime-local"
+                {...register("started_at")}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="label-text">End Time</label>
+              <input
+                type="datetime-local"
+                {...register("ended_at")}
+                className="input-field"
+              />
+            </div>
+          </div>
 
-        <div>
-          <label className="text-xs font-medium text-slate-500 block mb-1">Duration (mins)</label>
-          <input
-            type="number"
-            min={1}
-            {...register("duration_minutes")}
-            className="input-field text-sm py-1.5"
-          />
-          {errors.duration_minutes && <p className="text-destructive text-xs mt-0.5">{errors.duration_minutes.message}</p>}
-        </div>
+          {startedAt && endedAt && new Date(endedAt) <= new Date(startedAt) && (
+            <p className="text-xs text-red-500">End time must be after start time</p>
+          )}
 
-        <div>
-          <label className="text-xs font-medium text-slate-500 block mb-1">Date</label>
-          <input type="date" {...register("date")} className="input-field text-sm py-1.5" />
-          {errors.date && <p className="text-destructive text-xs mt-0.5">{errors.date.message}</p>}
-        </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="label-text">Duration (minutes)</label>
+              <input
+                type="number"
+                min={1}
+                {...register("duration_minutes")}
+                className="input-field"
+              />
+              {errors.duration_minutes && <p className="text-destructive text-xs mt-1">{errors.duration_minutes.message}</p>}
+              {startedAt && endedAt && new Date(endedAt) > new Date(startedAt) && (
+                <p className="text-xs text-slate-400 mt-1">Auto-calculated from times</p>
+              )}
+            </div>
+            <div>
+              <label className="label-text">Date</label>
+              <input type="date" {...register("date")} className="input-field" />
+              {errors.date && <p className="text-destructive text-xs mt-1">{errors.date.message}</p>}
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#266b75] text-white text-sm font-medium hover:bg-[#266b75]/90 transition-colors disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" />
+              {isPending ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </form>
       </div>
-
-      <div className="flex items-center gap-2 justify-end">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors"
-        >
-          <X className="w-3.5 h-3.5" />
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="flex items-center gap-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
-        >
-          <Check className="w-3.5 h-3.5" />
-          {isPending ? "Saving…" : "Save"}
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
 
@@ -209,7 +274,7 @@ export default function TimeTracking() {
   const [timerClientId, setTimerClientId] = useState("");
   const [timerTaskId, setTimerTaskId] = useState("");
   const [activeTab, setActiveTab] = useState<"timer" | "manual">("timer");
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null } | null>(null);
 
   // Ref used to pass client_id into the shared onSuccess handler without typed callback params
   const pendingClientIdRef = useRef<number | null>(null);
@@ -264,7 +329,7 @@ export default function TimeTracking() {
     mutation: {
       onSuccess: () => {
         invalidateAll();
-        setEditingId(null);
+        setEditingEntry(null);
         toast({ title: "Entry updated" });
       },
       onError: () => {
@@ -361,6 +426,7 @@ export default function TimeTracking() {
   const timerTaskName = tasks?.find(t => t.id === activeTimer?.taskId)?.title;
 
   return (
+    <>
     <div className="space-y-8 max-w-5xl mx-auto">
       <div>
         <h1 className="text-3xl font-display font-bold text-slate-900">Time Tracking</h1>
@@ -598,17 +664,6 @@ export default function TimeTracking() {
               ) : (
                 [...entries].reverse().map(entry => (
                   <div key={entry.id}>
-                    {/* Edit form expands above the row */}
-                    {editingId === entry.id ? (
-                      <EditEntryRow
-                        entry={entry}
-                        clients={clients}
-                        tasks={tasks}
-                        onSave={handleSaveEdit}
-                        onCancel={() => setEditingId(null)}
-                        isPending={updateMutation.isPending}
-                      />
-                    ) : (
                       <div className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors group">
                         {/* Duration badge */}
                         <div className={cn(
@@ -670,7 +725,7 @@ export default function TimeTracking() {
                           </div>
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
-                              onClick={() => setEditingId(entry.id)}
+                              onClick={() => setEditingEntry(entry)}
                               className="p-1.5 text-slate-300 hover:text-blue-500 transition-colors rounded"
                               title="Edit entry"
                             >
@@ -687,7 +742,6 @@ export default function TimeTracking() {
                           </div>
                         </div>
                       </div>
-                    )}
                   </div>
                 ))
               )}
@@ -696,5 +750,17 @@ export default function TimeTracking() {
         </div>
       </div>
     </div>
+
+    {editingEntry && (
+      <EditTimeEntryModal
+        entry={editingEntry}
+        clients={clients}
+        tasks={tasks}
+        onSave={handleSaveEdit}
+        onCancel={() => setEditingEntry(null)}
+        isPending={updateMutation.isPending}
+      />
+    )}
+    </>
   );
 }

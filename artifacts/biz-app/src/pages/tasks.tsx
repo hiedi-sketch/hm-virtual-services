@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   useListTasks,
   useCreateTask,
@@ -14,23 +14,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus,
-  CheckCircle2,
-  Circle,
-  Calendar,
-  User as UserIcon,
   Filter,
   RefreshCw,
-  Pencil,
   ArrowUpDown,
-  AlertCircle,
-  ChevronDown,
-  MessageSquare,
-  X,
-  Send,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { SubtaskList } from "@/components/SubtaskList";
 import { useAuth } from "@/contexts/AuthContext";
 import TaskTable from "@/components/TaskTable";
 import { useTimer } from "@/contexts/TimerContext";
@@ -123,7 +112,7 @@ function statusLabel(s: string) {
 
 function statusBadgeCls(s: string) {
   if (s === "complete")    return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  if (s === "in_progress") return "bg-amber-50 text-amber-700 border border-amber-200";
+  if (s === "in_progress") return "bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/30";
   if (s === "confirmed")   return "bg-blue-50 text-blue-700 border border-blue-200";
   return "bg-slate-100 text-slate-600 border border-slate-200";
 }
@@ -168,8 +157,6 @@ export default function Tasks() {
   // ── Modals ────────────────────────────────────────────────────────────────
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
-  const [commentTaskTitle, setCommentTaskTitle] = useState<string>("");
 
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
 
@@ -397,24 +384,9 @@ export default function Tasks() {
         onToggleStatus={handleToggleStatus}
         onUpdateField={handleUpdateField}
         onStartTimer={startForTask}
-        onComment={(id, title) => {
-          if (commentTaskId === id) { setCommentTaskId(null); }
-          else { setCommentTaskId(id); setCommentTaskTitle(title); }
-        }}
         activeTaskId={timerState.taskId}
-        activeCommentTaskId={commentTaskId}
         timerStatus={timerState.status}
       />
-
-      {/* ── Comment Panel ────────────────────────────────────────────────── */}
-      {commentTaskId !== null && (
-        <AdminTaskCommentPanel
-          taskId={commentTaskId}
-          taskTitle={commentTaskTitle}
-          onClose={() => setCommentTaskId(null)}
-          queryClient={queryClient}
-        />
-      )}
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="Add Task">
@@ -542,270 +514,6 @@ export default function Tasks() {
           </form>
         </Modal>
       )}
-    </div>
-  );
-}
-
-// ── TaskRow component ──────────────────────────────────────────────────────
-
-function TaskRow({
-  task, today, isAdmin, onToggle, onEdit, updating,
-}: {
-  task: Task;
-  today: string;
-  isAdmin: boolean;
-  onToggle: () => void;
-  onEdit: () => void;
-  updating: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const isComplete = task.status === "complete";
-  const isOverdue = !isComplete && task.due_date && task.due_date < today;
-  const daysOverdue = isOverdue && task.due_date
-    ? Math.floor((Date.now() - new Date(task.due_date + "T00:00:00").getTime()) / 86_400_000)
-    : 0;
-
-  return (
-    <>
-      <tr className={cn(
-        "group transition-colors",
-        isComplete ? "opacity-60 hover:opacity-80" : isOverdue ? "bg-red-50/40 hover:bg-red-50/70" : "hover:bg-primary/5",
-      )}>
-        {/* Task column */}
-        <td className="px-6 py-4 align-top">
-          <div className="flex items-start gap-3">
-            <button
-              onClick={onToggle}
-              disabled={updating}
-              className={cn(
-                "mt-0.5 shrink-0 transition-colors",
-                isComplete ? "text-emerald-500 hover:text-emerald-600" : "text-slate-300 hover:text-primary",
-              )}
-              title={isComplete ? "Mark pending" : "Mark complete"}
-            >
-              {isComplete ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-            </button>
-            <div className="min-w-0">
-              <div className={cn(
-                "font-semibold leading-snug",
-                isComplete ? "line-through text-slate-400 decoration-slate-300" : "text-slate-900 group-hover:text-primary transition-colors",
-              )}>
-                {task.title}
-              </div>
-              {task.assigned_to && (
-                <div className="text-slate-400 text-xs mt-0.5 flex items-center gap-1">
-                  <UserIcon className="w-3 h-3" /> {task.assigned_to}
-                </div>
-              )}
-              {task.recurrence && (
-                <div className="mt-1">
-                  <span className={cn(
-                    "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
-                    RECURRENCE_BADGE[task.recurrence],
-                  )}>
-                    <RefreshCw className="w-2.5 h-2.5" />
-                    {task.recurrence.charAt(0).toUpperCase() + task.recurrence.slice(1)}
-                  </span>
-                </div>
-              )}
-              {expanded && task.description && (
-                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{task.description}</p>
-              )}
-              <SubtaskList taskId={task.id} onAllComplete={onToggle} />
-            </div>
-          </div>
-        </td>
-
-        {/* Client column */}
-        <td className="px-6 py-4 align-top">
-          {task.client_name ? (
-            <span className="font-medium text-slate-700">{task.client_name}</span>
-          ) : (
-            <span className="text-slate-300">—</span>
-          )}
-        </td>
-
-        {/* Status column */}
-        <td className="px-6 py-4 align-top">
-          <span className={cn(
-            "inline-flex items-center text-xs font-semibold px-2.5 py-0.5 rounded-md",
-            statusBadgeCls(task.status),
-          )}>
-            {statusLabel(task.status)}
-          </span>
-        </td>
-
-        {/* Due Date column */}
-        <td className="px-6 py-4 align-top">
-          {task.due_date ? (
-            <span className={cn(
-              "flex items-center gap-1.5 text-sm",
-              isOverdue ? "font-semibold text-red-600" : "text-slate-600",
-            )}>
-              <Calendar className="w-3.5 h-3.5 shrink-0" />
-              {fmtDate(task.due_date)}
-              {isOverdue && <span className="text-red-400 font-normal text-xs">({daysOverdue}d late)</span>}
-            </span>
-          ) : (
-            <span className="text-slate-300">—</span>
-          )}
-        </td>
-
-        {/* Actions column */}
-        <td className="px-4 py-4 align-top text-slate-300 group-hover:text-slate-500 transition-colors">
-          <div className="flex items-center gap-1 justify-end">
-            {isAdmin && (
-              <button
-                onClick={onEdit}
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                title="Edit task"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-            )}
-            {task.description && (
-              <button
-                onClick={() => setExpanded(v => !v)}
-                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
-                title={expanded ? "Collapse" : "Show description"}
-              >
-                <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", expanded && "rotate-180")} />
-              </button>
-            )}
-          </div>
-        </td>
-      </tr>
-    </>
-  );
-}
-
-// ── Admin Task Comment Panel ─────────────────────────────────────────────────
-
-type Comment = {
-  id: number;
-  task_id: number;
-  user_id: number;
-  author_name: string;
-  author_role: string;
-  comment: string;
-  created_at: string;
-};
-
-function AdminTaskCommentPanel({
-  taskId,
-  taskTitle,
-  onClose,
-  queryClient,
-}: {
-  taskId: number;
-  taskTitle: string;
-  onClose: () => void;
-  queryClient: ReturnType<typeof useQueryClient>;
-}) {
-  const [text, setText] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
-
-  const { data: comments = [], refetch } = useQuery<Comment[]>({
-    queryKey: ["task-comments", taskId],
-    queryFn: async () => {
-      const res = await fetch(`/api/tasks/${taskId}/comments`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load comments");
-      return res.json();
-    },
-  });
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [comments]);
-
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!text.trim()) return;
-    setSubmitting(true);
-    try {
-      const res = await fetch(`/api/tasks/${taskId}/comments`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ comment: text.trim() }),
-      });
-      if (!res.ok) throw new Error("Failed to post comment");
-      setText("");
-      refetch();
-    } catch {
-      toast({ title: "Failed to post comment", variant: "destructive" });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  function fmtTime(d: string) {
-    return new Date(d).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  }
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-        <MessageSquare className="w-4 h-4 text-slate-400" />
-        <span className="font-semibold text-slate-900 text-sm">Comments</span>
-        <span className="text-xs text-slate-400 truncate ml-1">— {taskTitle}</span>
-        <button
-          onClick={onClose}
-          className="ml-auto p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="max-h-72 overflow-y-auto p-4 space-y-3">
-        {comments.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-6">No comments yet. Start the conversation.</p>
-        ) : (
-          comments.map(c => {
-            const isAdmin = c.author_role === "admin" || c.author_role === "team_member";
-            return (
-              <div
-                key={c.id}
-                className={cn("flex flex-col max-w-sm gap-0.5", isAdmin ? "items-end ml-auto" : "items-start")}
-              >
-                <span className="text-[10px] text-slate-400 px-1">
-                  {c.author_name} · {fmtTime(c.created_at)}
-                </span>
-                <div
-                  className={cn(
-                    "px-3 py-2 rounded-2xl text-sm leading-snug",
-                    isAdmin
-                      ? "bg-[#266b75] text-white rounded-tr-sm"
-                      : "bg-slate-100 text-slate-800 rounded-tl-sm",
-                  )}
-                >
-                  {c.comment}
-                </div>
-              </div>
-            );
-          })
-        )}
-        <div ref={bottomRef} />
-      </div>
-
-      <form onSubmit={submit} className="border-t border-slate-100 px-4 py-3 flex items-center gap-2">
-        <input
-          className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-ring/50 focus:border-primary"
-          placeholder="Add a comment…"
-          value={text}
-          onChange={e => setText(e.target.value)}
-          disabled={submitting}
-        />
-        <button
-          type="submit"
-          disabled={!text.trim() || submitting}
-          className="p-2 rounded-lg bg-[#266b75] text-white hover:bg-[#266b75]/90 disabled:opacity-40 transition-colors"
-        >
-          <Send className="w-4 h-4" />
-        </button>
-      </form>
     </div>
   );
 }

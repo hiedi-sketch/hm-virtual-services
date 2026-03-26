@@ -223,6 +223,7 @@ export default function ClientDetail() {
   const mappedTasks = filteredTasks.map(t => ({
     id: String(t.id),
     title: t.title,
+    description: t.description ?? undefined,
     due_date: t.due_date ?? undefined,
     assigned_to: t.assigned_to ?? undefined,
     status: t.status ?? "pending",
