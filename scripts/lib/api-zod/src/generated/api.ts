@@ -136,7 +136,7 @@ export const ListTasksResponseItem = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["pending", "complete"]),
+  status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
   recurrence: zod
@@ -169,7 +169,7 @@ export const SpawnRecurringTasksResponseItem = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["pending", "complete"]),
+  status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
   recurrence: zod
@@ -244,7 +244,7 @@ export const UpdateTaskBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().nullish(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["pending", "complete"]).optional(),
+  status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]).optional(),
   due_date: zod.string().nullish(),
   recurrence: zod
     .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
@@ -257,7 +257,7 @@ export const UpdateTaskResponse = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["pending", "complete"]),
+  status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
   recurrence: zod

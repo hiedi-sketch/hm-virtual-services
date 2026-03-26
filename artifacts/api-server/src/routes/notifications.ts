@@ -58,7 +58,7 @@ router.post("/notifications/overdue-tasks", requireAdmin, async (req, res) => {
     .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
     .where(
       and(
-        eq(tasksTable.status, "pending"),
+        eq(tasksTable.status, "Pending"),
         lt(tasksTable.due_date, today)
       )
     );

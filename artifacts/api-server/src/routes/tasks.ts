@@ -145,7 +145,7 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
   // When completing a recurring task, stamp last_generated_at = today so the daily
   // scheduler won't count this task as a new spawn source for the current cycle.
   const extraFields: Record<string, unknown> = {};
-  if (body.status === "complete") {
+  if (body.status === "Completed") {
     const [existing] = await db
       .select({ recurrence: tasksTable.recurrence })
       .from(tasksTable)
@@ -169,8 +169,8 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
   const parsed = UpdateTaskResponse.parse(updated);
   res.json(parsed);
   const actor = req.session.user;
-  const action = body.status === "complete" ? "completed" : "updated";
-  const summary = body.status === "complete"
+  const action = body.status === "Completed" ? "completed" : "updated";
+  const summary = body.status === "Completed"
     ? `Task "${updated.title}" completed`
     : `Task "${updated.title}" updated`;
   logAudit("task", id, action, summary, { id: actor?.id, name: actor?.name });

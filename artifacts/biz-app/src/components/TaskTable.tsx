@@ -17,16 +17,16 @@ type Task = {
 };
 
 const TASK_STATUS_OPTIONS = [
-  { value: "pending",     label: "Pending" },
-  { value: "confirmed",   label: "Confirmed" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "complete",    label: "Completed" },
+  { value: "Pending",     label: "Pending" },
+  { value: "Confirmed",   label: "Confirmed" },
+  { value: "In Progress", label: "In Progress" },
+  { value: "Completed",   label: "Completed" },
 ] as const;
 
 function statusBadge(status: string) {
-  if (status === "complete")    return "text-xs border rounded px-2 py-1 bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (status === "in_progress") return "text-xs border rounded px-2 py-1 bg-[#266b75]/10 text-[#266b75] border-[#266b75]/30";
-  if (status === "confirmed")   return "text-xs border rounded px-2 py-1 bg-blue-50 text-blue-700 border-blue-200";
+  if (status === "Completed")   return "text-xs border rounded px-2 py-1 bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "In Progress") return "text-xs border rounded px-2 py-1 bg-[#266b75]/10 text-[#266b75] border-[#266b75]/30";
+  if (status === "Confirmed")   return "text-xs border rounded px-2 py-1 bg-blue-50 text-blue-700 border-blue-200";
   return "text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-600";
 }
 
@@ -128,7 +128,7 @@ export default function TaskTable({
               </tr>
             ) : (
               displayedTasks.map((task) => {
-                const isOverdue = task.status !== "complete" && task.due_date && task.due_date < today;
+                const isOverdue = task.status !== "Completed" && task.due_date && task.due_date < today;
                 const numId = Number(task.id);
                 const isThisTaskActive = activeTaskId === numId;
                 const isThisRunning = isThisTaskActive && timerStatus === "running";
@@ -151,12 +151,12 @@ export default function TaskTable({
                           onClick={() => onToggleStatus(task)}
                           className="text-lg leading-none"
                         >
-                          {task.status === "complete" ? "✅" : "⬜"}
+                          {task.status === "Completed" ? "✅" : "⬜"}
                         </button>
                       </td>
                       <td className="px-6 py-4">
                         <div
-                          className={`font-semibold ${task.status === "complete" ? "line-through text-slate-400" : "text-slate-900"}`}
+                          className={`font-semibold ${task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"}`}
                           onClick={e => e.stopPropagation()}
                         >
                           <input
@@ -164,7 +164,7 @@ export default function TaskTable({
                             onChange={(e) => onUpdateField(task.id, "title", e.target.value)}
                             onClick={e => e.stopPropagation()}
                             className={`w-full bg-transparent outline-none font-semibold ${
-                              task.status === "complete" ? "line-through text-slate-400" : "text-slate-900"
+                              task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
                             }`}
                           />
                         </div>

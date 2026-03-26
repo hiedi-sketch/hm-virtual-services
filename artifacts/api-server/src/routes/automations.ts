@@ -37,7 +37,7 @@ router.post("/automations/run", requireAuth, async (req, res) => {
   const overdueTasks = await db
     .select({ id: tasksTable.id })
     .from(tasksTable)
-    .where(and(eq(tasksTable.status, "pending"), lt(tasksTable.due_date, today)));
+    .where(and(eq(tasksTable.status, "Pending"), lt(tasksTable.due_date, today)));
 
   // 3. Budget status per client (this month)
   //    Sum time entries grouped by client, compare to monthly_hour_budget

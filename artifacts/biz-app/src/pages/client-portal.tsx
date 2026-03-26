@@ -39,20 +39,20 @@ function fmtCurrency(n: number) {
 }
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    pending:     "bg-slate-100 text-slate-700",
-    confirmed:   "bg-blue-50 text-blue-700",
-    in_progress: "bg-amber-50 text-amber-700",
-    complete:    "bg-emerald-100 text-emerald-800",
-    paid:        "bg-emerald-100 text-emerald-800",
-    unpaid:      "bg-red-100 text-red-800",
-    in_review:   "bg-blue-100 text-blue-800",
-    resolved:    "bg-slate-100 text-slate-600",
+    Pending:      "bg-slate-100 text-slate-700",
+    Confirmed:    "bg-blue-50 text-blue-700",
+    "In Progress": "bg-amber-50 text-amber-700",
+    Completed:    "bg-emerald-100 text-emerald-800",
+    paid:         "bg-emerald-100 text-emerald-800",
+    unpaid:       "bg-red-100 text-red-800",
+    in_review:    "bg-blue-100 text-blue-800",
+    resolved:     "bg-slate-100 text-slate-600",
   };
   const labels: Record<string, string> = {
-    pending:     "Pending",
-    confirmed:   "Confirmed",
-    in_progress: "In Progress",
-    complete:    "Completed",
+    Pending:      "Pending",
+    Confirmed:    "Confirmed",
+    "In Progress": "In Progress",
+    Completed:    "Completed",
   };
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${map[status] ?? "bg-slate-100 text-slate-700"}`}>
@@ -119,8 +119,8 @@ export default function ClientPortal() {
   const hoursPct = hoursBudget > 0 ? Math.min(100, Math.round((hoursThisMonth / hoursBudget) * 100)) : 0;
   const hoursColor = hoursPct >= 100 ? "bg-red-500" : hoursPct >= 85 ? "bg-amber-500" : "bg-primary";
 
-  const completedTasks = tasks.filter(t => t.status === "complete");
-  const pendingTasks = tasks.filter(t => t.status !== "complete");
+  const completedTasks = tasks.filter(t => t.status === "Completed");
+  const pendingTasks = tasks.filter(t => t.status !== "Completed");
   const overdueTasks = pendingTasks.filter(t => t.due_date && t.due_date < todayStr);
 
   const paidInvoices = invoices.filter(i => i.status === "paid");
@@ -629,8 +629,8 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
   };
 
   const filtered = tasks.filter(t => filterStatus === "all" || t.status === filterStatus as string);
-  const pending = tasks.filter(t => t.status !== "complete").length;
-  const completed = tasks.filter(t => t.status === "complete").length;
+  const pending = tasks.filter(t => t.status !== "Completed").length;
+  const completed = tasks.filter(t => t.status === "Completed").length;
 
   return (
     <div className="space-y-5">

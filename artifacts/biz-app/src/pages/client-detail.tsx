@@ -60,7 +60,7 @@ export default function ClientDetail() {
 
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "confirmed" | "in_progress" | "complete">("all");
+  const [taskFilter, setTaskFilter] = useState<"all" | "Pending" | "Confirmed" | "In Progress" | "Completed">("all");
   const [showAddService, setShowAddService] = useState(false);
   const [addServiceId, setAddServiceId] = useState("");
   const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
@@ -147,7 +147,7 @@ export default function ClientDetail() {
   const toggleStatus = (task: { id: string; status: string }) => {
     updateTask.mutate({
       id: Number(task.id),
-      data: { status: task.status === "complete" ? "pending" : "complete" },
+      data: { status: task.status === "Completed" ? "Pending" : "Completed" },
     });
   };
 
@@ -226,7 +226,7 @@ export default function ClientDetail() {
     description: t.description ?? undefined,
     due_date: t.due_date ?? undefined,
     assigned_to: t.assigned_to ?? undefined,
-    status: t.status ?? "pending",
+    status: t.status ?? "Pending",
   }));
 
   if (clientLoading) {
@@ -555,10 +555,10 @@ export default function ClientDetail() {
           <div className="ml-auto flex gap-2">
             {([
               { key: "all", label: "All" },
-              { key: "pending", label: "Pending" },
-              { key: "confirmed", label: "Confirmed" },
-              { key: "in_progress", label: "In Progress" },
-              { key: "complete", label: "Completed" },
+              { key: "Pending", label: "Pending" },
+              { key: "Confirmed", label: "Confirmed" },
+              { key: "In Progress", label: "In Progress" },
+              { key: "Completed", label: "Completed" },
             ] as const).map(f => (
               <button
                 key={f.key}

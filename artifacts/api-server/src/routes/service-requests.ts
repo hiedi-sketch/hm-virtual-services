@@ -61,7 +61,7 @@ router.post("/service-requests", requireAuth, async (req, res) => {
       type: body.data.type,
       subject: body.data.subject,
       message: body.data.message,
-      status: "pending",
+      status: "Pending",
     })
     .returning();
 

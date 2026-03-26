@@ -52,14 +52,14 @@ export default function TeamDashboard() {
 
   // Task stats
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.status === "complete").length;
-  const pendingTasks = tasks.filter(t => t.status !== "complete").length;
+  const completedTasks = tasks.filter(t => t.status === "Completed").length;
+  const pendingTasks = tasks.filter(t => t.status !== "Completed").length;
   const completedPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
   const overdueTasks = tasks
-    .filter(t => t.status !== "complete" && t.due_date && t.due_date < todayStr)
+    .filter(t => t.status !== "Completed" && t.due_date && t.due_date < todayStr)
     .sort((a, b) => (a.due_date ?? "").localeCompare(b.due_date ?? ""));
   const upcomingTasks = tasks
-    .filter(t => t.status !== "complete" && (!t.due_date || t.due_date >= todayStr))
+    .filter(t => t.status !== "Completed" && (!t.due_date || t.due_date >= todayStr))
     .sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"))
     .slice(0, 5);
 
@@ -271,7 +271,7 @@ export default function TeamDashboard() {
                           </span>
                         )}
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                          t.status === "complete"
+                          t.status === "Completed"
                             ? "bg-emerald-50 text-emerald-700"
                             : "bg-amber-50 text-amber-700"
                         }`}>

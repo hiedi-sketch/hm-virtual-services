@@ -100,10 +100,10 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 // ── Schemas ─────────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS = [
-  { value: "pending",     label: "Pending" },
-  { value: "confirmed",   label: "Confirmed" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "complete",    label: "Completed" },
+  { value: "Pending",      label: "Pending" },
+  { value: "Confirmed",    label: "Confirmed" },
+  { value: "In Progress",  label: "In Progress" },
+  { value: "Completed",    label: "Completed" },
 ] as const;
 
 function statusLabel(s: string) {
@@ -111,9 +111,9 @@ function statusLabel(s: string) {
 }
 
 function statusBadgeCls(s: string) {
-  if (s === "complete")    return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  if (s === "in_progress") return "bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/30";
-  if (s === "confirmed")   return "bg-blue-50 text-blue-700 border border-blue-200";
+  if (s === "Completed")   return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+  if (s === "In Progress") return "bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/30";
+  if (s === "Confirmed")   return "bg-blue-50 text-blue-700 border border-blue-200";
   return "bg-slate-100 text-slate-600 border border-slate-200";
 }
 
@@ -123,7 +123,7 @@ const formSchema = z.object({
   client_id: z.coerce.number().min(1, "Client is required"),
   assigned_to: z.string().optional(),
   due_date: z.string().optional(),
-  status: z.string().optional().default("pending"),
+  status: z.string().optional().default("Pending"),
   recurrence: z.preprocess(
     val => (val === "" ? null : val),
     z.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullable().optional()
@@ -210,12 +210,12 @@ export default function Tasks() {
 
   const onEditSubmit = (data: EditValues) => {
     if (!editingTask) return;
-    updateMutation.mutate({ id: editingTask.id, data: { ...data, status: data.status || "pending", recurrence: data.recurrence || null } });
+    updateMutation.mutate({ id: editingTask.id, data: { ...data, status: data.status || "Pending", recurrence: data.recurrence || null } });
   };
 
   const toggleStatus = (task: Task) => {
-    const completing = task.status !== "complete";
-    updateMutation.mutate({ id: task.id, data: { status: completing ? "complete" : "pending" } });
+    const completing = task.status !== "Completed";
+    updateMutation.mutate({ id: task.id, data: { status: completing ? "Completed" : "Pending" } });
     if (completing && task.recurrence) {
       spawnNextMutation.mutate({
         data: {
@@ -234,8 +234,8 @@ export default function Tasks() {
   const counts = useMemo(() => ({
     all: allTasks.length,
     mine: allTasks.filter(t => t.assigned_to === user?.name).length,
-    overdue: allTasks.filter(t => t.status !== "complete" && t.due_date && t.due_date < today).length,
-    completed: allTasks.filter(t => t.status === "complete").length,
+    overdue: allTasks.filter(t => t.status !== "Completed" && t.due_date && t.due_date < today).length,
+    completed: allTasks.filter(t => t.status === "Completed").length,
   }), [allTasks, user, today]);
 
   // ── View + sort pipeline ──────────────────────────────────────────────────
@@ -243,8 +243,8 @@ export default function Tasks() {
     // 1. View filter
     let result = allTasks;
     if (view === "mine") result = allTasks.filter(t => t.assigned_to === user?.name);
-    else if (view === "overdue") result = allTasks.filter(t => t.status !== "complete" && t.due_date && t.due_date < today);
-    else if (view === "completed") result = allTasks.filter(t => t.status === "complete");
+    else if (view === "overdue") result = allTasks.filter(t => t.status !== "Completed" && t.due_date && t.due_date < today);
+    else if (view === "completed") result = allTasks.filter(t => t.status === "Completed");
 
     // 2. Sort
     return [...result].sort((a, b) => {
@@ -264,7 +264,7 @@ export default function Tasks() {
         return (a.client_name ?? "").localeCompare(b.client_name ?? "");
       }
       if (sortBy === "status") {
-        const order: Record<string, number> = { pending: 0, confirmed: 1, in_progress: 2, complete: 3 };
+        const order: Record<string, number> = { Pending: 0, Confirmed: 1, "In Progress": 2, Completed: 3 };
         return (order[a.status] ?? 0) - (order[b.status] ?? 0);
       }
       return 0;
@@ -286,7 +286,7 @@ export default function Tasks() {
   };
 
   const handleToggleStatus = (tableTask: { id: string; status: string }) => {
-    const newStatus = tableTask.status === "complete" ? "pending" : "complete";
+    const newStatus = tableTask.status === "Completed" ? "Pending" : "Completed";
     updateMutation.mutate({ id: Number(tableTask.id), data: { status: newStatus } });
   };
 
@@ -377,7 +377,7 @@ export default function Tasks() {
           title: t.title,
           due_date: t.due_date ?? undefined,
           assigned_to: t.assigned_to ?? undefined,
-          status: t.status ?? "pending",
+          status: t.status ?? "Pending",
           client_id: t.client_id ?? null,
           client_name: t.client_name ?? null,
         }))}

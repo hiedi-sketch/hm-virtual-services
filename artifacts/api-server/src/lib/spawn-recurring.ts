@@ -80,7 +80,7 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
   const completedRecurring = await db
     .select()
     .from(tasksTable)
-    .where(and(isNotNull(tasksTable.recurrence), eq(tasksTable.status, "complete")));
+    .where(and(isNotNull(tasksTable.recurrence), eq(tasksTable.status, "Completed")));
 
   const spawned: (typeof tasksTable.$inferSelect)[] = [];
 
@@ -103,7 +103,7 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
           eq(tasksTable.title, task.title),
           eq(tasksTable.client_id, task.client_id),
           eq(tasksTable.recurrence, task.recurrence),
-          eq(tasksTable.status, "pending"),
+          eq(tasksTable.status, "Pending"),
         ),
       )
       .limit(1);
@@ -117,7 +117,7 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
         description: task.description,
         client_id: task.client_id,
         assigned_to: task.assigned_to,
-        status: "pending",
+        status: "Pending",
         due_date: nextDueDate(task.recurrence),
         recurrence: task.recurrence,
         last_generated_at: today,

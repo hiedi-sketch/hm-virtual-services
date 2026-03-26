@@ -199,11 +199,11 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res) => {
       if (i % 2 === 1) {
         doc.rect(L, rowY, R - L, 16).fillColor("#fafafa").fill();
       }
-      const statusColor = t.status === "complete" ? "#16a34a" : "#d97706";
+      const statusColor = t.status === "Completed" ? "#16a34a" : "#d97706";
       doc.font("Helvetica").fontSize(9).fillColor("#1e293b")
         .text(t.title, colTitle + 6, rowY + 3, { width: 270, ellipsis: true });
       doc.font("Helvetica-Bold").fontSize(8).fillColor(statusColor)
-        .text(t.status === "complete" ? "Complete" : "Pending",
+        .text(t.status === "Completed" ? "Completed" : "Pending",
           colStatus, rowY + 4, { width: 80 });
       doc.font("Helvetica").fontSize(8).fillColor("#64748b")
         .text(t.due_date ? fmtDate(t.due_date) : "—",
