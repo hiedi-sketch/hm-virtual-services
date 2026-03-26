@@ -6,13 +6,16 @@ import { Modal } from "@/components/Modal";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Building2, Mail, DollarSign, ChevronRight, Clock } from "lucide-react";
+import { Plus, Building2, Mail, DollarSign, ChevronRight, Clock, Phone, Globe, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
 const formSchema = z.object({
-  name: z.string().min(1, "Name is required"),
+  name: z.string().min(1, "Business name is required"),
+  contact_name: z.string().optional(),
   email: z.string().email("Invalid email address"),
+  phone: z.string().optional(),
+  website: z.string().optional(),
   has_bookkeeping: z.boolean(),
   has_va: z.boolean(),
   monthly_hour_budget: z.coerce.number().min(0),
@@ -110,6 +113,9 @@ export default function Clients() {
       data: {
         name: data.name,
         email: data.email,
+        contact_name: data.contact_name?.trim() || null,
+        phone: data.phone?.trim() || null,
+        website: data.website?.trim() || null,
         service_type: serviceType as any,
         monthly_fee: totalFee,
         monthly_hour_budget: totalHours || 1,
@@ -172,6 +178,11 @@ export default function Clients() {
                   >
                     <td className="px-6 py-4">
                       <div className="font-semibold text-slate-900 group-hover:text-primary transition-colors">{client.name}</div>
+                      {client.contact_name && (
+                        <div className="text-slate-500 text-xs mt-0.5 flex items-center gap-1">
+                          <User className="w-3 h-3" /> {client.contact_name}
+                        </div>
+                      )}
                       <div className="text-slate-400 text-xs flex items-center gap-1 mt-0.5">
                         <Mail className="w-3 h-3" /> {client.email}
                       </div>
@@ -202,25 +213,57 @@ export default function Clients() {
         </div>
       </div>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New Client" description="Enter the details for your new client retainer.">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Add New Client" description="Enter the details for your new client.">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          {/* Name + Email */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="label-text">Company / Client Name</label>
-              <input {...register("name")} className="input-field" placeholder="Acme Corp" />
-              {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
+
+          {/* Contact Info */}
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact Information</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="label-text">Business Name <span className="text-destructive">*</span></label>
+                <input {...register("name")} className="input-field" placeholder="Acme Corp" />
+                {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
+              </div>
+              <div>
+                <label className="label-text">Contact Name</label>
+                <input {...register("contact_name")} className="input-field" placeholder="Jane Smith" />
+              </div>
             </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="label-text">Email Address <span className="text-destructive">*</span></label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type="email" {...register("email")} className="input-field pl-9" placeholder="billing@acmecorp.com" />
+                </div>
+                {errors.email && <p className="text-destructive text-xs mt-1">{errors.email.message}</p>}
+              </div>
+              <div>
+                <label className="label-text">Phone Number</label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input type="tel" {...register("phone")} className="input-field pl-9" placeholder="(555) 123-4567" />
+                </div>
+              </div>
+            </div>
+
             <div>
-              <label className="label-text">Contact Email</label>
-              <input type="email" {...register("email")} className="input-field" placeholder="billing@acmecorp.com" />
-              {errors.email && <p className="text-destructive text-xs mt-1">{errors.email.message}</p>}
+              <label className="label-text">Website</label>
+              <div className="relative">
+                <Globe className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input type="url" {...register("website")} className="input-field pl-9" placeholder="https://acmecorp.com" />
+              </div>
             </div>
           </div>
 
+          <div className="border-t border-slate-100" />
+
           {/* Service toggles */}
           <div>
-            <label className="label-text mb-2">Services</label>
+            <label className="label-text mb-2">Services <span className="text-destructive">*</span></label>
             <div className="flex flex-col gap-2">
               <Controller
                 name="has_bookkeeping"

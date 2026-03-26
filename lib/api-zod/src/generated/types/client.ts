@@ -11,6 +11,9 @@ export interface Client {
   id: number;
   name: string;
   email: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  website?: string | null;
   monthly_hour_budget: number;
   monthly_fee: number;
   service_type: ClientServiceType;

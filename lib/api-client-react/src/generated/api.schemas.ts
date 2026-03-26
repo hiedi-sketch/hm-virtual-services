@@ -22,10 +22,15 @@ export interface Client {
   id: number;
   name: string;
   email: string;
-  phone: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  website?: string | null;
   monthly_hour_budget: number;
   monthly_fee: number;
   service_type: ClientServiceType;
+  bk_fee?: number | null;
+  va_hourly_rate?: number | null;
+  va_hour_limit?: number | null;
 }
 
 export type CreateClientInputServiceType =
@@ -40,10 +45,15 @@ export const CreateClientInputServiceType = {
 export interface CreateClientInput {
   name: string;
   email: string;
-  phone: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  website?: string | null;
   monthly_hour_budget: number;
   monthly_fee: number;
   service_type: CreateClientInputServiceType;
+  bk_fee?: number | null;
+  va_hourly_rate?: number | null;
+  va_hour_limit?: number | null;
 }
 
 export type UpdateClientInputServiceType =
@@ -58,8 +68,15 @@ export const UpdateClientInputServiceType = {
 export interface UpdateClientInput {
   name?: string;
   email?: string;
-  phone?: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  website?: string | null;
   service_type?: UpdateClientInputServiceType;
+  monthly_fee?: number;
+  monthly_hour_budget?: number;
+  bk_fee?: number | null;
+  va_hourly_rate?: number | null;
+  va_hour_limit?: number | null;
 }
 
 export type ClientDashboardServiceType =

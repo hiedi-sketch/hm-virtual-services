@@ -10,6 +10,9 @@ import type { UpdateClientInputServiceType } from "./updateClientInputServiceTyp
 export interface UpdateClientInput {
   name?: string;
   email?: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  website?: string | null;
   service_type?: UpdateClientInputServiceType;
   monthly_fee?: number;
   monthly_hour_budget?: number;

@@ -16,7 +16,7 @@ import TaskTable from "@/components/TaskTable";
 import { DocumentsTab } from "@/components/DocumentsTab";
 import {
   Plus, ArrowLeft, X, Paperclip, Mail, Phone, DollarSign,
-  Monitor, Pencil, Check, AlertCircle,
+  Monitor, Pencil, Check, AlertCircle, Globe, User,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -62,7 +62,9 @@ export default function ClientDetail() {
 
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editContactName, setEditContactName] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editWebsite, setEditWebsite] = useState("");
   const [editHasBK, setEditHasBK] = useState(false);
   const [editHasVA, setEditHasVA] = useState(false);
   const [editBkFee, setEditBkFee] = useState<string>("");
@@ -70,7 +72,6 @@ export default function ClientDetail() {
   const [editVaLimit, setEditVaLimit] = useState<string>("");
 
   const { data: client, isLoading: clientLoading } = useGetClient(clientId);
-  console.log("CLIENT DATA:", client);
   const { data: tasks } = useListTasks({ clientId });
   const { data: dashboard } = useGetDashboard();
 
@@ -143,6 +144,9 @@ export default function ClientDetail() {
     if (!client) return;
     setEditName(client.name);
     setEditEmail(client.email);
+    setEditContactName(client.contact_name ?? "");
+    setEditPhone(client.phone ?? "");
+    setEditWebsite(client.website ?? "");
     const hasBK = client.service_type === "bookkeeping" || client.service_type === "hybrid";
     const hasVA = client.service_type === "va" || client.service_type === "hybrid";
     setEditHasBK(hasBK);
@@ -170,7 +174,9 @@ export default function ClientDetail() {
       data: {
         name: editName.trim() || undefined,
         email: editEmail.trim() || undefined,
-        phone: editPhone.trim() || undefined,
+        contact_name: editContactName.trim() || null,
+        phone: editPhone.trim() || null,
+        website: editWebsite.trim() || null,
         service_type: serviceType as any,
         bk_fee: bkFee,
         va_hourly_rate: vaRate,
@@ -245,22 +251,38 @@ export default function ClientDetail() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Name</label>
-                <input className={inputCls} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Client name" />
+                <label className="block text-xs font-medium text-slate-500 mb-1">Business Name</label>
+                <input className={inputCls} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Acme Corp" />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Contact Name</label>
+                <input className={inputCls} value={editContactName} onChange={e => setEditContactName(e.target.value)} placeholder="Jane Smith" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
                 <input type="email" className={inputCls} value={editEmail} onChange={e => setEditEmail(e.target.value)} placeholder="email@example.com" />
               </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  className={inputCls}
+                  value={editPhone}
+                  onChange={e => setEditPhone(e.target.value)}
+                  placeholder="(555) 123-4567"
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Website</label>
               <input
-                type="tel"
+                type="url"
                 className={inputCls}
-                value={editPhone}
-                onChange={e => setEditPhone(e.target.value)}
-                placeholder="(555) 123-4567"
+                value={editWebsite}
+                onChange={e => setEditWebsite(e.target.value)}
+                placeholder="https://acmecorp.com"
               />
             </div>
 
@@ -334,15 +356,35 @@ export default function ClientDetail() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-slate-900">{client.name}</h1>
+                {client.contact_name && (
+                  <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5" />
+                    {client.contact_name}
+                  </p>
+                )}
                 <div className="flex flex-wrap items-center gap-3 mt-1">
                   <span className="flex items-center gap-1.5 text-sm text-slate-500">
                     <Mail className="w-3.5 h-3.5" />
                     {client.email}
                   </span>
-                  <span className="flex items-center gap-1.5 text-sm text-slate-500">
-                    <Phone className="w-3.5 h-3.5" />
-                    {client.phone}
-                  </span>
+                  {client.phone && (
+                    <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                      <Phone className="w-3.5 h-3.5" />
+                      {client.phone}
+                    </span>
+                  )}
+                  {client.website && (
+                    <a
+                      href={client.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      {client.website.replace(/^https?:\/\//, "")}
+                    </a>
+                  )}
                 </div>
                 {/* Service package badges */}
                 <div className="flex flex-wrap gap-2 mt-2">

@@ -10,6 +10,9 @@ import type { CreateClientInputServiceType } from "./createClientInputServiceTyp
 export interface CreateClientInput {
   name: string;
   email: string;
+  contact_name?: string | null;
+  phone?: string | null;
+  website?: string | null;
   monthly_hour_budget: number;
   monthly_fee: number;
   service_type: CreateClientInputServiceType;
