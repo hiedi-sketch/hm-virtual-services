@@ -146,13 +146,10 @@ export default function ClientPortal() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <div
-                className="w-7 h-7 rounded-md flex items-center justify-center text-white font-bold text-xs shrink-0"
-                style={{ background: "#266b75", fontFamily: "Georgia, serif", letterSpacing: "-0.5px" }}
-              >
-                HM
+              <div className="w-7 h-7 rounded-md overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "#266b75" }}>
+                <img src="/hm-logo.png" alt="HM Virtual Services" className="w-6 h-6 object-contain" style={{ filter: "brightness(0) invert(1)" }} />
               </div>
-              <span className="text-sm font-semibold" style={{ color: "#266b75" }}>HM Virtual Services Suite</span>
+              <span className="text-sm font-semibold" style={{ color: "#266b75" }}>HM Virtual Services Business Suite</span>
             </div>
             <span className="text-slate-300 text-sm">·</span>
             <span className="text-slate-500 text-sm">Client Portal</span>

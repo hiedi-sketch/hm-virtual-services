@@ -71,15 +71,12 @@ export default function Login() {
 
         {/* Logo + Wordmark */}
         <div className="mb-16 flex items-center gap-3">
-          <div
-            className="w-9 h-9 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
-            style={{ background: "#266b75", fontFamily: "Georgia, serif", letterSpacing: "-0.5px" }}
-          >
-            HM
+          <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 flex items-center justify-center" style={{ background: "#266b75" }}>
+            <img src="/hm-logo.png" alt="HM Virtual Services" className="w-10 h-10 object-contain" style={{ filter: "brightness(0) invert(1)" }} />
           </div>
           <div>
             <div className="text-sm font-semibold leading-tight" style={{ color: "#266b75" }}>HM Virtual Services</div>
-            <div className="text-xs" style={{ color: "#999" }}>Suite</div>
+            <div className="text-xs font-medium" style={{ color: "#266b75" }}>Business Suite</div>
           </div>
         </div>
 
@@ -220,7 +217,7 @@ export default function Login() {
         {/* Footer */}
         <div className="mt-16 pt-8" style={{ borderTop: "1px solid #e8e8e4" }}>
           <p className="text-xs" style={{ color: "#bbb" }}>
-            Default admin: admin@flowstate.app / admin123 · HM Virtual Services Suite
+            Default admin: admin@flowstate.app / admin123 · HM Virtual Services Business Suite
           </p>
         </div>
 
