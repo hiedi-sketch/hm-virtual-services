@@ -278,7 +278,7 @@ export default function Leads() {
         </div>
         <button onClick={() => setIsModalOpen(true)} className="btn-primary">
           <Plus className="w-5 h-5 mr-2" />
-          Add Lead
+          Add New Lead
         </button>
       </div>
 
@@ -359,10 +359,10 @@ export default function Leads() {
       ) : totalLeads === 0 ? (
         <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-16 text-center">
           <Target className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-slate-900">No leads yet</h3>
-          <p className="text-slate-500 mt-2">Add prospects to start building your pipeline.</p>
-          <button onClick={() => setIsModalOpen(true)} className="btn-secondary mt-6">
-            Add your first lead
+          <h3 className="text-xl font-medium text-slate-900">You're all caught up.</h3>
+          <p className="text-slate-400 mt-2">Nothing needs your attention right now.</p>
+          <button onClick={() => setIsModalOpen(true)} className="mt-6 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors" style={{ background: "#266b75" }}>
+            Add New Lead
           </button>
         </div>
       ) : (
@@ -395,7 +395,7 @@ export default function Leads() {
                 {/* Cards */}
                 {colLeads.length === 0 ? (
                   <div className="border-2 border-dashed border-slate-200 rounded-xl py-8 text-center text-slate-400 text-sm">
-                    No leads here
+                    You're all caught up.
                   </div>
                 ) : (
                   colLeads.map(lead => (

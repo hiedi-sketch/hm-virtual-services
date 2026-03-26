@@ -135,7 +135,7 @@ export default function Clients() {
         </div>
         <button onClick={() => setIsModalOpen(true)} className="btn-primary">
           <Plus className="w-5 h-5 mr-2" />
-          Add Client
+          Add New Client
         </button>
       </div>
 
@@ -161,9 +161,10 @@ export default function Clients() {
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Building2 className="w-12 h-12 text-slate-300 mb-3" />
-                      <p className="text-slate-500 font-medium">No clients yet</p>
-                      <button onClick={() => setIsModalOpen(true)} className="text-primary hover:underline mt-2 font-medium">
-                        Add your first client
+                      <p className="text-slate-700 font-medium">You're all caught up.</p>
+                      <p className="text-slate-400 text-sm mt-0.5">No clients yet. Add your first to get started.</p>
+                      <button onClick={() => setIsModalOpen(true)} className="mt-3 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors" style={{ background: "#266b75" }}>
+                        Add New Client
                       </button>
                     </div>
                   </td>

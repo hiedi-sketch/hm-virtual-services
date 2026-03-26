@@ -163,7 +163,7 @@ export default function Services() {
           className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
         >
           <Plus className="w-4 h-4" />
-          Add Service
+          Add New Service
         </button>
       </div>
 
@@ -204,11 +204,9 @@ export default function Services() {
           <div className="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center mb-4">
             <Package className="w-6 h-6 text-slate-300" />
           </div>
-          <p className="text-slate-500 font-medium">
-            {services.length === 0 ? "No services yet" : "No matching services"}
-          </p>
+          <p className="text-slate-700 font-medium">You're all caught up.</p>
           <p className="text-slate-400 text-sm mt-1">
-            {services.length === 0 ? "Add your first service to get started." : "Try adjusting your search or filter."}
+            {services.length === 0 ? "Nothing needs your attention right now." : "Try adjusting your search or filter."}
           </p>
           {services.length === 0 && (
             <button
@@ -216,7 +214,7 @@ export default function Services() {
               className="mt-4 inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90"
             >
               <Plus className="w-4 h-4" />
-              Add Service
+              Add New Service
             </button>
           )}
         </div>
@@ -290,7 +288,7 @@ export default function Services() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-slate-100">
               <h2 className="font-semibold text-slate-900">
-                {editingService ? "Edit Service" : "New Service"}
+                {editingService ? "Edit Service" : "Add New Service"}
               </h2>
               <button onClick={closeForm} className="text-slate-400 hover:text-slate-600 transition-colors">
                 <X className="w-5 h-5" />

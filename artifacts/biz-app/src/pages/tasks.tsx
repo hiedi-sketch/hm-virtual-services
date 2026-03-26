@@ -272,10 +272,10 @@ export default function Tasks() {
   ];
 
   const emptyMessages: Record<ViewKey, string> = {
-    all: "No tasks yet — create one to get started!",
-    mine: "No tasks assigned to you.",
-    overdue: "No overdue tasks — you're all caught up!",
-    completed: "No completed tasks yet.",
+    all: "You're all caught up.",
+    mine: "You're all caught up.",
+    overdue: "You're all caught up.",
+    completed: "You're all caught up.",
   };
 
   const handleToggleStatus = (tableTask: { id: string; completed: boolean }) => {
@@ -301,7 +301,7 @@ export default function Tasks() {
         </div>
         <button onClick={() => setIsModalOpen(true)} className="btn-primary shrink-0 self-start sm:self-auto">
           <Plus className="w-5 h-5 mr-2" />
-          New Task
+          Add New Task
         </button>
       </div>
 
@@ -399,7 +399,7 @@ export default function Tasks() {
       )}
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}
-      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="New Task">
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="Add New Task">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="label-text">Task Title</label>

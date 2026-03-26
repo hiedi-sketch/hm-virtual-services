@@ -1459,10 +1459,10 @@ export default function Dashboard() {
           <div className="bg-white rounded-2xl border border-dashed border-slate-400 p-12 text-center">
             <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-slate-900">
-              No clients yet
+              You're all caught up.
             </h3>
-            <p className="text-slate-500 mt-1">
-              Add clients to track their package hours here.
+            <p className="text-slate-400 mt-1">
+              Nothing needs your attention right now.
             </p>
           </div>
         ) : (

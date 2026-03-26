@@ -690,7 +690,8 @@ export default function ClientDetail() {
         {clientServices.length === 0 ? (
           <div className="p-8 text-center">
             <Package className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">No services assigned yet.</p>
+            <p className="text-sm text-slate-500 font-medium">You're all caught up.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Nothing needs your attention right now.</p>
             {availableToAdd.length > 0 && (
               <button
                 onClick={() => setShowAddService(true)}
@@ -1000,7 +1001,8 @@ function ClientDetailMessages({ clientId }: { clientId: number }) {
       {threads.length === 0 ? (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center">
           <MessageSquare className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-          <p className="text-sm text-slate-400">No messages yet with this client.</p>
+          <p className="text-sm text-slate-500 font-medium">You're all caught up.</p>
+          <p className="text-xs text-slate-400 mt-0.5">Nothing needs your attention right now.</p>
         </div>
       ) : (
         <div className="space-y-3">

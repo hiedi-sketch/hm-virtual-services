@@ -934,8 +934,8 @@ export default function Invoices() {
         ) : filtered.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-16 text-center">
             <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No invoices found</p>
-            <p className="text-slate-400 text-sm mt-1">Create your first invoice to get started.</p>
+            <p className="text-slate-700 font-medium">You're all caught up.</p>
+            <p className="text-slate-400 text-sm mt-1">Nothing needs your attention right now.</p>
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">

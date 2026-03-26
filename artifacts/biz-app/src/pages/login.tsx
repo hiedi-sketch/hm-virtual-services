@@ -83,10 +83,10 @@ export default function Login() {
           className="text-2xl font-semibold mb-1 leading-tight"
           style={{ color: "#111", letterSpacing: "-0.02em" }}
         >
-          Sign in
+          Welcome back to HM Virtual Services Business Suite.
         </h1>
-        <p className="text-sm mb-12" style={{ color: "#888" }}>
-          Enter your credentials to continue.
+        <p className="text-sm mb-12" style={{ color: "#266b75", fontWeight: 500 }}>
+          Let's Get Your Day Running Smoothly.
         </p>
 
         {/* Server error */}

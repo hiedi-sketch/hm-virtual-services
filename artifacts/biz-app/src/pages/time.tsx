@@ -592,8 +592,8 @@ export default function TimeTracking() {
               ) : !entries?.length ? (
                 <div className="p-12 text-center">
                   <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500 font-medium">No time entries yet</p>
-                  <p className="text-sm text-slate-400 mt-1">Log your first entry using the timer or form.</p>
+                  <p className="text-slate-700 font-medium">You're all caught up.</p>
+                  <p className="text-sm text-slate-400 mt-1">Nothing needs your attention right now.</p>
                 </div>
               ) : (
                 [...entries].reverse().map(entry => (

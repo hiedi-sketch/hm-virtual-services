@@ -131,9 +131,9 @@ export default function ClientPortal() {
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "overview", label: "Overview", icon: <LayoutDashboard className="w-4 h-4" /> },
-    { key: "tasks", label: "Tasks", icon: <CheckSquare className="w-4 h-4" />, badge: pendingTasks.length || undefined },
-    { key: "invoices", label: "Invoices", icon: <FileText className="w-4 h-4" />, badge: unpaidInvoices.length || undefined },
-    { key: "services", label: "Services", icon: <Sparkles className="w-4 h-4" /> },
+    { key: "tasks", label: "Your Tasks", icon: <CheckSquare className="w-4 h-4" />, badge: pendingTasks.length || undefined },
+    { key: "invoices", label: "Your Billing", icon: <FileText className="w-4 h-4" />, badge: unpaidInvoices.length || undefined },
+    { key: "services", label: "Your Services", icon: <Sparkles className="w-4 h-4" /> },
     { key: "messages", label: "Messages", icon: <MessageSquare className="w-4 h-4" />, badge: unreadMessages || undefined },
     { key: "documents", label: "Documents", icon: <Paperclip className="w-4 h-4" /> },
     { key: "profile", label: "My Profile", icon: <User className="w-4 h-4" /> },

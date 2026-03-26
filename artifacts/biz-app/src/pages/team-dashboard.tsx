@@ -328,7 +328,7 @@ export default function TeamDashboard() {
             {/* Recent time logs */}
             <div className="flex-1">
               {recentEntries.length === 0 ? (
-                <p className="text-sm text-slate-400 px-5 py-4">No time logged yet.</p>
+                <p className="text-sm text-slate-400 px-5 py-4">You're all caught up.</p>
               ) : (
                 <ul className="divide-y divide-slate-50">
                   {recentEntries.map(e => (
