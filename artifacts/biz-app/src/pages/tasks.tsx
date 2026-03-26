@@ -378,19 +378,32 @@ export default function Tasks() {
             <p className="text-sm font-medium text-slate-500">{emptyMessages[view]}</p>
           </div>
         ) : (
-          <ul className="divide-y divide-slate-50">
-            {displayedTasks.map(task => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                today={today}
-                isAdmin={isAdmin}
-                onToggle={() => toggleStatus(task)}
-                onEdit={() => openEdit(task)}
-                updating={updateMutation.isPending || spawnNextMutation.isPending}
-              />
-            ))}
-          </ul>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/40">
+                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 text-xs uppercase tracking-wide w-[40%]">Task</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-slate-500 text-xs uppercase tracking-wide w-[20%]">Client</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-slate-500 text-xs uppercase tracking-wide w-[15%]">Status</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-slate-500 text-xs uppercase tracking-wide w-[20%]">Due Date</th>
+                  <th className="px-4 py-2.5 w-[5%]" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {displayedTasks.map(task => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    today={today}
+                    isAdmin={isAdmin}
+                    onToggle={() => toggleStatus(task)}
+                    onEdit={() => openEdit(task)}
+                    updating={updateMutation.isPending || spawnNextMutation.isPending}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -532,34 +545,100 @@ function TaskRow({
     : 0;
 
   return (
-    <li className={cn(
-      "px-5 py-4 flex gap-4 group transition-colors",
-      isComplete ? "bg-slate-50/50" : isOverdue ? "bg-red-50/30 hover:bg-red-50/50" : "hover:bg-slate-50/60",
-    )}>
-      {/* Status toggle */}
-      <button
-        onClick={onToggle}
-        disabled={updating}
-        className={cn(
-          "mt-0.5 shrink-0 transition-colors",
-          isComplete ? "text-emerald-500 hover:text-emerald-600" : "text-slate-300 hover:text-blue-500",
-        )}
-        title={isComplete ? "Mark pending" : "Mark complete"}
-      >
-        {isComplete ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
-      </button>
+    <>
+      <tr className={cn(
+        "group transition-colors",
+        isComplete ? "bg-slate-50/50" : isOverdue ? "bg-red-50/30 hover:bg-red-50/50" : "hover:bg-slate-50/60",
+      )}>
+        {/* Task column */}
+        <td className="px-5 py-3.5 align-top">
+          <div className="flex items-start gap-2.5">
+            <button
+              onClick={onToggle}
+              disabled={updating}
+              className={cn(
+                "mt-0.5 shrink-0 transition-colors",
+                isComplete ? "text-emerald-500 hover:text-emerald-600" : "text-slate-300 hover:text-blue-500",
+              )}
+              title={isComplete ? "Mark pending" : "Mark complete"}
+            >
+              {isComplete ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
+            </button>
+            <div className="min-w-0">
+              <span className={cn(
+                "font-medium leading-snug",
+                isComplete ? "line-through text-slate-400 decoration-slate-300" : "text-slate-900",
+              )}>
+                {task.title}
+              </span>
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                {task.recurrence && (
+                  <span className={cn(
+                    "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
+                    RECURRENCE_BADGE[task.recurrence],
+                  )}>
+                    <RefreshCw className="w-2.5 h-2.5" />
+                    {task.recurrence.charAt(0).toUpperCase() + task.recurrence.slice(1)}
+                  </span>
+                )}
+                {task.assigned_to && (
+                  <span className="inline-flex items-center gap-1 text-xs text-slate-400">
+                    <UserIcon className="w-3 h-3 shrink-0" />
+                    {task.assigned_to}
+                  </span>
+                )}
+              </div>
+              {expanded && task.description && (
+                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{task.description}</p>
+              )}
+              <SubtaskList taskId={task.id} onAllComplete={onToggle} />
+            </div>
+          </div>
+        </td>
 
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start gap-2">
+        {/* Client column */}
+        <td className="px-4 py-3.5 align-top">
+          {task.client_name ? (
+            <span className="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+              {task.client_name}
+            </span>
+          ) : (
+            <span className="text-slate-300 text-xs">—</span>
+          )}
+        </td>
+
+        {/* Status column */}
+        <td className="px-4 py-3.5 align-top">
           <span className={cn(
-            "font-medium flex-1 min-w-0 leading-snug",
-            isComplete ? "line-through text-slate-400 decoration-slate-300" : "text-slate-900",
+            "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md",
+            isComplete ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600",
           )}>
-            {task.title}
+            {isComplete ? "Done" : "Pending"}
           </span>
+        </td>
 
-          <div className="flex items-center gap-1.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Due Date column */}
+        <td className="px-4 py-3.5 align-top">
+          {task.due_date ? (
+            <span className={cn(
+              "inline-flex items-center gap-1 text-xs",
+              isOverdue ? "font-semibold text-red-600" : "text-slate-500",
+            )}>
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              {isOverdue ? (
+                <>{fmtDate(task.due_date)} <span className="text-red-400">({daysOverdue}d late)</span></>
+              ) : (
+                fmtDate(task.due_date)
+              )}
+            </span>
+          ) : (
+            <span className="text-slate-300 text-xs">—</span>
+          )}
+        </td>
+
+        {/* Actions column */}
+        <td className="px-4 py-3.5 align-top">
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
             {isAdmin && (
               <button
                 onClick={onEdit}
@@ -579,68 +658,8 @@ function TaskRow({
               </button>
             )}
           </div>
-        </div>
-
-        {/* Description */}
-        {expanded && task.description && (
-          <p className="text-sm text-slate-500 mt-1.5 leading-relaxed">{task.description}</p>
-        )}
-
-        {/* Meta badges */}
-        <div className="flex flex-wrap items-center gap-2 mt-2">
-          {/* Client */}
-          {isAdmin && task.client_name && (
-            <span className="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-              {task.client_name}
-            </span>
-          )}
-
-          {/* Status badge — useful in "all" view */}
-          <span className={cn(
-            "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md",
-            isComplete ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600",
-          )}>
-            {isComplete ? "Done" : "Pending"}
-          </span>
-
-          {/* Recurrence */}
-          {task.recurrence && (
-            <span className={cn(
-              "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
-              RECURRENCE_BADGE[task.recurrence],
-            )}>
-              <RefreshCw className="w-2.5 h-2.5" />
-              {task.recurrence.charAt(0).toUpperCase() + task.recurrence.slice(1)}
-            </span>
-          )}
-
-          {/* Due date */}
-          {task.due_date && (
-            <span className={cn(
-              "inline-flex items-center gap-1 text-xs",
-              isOverdue ? "font-semibold text-red-600" : "text-slate-500",
-            )}>
-              <Calendar className="w-3.5 h-3.5 shrink-0" />
-              {isOverdue ? (
-                <>Overdue · {fmtDate(task.due_date)} ({daysOverdue}d)</>
-              ) : (
-                fmtDate(task.due_date)
-              )}
-            </span>
-          )}
-
-          {/* Assignee */}
-          {task.assigned_to && (
-            <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-              <UserIcon className="w-3.5 h-3.5 shrink-0" />
-              {task.assigned_to}
-            </span>
-          )}
-        </div>
-
-        {/* Subtasks */}
-        <SubtaskList taskId={task.id} onAllComplete={onToggle} />
-      </div>
-    </li>
+        </td>
+      </tr>
+    </>
   );
 }
