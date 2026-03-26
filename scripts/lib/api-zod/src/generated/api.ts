@@ -143,6 +143,7 @@ export const ListTasksResponseItem = zod.object({
     .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
     .nullish(),
   last_generated_at: zod.string().nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
 export const ListTasksResponse = zod.array(ListTasksResponseItem);
 
@@ -158,6 +159,7 @@ export const CreateTaskBody = zod.object({
   recurrence: zod
     .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
     .nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
 
 /**
@@ -249,6 +251,7 @@ export const UpdateTaskBody = zod.object({
   recurrence: zod
     .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
     .nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
 
 export const UpdateTaskResponse = zod.object({
@@ -264,6 +267,7 @@ export const UpdateTaskResponse = zod.object({
     .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
     .nullish(),
   last_generated_at: zod.string().nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
 
 /**

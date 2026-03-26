@@ -87,6 +87,25 @@ export default function ClientDetail() {
   const { data: allServices = [] } = useListServices();
   const { data: clientServices = [] } = useListClientServices(clientId);
 
+  const { data: servicesHours = [] } = useQuery<Array<{
+    service_id: number;
+    name: string;
+    service_type: string;
+    billing_type: string;
+    hourly_rate: number | null;
+    budgeted_hours: number | null;
+    price: number | null;
+    hours_used: number;
+  }>>({
+    queryKey: ["services-hours", clientId],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/services-hours`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!clientId,
+  });
+
   const invalidateClientServices = () =>
     queryClient.invalidateQueries({ queryKey: getListClientServicesQueryKey(clientId) });
 
@@ -705,43 +724,94 @@ export default function ClientDetail() {
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {clientServices.map(cs => (
-              <div key={cs.id} className="flex items-center gap-3 px-5 py-3">
-                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                  {cs.billing_type === "recurring" ? (
-                    <RefreshCw className="w-3.5 h-3.5 text-primary" />
-                  ) : (
-                    <ShoppingBag className="w-3.5 h-3.5 text-primary" />
+            {clientServices.map(cs => {
+              const hoursInfo = servicesHours.find(h => h.service_id === cs.service_id);
+              const isVA = cs.service_type === "Virtual Assistant";
+              const isHourly = cs.billing_type === "Hourly";
+              const budgeted = cs.budgeted_hours ?? 0;
+              const used = hoursInfo?.hours_used ?? 0;
+              const remaining = Math.max(0, budgeted - used);
+              const pct = budgeted > 0 ? Math.min(100, Math.round((used / budgeted) * 100)) : 0;
+              const overBudget = isVA && budgeted > 0 && used >= budgeted;
+              return (
+                <div key={cs.id} className="px-5 py-3.5">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${isVA ? "bg-[#266b75]/10" : "bg-blue-50"}`}>
+                      {isVA
+                        ? <Monitor className="w-3.5 h-3.5 text-[#266b75]" />
+                        : <DollarSign className="w-3.5 h-3.5 text-blue-600" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-900 truncate">{cs.name}</p>
+                      <div className="flex flex-wrap gap-1 mt-0.5">
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+                          isVA ? "bg-[#266b75]/10 text-[#266b75] border-[#266b75]/20" : "bg-blue-50 text-blue-700 border-blue-200"
+                        }`}>
+                          {cs.service_type ?? "Service"}
+                        </span>
+                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
+                          isHourly ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-600 border-slate-200"
+                        }`}>
+                          {cs.billing_type ?? "Flat Rate"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {isHourly && cs.hourly_rate != null ? (
+                        <p className="text-sm font-semibold text-slate-700">{formatCurrency(cs.hourly_rate)}/hr</p>
+                      ) : cs.price != null ? (
+                        <p className="text-sm font-semibold text-slate-700">{formatCurrency(cs.price)}</p>
+                      ) : (
+                        <p className="text-sm text-slate-400">—</p>
+                      )}
+                      {isHourly && isVA && budgeted > 0 && (
+                        <p className="text-[10px] text-slate-400">{budgeted} hrs budgeted</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => removeServiceMutation.mutate({ clientId, serviceId: cs.service_id })}
+                      disabled={removeServiceMutation.isPending}
+                      className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors ml-1"
+                      title="Remove service"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* VA hours usage bar */}
+                  {isVA && budgeted > 0 && (
+                    <div className="mt-2.5 ml-10">
+                      <div className="flex justify-between text-xs text-slate-500 mb-1">
+                        <span>{used.toFixed(1)} hrs used</span>
+                        <span className={overBudget ? "text-red-500 font-semibold" : ""}>{remaining.toFixed(1)} hrs remaining</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${overBudget ? "bg-red-500" : "bg-[#266b75]"}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      {isHourly && cs.hourly_rate != null && (
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Estimated cost: {formatCurrency(used * cs.hourly_rate)}
+                          {isHourly && ` (${cs.hourly_rate}/hr × ${used.toFixed(1)} hrs)`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Hourly cost for Bookkeeping (no budget bar) */}
+                  {!isVA && isHourly && cs.hourly_rate != null && used > 0 && (
+                    <div className="mt-1.5 ml-10">
+                      <p className="text-[10px] text-slate-400">
+                        {used.toFixed(1)} hrs tracked — est. {formatCurrency(used * cs.hourly_rate)}
+                      </p>
+                    </div>
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900 truncate">{cs.name}</p>
-                  {cs.description && (
-                    <p className="text-xs text-slate-400 truncate">{cs.description}</p>
-                  )}
-                </div>
-                <span
-                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                    cs.billing_type === "recurring"
-                      ? "bg-blue-50 text-blue-700"
-                      : "bg-slate-50 text-slate-600"
-                  }`}
-                >
-                  {cs.billing_type === "recurring" ? "Recurring" : "One-time"}
-                </span>
-                <span className="text-sm font-semibold text-slate-700 w-20 text-right shrink-0">
-                  {cs.price != null ? formatCurrency(cs.price) : "—"}
-                </span>
-                <button
-                  onClick={() => removeServiceMutation.mutate({ clientId, serviceId: cs.service_id })}
-                  disabled={removeServiceMutation.isPending}
-                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors ml-1"
-                  title="Remove service"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

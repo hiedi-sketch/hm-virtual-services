@@ -67,7 +67,8 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 ## Data Models
 
 - **Clients**: id, name, email, monthly_hour_budget, monthly_fee, service_type (bookkeeping/va/hybrid)
-- **Tasks**: id, title, description, client_id, assigned_to, status (pending/complete), due_date, recurrence fields
+- **Services**: id, name, description, service_type ("Bookkeeping"|"Virtual Assistant"), price, billing_type ("Flat Rate"|"Hourly"), hourly_rate (nullable), budgeted_hours (nullable, VA only), active, created_at
+- **Tasks**: id, title, description, client_id, assigned_to, status ("Pending"|"Confirmed"|"In Progress"|"Completed"), due_date, recurrence fields, service_type (nullable, "Bookkeeping"|"Virtual Assistant")
 - **TimeEntries**: id, client_id, task_id (optional), duration_minutes, date, started_at, ended_at
 - **Leads**: id, name, email, estimated_value, status (new/contacted/proposal/closed), lead_source
 - **Invoices**: id, client_id, amount, status (draft/sent/paid/unpaid/void), due_date, description, line_items (json), notes, thank_you_message, paid_at, payment_method, payment_notes, recurring_id (nullable), updated_at

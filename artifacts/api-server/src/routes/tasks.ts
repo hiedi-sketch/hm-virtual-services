@@ -40,6 +40,7 @@ const taskSelectFields = {
   client_name: clientsTable.name,
   recurrence: tasksTable.recurrence,
   last_generated_at: tasksTable.last_generated_at,
+  service_type: tasksTable.service_type,
 };
 
 // --- Task CRUD ---

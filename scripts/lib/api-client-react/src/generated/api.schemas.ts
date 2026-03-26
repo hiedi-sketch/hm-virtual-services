@@ -132,6 +132,7 @@ export interface Task {
   client_name?: string | null;
   recurrence?: TaskRecurrence;
   last_generated_at?: string | null;
+  service_type?: "Bookkeeping" | "Virtual Assistant" | null;
 }
 
 export type CreateTaskInputRecurrence =
@@ -153,6 +154,7 @@ export interface CreateTaskInput {
   assigned_to?: string | null;
   due_date?: string | null;
   recurrence?: CreateTaskInputRecurrence;
+  service_type?: "Bookkeeping" | "Virtual Assistant" | null;
 }
 
 export type UpdateTaskInputStatus =
@@ -182,6 +184,7 @@ export interface UpdateTaskInput {
   status?: UpdateTaskInputStatus;
   due_date?: string | null;
   recurrence?: UpdateTaskInputRecurrence;
+  service_type?: "Bookkeeping" | "Virtual Assistant" | null;
 }
 
 export interface TimeEntry {
@@ -442,16 +445,27 @@ export type ServiceBillingType =
   (typeof ServiceBillingType)[keyof typeof ServiceBillingType];
 
 export const ServiceBillingType = {
-  one_time: "one_time",
-  recurring: "recurring",
+  flat_rate: "Flat Rate",
+  hourly: "Hourly",
+} as const;
+
+export type ServiceServiceType =
+  (typeof ServiceServiceType)[keyof typeof ServiceServiceType];
+
+export const ServiceServiceType = {
+  bookkeeping: "Bookkeeping",
+  virtual_assistant: "Virtual Assistant",
 } as const;
 
 export interface Service {
   id: number;
   name: string;
   description?: string | null;
+  service_type: ServiceServiceType;
   price: number;
   billing_type: ServiceBillingType;
+  hourly_rate?: number | null;
+  budgeted_hours?: number | null;
   active: boolean;
   created_at: string;
 }
@@ -459,16 +473,22 @@ export interface Service {
 export interface CreateServiceInput {
   name: string;
   description?: string | null;
+  service_type: ServiceServiceType;
   price: number;
   billing_type?: ServiceBillingType;
+  hourly_rate?: number | null;
+  budgeted_hours?: number | null;
   active?: boolean;
 }
 
 export interface UpdateServiceInput {
   name?: string;
   description?: string | null;
+  service_type?: ServiceServiceType;
   price?: number;
   billing_type?: ServiceBillingType;
+  hourly_rate?: number | null;
+  budgeted_hours?: number | null;
   active?: boolean;
 }
 
@@ -479,8 +499,11 @@ export interface ClientService {
   created_at: string;
   name?: string | null;
   description?: string | null;
+  service_type?: string | null;
   price?: number | null;
   billing_type?: string | null;
+  hourly_rate?: number | null;
+  budgeted_hours?: number | null;
   active?: boolean | null;
 }
 

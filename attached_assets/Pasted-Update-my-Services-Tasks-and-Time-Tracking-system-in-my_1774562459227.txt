@@ -1,0 +1,122 @@
+Update my Services, Tasks, and Time Tracking system in my React + TypeScript + Express app to support:
+
+Virtual Assistant budgeted hours
+Bookkeeping services (no hours)
+Hourly or flat-rate services
+Task tagging per service type
+1. Service Form Update (Create/Edit)
+
+Add the following fields:
+
+Required Fields:
+Service Type (dropdown)
+Bookkeeping
+Virtual Assistant
+Service Name (text input)
+Description (textarea)
+Price (currency input)
+Flat Rate / Hourly Toggle (NEW)
+Field: Billing Type (dropdown or radio buttons)
+Options:
+Flat Rate
+Hourly
+
+Behavior:
+
+If Hourly is selected:
+Show field: Hourly Rate (currency)
+Allow time tracking entries to calculate cost using hourly rate × time tracked
+If Flat Rate is selected:
+Hide hourly rate field
+Budgeted hours apply only for Virtual Assistant services
+Conditional Budgeted Hours (Virtual Assistant Only)
+Show Budgeted Hours field ONLY if:
+Service Type = Virtual Assistant
+Hide for Bookkeeping
+Validation Rules
+Budgeted Hours > 0 for VA services
+Hourly Rate required if Billing Type = Hourly
+Price required for Flat Rate
+2. Data Model Updates
+Services Table
+id
+serviceType ("Bookkeeping" | "Virtual Assistant")
+name
+description
+billingType ("Flat Rate" | "Hourly")
+price (Flat Rate)
+hourlyRate (nullable — only used if billingType = Hourly)
+budgetedHours (nullable — only for VA)
+createdAt
+3. Task Tagging System
+Add serviceType field to tasks
+Dropdown on task create/edit:
+Bookkeeping
+Virtual Assistant
+
+Behavior:
+
+Inherit service type from selected service when creating tasks
+4. Time Tracking Logic
+Virtual Assistant Tasks:
+Track hours
+Compare total hours to Budgeted Hours
+If service is Hourly → calculate cost using hourlyRate × hours worked
+Bookkeeping Tasks:
+Track time
+Do not use budgeted hours
+If Hourly → calculate cost using hourlyRate × hours
+Flat Rate Tasks:
+Ignore hours for billing purposes
+5. Client View (Service Usage)
+
+For each client, display:
+
+Virtual Assistant Services
+Service Name
+Budgeted Hours
+Hours Used
+Remaining Hours
+If Hourly → show cost = hours × hourly rate
+Bookkeeping Services
+Service Name
+Total Time Tracked (optional)
+Cost if Hourly
+No budgeted hours
+6. Invoice Integration
+
+When adding services to an invoice:
+
+Flat Rate → show price
+Hourly → calculate total from time tracked × hourly rate
+Include budgeted hours for VA services
+Exclude budgeted hours for Bookkeeping
+7. Services List Display
+
+Table should show:
+
+Service Name
+Service Type
+Billing Type (Flat Rate / Hourly)
+Price or Hourly Rate
+Budgeted Hours (only for VA)
+8. Validation
+Tasks must have a serviceType
+Time entries inherit serviceType
+Only VA services track budgeted hours
+Hourly rate required if Billing Type = Hourly
+9. UI/UX (Match Branding)
+Notion-style, minimal, clean
+Colors:
+Primary: #266b75
+Accent: #7dbdc6
+Borders: #c8c7cb
+Smooth layout, clear form spacing
+10. Deliverables
+Service form with Flat Rate / Hourly toggle
+Conditional Budgeted Hours field (VA only)
+Task tagging by service type
+Time tracking calculation for hourly services
+Client-level VA hours tracking
+Services list/table with billing type and hours info
+Invoice integration for both Flat Rate and Hourly

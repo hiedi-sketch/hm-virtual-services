@@ -128,6 +128,10 @@ const formSchema = z.object({
     val => (val === "" ? null : val),
     z.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullable().optional()
   ),
+  service_type: z.preprocess(
+    val => (val === "" ? null : val),
+    z.enum(["Bookkeeping", "Virtual Assistant"]).nullable().optional()
+  ),
 });
 type FormValues = z.infer<typeof formSchema>;
 
@@ -205,6 +209,7 @@ export default function Tasks() {
       due_date: task.due_date ?? undefined,
       status: task.status,
       recurrence: (task.recurrence as EditValues["recurrence"]) ?? null,
+      service_type: (task.service_type as EditValues["service_type"]) ?? null,
     });
   };
 
@@ -436,14 +441,24 @@ export default function Tasks() {
               </select>
             </div>
           </div>
-          <div>
-            <label className="label-text flex items-center gap-1.5">
-              <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-              Recurrence
-            </label>
-            <select {...register("recurrence")} className="input-field">
-              {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="label-text flex items-center gap-1.5">
+                <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                Recurrence
+              </label>
+              <select {...register("recurrence")} className="input-field">
+                {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="label-text">Service Type</label>
+              <select {...register("service_type")} className="input-field">
+                <option value="">None</option>
+                <option value="Bookkeeping">Bookkeeping</option>
+                <option value="Virtual Assistant">Virtual Assistant</option>
+              </select>
+            </div>
           </div>
           <div className="pt-4 flex justify-end gap-3">
             <button type="button" onClick={() => { setIsModalOpen(false); reset(); }} className="btn-secondary">Cancel</button>
@@ -496,14 +511,24 @@ export default function Tasks() {
                 </select>
               </div>
             </div>
-            <div>
-              <label className="label-text flex items-center gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                Recurrence
-              </label>
-              <select {...registerEdit("recurrence")} className="input-field">
-                {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="label-text flex items-center gap-1.5">
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                  Recurrence
+                </label>
+                <select {...registerEdit("recurrence")} className="input-field">
+                  {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label-text">Service Type</label>
+                <select {...registerEdit("service_type")} className="input-field">
+                  <option value="">None</option>
+                  <option value="Bookkeeping">Bookkeeping</option>
+                  <option value="Virtual Assistant">Virtual Assistant</option>
+                </select>
+              </div>
             </div>
             <div className="pt-4 flex justify-end gap-3">
               <button type="button" onClick={() => setEditingTask(null)} className="btn-secondary">Cancel</button>

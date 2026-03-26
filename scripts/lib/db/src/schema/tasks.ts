@@ -12,6 +12,7 @@ export const tasksTable = pgTable("tasks", {
   due_date: text("due_date"),
   recurrence: text("recurrence", { enum: ["daily", "weekdays", "weekly", "monthly", "annually"] }),
   last_generated_at: text("last_generated_at"),
+  service_type: text("service_type", { enum: ["Bookkeeping", "Virtual Assistant"] }),
 });
 
 export const insertTaskSchema = createInsertSchema(tasksTable).omit({ id: true });

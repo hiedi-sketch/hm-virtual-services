@@ -1,26 +1,35 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { servicesTable, clientServicesTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { servicesTable, clientServicesTable, timeEntriesTable, tasksTable } from "@workspace/db";
+import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
 
 const router: IRouter = Router();
 
+const ServiceTypeEnum = z.enum(["Bookkeeping", "Virtual Assistant"]);
+const BillingTypeEnum = z.enum(["Flat Rate", "Hourly"]);
+
 const CreateServiceBody = z.object({
   name: z.string().min(1),
   description: z.string().nullable().optional(),
-  price: z.number().min(0),
-  billing_type: z.enum(["one_time", "recurring"]).default("one_time"),
+  service_type: ServiceTypeEnum.default("Virtual Assistant"),
+  price: z.number().min(0).default(0),
+  billing_type: BillingTypeEnum.default("Flat Rate"),
+  hourly_rate: z.number().min(0).nullable().optional(),
+  budgeted_hours: z.number().min(0).nullable().optional(),
   active: z.boolean().optional().default(true),
 });
 
 const UpdateServiceBody = z.object({
   name: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
+  service_type: ServiceTypeEnum.optional(),
   price: z.number().min(0).optional(),
-  billing_type: z.enum(["one_time", "recurring"]).optional(),
+  billing_type: BillingTypeEnum.optional(),
+  hourly_rate: z.number().min(0).nullable().optional(),
+  budgeted_hours: z.number().min(0).nullable().optional(),
   active: z.boolean().optional(),
 });
 
@@ -36,7 +45,7 @@ router.post("/services", requireAdmin, async (req, res) => {
   const [service] = await db.insert(servicesTable).values(body).returning();
   res.status(201).json(service);
   const actor = req.session.user;
-  logAudit("service", service.id, "created", `Service "${service.name}" created ($${service.price})`, { id: actor?.id, name: actor?.name });
+  logAudit("service", service.id, "created", `Service "${service.name}" created (${service.billing_type})`, { id: actor?.id, name: actor?.name });
 });
 
 // ── Update a service ──────────────────────────────────────────────────────
@@ -81,8 +90,11 @@ router.get("/clients/:clientId/services", requireAuth, async (req, res) => {
       created_at: clientServicesTable.created_at,
       name: servicesTable.name,
       description: servicesTable.description,
+      service_type: servicesTable.service_type,
       price: servicesTable.price,
       billing_type: servicesTable.billing_type,
+      hourly_rate: servicesTable.hourly_rate,
+      budgeted_hours: servicesTable.budgeted_hours,
       active: servicesTable.active,
     })
     .from(clientServicesTable)
@@ -122,6 +134,60 @@ router.delete("/clients/:clientId/services/:serviceId", requireAdmin, async (req
     .where(and(eq(clientServicesTable.client_id, clientId), eq(clientServicesTable.service_id, serviceId)));
 
   res.status(204).send();
+});
+
+// ── VA hours usage summary for a client's assigned services ───────────────
+// Returns hours tracked per service (task-scoped time entries)
+router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) => {
+  const clientId = Number(req.params["clientId"]);
+  if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid clientId" }); return; }
+
+  // Get all assigned services for client
+  const assignedServices = await db
+    .select({
+      service_id: clientServicesTable.service_id,
+      name: servicesTable.name,
+      service_type: servicesTable.service_type,
+      billing_type: servicesTable.billing_type,
+      hourly_rate: servicesTable.hourly_rate,
+      budgeted_hours: servicesTable.budgeted_hours,
+      price: servicesTable.price,
+    })
+    .from(clientServicesTable)
+    .leftJoin(servicesTable, eq(clientServicesTable.service_id, servicesTable.id))
+    .where(eq(clientServicesTable.client_id, clientId));
+
+  // Get total hours tracked per service (via tasks tagged with service_type matching service)
+  // We'll get total time entries for this client grouped by task service_type
+  const timeByServiceType = await db
+    .select({
+      service_type: tasksTable.service_type,
+      total_minutes: sql<number>`coalesce(sum(${timeEntriesTable.duration_minutes}), 0)`.as("total_minutes"),
+    })
+    .from(timeEntriesTable)
+    .leftJoin(tasksTable, eq(timeEntriesTable.task_id, tasksTable.id))
+    .where(eq(timeEntriesTable.client_id, clientId))
+    .groupBy(tasksTable.service_type);
+
+  const minutesByType: Record<string, number> = {};
+  for (const row of timeByServiceType) {
+    if (row.service_type) {
+      minutesByType[row.service_type] = row.total_minutes;
+    }
+  }
+
+  const result = assignedServices.map(svc => ({
+    service_id: svc.service_id,
+    name: svc.name,
+    service_type: svc.service_type,
+    billing_type: svc.billing_type,
+    hourly_rate: svc.hourly_rate,
+    budgeted_hours: svc.budgeted_hours,
+    price: svc.price,
+    hours_used: svc.service_type ? (minutesByType[svc.service_type] ?? 0) / 60 : 0,
+  }));
+
+  res.json(result);
 });
 
 export default router;
