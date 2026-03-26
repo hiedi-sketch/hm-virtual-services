@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
 import { useAuth } from "@/contexts/AuthContext";
+import TaskTable from "@/components/TaskTable";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -270,6 +271,17 @@ export default function Tasks() {
     completed: "No completed tasks yet.",
   };
 
+  const handleToggleStatus = (tableTask: { id: string; completed: boolean }) => {
+    const original = allTasks.find(t => String(t.id) === tableTask.id);
+    if (original) toggleStatus(original);
+  };
+
+  const handleUpdateField = (id: string, field: string, value: any) => {
+    const apiField = field === "completed" ? "status" : field;
+    const apiValue = field === "completed" ? (value ? "complete" : "pending") : value;
+    updateMutation.mutate({ id: Number(id), data: { [apiField]: apiValue } });
+  };
+
   return (
     <div className="space-y-6">
       {/* ── Page header ──────────────────────────────────────────────────── */}
@@ -347,71 +359,17 @@ export default function Tasks() {
       </div>
 
       {/* ── Task list ────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        {/* List header */}
-        <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/60 flex items-center gap-2">
-          {(() => {
-            const v = VIEWS.find(vv => vv.key === view)!;
-            return (
-              <>
-                <span className={cn("w-2 h-2 rounded-full", v.dotColor)} />
-                <span className="font-semibold text-slate-900 text-sm">{v.label}</span>
-                <span className="text-xs text-slate-400 ml-0.5">
-                  — {displayedTasks.length} task{displayedTasks.length !== 1 ? "s" : ""}
-                </span>
-                {view === "overdue" && displayedTasks.length > 0 && (
-                  <span className="ml-2 flex items-center gap-1 text-xs text-red-600 font-medium bg-red-50 px-2 py-0.5 rounded-full">
-                    <AlertCircle className="w-3 h-3" />
-                    Needs attention
-                  </span>
-                )}
-              </>
-            );
-          })()}
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider font-semibold">
-                <th className="px-6 py-4">Task</th>
-                <th className="px-6 py-4">Client</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Due Date</th>
-                <th className="px-4 py-4" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-sm">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400 animate-pulse">Loading tasks…</td>
-                </tr>
-              ) : displayedTasks.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <CheckCircle2 className="w-10 h-10 text-slate-200 mb-3" />
-                      <p className="text-slate-500 font-medium">{emptyMessages[view]}</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                displayedTasks.map(task => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    today={today}
-                    isAdmin={isAdmin}
-                    onToggle={() => toggleStatus(task)}
-                    onEdit={() => openEdit(task)}
-                    updating={updateMutation.isPending || spawnNextMutation.isPending}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <TaskTable
+        tasks={displayedTasks.map(t => ({
+          id: String(t.id),
+          title: t.title,
+          due_date: t.due_date ?? undefined,
+          assigned_to: t.assigned_to ?? undefined,
+          completed: t.status === "complete",
+        }))}
+        onToggleStatus={handleToggleStatus}
+        onUpdateField={handleUpdateField}
+      />
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="New Task">
