@@ -75,7 +75,7 @@ const serviceSchema = z.object({
   message: z.string().min(10, "Please include some detail (at least 10 characters)"),
 });
 
-type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents" | "messages";
+type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents" | "messages" | "time";
 
 // ================================================================
 export default function ClientPortal() {
@@ -133,6 +133,7 @@ export default function ClientPortal() {
     { key: "overview", label: "Overview", icon: <LayoutDashboard className="w-4 h-4" /> },
     { key: "tasks", label: "Your Tasks", icon: <CheckSquare className="w-4 h-4" />, badge: pendingTasks.length || undefined },
     { key: "invoices", label: "Your Billing", icon: <FileText className="w-4 h-4" />, badge: unpaidInvoices.length || undefined },
+    { key: "time", label: "Time Tracking", icon: <Clock className="w-4 h-4" /> },
     { key: "services", label: "Your Services", icon: <Sparkles className="w-4 h-4" /> },
     { key: "messages", label: "Messages", icon: <MessageSquare className="w-4 h-4" />, badge: unreadMessages || undefined },
     { key: "documents", label: "Documents", icon: <Paperclip className="w-4 h-4" /> },
@@ -209,6 +210,7 @@ export default function ClientPortal() {
             todayStr={todayStr}
             goToTasks={() => setActiveTab("tasks")}
             goToInvoices={() => setActiveTab("invoices")}
+            goToTime={() => setActiveTab("time")}
           />
         )}
         {activeTab === "tasks" && (
@@ -225,6 +227,9 @@ export default function ClientPortal() {
         )}
         {activeTab === "services" && (
           <ServicesTab serviceRequests={serviceRequests} queryClient={queryClient} toast={toast} clientId={clientId} />
+        )}
+        {activeTab === "time" && (
+          <TimeTrackingTab timeEntries={timeEntries} />
         )}
         {activeTab === "messages" && (
           <MessagesTab messages={messages} clientId={clientId} queryClient={queryClient} toast={toast} />
@@ -247,13 +252,13 @@ function OverviewTab({
   user, clientRecord, hoursThisMonth, hoursBudget, hoursPct, hoursColor,
   pendingTasks, completedTasks, overdueTasks, overdueInvoices,
   totalOwed, totalPaid, unpaidInvoices, paidInvoices, todayStr,
-  goToTasks, goToInvoices,
+  goToTasks, goToInvoices, goToTime,
 }: {
   user: any; clientRecord?: ClientRecord;
   hoursThisMonth: number; hoursBudget: number; hoursPct: number; hoursColor: string;
   pendingTasks: any[]; completedTasks: any[]; overdueTasks: any[]; overdueInvoices: any[];
   totalOwed: number; totalPaid: number; unpaidInvoices: any[]; paidInvoices: any[];
-  todayStr: string; goToTasks: () => void; goToInvoices: () => void;
+  todayStr: string; goToTasks: () => void; goToInvoices: () => void; goToTime: () => void;
 }) {
   const hasBK = !!(clientRecord?.bk_fee || clientRecord?.service_type === "bookkeeping" || clientRecord?.service_type === "hybrid");
   const hasVA = !!(clientRecord?.va_hourly_rate || clientRecord?.service_type === "va" || clientRecord?.service_type === "hybrid");
@@ -299,7 +304,7 @@ function OverviewTab({
       {/* Summary cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {/* Hours */}
-        <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
+        <div className="col-span-2 sm:col-span-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3 cursor-pointer hover:shadow-md transition-shadow" onClick={goToTime}>
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: "hsl(188 51% 30% / 0.1)" }}><Clock className="w-5 h-5" style={{ color: "#266b75" }} /></div>
             <div>
@@ -1290,6 +1295,132 @@ function ProfileTab({ user, refreshUser, toast }: { user: any; refreshUser: () =
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+// ================================================================
+// TIME TRACKING TAB
+// ================================================================
+function TimeTrackingTab({ timeEntries }: { timeEntries: any[] }) {
+  const totalMinutes = timeEntries.reduce((s: number, e: any) => s + (e.duration_minutes ?? 0), 0);
+  const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
+
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const monthMinutes = timeEntries
+    .filter((e: any) => e.date >= monthStart)
+    .reduce((s: number, e: any) => s + (e.duration_minutes ?? 0), 0);
+  const monthHours = Math.round((monthMinutes / 60) * 10) / 10;
+
+  function fmtDuration(minutes: number) {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
+  }
+
+  function fmtDate(dateStr: string) {
+    const d = new Date(dateStr + "T12:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  }
+
+  function monthLabel(dateStr: string) {
+    const d = new Date(dateStr + "T12:00:00");
+    return d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+
+  const sorted = [...timeEntries].sort((a, b) => b.date.localeCompare(a.date));
+
+  const grouped: Record<string, any[]> = {};
+  for (const entry of sorted) {
+    const key = entry.date.slice(0, 7);
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(entry);
+  }
+  const months = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">Time Tracking</h2>
+        <p className="text-slate-500 text-sm mt-0.5">A log of all hours worked on your account.</p>
+      </div>
+
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-3">
+          <div className="p-2.5 rounded-xl shrink-0" style={{ backgroundColor: "hsl(188 51% 30% / 0.1)" }}>
+            <Clock className="w-5 h-5" style={{ color: "#266b75" }} />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">This Month</p>
+            <p className="text-2xl font-bold text-slate-900 leading-none mt-0.5">{monthHours}h</p>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-3">
+          <div className="p-2.5 bg-slate-50 rounded-xl shrink-0">
+            <FileText className="w-5 h-5 text-slate-400" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">All Time</p>
+            <p className="text-2xl font-bold text-slate-900 leading-none mt-0.5">{totalHours}h</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Entries */}
+      {timeEntries.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-16 text-center">
+          <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-700 font-medium">You're all caught up.</p>
+          <p className="text-slate-400 text-sm mt-1">Nothing needs your attention right now.</p>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {months.map(monthKey => {
+            const entries = grouped[monthKey];
+            const mTotal = entries.reduce((s: number, e: any) => s + (e.duration_minutes ?? 0), 0);
+            return (
+              <div key={monthKey}>
+                {/* Month header */}
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">
+                    {monthLabel(entries[0].date)}
+                  </h3>
+                  <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
+                    {fmtDuration(mTotal)} total
+                  </span>
+                </div>
+
+                {/* Entry rows */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm divide-y divide-slate-100 overflow-hidden">
+                  {entries.map((entry: any) => (
+                    <div key={entry.id} className="flex items-center justify-between px-5 py-4 gap-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: "hsl(188 51% 30% / 0.08)" }}>
+                          <Clock className="w-4 h-4" style={{ color: "#266b75" }} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">
+                            {entry.task_title ?? "General"}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5">{fmtDate(entry.date)}</p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold tabular-nums px-3 py-1 rounded-lg bg-slate-50 text-slate-700">
+                        {fmtDuration(entry.duration_minutes ?? 0)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
