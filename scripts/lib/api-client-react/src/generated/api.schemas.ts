@@ -373,6 +373,16 @@ export const RecurringInvoiceFrequency = {
   custom: "custom",
 } as const;
 
+export type ReminderType = "due" | "day3" | "day5" | "day10";
+
+export interface InvoiceReminder {
+  id: number;
+  invoice_id: number;
+  type: ReminderType;
+  sent_at: string;
+  created_at: string;
+}
+
 export interface RecurringInvoice {
   id: number;
   client_id: number;
@@ -387,6 +397,7 @@ export interface RecurringInvoice {
   thank_you_message?: string | null;
   amount: number;
   active: boolean;
+  auto_send: boolean;
   created_at?: string | null;
 }
 
@@ -403,6 +414,7 @@ export interface CreateRecurringInvoiceInput {
   thank_you_message?: string | null;
   amount: number;
   active?: boolean;
+  auto_send?: boolean;
 }
 
 export interface UpdateRecurringInvoiceInput {
@@ -417,6 +429,7 @@ export interface UpdateRecurringInvoiceInput {
   thank_you_message?: string | null;
   amount?: number;
   active?: boolean;
+  auto_send?: boolean;
 }
 
 export type ListTasksParams = {

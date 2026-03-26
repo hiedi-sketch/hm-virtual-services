@@ -1,0 +1,113 @@
+Fix and fully implement Recurring Invoices and add an Automated Reminder System to my React + TypeScript + Express invoicing app.
+
+1. Fix Recurring Invoices (Fully Functional)
+Create Recurring Invoice Setup
+
+When creating/editing an invoice, allow enabling “Recurring Invoice”
+
+Fields:
+
+Frequency:
+Weekly
+Monthly
+Custom (every X days)
+Start Date
+Next Run Date (auto-calculated)
+End Date (optional)
+Auto-send toggle (send to client automatically)
+Behavior
+Store recurring configuration in a recurringInvoices table
+Automatically generate a new invoice based on schedule
+Each generated invoice should:
+Copy services/line items
+Copy notes and thank you message
+Set new due date
+Link back via recurringId
+Automation (CRITICAL)
+Implement a background job (cron or scheduled task) that:
+Runs daily
+Checks for recurring invoices due to generate
+Creates and optionally sends them
+2. Automated Reminder System
+Reminder Schedule
+
+For each invoice, automatically send reminders:
+
+On Due Date
+3 days after due
+5 days after due (include message: late fees begin on day 6)
+10 days after due
+Reminder Logic
+Only send reminders if:
+Invoice status is NOT “paid” or “void”
+Track reminders sent to prevent duplicates
+Database अपडेट
+
+Add fields to invoices table:
+
+reminderSentDueDate (boolean)
+reminderSentDay3 (boolean)
+reminderSentDay5 (boolean)
+reminderSentDay10 (boolean)
+
+OR create a more scalable table:
+
+invoiceReminders table
+
+id
+invoiceId
+type (due, day3, day5, day10)
+sentAt
+3. Reminder Automation (CRON JOB)
+
+Create a scheduled job that runs daily:
+
+Logic:
+
+Find invoices where:
+dueDate = today → send due reminder
+dueDate + 3 days = today → send reminder
+dueDate + 5 days = today → send reminder (include late fee warning)
+dueDate + 10 days = today → send reminder
+Send email (or placeholder function)
+Log reminder as sent
+4. Email / Notification Content
+
+Create reusable templates:
+
+Due Date Reminder:
+
+“Your invoice is due today.”
+
+Day 3 Reminder:
+
+“Your invoice is now 3 days overdue.”
+
+Day 5 Reminder:
+
+“Your invoice is 5 days overdue. Late fees will begin tomorrow.”
+
+Day 10 Reminder:
+
+“Your invoice is now 10 days overdue. Please make payment immediately.”
+
+5. Admin Controls
+Allow toggling reminders ON/OFF per invoice
+Allow editing reminder schedule in future (optional)
+6. UI Updates
+Show:
+Next scheduled invoice (for recurring)
+Reminder status (what has been sent)
+Badge for:
+overdue
+upcoming reminders
+7. API Routes
+POST /recurring-invoices
+GET /recurring-invoices
+POST /invoices/:id/send-reminder
+8. Deliverables
+Fully working recurring invoice system
+Daily automation job (cron)
+Automated reminder system
+Reminder tracking
+Email templates (or mock sender)

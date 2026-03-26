@@ -5,6 +5,7 @@ export * from "./tasks";
 export * from "./time_entries";
 export * from "./leads";
 export * from "./invoices";
+export * from "./reminders";
 export * from "./users";
 export * from "./api_keys";
 export * from "./audit_logs";

@@ -3095,3 +3095,45 @@ export const useSendInvoice = <
 > => {
   return useMutation(getSendInvoiceMutationOptions(options));
 };
+
+// ── Invoice Reminders ─────────────────────────────────────────────────────────
+
+export const getListInvoiceRemindersUrl = (id: number) => `/api/invoices/${id}/reminders`;
+export const getListInvoiceRemindersQueryKey = (id: number) => [getListInvoiceRemindersUrl(id)] as const;
+
+export const listInvoiceReminders = async (id: number, options?: RequestInit) =>
+  customFetch<import("./api.schemas").InvoiceReminder[]>(getListInvoiceRemindersUrl(id), { ...options, method: "GET" });
+
+export function useListInvoiceReminders<TData = Awaited<ReturnType<typeof listInvoiceReminders>>, TError = ErrorType<unknown>>(
+  id: number,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listInvoiceReminders>>, TError, TData>; request?: SecondParameter<typeof customFetch> }
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListInvoiceRemindersQueryKey(id);
+  const queryFn = () => listInvoiceReminders(id, requestOptions);
+  const query = useQuery({ queryKey, queryFn, enabled: !!id, ...queryOptions } as UseQueryOptions<Awaited<ReturnType<typeof listInvoiceReminders>>, TError, TData>);
+  return { ...query, queryKey } as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+}
+
+export const getSendReminderUrl = (id: number) => `/api/invoices/${id}/send-reminder`;
+
+export const sendReminder = async (id: number, data: { type: import("./api.schemas").ReminderType }, options?: RequestInit) =>
+  customFetch<{ sent: boolean }>(getSendReminderUrl(id), { ...options, method: "POST", data });
+
+export const getSendReminderMutationOptions = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof sendReminder>>, TError, { id: number; data: { type: import("./api.schemas").ReminderType } }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationKey = ["sendReminder"];
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendReminder>>, { id: number; data: { type: import("./api.schemas").ReminderType } }> = ({ id, data }) =>
+    sendReminder(id, data, requestOptions);
+  return { mutationKey, mutationFn, ...mutationOptions };
+};
+
+export const useSendReminder = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof sendReminder>>, TError, { id: number; data: { type: import("./api.schemas").ReminderType } }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof sendReminder>>, TError, { id: number; data: { type: import("./api.schemas").ReminderType } }, TContext> => {
+  return useMutation(getSendReminderMutationOptions(options));
+};

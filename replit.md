@@ -58,7 +58,9 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 - **Tasks** (`/tasks`) — Create and manage tasks; team_member sees own assigned tasks; client sees their tasks
 - **Time Tracking** (`/time`) — Timer + manual entry; client sees their time only
 - **Leads CRM** (`/leads`) — 4-stage pipeline (New/Contacted/Proposal/Closed); admin + team_member
-- **Invoices** (`/invoices`) — Full invoice lifecycle: create with line items (service picker + custom), edit, mark as paid (with date/method/notes), void, delete; status tabs (All/Unpaid/Paid/Void); void excluded from totals; client sees their invoices only
+- **Invoices** (`/invoices`) — Full invoice lifecycle: create with line items (service picker + custom), edit, mark as paid (with date/method/notes), void, delete, send via email; status tabs (All/Draft/Sent/Unpaid/Paid/Void/Recurring); draft toggle, PDF download, Stripe pay-by-link; bell icon per invoice opens Reminder Modal; 4-card summary (Paid, Outstanding, Total, Overdue)
+- **Recurring Invoices** — Recurring schedules (weekly/monthly/custom) auto-generate invoices daily via cron; `auto_send` flag emails invoice to client when generated; per-schedule active/auto_send toggles; manual "Generate" button per schedule
+- **Payment Reminders** — Automated reminders at: due date, 3 days overdue, 5 days overdue, 10 days overdue; deduped in `invoice_reminders` DB table; manual send via bell icon → Reminder Modal; Stripe pay-link embedded in reminder emails
 - **Team** (`/team`) — User management (create/edit/delete users, assign roles & client links); admin only
 - **Client Portal** — Dedicated portal for client-role users: open tasks, hours used this month, unpaid balance, invoice list
 
@@ -68,7 +70,9 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 - **Tasks**: id, title, description, client_id, assigned_to, status (pending/complete), due_date, recurrence fields
 - **TimeEntries**: id, client_id, task_id (optional), duration_minutes, date, started_at, ended_at
 - **Leads**: id, name, email, estimated_value, status (new/contacted/proposal/closed), lead_source
-- **Invoices**: id, client_id, amount, status (paid/unpaid/void), due_date, description, line_items (json), notes, thank_you_message, paid_at, payment_method, payment_notes, updated_at
+- **Invoices**: id, client_id, amount, status (draft/sent/paid/unpaid/void), due_date, description, line_items (json), notes, thank_you_message, paid_at, payment_method, payment_notes, recurring_id (nullable), updated_at
+- **RecurringInvoices**: id, client_id, frequency (weekly/monthly/custom), interval_days, start_date, end_date, next_due_date, description, line_items, amount, active, auto_send, created_at
+- **InvoiceReminders**: id, invoice_id, type (due/day3/day5/day10), sent_at, created_at
 - **Users**: id, email, password_hash, name, role (admin/team_member/client), client_id (nullable)
 
 ## API Routes
@@ -88,6 +92,13 @@ All under `/api`. All routes require auth except `/api/auth/*`.
 - `PATCH /leads/:id` — Admin + team_member; DELETE admin only
 - `GET /invoices` — Auth required; client sees own
 - `POST/PATCH/DELETE /invoices/:id` — Admin only
+- `POST /invoices/:id/send` — Send invoice via email (with Stripe pay button if configured)
+- `GET /invoices/:id/reminders` — List sent reminders for an invoice
+- `POST /invoices/:id/send-reminder` — Manually trigger a reminder (body: { type: "due"|"day3"|"day5"|"day10" })
+- `GET/POST /recurring-invoices` — Admin only; list/create recurring schedules
+- `PATCH/DELETE /recurring-invoices/:id` — Admin only
+- `POST /recurring-invoices/:id/generate` — Manually generate next invoice from template
+- `GET /invoices/:id/pdf` — Download PDF of an invoice
 
 ## TypeScript & Composite Projects
 

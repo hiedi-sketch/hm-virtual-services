@@ -7,6 +7,8 @@ import {
   useUpdateInvoice,
   useDeleteInvoice,
   useSendInvoice,
+  useSendReminder,
+  useListInvoiceReminders,
   useListRecurringInvoices,
   useCreateRecurringInvoice,
   useUpdateRecurringInvoice,
@@ -17,6 +19,8 @@ import {
   Invoice,
   LineItem,
   RecurringInvoice,
+  InvoiceReminder,
+  ReminderType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -25,7 +29,7 @@ import {
   Plus, X, Trash2, CheckCircle2, Clock, FileText, Download,
   CreditCard, Pencil, BanIcon, DollarSign, AlertTriangle,
   ChevronDown, ChevronUp, Send, RefreshCw, ToggleLeft, ToggleRight,
-  Repeat, Play,
+  Repeat, Play, Bell, BellRing,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -76,6 +80,13 @@ const FREQUENCIES = [
   { value: "custom", label: "Custom interval" },
 ];
 
+const REMINDER_TYPES: { type: ReminderType; label: string; description: string; urgency: string }[] = [
+  { type: "due", label: "Due Today", description: "Sent on the invoice due date.", urgency: "amber" },
+  { type: "day3", label: "3 Days Overdue", description: "Sent 3 days after the due date.", urgency: "orange" },
+  { type: "day5", label: "5 Days Overdue", description: "Sent 5 days overdue. Late fees begin tomorrow.", urgency: "red" },
+  { type: "day10", label: "10 Days Overdue", description: "Sent 10 days overdue. Urgent notice.", urgency: "rose" },
+];
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatDate(d: string) {
@@ -86,6 +97,12 @@ function formatDate(d: string) {
 
 function todayStr() {
   return new Date().toISOString().split("T")[0]!;
+}
+
+function daysOverdue(due_date: string): number {
+  const today = new Date(todayStr() + "T00:00:00");
+  const due = new Date(due_date + "T00:00:00");
+  return Math.floor((today.getTime() - due.getTime()) / 86_400_000);
 }
 
 function isOverdue(due_date: string, status: string) {
@@ -107,18 +124,41 @@ function statusLabel(inv: Invoice) {
   if (inv.status === "paid")   return "Paid";
   if (inv.status === "draft")  return "Draft";
   if (inv.status === "sent")   return "Sent";
-  if (isOverdue(inv.due_date, inv.status)) return "Overdue";
+  const days = daysOverdue(inv.due_date);
+  if (days > 0) return `${days}d overdue`;
   return "Unpaid";
 }
 
 const inputCls = "w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white";
 
+// ── Toggle div (avoids label + button double-click bug) ───────────────────────
+
+function ToggleDiv({ value, onChange, label, sublabel }: {
+  value: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  sublabel?: string;
+}) {
+  return (
+    <div
+      role="button" tabIndex={0}
+      onClick={() => onChange(!value)}
+      onKeyDown={e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); onChange(!value); } }}
+      className="flex items-center gap-2.5 cursor-pointer select-none"
+      aria-pressed={value}>
+      {value ? <ToggleRight className="w-6 h-6 text-blue-600 shrink-0" /> : <ToggleLeft className="w-6 h-6 text-slate-400 shrink-0" />}
+      <span className="text-sm text-slate-600">
+        <span className={cn("font-medium", value ? "text-blue-700" : "text-slate-700")}>{label}</span>
+        {sublabel && <span className="text-slate-400 ml-1">{sublabel}</span>}
+      </span>
+    </div>
+  );
+}
+
 // ── Line Items Editor ─────────────────────────────────────────────────────────
 
 function LineItemsEditor({
-  items,
-  onChange,
-  services,
+  items, onChange, services,
 }: {
   items: DraftItem[];
   onChange: (items: DraftItem[]) => void;
@@ -129,22 +169,15 @@ function LineItemsEditor({
   const update = (id: string, field: keyof DraftItem, value: string | number) => {
     onChange(items.map(it => it._id === id ? { ...it, [field]: value } : it));
   };
-
   const remove = (id: string) => onChange(items.filter(it => it._id !== id));
-
   const addCustom = () => onChange([...items, newItem()]);
-
   const addFromService = () => {
     if (!addServiceId) return;
     const svc = services.find(s => String(s.id) === addServiceId);
     if (!svc) return;
-    onChange([...items, newItem({
-      name: svc.name, description: svc.description ?? "",
-      qty: 1, unit_price: svc.price,
-    })]);
+    onChange([...items, newItem({ name: svc.name, description: svc.description ?? "", qty: 1, unit_price: svc.price })]);
     setAddServiceId("");
   };
-
   const activeServices = services.filter(s => s.active);
 
   return (
@@ -153,22 +186,16 @@ function LineItemsEditor({
         <div className="flex gap-2">
           <select className={cn(inputCls, "flex-1")} value={addServiceId} onChange={e => setAddServiceId(e.target.value)}>
             <option value="">Add from service catalog…</option>
-            {activeServices.map(s => (
-              <option key={s.id} value={s.id}>{s.name} — {formatCurrency(s.price)}</option>
-            ))}
+            {activeServices.map(s => <option key={s.id} value={s.id}>{s.name} — {formatCurrency(s.price)}</option>)}
           </select>
           <button type="button" onClick={addFromService} disabled={!addServiceId}
-            className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors shrink-0">
-            Add
-          </button>
+            className="px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-40 transition-colors shrink-0">Add</button>
         </div>
       )}
-
       {items.length > 0 && (
         <div className="rounded-xl border border-slate-200 overflow-hidden">
           <div className="grid grid-cols-[1fr_3fr_2fr_1.5fr_1.5fr_auto] gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            <span>Qty</span><span>Item</span><span>Description</span>
-            <span>Unit Price</span><span className="text-right">Total</span><span />
+            <span>Qty</span><span>Item</span><span>Description</span><span>Unit Price</span><span className="text-right">Total</span><span />
           </div>
           {items.map(it => (
             <div key={it._id} className="grid grid-cols-[1fr_3fr_2fr_1.5fr_1.5fr_auto] gap-2 px-3 py-2 border-b border-slate-100 last:border-0 items-center">
@@ -195,7 +222,6 @@ function LineItemsEditor({
           </div>
         </div>
       )}
-
       <button type="button" onClick={addCustom}
         className="flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-700 font-medium px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors">
         <Plus className="w-3.5 h-3.5" /> Add custom line item
@@ -206,17 +232,11 @@ function LineItemsEditor({
 
 // ── Invoice Form ──────────────────────────────────────────────────────────────
 
-function InvoiceForm({
-  invoice, clients, services, onSubmit, onCancel, isPending,
-}: {
+function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending }: {
   invoice?: Invoice;
   clients: { id: number; name: string }[];
   services: { id: number; name: string; description?: string | null; price: number; active: boolean }[];
-  onSubmit: (data: {
-    client_id: number; amount: number; due_date: string; status: string;
-    description: string | null; line_items: LineItem[] | null;
-    notes: string | null; thank_you_message: string | null;
-  }) => void;
+  onSubmit: (data: any) => void;
   onCancel: () => void;
   isPending: boolean;
 }) {
@@ -230,12 +250,9 @@ function InvoiceForm({
   const [manualAmount, setManualAmount] = useState<string>(
     invoice && (!invoice.line_items || invoice.line_items.length === 0) ? String(invoice.amount) : ""
   );
-  const initialItems: DraftItem[] = invoice?.line_items?.map(li => ({
-    _id: Math.random().toString(36).slice(2),
-    name: li.name, description: li.description ?? "",
-    qty: li.qty, unit_price: li.unit_price,
-  })) ?? [];
-  const [lineItems, setLineItems] = useState<DraftItem[]>(initialItems);
+  const [lineItems, setLineItems] = useState<DraftItem[]>(
+    invoice?.line_items?.map(li => ({ _id: Math.random().toString(36).slice(2), name: li.name, description: li.description ?? "", qty: li.qty, unit_price: li.unit_price })) ?? []
+  );
   const [showAdvanced, setShowAdvanced] = useState(!!(invoice?.notes || invoice?.thank_you_message));
 
   const hasItems = lineItems.length > 0;
@@ -248,14 +265,7 @@ function InvoiceForm({
     const currentStatus = isEdit
       ? (saveAsDraft ? "draft" : invoice?.status === "draft" ? "unpaid" : invoice?.status ?? "unpaid")
       : (saveAsDraft ? "draft" : "unpaid");
-    onSubmit({
-      client_id: Number(clientId), amount: total, due_date: dueDate,
-      status: currentStatus,
-      description: description.trim() || null,
-      line_items: hasItems ? lineItems.map(draftToLineItem) : null,
-      notes: notes.trim() || null,
-      thank_you_message: thankYou.trim() || null,
-    });
+    onSubmit({ client_id: Number(clientId), amount: total, due_date: dueDate, status: currentStatus, description: description.trim() || null, line_items: hasItems ? lineItems.map(draftToLineItem) : null, notes: notes.trim() || null, thank_you_message: thankYou.trim() || null });
   };
 
   return (
@@ -273,62 +283,38 @@ function InvoiceForm({
           <input type="date" className={inputCls} value={dueDate} onChange={e => setDueDate(e.target.value)} required />
         </div>
       </div>
-
       <div>
-        <label className="block text-xs font-medium text-slate-500 mb-2">
-          Line Items {hasItems && <span className="text-blue-500">({lineItems.length})</span>}
-        </label>
+        <label className="block text-xs font-medium text-slate-500 mb-2">Line Items {hasItems && <span className="text-blue-500">({lineItems.length})</span>}</label>
         <LineItemsEditor items={lineItems} onChange={setLineItems} services={services} />
       </div>
-
       {!hasItems && (
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Total Amount ($) <span className="text-red-400">*</span></label>
-          <input type="number" min="0" step="0.01" className={inputCls} placeholder="0.00"
-            value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
+          <input type="number" min="0" step="0.01" className={inputCls} placeholder="0.00" value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
         </div>
       )}
-
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-1">Description / Memo</label>
-        <input type="text" className={inputCls} placeholder="e.g. March bookkeeping services"
-          value={description} onChange={e => setDescription(e.target.value)} />
+        <input type="text" className={inputCls} placeholder="e.g. March bookkeeping services" value={description} onChange={e => setDescription(e.target.value)} />
       </div>
-
       <button type="button" onClick={() => setShowAdvanced(v => !v)}
         className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
         {showAdvanced ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         {showAdvanced ? "Hide" : "Show"} notes & thank-you message
       </button>
-
       {showAdvanced && (
         <div className="space-y-4 border-t border-slate-100 pt-4">
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Notes (internal / terms)</label>
-            <textarea className={cn(inputCls, "resize-none")} rows={2}
-              placeholder="e.g. Payment due net 15." value={notes} onChange={e => setNotes(e.target.value)} />
+            <textarea className={cn(inputCls, "resize-none")} rows={2} placeholder="e.g. Payment due net 15." value={notes} onChange={e => setNotes(e.target.value)} />
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Thank-you Message</label>
-            <textarea className={cn(inputCls, "resize-none")} rows={2}
-              placeholder="e.g. Thank you for your business!" value={thankYou} onChange={e => setThankYou(e.target.value)} />
+            <textarea className={cn(inputCls, "resize-none")} rows={2} placeholder="e.g. Thank you for your business!" value={thankYou} onChange={e => setThankYou(e.target.value)} />
           </div>
         </div>
       )}
-
-      {/* Save as draft toggle */}
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setSaveAsDraft(v => !v)}
-        onKeyDown={e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setSaveAsDraft(v => !v); }}}
-        className="flex items-center gap-2.5 cursor-pointer select-none"
-        aria-pressed={saveAsDraft}
-        aria-label="Save as Draft toggle">
-        {saveAsDraft ? <ToggleRight className="w-6 h-6 text-purple-600" /> : <ToggleLeft className="w-6 h-6 text-slate-400" />}
-        <span className="text-sm text-slate-600">Save as <span className="font-medium text-purple-700">Draft</span> (don't send yet)</span>
-      </div>
-
+      <ToggleDiv value={saveAsDraft} onChange={setSaveAsDraft} label="Save as Draft" sublabel="(don't send yet)" />
       {total > 0 && (
         <div className="flex justify-end">
           <div className="bg-slate-900 text-white rounded-xl px-5 py-3 text-right">
@@ -337,16 +323,12 @@ function InvoiceForm({
           </div>
         </div>
       )}
-
       <div className="flex gap-2 pt-1">
         <button type="submit" disabled={isPending}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50">
           {isPending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Changes" : saveAsDraft ? "Save Draft" : "Create Invoice")}
         </button>
-        <button type="button" onClick={onCancel}
-          className="text-sm text-slate-500 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 transition-colors">
-          Cancel
-        </button>
+        <button type="button" onClick={onCancel} className="text-sm text-slate-500 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 transition-colors">Cancel</button>
       </div>
     </form>
   );
@@ -355,60 +337,119 @@ function InvoiceForm({
 // ── Mark as Paid Modal ────────────────────────────────────────────────────────
 
 function MarkAsPaidModal({ invoice, onClose, onConfirm, isPending }: {
-  invoice: Invoice;
-  onClose: () => void;
+  invoice: Invoice; onClose: () => void;
   onConfirm: (data: { paid_at: string; payment_method: string; payment_notes: string }) => void;
   isPending: boolean;
 }) {
   const [paidAt, setPaidAt] = useState(todayStr());
   const [method, setMethod] = useState("cash");
   const [notes, setNotes] = useState("");
-
   return (
     <Modal isOpen title="Record Payment" onClose={onClose}>
       <form onSubmit={e => { e.preventDefault(); onConfirm({ paid_at: paidAt, payment_method: method, payment_notes: notes }); }} className="space-y-4">
         <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
           <DollarSign className="w-5 h-5 text-emerald-600 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-emerald-800">Invoice #{invoice.id}</p>
-            <p className="text-xs text-emerald-600">{formatCurrency(invoice.amount)}</p>
-          </div>
+          <div><p className="text-sm font-semibold text-emerald-800">Invoice #{invoice.id}</p><p className="text-xs text-emerald-600">{formatCurrency(invoice.amount)}</p></div>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Payment Date</label>
-          <input type="date" className={inputCls} value={paidAt} onChange={e => setPaidAt(e.target.value)} required />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Payment Method</label>
+        <div><label className="block text-xs font-medium text-slate-500 mb-1">Payment Date</label><input type="date" className={inputCls} value={paidAt} onChange={e => setPaidAt(e.target.value)} required /></div>
+        <div><label className="block text-xs font-medium text-slate-500 mb-1">Payment Method</label>
           <select className={inputCls} value={method} onChange={e => setMethod(e.target.value)}>
             {PAYMENT_METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Notes (optional)</label>
-          <textarea className={cn(inputCls, "resize-none")} rows={2} placeholder="e.g. Check #1234"
-            value={notes} onChange={e => setNotes(e.target.value)} />
-        </div>
+        <div><label className="block text-xs font-medium text-slate-500 mb-1">Notes (optional)</label><textarea className={cn(inputCls, "resize-none")} rows={2} placeholder="e.g. Check #1234" value={notes} onChange={e => setNotes(e.target.value)} /></div>
         <div className="flex gap-2 pt-1">
-          <button type="submit" disabled={isPending}
-            className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
-            {isPending ? "Saving…" : "Mark as Paid"}
-          </button>
-          <button type="button" onClick={onClose}
-            className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
-            Cancel
-          </button>
+          <button type="submit" disabled={isPending} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50">{isPending ? "Saving…" : "Mark as Paid"}</button>
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
         </div>
       </form>
     </Modal>
   );
 }
 
+// ── Reminder Modal ────────────────────────────────────────────────────────────
+
+function ReminderModal({ invoice, onClose }: { invoice: Invoice; onClose: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: reminders = [], isLoading, refetch } = useListInvoiceReminders(invoice.id);
+
+  const sendMutation = useSendReminder({
+    mutation: {
+      onSuccess: (_, vars) => {
+        refetch();
+        const label = REMINDER_TYPES.find(r => r.type === vars.data.type)?.label ?? vars.data.type;
+        toast({ title: `Reminder sent: ${label}` });
+      },
+      onError: (err: any) => {
+        const msg = err?.response?.data?.error ?? err?.message ?? "Failed to send reminder";
+        toast({ title: msg, variant: "destructive" });
+      },
+    },
+  });
+
+  const sentTypes = new Set(reminders.map(r => r.type));
+  const overdueDays = daysOverdue(invoice.due_date);
+
+  return (
+    <Modal isOpen title={`Reminders — Invoice #${invoice.id}`} onClose={onClose}
+      description={`${formatCurrency(invoice.amount)} · Due ${formatDate(invoice.due_date)}${overdueDays > 0 ? ` · ${overdueDays}d overdue` : ""}`}>
+      <div className="space-y-3">
+        <p className="text-xs text-slate-500">
+          Reminders are sent automatically each day at midnight. You can also trigger them manually below.
+        </p>
+        {isLoading ? (
+          <div className="space-y-2">{[1, 2, 3, 4].map(i => <div key={i} className="h-14 rounded-xl bg-slate-50 animate-pulse" />)}</div>
+        ) : (
+          <div className="space-y-2">
+            {REMINDER_TYPES.map(({ type, label, description }) => {
+              const alreadySent = sentTypes.has(type);
+              const sentRecord = reminders.find(r => r.type === type);
+              const isSending = sendMutation.isPending && sendMutation.variables?.data.type === type;
+              return (
+                <div key={type} className={cn(
+                  "flex items-center justify-between gap-3 p-3 rounded-xl border",
+                  alreadySent ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"
+                )}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-900">{label}</p>
+                    <p className="text-xs text-slate-500">{description}</p>
+                    {sentRecord && (
+                      <p className="text-xs text-emerald-600 mt-0.5">
+                        Sent {new Date(sentRecord.sent_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {alreadySent && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                    <button
+                      onClick={() => sendMutation.mutate({ id: invoice.id, data: { type } })}
+                      disabled={isSending}
+                      className={cn(
+                        "text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50",
+                        alreadySent
+                          ? "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                          : "bg-blue-600 text-white hover:bg-blue-700"
+                      )}>
+                      {isSending ? (
+                        <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin inline-block" />
+                      ) : alreadySent ? "Resend" : "Send"}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <button onClick={onClose} className="w-full mt-2 px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Close</button>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Recurring Invoice Form ────────────────────────────────────────────────────
 
-function RecurringInvoiceForm({
-  clients, services, onSubmit, onCancel, isPending,
-}: {
+function RecurringInvoiceForm({ clients, services, onSubmit, onCancel, isPending }: {
   clients: { id: number; name: string }[];
   services: { id: number; name: string; description?: string | null; price: number; active: boolean }[];
   onSubmit: (data: any) => void;
@@ -421,38 +462,24 @@ function RecurringInvoiceForm({
   const [startDate, setStartDate] = useState(todayStr());
   const [endDate, setEndDate] = useState("");
   const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
-  const [thankYou, setThankYou] = useState("");
   const [lineItems, setLineItems] = useState<DraftItem[]>([]);
   const [manualAmount, setManualAmount] = useState("");
+  const [autoSend, setAutoSend] = useState(false);
 
   const hasItems = lineItems.length > 0;
   const total = hasItems ? calcTotal(lineItems) : Number(manualAmount) || 0;
-
-  // Compute first next_due_date based on start date and frequency
-  function computeFirstNextDue() {
-    const d = new Date(startDate + "T00:00:00");
-    if (frequency === "weekly") d.setDate(d.getDate() + 7);
-    else if (frequency === "monthly") d.setMonth(d.getMonth() + 1);
-    else d.setDate(d.getDate() + intervalDays);
-    return d.toISOString().split("T")[0]!;
-  }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientId || !startDate || total === 0) return;
     onSubmit({
-      client_id: Number(clientId),
-      frequency,
+      client_id: Number(clientId), frequency,
       interval_days: frequency === "custom" ? intervalDays : null,
-      start_date: startDate,
-      end_date: endDate || null,
-      next_due_date: startDate, // first invoice due = start date
-      description: description.trim() || null,
+      start_date: startDate, end_date: endDate || null,
+      next_due_date: startDate, description: description.trim() || null,
       line_items: hasItems ? lineItems.map(draftToLineItem) : null,
-      notes: notes.trim() || null,
-      thank_you_message: thankYou.trim() || null,
-      amount: total,
+      notes: null, thank_you_message: null,
+      amount: total, auto_send: autoSend,
     });
   };
 
@@ -473,15 +500,12 @@ function RecurringInvoiceForm({
           </select>
         </div>
       </div>
-
       {frequency === "custom" && (
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Repeat every (days)</label>
-          <input type="number" min={1} className={inputCls} value={intervalDays}
-            onChange={e => setIntervalDays(Number(e.target.value))} />
+          <input type="number" min={1} className={inputCls} value={intervalDays} onChange={e => setIntervalDays(Number(e.target.value))} />
         </div>
       )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Start Date <span className="text-red-400">*</span></label>
@@ -492,26 +516,23 @@ function RecurringInvoiceForm({
           <input type="date" className={inputCls} value={endDate} onChange={e => setEndDate(e.target.value)} />
         </div>
       </div>
-
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-1">Description</label>
-        <input type="text" className={inputCls} placeholder="e.g. Monthly bookkeeping" value={description}
-          onChange={e => setDescription(e.target.value)} />
+        <input type="text" className={inputCls} placeholder="e.g. Monthly bookkeeping" value={description} onChange={e => setDescription(e.target.value)} />
       </div>
-
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-2">Line Items</label>
         <LineItemsEditor items={lineItems} onChange={setLineItems} services={services} />
       </div>
-
       {!hasItems && (
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Amount ($) <span className="text-red-400">*</span></label>
-          <input type="number" min="0" step="0.01" className={inputCls} placeholder="0.00"
-            value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
+          <input type="number" min="0" step="0.01" className={inputCls} placeholder="0.00" value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
         </div>
       )}
-
+      <div className="border-t border-slate-100 pt-4 space-y-2">
+        <ToggleDiv value={autoSend} onChange={setAutoSend} label="Auto-send to client" sublabel="(email sent automatically when each invoice generates)" />
+      </div>
       {total > 0 && (
         <div className="flex justify-end">
           <div className="bg-slate-900 text-white rounded-xl px-5 py-3 text-right">
@@ -520,16 +541,12 @@ function RecurringInvoiceForm({
           </div>
         </div>
       )}
-
       <div className="flex gap-2 pt-1">
         <button type="submit" disabled={isPending}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50">
           {isPending ? "Creating…" : "Create Recurring Invoice"}
         </button>
-        <button type="button" onClick={onCancel}
-          className="text-sm text-slate-500 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 transition-colors">
-          Cancel
-        </button>
+        <button type="button" onClick={onCancel} className="text-sm text-slate-500 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 transition-colors">Cancel</button>
       </div>
     </form>
   );
@@ -556,7 +573,7 @@ function RecurringInvoicesPanel({ clients, services }: {
 
   const createMutation = useCreateRecurringInvoice({
     mutation: {
-      onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Recurring invoice created" }); },
+      onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Recurring schedule created" }); },
       onError: () => toast({ title: "Failed to create", variant: "destructive" }),
     },
   });
@@ -570,7 +587,7 @@ function RecurringInvoicesPanel({ clients, services }: {
 
   const deleteMutation = useDeleteRecurringInvoice({
     mutation: {
-      onSuccess: () => { invalidate(); setDeleteId(null); toast({ title: "Recurring invoice deleted" }); },
+      onSuccess: () => { invalidate(); setDeleteId(null); toast({ title: "Schedule deleted" }); },
       onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
     },
   });
@@ -578,19 +595,13 @@ function RecurringInvoicesPanel({ clients, services }: {
   const generateMutation = useGenerateRecurringInvoice({
     mutation: {
       onSuccess: (inv) => { invalidate(); setGeneratingId(null); toast({ title: `Invoice #${inv.id} generated`, description: formatCurrency(inv.amount) }); },
-      onError: () => { setGeneratingId(null); toast({ title: "Failed to generate invoice", variant: "destructive" }); },
+      onError: () => { setGeneratingId(null); toast({ title: "Failed to generate", variant: "destructive" }); },
     },
   });
 
   const getClientName = (id: number) => clients.find(c => c.id === id)?.name ?? `Client #${id}`;
-
-  const handleGenerate = (id: number) => {
-    setGeneratingId(id);
-    generateMutation.mutate({ id });
-  };
-
-  const toggleActive = (r: RecurringInvoice) => {
-    updateMutation.mutate({ id: r.id, data: { active: !r.active } });
+  const toggle = (r: RecurringInvoice, field: "active" | "auto_send") => {
+    updateMutation.mutate({ id: r.id, data: { [field]: !r[field] } });
   };
 
   return (
@@ -598,7 +609,7 @@ function RecurringInvoicesPanel({ clients, services }: {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-slate-900">Recurring Invoices</h2>
-          <p className="text-sm text-slate-500 mt-0.5">Schedules that auto-generate invoices on a set frequency.</p>
+          <p className="text-sm text-slate-500 mt-0.5">Schedules auto-generate invoices daily. Auto-send emails them straight to the client.</p>
         </div>
         <button onClick={() => setShowForm(v => !v)}
           className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-xl transition-colors">
@@ -609,69 +620,75 @@ function RecurringInvoicesPanel({ clients, services }: {
 
       {showForm && (
         <div className="bg-white rounded-2xl border border-blue-200 p-6">
-          <RecurringInvoiceForm
-            clients={clients} services={services}
+          <RecurringInvoiceForm clients={clients} services={services}
             onSubmit={(data) => createMutation.mutate({ data })}
             onCancel={() => setShowForm(false)}
-            isPending={createMutation.isPending}
-          />
+            isPending={createMutation.isPending} />
         </div>
       )}
 
       {isLoading ? (
-        <div className="space-y-2">{[1, 2].map(i => <div key={i} className="h-14 bg-white rounded-xl border border-slate-100 animate-pulse" />)}</div>
+        <div className="space-y-2">{[1, 2].map(i => <div key={i} className="h-16 bg-white rounded-xl border border-slate-100 animate-pulse" />)}</div>
       ) : recurring.length === 0 ? (
         <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-12 text-center">
           <Repeat className="w-8 h-8 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 font-medium">No recurring schedules yet</p>
-          <p className="text-slate-400 text-sm mt-1">Create a schedule to auto-generate invoices on a recurring basis.</p>
+          <p className="text-slate-400 text-sm mt-1">Create a schedule to auto-generate invoices on a set frequency.</p>
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="divide-y divide-slate-100">
             {recurring.map(r => (
-              <div key={r.id} className={cn("flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 hover:bg-slate-50/60 transition-colors", !r.active && "opacity-50")}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-slate-900">{formatCurrency(r.amount)}</span>
-                    <span className="text-slate-400">·</span>
-                    <span className="text-sm text-slate-600">{getClientName(r.client_id)}</span>
-                    <span className="text-xs px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 capitalize">{r.frequency}</span>
-                    {!r.active && <span className="text-xs text-slate-400 font-medium">Paused</span>}
+              <div key={r.id} className={cn("px-5 py-4 hover:bg-slate-50/60 transition-colors", !r.active && "opacity-50")}>
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-slate-900">{formatCurrency(r.amount)}</span>
+                      <span className="text-slate-400">·</span>
+                      <span className="text-sm text-slate-600">{getClientName(r.client_id)}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200 capitalize">{r.frequency}</span>
+                      {!r.active && <span className="text-xs text-slate-400 font-medium">Paused</span>}
+                      {r.auto_send && <span className="text-xs px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-200">Auto-send</span>}
+                    </div>
+                    {r.description && <p className="text-sm text-slate-500 mt-0.5">{r.description}</p>}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-slate-400">
+                      <span>Next: <span className="font-medium text-slate-600">{formatDate(r.next_due_date)}</span></span>
+                      {r.end_date && <span>· Ends: {formatDate(r.end_date)}</span>}
+                      {r.line_items && r.line_items.length > 0 && <span>· {r.line_items.length} line item{r.line_items.length !== 1 ? "s" : ""}</span>}
+                    </div>
+                    {/* Toggles inline */}
+                    <div className="flex flex-wrap gap-4 mt-2">
+                      <div
+                        role="button" tabIndex={0}
+                        onClick={() => toggle(r, "active")}
+                        onKeyDown={e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(r, "active"); } }}
+                        className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500 hover:text-slate-700">
+                        {r.active ? <ToggleRight className="w-4 h-4 text-blue-500" /> : <ToggleLeft className="w-4 h-4" />}
+                        {r.active ? "Active" : "Paused"}
+                      </div>
+                      <div
+                        role="button" tabIndex={0}
+                        onClick={() => toggle(r, "auto_send")}
+                        onKeyDown={e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(r, "auto_send"); } }}
+                        className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500 hover:text-slate-700">
+                        {r.auto_send ? <ToggleRight className="w-4 h-4 text-emerald-500" /> : <ToggleLeft className="w-4 h-4" />}
+                        Auto-send
+                      </div>
+                    </div>
                   </div>
-                  {r.description && <p className="text-sm text-slate-500 mt-0.5">{r.description}</p>}
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-400">
-                    <span>Next: {formatDate(r.next_due_date)}</span>
-                    {r.end_date && <span>· Ends: {formatDate(r.end_date)}</span>}
-                    {r.line_items && r.line_items.length > 0 && (
-                      <span>· {r.line_items.length} line item{r.line_items.length !== 1 ? "s" : ""}</span>
-                    )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => { setGeneratingId(r.id); generateMutation.mutate({ id: r.id }); }}
+                      disabled={!r.active || generatingId === r.id}
+                      className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 transition-colors">
+                      {generatingId === r.id ? <span className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin inline-block" /> : <Play className="w-3.5 h-3.5" />}
+                      Generate
+                    </button>
+                    <button onClick={() => setDeleteId(r.id)}
+                      className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {/* Generate now */}
-                  <button
-                    onClick={() => handleGenerate(r.id)}
-                    disabled={!r.active || generatingId === r.id}
-                    className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 transition-colors"
-                    title="Generate invoice now">
-                    {generatingId === r.id ? (
-                      <span className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin inline-block" />
-                    ) : <Play className="w-3.5 h-3.5" />}
-                    Generate
-                  </button>
-                  {/* Toggle active */}
-                  <button
-                    onClick={() => toggleActive(r)}
-                    className={cn("p-1.5 rounded-lg transition-colors", r.active ? "text-blue-500 hover:bg-blue-50" : "text-slate-300 hover:text-slate-500")}
-                    title={r.active ? "Pause schedule" : "Resume schedule"}>
-                    {r.active ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
-                  </button>
-                  {/* Delete */}
-                  <button onClick={() => setDeleteId(r.id)}
-                    className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               </div>
             ))}
@@ -679,25 +696,18 @@ function RecurringInvoicesPanel({ clients, services }: {
         </div>
       )}
 
-      {/* Delete confirm */}
       <Modal isOpen={deleteId !== null} onClose={() => setDeleteId(null)} title="Delete Recurring Schedule">
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
             <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-red-800">Delete this recurring schedule?</p>
-              <p className="text-xs text-red-600 mt-1">Existing generated invoices are kept. No future invoices will be generated.</p>
-            </div>
+            <div><p className="text-sm font-semibold text-red-800">Delete this schedule?</p><p className="text-xs text-red-600 mt-1">Existing invoices are kept. No future invoices will be generated.</p></div>
           </div>
           <div className="flex gap-2">
             <button onClick={() => deleteId !== null && deleteMutation.mutate({ id: deleteId })} disabled={deleteMutation.isPending}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
               {deleteMutation.isPending ? "Deleting…" : "Delete Schedule"}
             </button>
-            <button onClick={() => setDeleteId(null)}
-              className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
-              Cancel
-            </button>
+            <button onClick={() => setDeleteId(null)} className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
           </div>
         </div>
       </Modal>
@@ -719,15 +729,13 @@ export default function Invoices() {
   const [voidingId, setVoidingId] = useState<number | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [sendingId, setSendingId] = useState<number | null>(null);
+  const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
 
-  const { data: invoices = [], isLoading } = useListInvoices(
-    filterClient ? { clientId: filterClient } : undefined,
-  );
+  const { data: invoices = [], isLoading } = useListInvoices(filterClient ? { clientId: filterClient } : undefined);
   const { data: clients = [] } = useListClients();
   const { data: services = [] } = useListServices();
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
 
   const createMutation = useCreateInvoice({
     mutation: {
@@ -758,63 +766,35 @@ export default function Invoices() {
   const sendMutation = useSendInvoice({
     mutation: {
       onSuccess: (data: any) => {
-        invalidate();
-        setSendingId(null);
-        const emailSent = data?.emailSent !== false;
+        invalidate(); setSendingId(null);
         toast({
-          title: emailSent ? "Invoice sent!" : "Invoice marked as sent",
-          description: emailSent ? "Email delivered to client." : "SMTP not configured — status updated without email.",
+          title: data?.emailSent !== false ? "Invoice sent!" : "Invoice marked as sent",
+          description: data?.emailSent !== false ? "Email delivered to client." : "SMTP not configured — status updated.",
         });
       },
       onError: () => { setSendingId(null); toast({ title: "Failed to send invoice", variant: "destructive" }); },
     },
   });
 
-  const handleCreate = useCallback((data: any) => {
-    createMutation.mutate({ data });
-  }, [createMutation]);
-
-  const handleEdit = useCallback((data: any) => {
-    if (!editingInvoice) return;
-    updateMutation.mutate({ id: editingInvoice.id, data });
-  }, [editingInvoice, updateMutation]);
-
-  const handleMarkPaid = useCallback((payData: { paid_at: string; payment_method: string; payment_notes: string }) => {
-    if (!markingPaidInvoice) return;
-    updateMutation.mutate({
-      id: markingPaidInvoice.id,
-      data: { status: "paid", paid_at: payData.paid_at, payment_method: payData.payment_method, payment_notes: payData.payment_notes || null },
+  const filtered = invoices
+    .filter(inv => {
+      if (filterStatus === "recurring") return false;
+      if (filterStatus !== "all" && inv.status !== filterStatus) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const order = (i: Invoice) => i.status === "void" ? 5 : i.status === "paid" ? 4 : i.status === "sent" ? 3 : i.status === "draft" ? 2 : 1;
+      return order(a) - order(b);
     });
-  }, [markingPaidInvoice, updateMutation]);
 
-  const handleVoid = useCallback(() => {
-    if (voidingId === null) return;
-    updateMutation.mutate({ id: voidingId, data: { status: "void" } });
-  }, [voidingId, updateMutation]);
-
-  const handleSend = useCallback((inv: Invoice) => {
-    setSendingId(inv.id);
-    sendMutation.mutate({ id: inv.id });
-  }, [sendMutation]);
-
-  // ── Filtered + sorted invoices ────────────────────────────────────────────
-  const filtered = invoices.filter(inv => {
-    if (filterStatus === "recurring") return false; // handled by panel
-    if (filterStatus !== "all" && inv.status !== filterStatus) return false;
-    return true;
-  }).sort((a, b) => {
-    const order = (i: Invoice) => i.status === "void" ? 5 : i.status === "paid" ? 4 : i.status === "sent" ? 3 : i.status === "draft" ? 2 : 1;
-    return order(a) - order(b);
-  });
-
-  // Summary (exclude void from totals)
   const activeInvoices = invoices.filter(i => i.status !== "void");
   const totalPaid = activeInvoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
   const totalUnpaid = activeInvoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+  const overdueCount = activeInvoices.filter(i => isOverdue(i.due_date, i.status)).length;
 
   const getClientName = (id: number) => clients.find(c => c.id === id)?.name ?? `Client #${id}`;
 
-  // ── Stripe ────────────────────────────────────────────────────────────────
+  // Stripe
   const [stripeEnabled, setStripeEnabled] = useState(false);
   const [payingId, setPayingId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
@@ -828,13 +808,11 @@ export default function Invoices() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const payment = params.get("payment");
-    const invoiceId = params.get("invoice");
-    if (payment === "success" && invoiceId) {
-      toast({ title: "Payment received!", description: `Invoice #${invoiceId} is now marked paid.` });
+    if (params.get("payment") === "success") {
+      toast({ title: "Payment received!", description: `Invoice #${params.get("invoice")} marked paid.` });
       invalidate();
       window.history.replaceState({}, "", window.location.pathname);
-    } else if (payment === "cancelled") {
+    } else if (params.get("payment") === "cancelled") {
       toast({ title: "Payment cancelled", description: "No charge was made." });
       window.history.replaceState({}, "", window.location.pathname);
     }
@@ -862,8 +840,7 @@ export default function Invoices() {
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url; a.download = `invoice-${inv.id}.pdf`; a.click();
+      const a = document.createElement("a"); a.href = url; a.download = `invoice-${inv.id}.pdf`; a.click();
       URL.revokeObjectURL(url);
     } catch { toast({ title: "Failed to download PDF", variant: "destructive" }); }
     finally { setDownloadingId(null); }
@@ -881,15 +858,14 @@ export default function Invoices() {
 
   return (
     <div className="space-y-8">
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Invoices</h1>
           <p className="text-slate-500 mt-1">Manage billing, payments, and outstanding balances.</p>
         </div>
         {filterStatus !== "recurring" && (
-          <button
-            onClick={() => { setShowForm(v => !v); setEditingInvoice(null); }}
+          <button onClick={() => { setShowForm(v => !v); setEditingInvoice(null); }}
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-xl text-sm transition-colors shrink-0">
             {showForm ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
             {showForm ? "Cancel" : "New Invoice"}
@@ -897,52 +873,41 @@ export default function Invoices() {
         )}
       </div>
 
-      {/* ── Summary Cards ───────────────────────────────────────────────────── */}
+      {/* Summary Cards */}
       {filterStatus !== "recurring" && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
             <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0"><CheckCircle2 className="w-5 h-5" /></div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Paid</p>
-              <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid)}</p>
-            </div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Paid</p><p className="text-2xl font-bold text-slate-900">{formatCurrency(totalPaid)}</p></div>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
             <div className="p-3 bg-amber-50 text-amber-600 rounded-xl shrink-0"><Clock className="w-5 h-5" /></div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Outstanding</p>
-              <p className="text-2xl font-bold text-slate-900">{formatCurrency(totalUnpaid)}</p>
-            </div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Outstanding</p><p className="text-2xl font-bold text-slate-900">{formatCurrency(totalUnpaid)}</p></div>
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
             <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0"><FileText className="w-5 h-5" /></div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">All Invoices</p>
-              <p className="text-2xl font-bold text-slate-900">{activeInvoices.length}</p>
-            </div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">All Invoices</p><p className="text-2xl font-bold text-slate-900">{activeInvoices.length}</p></div>
+          </div>
+          <div className={cn("bg-white rounded-2xl border shadow-sm p-5 flex items-center gap-4", overdueCount > 0 ? "border-red-200" : "border-slate-200")}>
+            <div className={cn("p-3 rounded-xl shrink-0", overdueCount > 0 ? "bg-red-50 text-red-600" : "bg-slate-50 text-slate-400")}><BellRing className="w-5 h-5" /></div>
+            <div><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Overdue</p><p className={cn("text-2xl font-bold", overdueCount > 0 ? "text-red-600" : "text-slate-900")}>{overdueCount}</p></div>
           </div>
         </div>
       )}
 
-      {/* ── New Invoice Form ─────────────────────────────────────────────────── */}
+      {/* New Invoice Form */}
       {showForm && !editingInvoice && filterStatus !== "recurring" && (
         <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-6">
           <h2 className="font-semibold text-slate-900 mb-5">New Invoice</h2>
-          <InvoiceForm
-            clients={clients} services={services}
-            onSubmit={handleCreate} onCancel={() => setShowForm(false)}
-            isPending={createMutation.isPending}
-          />
+          <InvoiceForm clients={clients} services={services} onSubmit={(data) => createMutation.mutate({ data })} onCancel={() => setShowForm(false)} isPending={createMutation.isPending} />
         </div>
       )}
 
-      {/* ── Filters ─────────────────────────────────────────────────────────── */}
+      {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         {filterStatus !== "recurring" && (
-          <select
-            className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={filterClient ?? ""}
-            onChange={e => setFilterClient(e.target.value ? Number(e.target.value) : undefined)}>
+          <select className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            value={filterClient ?? ""} onChange={e => setFilterClient(e.target.value ? Number(e.target.value) : undefined)}>
             <option value="">All Clients</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -950,11 +915,8 @@ export default function Invoices() {
         <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm">
           {STATUS_TABS.map(tab => (
             <button key={tab.value} onClick={() => setFilterStatus(tab.value)}
-              className={cn(
-                "px-3 py-1.5 font-medium transition-colors",
-                tab.value === "recurring" && "flex items-center gap-1",
-                filterStatus === tab.value ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50"
-              )}>
+              className={cn("px-3 py-1.5 font-medium transition-colors", tab.value === "recurring" && "flex items-center gap-1",
+                filterStatus === tab.value ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50")}>
               {tab.value === "recurring" && <Repeat className="w-3 h-3" />}
               {tab.label}
             </button>
@@ -962,17 +924,13 @@ export default function Invoices() {
         </div>
       </div>
 
-      {/* ── Recurring Invoices Panel ─────────────────────────────────────────── */}
-      {filterStatus === "recurring" && (
-        <RecurringInvoicesPanel clients={clients} services={services} />
-      )}
+      {/* Recurring Panel */}
+      {filterStatus === "recurring" && <RecurringInvoicesPanel clients={clients} services={services} />}
 
-      {/* ── Invoice List ─────────────────────────────────────────────────────── */}
+      {/* Invoice List */}
       {filterStatus !== "recurring" && (
         isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => <div key={i} className="h-16 bg-white rounded-xl border border-slate-100 animate-pulse" />)}
-          </div>
+          <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="h-16 bg-white rounded-xl border border-slate-100 animate-pulse" />)}</div>
         ) : filtered.length === 0 ? (
           <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-16 text-center">
             <FileText className="w-10 h-10 text-slate-300 mx-auto mb-3" />
@@ -983,35 +941,23 @@ export default function Invoices() {
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="divide-y divide-slate-100">
               {filtered.map(inv => {
-                const overdue = isOverdue(inv.due_date, inv.status);
+                const over = isOverdue(inv.due_date, inv.status);
+                const overDays = over ? daysOverdue(inv.due_date) : 0;
                 const isVoid = inv.status === "void";
                 const isPaid = inv.status === "paid";
                 const isSent = inv.status === "sent";
-                const isDraft = inv.status === "draft";
                 const isRecurring = !!inv.recurring_id;
 
                 return (
-                  <div key={inv.id}
-                    className={cn("flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 hover:bg-slate-50/60 transition-colors", isVoid && "opacity-50")}>
+                  <div key={inv.id} className={cn("flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 hover:bg-slate-50/60 transition-colors", isVoid && "opacity-50")}>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={cn("font-semibold text-slate-900", isVoid && "line-through")}>
-                          {formatCurrency(inv.amount)}
-                        </span>
+                        <span className={cn("font-semibold text-slate-900", isVoid && "line-through")}>{formatCurrency(inv.amount)}</span>
                         <span className="text-slate-400 text-sm">·</span>
                         <span className="text-sm text-slate-600">{getClientName(inv.client_id)}</span>
                         <span className="text-slate-300 text-xs">#{inv.id}</span>
-                        {isRecurring && (
-                          <span className="flex items-center gap-1 text-xs text-blue-500 font-medium">
-                            <Repeat className="w-3 h-3" /> recurring
-                          </span>
-                        )}
-                        {inv.description && (
-                          <>
-                            <span className="text-slate-400 text-sm">·</span>
-                            <span className="text-sm text-slate-500 truncate max-w-xs">{inv.description}</span>
-                          </>
-                        )}
+                        {isRecurring && <span className="flex items-center gap-1 text-xs text-blue-500 font-medium"><Repeat className="w-3 h-3" /> recurring</span>}
+                        {inv.description && <><span className="text-slate-400 text-sm">·</span><span className="text-sm text-slate-500 truncate max-w-xs">{inv.description}</span></>}
                       </div>
                       {inv.line_items && inv.line_items.length > 0 && (
                         <p className="text-xs text-slate-400 mt-0.5">
@@ -1020,8 +966,8 @@ export default function Invoices() {
                         </p>
                       )}
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className={cn("text-xs", overdue ? "text-red-500 font-medium" : "text-slate-400")}>
-                          {overdue ? "Overdue · " : "Due "}{formatDate(inv.due_date)}
+                        <span className={cn("text-xs", over ? "text-red-500 font-medium" : "text-slate-400")}>
+                          {over ? `${overDays}d overdue · Due ` : "Due "}{formatDate(inv.due_date)}
                         </span>
                         {isPaid && inv.paid_at && (
                           <span className="text-xs text-emerald-600">
@@ -1032,9 +978,7 @@ export default function Invoices() {
                       </div>
                     </div>
 
-                    <span className={cn("shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border", statusBadge(inv))}>
-                      {statusLabel(inv)}
-                    </span>
+                    <span className={cn("shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border", statusBadge(inv))}>{statusLabel(inv)}</span>
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       {/* Mark paid */}
@@ -1045,17 +989,21 @@ export default function Invoices() {
                         </button>
                       )}
 
-                      {/* Send to client */}
+                      {/* Send */}
                       {!isVoid && !isPaid && (
-                        <button
-                          onClick={() => handleSend(inv)}
+                        <button onClick={() => { setSendingId(inv.id); sendMutation.mutate({ id: inv.id }); }}
                           disabled={sendingId === inv.id}
-                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors"
-                          title="Send invoice to client via email">
-                          {sendingId === inv.id ? (
-                            <span className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin inline-block" />
-                          ) : <Send className="w-3.5 h-3.5" />}
+                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors">
+                          {sendingId === inv.id ? <span className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin inline-block" /> : <Send className="w-3.5 h-3.5" />}
                           {isSent ? "Resend" : "Send"}
+                        </button>
+                      )}
+
+                      {/* Reminders (bell — overdue or sent) */}
+                      {!isVoid && !isPaid && (
+                        <button onClick={() => setReminderInvoice(inv)} title="Send payment reminder"
+                          className={cn("p-1.5 rounded-lg transition-colors", over ? "text-red-400 hover:text-red-600 hover:bg-red-50" : "text-slate-300 hover:text-amber-500 hover:bg-amber-50")}>
+                          <Bell className="w-4 h-4" />
                         </button>
                       )}
 
@@ -1067,24 +1015,19 @@ export default function Invoices() {
                         </button>
                       )}
 
-                      {/* Pay via Stripe */}
+                      {/* Stripe */}
                       {stripeEnabled && !isPaid && !isVoid && (
                         <button onClick={() => payInvoice(inv)} disabled={payingId === inv.id}
-                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors"
-                          title="Pay online via Stripe">
-                          {payingId === inv.id ? (
-                            <span className="w-3 h-3 border-2 border-slate-600 border-t-transparent rounded-full animate-spin inline-block" />
-                          ) : <CreditCard className="w-3.5 h-3.5" />}
+                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
+                          {payingId === inv.id ? <span className="w-3 h-3 border-2 border-slate-600 border-t-transparent rounded-full animate-spin inline-block" /> : <CreditCard className="w-3.5 h-3.5" />}
                           Stripe
                         </button>
                       )}
 
-                      {/* PDF download */}
+                      {/* PDF */}
                       <button onClick={() => downloadPdf(inv)} disabled={downloadingId === inv.id}
                         className="p-1.5 rounded-lg text-slate-300 hover:text-blue-500 transition-colors" title="Download PDF">
-                        {downloadingId === inv.id ? (
-                          <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin inline-block" />
-                        ) : <Download className="w-4 h-4" />}
+                        {downloadingId === inv.id ? <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin inline-block" /> : <Download className="w-4 h-4" />}
                       </button>
 
                       {/* Void */}
@@ -1109,73 +1052,60 @@ export default function Invoices() {
         )
       )}
 
-      {/* ── Edit Invoice Modal ───────────────────────────────────────────────── */}
+      {/* Edit Invoice Modal */}
       <Modal isOpen={!!editingInvoice} onClose={() => setEditingInvoice(null)}
         title={`Edit Invoice #${editingInvoice?.id}`}
         description={editingInvoice ? `${getClientName(editingInvoice.client_id)} · ${formatCurrency(editingInvoice.amount)}` : undefined}>
         {editingInvoice && (
-          <InvoiceForm
-            invoice={editingInvoice} clients={clients} services={services}
-            onSubmit={handleEdit} onCancel={() => setEditingInvoice(null)}
-            isPending={updateMutation.isPending}
-          />
+          <InvoiceForm invoice={editingInvoice} clients={clients} services={services}
+            onSubmit={(data) => updateMutation.mutate({ id: editingInvoice.id, data })}
+            onCancel={() => setEditingInvoice(null)} isPending={updateMutation.isPending} />
         )}
       </Modal>
 
-      {/* ── Mark as Paid Modal ──────────────────────────────────────────────── */}
+      {/* Mark as Paid Modal */}
       {markingPaidInvoice && (
-        <MarkAsPaidModal
-          invoice={markingPaidInvoice} onClose={() => setMarkingPaidInvoice(null)}
-          onConfirm={handleMarkPaid} isPending={updateMutation.isPending}
-        />
+        <MarkAsPaidModal invoice={markingPaidInvoice} onClose={() => setMarkingPaidInvoice(null)}
+          onConfirm={(payData) => updateMutation.mutate({ id: markingPaidInvoice.id, data: { status: "paid", paid_at: payData.paid_at, payment_method: payData.payment_method, payment_notes: payData.payment_notes || null } })}
+          isPending={updateMutation.isPending} />
       )}
 
-      {/* ── Void Confirmation ───────────────────────────────────────────────── */}
+      {/* Reminders Modal */}
+      {reminderInvoice && <ReminderModal invoice={reminderInvoice} onClose={() => setReminderInvoice(null)} />}
+
+      {/* Void Confirmation */}
       <Modal isOpen={voidingId !== null} onClose={() => setVoidingId(null)} title="Void Invoice">
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100">
             <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-amber-800">Mark this invoice as void?</p>
-              <p className="text-xs text-amber-600 mt-1">The record is kept but excluded from totals and reports.</p>
-            </div>
+            <div><p className="text-sm font-semibold text-amber-800">Mark this invoice as void?</p><p className="text-xs text-amber-600 mt-1">The record is kept but excluded from totals and reports.</p></div>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleVoid} disabled={updateMutation.isPending}
+            <button onClick={() => voidingId !== null && updateMutation.mutate({ id: voidingId, data: { status: "void" } })} disabled={updateMutation.isPending}
               className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
               {updateMutation.isPending ? "Voiding…" : "Void Invoice"}
             </button>
-            <button onClick={() => setVoidingId(null)}
-              className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
-              Cancel
-            </button>
+            <button onClick={() => setVoidingId(null)} className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
           </div>
         </div>
       </Modal>
 
-      {/* ── Delete Confirmation ─────────────────────────────────────────────── */}
+      {/* Delete Confirmation */}
       <Modal isOpen={deleteConfirmId !== null} onClose={() => setDeleteConfirmId(null)} title="Delete Invoice">
         <div className="space-y-4">
           <div className="flex items-start gap-3 p-3 bg-red-50 rounded-xl border border-red-100">
             <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-semibold text-red-800">Permanently delete this invoice?</p>
-              <p className="text-xs text-red-600 mt-1">This action cannot be undone.</p>
-            </div>
+            <div><p className="text-sm font-semibold text-red-800">Permanently delete this invoice?</p><p className="text-xs text-red-600 mt-1">This action cannot be undone.</p></div>
           </div>
           <div className="flex gap-2">
             <button onClick={() => deleteConfirmId !== null && deleteMutation.mutate({ id: deleteConfirmId })} disabled={deleteMutation.isPending}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50">
               {deleteMutation.isPending ? "Deleting…" : "Delete Permanently"}
             </button>
-            <button onClick={() => setDeleteConfirmId(null)}
-              className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">
-              Cancel
-            </button>
+            <button onClick={() => setDeleteConfirmId(null)} className="px-4 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
           </div>
         </div>
       </Modal>
     </div>
   );
 }
-

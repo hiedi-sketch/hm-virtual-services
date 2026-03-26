@@ -497,6 +497,7 @@ export const CreateRecurringInvoiceBody = zod.object({
   thank_you_message: zod.string().nullish(),
   amount: zod.number(),
   active: zod.boolean().optional(),
+  auto_send: zod.boolean().optional(),
 });
 
 export const UpdateRecurringInvoiceParams = zod.object({
@@ -515,6 +516,7 @@ export const UpdateRecurringInvoiceBody = zod.object({
   thank_you_message: zod.string().nullish(),
   amount: zod.number().optional(),
   active: zod.boolean().optional(),
+  auto_send: zod.boolean().optional(),
 });
 
 export const DeleteRecurringInvoiceParams = zod.object({

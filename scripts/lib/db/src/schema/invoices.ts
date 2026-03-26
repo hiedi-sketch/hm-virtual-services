@@ -22,6 +22,7 @@ export const recurringInvoicesTable = pgTable("recurring_invoices", {
   thank_you_message: text("thank_you_message"),
   amount: real("amount").notNull().default(0),
   active: boolean("active").notNull().default(true),
+  auto_send: boolean("auto_send").notNull().default(false),
   created_at: timestamp("created_at").defaultNow(),
 });
 
