@@ -370,27 +370,33 @@ export default function Tasks() {
           })()}
         </div>
 
-        {isLoading ? (
-          <div className="p-12 text-center text-slate-400 animate-pulse">Loading tasks…</div>
-        ) : displayedTasks.length === 0 ? (
-          <div className="p-14 text-center">
-            <CheckCircle2 className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-            <p className="text-sm font-medium text-slate-500">{emptyMessages[view]}</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/40">
-                  <th className="text-left px-5 py-2.5 font-medium text-slate-500 text-xs uppercase tracking-wide w-[40%]">Task</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-slate-500 text-xs uppercase tracking-wide w-[20%]">Client</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-slate-500 text-xs uppercase tracking-wide w-[15%]">Status</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-slate-500 text-xs uppercase tracking-wide w-[20%]">Due Date</th>
-                  <th className="px-4 py-2.5 w-[5%]" />
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider font-semibold">
+                <th className="px-6 py-4">Task</th>
+                <th className="px-6 py-4">Client</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Due Date</th>
+                <th className="px-4 py-4" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-sm">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-400 animate-pulse">Loading tasks…</td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {displayedTasks.map(task => (
+              ) : displayedTasks.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <CheckCircle2 className="w-10 h-10 text-slate-200 mb-3" />
+                      <p className="text-slate-500 font-medium">{emptyMessages[view]}</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                displayedTasks.map(task => (
                   <TaskRow
                     key={task.id}
                     task={task}
@@ -400,11 +406,11 @@ export default function Tasks() {
                     onEdit={() => openEdit(task)}
                     updating={updateMutation.isPending || spawnNextMutation.isPending}
                   />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}
@@ -548,31 +554,36 @@ function TaskRow({
     <>
       <tr className={cn(
         "group transition-colors",
-        isComplete ? "bg-slate-50/50" : isOverdue ? "bg-red-50/30 hover:bg-red-50/50" : "hover:bg-slate-50/60",
+        isComplete ? "opacity-60 hover:opacity-80" : isOverdue ? "bg-red-50/40 hover:bg-red-50/70" : "hover:bg-primary/5",
       )}>
         {/* Task column */}
-        <td className="px-5 py-3.5 align-top">
-          <div className="flex items-start gap-2.5">
+        <td className="px-6 py-4 align-top">
+          <div className="flex items-start gap-3">
             <button
               onClick={onToggle}
               disabled={updating}
               className={cn(
                 "mt-0.5 shrink-0 transition-colors",
-                isComplete ? "text-emerald-500 hover:text-emerald-600" : "text-slate-300 hover:text-blue-500",
+                isComplete ? "text-emerald-500 hover:text-emerald-600" : "text-slate-300 hover:text-primary",
               )}
               title={isComplete ? "Mark pending" : "Mark complete"}
             >
               {isComplete ? <CheckCircle2 className="w-5 h-5" /> : <Circle className="w-5 h-5" />}
             </button>
             <div className="min-w-0">
-              <span className={cn(
-                "font-medium leading-snug",
-                isComplete ? "line-through text-slate-400 decoration-slate-300" : "text-slate-900",
+              <div className={cn(
+                "font-semibold leading-snug",
+                isComplete ? "line-through text-slate-400 decoration-slate-300" : "text-slate-900 group-hover:text-primary transition-colors",
               )}>
                 {task.title}
-              </span>
-              <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                {task.recurrence && (
+              </div>
+              {task.assigned_to && (
+                <div className="text-slate-400 text-xs mt-0.5 flex items-center gap-1">
+                  <UserIcon className="w-3 h-3" /> {task.assigned_to}
+                </div>
+              )}
+              {task.recurrence && (
+                <div className="mt-1">
                   <span className={cn(
                     "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
                     RECURRENCE_BADGE[task.recurrence],
@@ -580,14 +591,8 @@ function TaskRow({
                     <RefreshCw className="w-2.5 h-2.5" />
                     {task.recurrence.charAt(0).toUpperCase() + task.recurrence.slice(1)}
                   </span>
-                )}
-                {task.assigned_to && (
-                  <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-                    <UserIcon className="w-3 h-3 shrink-0" />
-                    {task.assigned_to}
-                  </span>
-                )}
-              </div>
+                </div>
+              )}
               {expanded && task.description && (
                 <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">{task.description}</p>
               )}
@@ -597,18 +602,16 @@ function TaskRow({
         </td>
 
         {/* Client column */}
-        <td className="px-4 py-3.5 align-top">
+        <td className="px-6 py-4 align-top">
           {task.client_name ? (
-            <span className="inline-flex items-center text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-              {task.client_name}
-            </span>
+            <span className="font-medium text-slate-700">{task.client_name}</span>
           ) : (
-            <span className="text-slate-300 text-xs">—</span>
+            <span className="text-slate-300">—</span>
           )}
         </td>
 
         {/* Status column */}
-        <td className="px-4 py-3.5 align-top">
+        <td className="px-6 py-4 align-top">
           <span className={cn(
             "inline-flex items-center text-xs font-semibold px-2 py-0.5 rounded-md",
             isComplete ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600",
@@ -618,31 +621,28 @@ function TaskRow({
         </td>
 
         {/* Due Date column */}
-        <td className="px-4 py-3.5 align-top">
+        <td className="px-6 py-4 align-top">
           {task.due_date ? (
             <span className={cn(
-              "inline-flex items-center gap-1 text-xs",
-              isOverdue ? "font-semibold text-red-600" : "text-slate-500",
+              "flex items-center gap-1.5 text-sm",
+              isOverdue ? "font-semibold text-red-600" : "text-slate-600",
             )}>
               <Calendar className="w-3.5 h-3.5 shrink-0" />
-              {isOverdue ? (
-                <>{fmtDate(task.due_date)} <span className="text-red-400">({daysOverdue}d late)</span></>
-              ) : (
-                fmtDate(task.due_date)
-              )}
+              {fmtDate(task.due_date)}
+              {isOverdue && <span className="text-red-400 font-normal text-xs">({daysOverdue}d late)</span>}
             </span>
           ) : (
-            <span className="text-slate-300 text-xs">—</span>
+            <span className="text-slate-300">—</span>
           )}
         </td>
 
         {/* Actions column */}
-        <td className="px-4 py-3.5 align-top">
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+        <td className="px-4 py-4 align-top text-slate-300 group-hover:text-slate-500 transition-colors">
+          <div className="flex items-center gap-1 justify-end">
             {isAdmin && (
               <button
                 onClick={onEdit}
-                className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                 title="Edit task"
               >
                 <Pencil className="w-3.5 h-3.5" />
@@ -651,7 +651,7 @@ function TaskRow({
             {task.description && (
               <button
                 onClick={() => setExpanded(v => !v)}
-                className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-400 hover:text-slate-700 transition-colors"
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors"
                 title={expanded ? "Collapse" : "Show description"}
               >
                 <ChevronDown className={cn("w-3.5 h-3.5 transition-transform", expanded && "rotate-180")} />
