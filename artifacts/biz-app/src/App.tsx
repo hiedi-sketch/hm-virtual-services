@@ -24,6 +24,7 @@ import ResetPassword from "@/pages/reset-password";
 import ClientPortal from "@/pages/client-portal";
 import NotificationsPage from "@/pages/notifications";
 import Backup from "@/pages/backup";
+import Services from "@/pages/services";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,6 +78,7 @@ function Router() {
         {user.role === "admin" && <Route path="/reports" component={Reports} />}
         {user.role === "admin" && <Route path="/api-keys" component={ApiKeys} />}
         {user.role === "admin" && <Route path="/backup" component={Backup} />}
+        {user.role === "admin" && <Route path="/services" component={Services} />}
         <Route path="/notifications" component={NotificationsPage} />
         <Route component={NotFound} />
       </Switch>

@@ -7,8 +7,13 @@ import {
   useCreateTask,
   useUpdateClient,
   useGetDashboard,
+  useListServices,
+  useListClientServices,
+  useAssignClientService,
+  useRemoveClientService,
   getListTasksQueryKey,
   getGetClientQueryKey,
+  getListClientServicesQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -16,7 +21,8 @@ import TaskTable from "@/components/TaskTable";
 import { DocumentsTab } from "@/components/DocumentsTab";
 import {
   Plus, ArrowLeft, X, Paperclip, Mail, Phone, DollarSign,
-  Monitor, Pencil, Check, AlertCircle, Globe, User,
+  Monitor, Pencil, Check, AlertCircle, Globe, User, Package,
+  RefreshCw, ShoppingBag, Trash2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -55,6 +61,8 @@ export default function ClientDetail() {
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [taskFilter, setTaskFilter] = useState<"all" | "pending" | "completed">("all");
+  const [showAddService, setShowAddService] = useState(false);
+  const [addServiceId, setAddServiceId] = useState("");
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
@@ -74,6 +82,28 @@ export default function ClientDetail() {
   const { data: client, isLoading: clientLoading } = useGetClient(clientId);
   const { data: tasks } = useListTasks({ clientId });
   const { data: dashboard } = useGetDashboard();
+  const { data: allServices = [] } = useListServices();
+  const { data: clientServices = [] } = useListClientServices(clientId);
+
+  const invalidateClientServices = () =>
+    queryClient.invalidateQueries({ queryKey: getListClientServicesQueryKey(clientId) });
+
+  const assignServiceMutation = useAssignClientService({
+    mutation: {
+      onSuccess: () => { invalidateClientServices(); setShowAddService(false); setAddServiceId(""); toast({ title: "Service assigned" }); },
+      onError: (e: any) => toast({ title: e?.response?.data?.error === "Service already assigned" ? "Service already assigned" : "Failed to assign service", variant: "destructive" }),
+    },
+  });
+
+  const removeServiceMutation = useRemoveClientService({
+    mutation: {
+      onSuccess: () => { invalidateClientServices(); toast({ title: "Service removed" }); },
+      onError: () => toast({ title: "Failed to remove service", variant: "destructive" }),
+    },
+  });
+
+  const assignedIds = new Set(clientServices.map(cs => cs.service_id));
+  const availableToAdd = allServices.filter(s => s.active && !assignedIds.has(s.id));
 
 
   const dashClient = dashboard?.find(c => c.id === clientId);
@@ -588,6 +618,113 @@ export default function ClientDetail() {
           onToggleStatus={toggleStatus}
           onUpdateField={updateTaskField}
         />
+      </div>
+
+      {/* Assigned Services */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+          <Package className="w-4 h-4 text-slate-500" />
+          <span className="font-semibold text-slate-900 text-sm">Assigned Services</span>
+          <span className="ml-1 text-xs text-slate-400">({clientServices.length})</span>
+          <button
+            onClick={() => setShowAddService(v => !v)}
+            className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Service
+          </button>
+        </div>
+
+        {/* Add Service Inline Form */}
+        {showAddService && (
+          <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-end gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Select a service</label>
+              <select
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-ring/50"
+                value={addServiceId}
+                onChange={e => setAddServiceId(e.target.value)}
+              >
+                <option value="">Choose service…</option>
+                {availableToAdd.map(s => (
+                  <option key={s.id} value={s.id}>{s.name} — {formatCurrency(s.price)}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={() => {
+                if (!addServiceId) return;
+                assignServiceMutation.mutate({ clientId, service_id: Number(addServiceId) });
+              }}
+              disabled={!addServiceId || assignServiceMutation.isPending}
+              className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {assignServiceMutation.isPending ? "Assigning…" : "Assign"}
+            </button>
+            <button
+              onClick={() => { setShowAddService(false); setAddServiceId(""); }}
+              className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* Services List */}
+        {clientServices.length === 0 ? (
+          <div className="p-8 text-center">
+            <Package className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+            <p className="text-sm text-slate-400">No services assigned yet.</p>
+            {availableToAdd.length > 0 && (
+              <button
+                onClick={() => setShowAddService(true)}
+                className="mt-3 text-xs text-primary hover:underline"
+              >
+                Assign a service
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {clientServices.map(cs => (
+              <div key={cs.id} className="flex items-center gap-3 px-5 py-3">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  {cs.billing_type === "recurring" ? (
+                    <RefreshCw className="w-3.5 h-3.5 text-primary" />
+                  ) : (
+                    <ShoppingBag className="w-3.5 h-3.5 text-primary" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-900 truncate">{cs.name}</p>
+                  {cs.description && (
+                    <p className="text-xs text-slate-400 truncate">{cs.description}</p>
+                  )}
+                </div>
+                <span
+                  className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                    cs.billing_type === "recurring"
+                      ? "bg-blue-50 text-blue-700"
+                      : "bg-slate-50 text-slate-600"
+                  }`}
+                >
+                  {cs.billing_type === "recurring" ? "Recurring" : "One-time"}
+                </span>
+                <span className="text-sm font-semibold text-slate-700 w-20 text-right shrink-0">
+                  {cs.price != null ? formatCurrency(cs.price) : "—"}
+                </span>
+                <button
+                  onClick={() => removeServiceMutation.mutate({ clientId, serviceId: cs.service_id })}
+                  disabled={removeServiceMutation.isPending}
+                  className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors ml-1"
+                  title="Remove service"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Client Documents */}

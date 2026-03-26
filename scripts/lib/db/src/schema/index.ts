@@ -1,4 +1,6 @@
 export * from "./clients";
+export * from "./services";
+export * from "./client_services";
 export * from "./tasks";
 export * from "./time_entries";
 export * from "./leads";

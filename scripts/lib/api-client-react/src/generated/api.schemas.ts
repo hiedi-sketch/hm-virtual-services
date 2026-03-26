@@ -334,6 +334,52 @@ export type ListTasksParams = {
   clientId?: number;
 };
 
+export type ServiceBillingType =
+  (typeof ServiceBillingType)[keyof typeof ServiceBillingType];
+
+export const ServiceBillingType = {
+  one_time: "one_time",
+  recurring: "recurring",
+} as const;
+
+export interface Service {
+  id: number;
+  name: string;
+  description?: string | null;
+  price: number;
+  billing_type: ServiceBillingType;
+  active: boolean;
+  created_at: string;
+}
+
+export interface CreateServiceInput {
+  name: string;
+  description?: string | null;
+  price: number;
+  billing_type?: ServiceBillingType;
+  active?: boolean;
+}
+
+export interface UpdateServiceInput {
+  name?: string;
+  description?: string | null;
+  price?: number;
+  billing_type?: ServiceBillingType;
+  active?: boolean;
+}
+
+export interface ClientService {
+  id: number;
+  client_id: number;
+  service_id: number;
+  created_at: string;
+  name?: string | null;
+  description?: string | null;
+  price?: number | null;
+  billing_type?: string | null;
+  active?: boolean | null;
+}
+
 export type ListTimeEntriesParams = {
   clientId?: number;
 };

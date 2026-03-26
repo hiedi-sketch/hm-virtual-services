@@ -5,6 +5,7 @@ import {
   useUpdateInvoice,
   useDeleteInvoice,
   useListClients,
+  useListServices,
   getListInvoicesQueryKey,
   Invoice,
 } from "@workspace/api-client-react";
@@ -50,10 +51,13 @@ export default function Invoices() {
   const [formDescription, setFormDescription] = useState("");
   const [formStatus, setFormStatus] = useState<"paid" | "unpaid">("unpaid");
 
+  const [formServiceId, setFormServiceId] = useState("");
+
   const { data: invoices = [], isLoading } = useListInvoices(
     filterClient ? { clientId: filterClient } : undefined,
   );
   const { data: clients = [] } = useListClients();
+  const { data: services = [] } = useListServices();
 
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
@@ -68,6 +72,7 @@ export default function Invoices() {
         setFormDueDate("");
         setFormDescription("");
         setFormStatus("unpaid");
+        setFormServiceId("");
         toast({ title: "Invoice created" });
       },
       onError: () => toast({ title: "Failed to create invoice", variant: "destructive" }),
@@ -246,7 +251,50 @@ export default function Invoices() {
           onSubmit={handleCreate}
           className="bg-white rounded-2xl border border-blue-200 shadow-sm p-6 space-y-4"
         >
-          <h2 className="font-semibold text-slate-900">New Invoice</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900">New Invoice</h2>
+          </div>
+
+          {/* Quick fill from service */}
+          {services.length > 0 && (
+            <div className="flex items-end gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-slate-500 mb-1">
+                  Quick fill from service (optional)
+                </label>
+                <select
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={formServiceId}
+                  onChange={e => {
+                    const id = e.target.value;
+                    setFormServiceId(id);
+                    if (id) {
+                      const svc = services.find(s => String(s.id) === id);
+                      if (svc) {
+                        setFormAmount(String(svc.price));
+                        if (svc.description) setFormDescription(svc.description);
+                      }
+                    }
+                  }}
+                >
+                  <option value="">Select a service to auto-fill…</option>
+                  {services.filter(s => s.active).map(s => (
+                    <option key={s.id} value={s.id}>{s.name} — ${s.price.toFixed(2)}</option>
+                  ))}
+                </select>
+              </div>
+              {formServiceId && (
+                <button
+                  type="button"
+                  onClick={() => setFormServiceId("")}
+                  className="text-xs text-slate-400 hover:text-slate-600 px-2 py-2 rounded-lg hover:bg-slate-100 transition-colors"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">
