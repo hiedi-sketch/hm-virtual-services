@@ -386,6 +386,47 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       </table>`
     : "";
 
+  // Try to generate a Stripe checkout URL for the Pay Now button
+  let stripePayUrl: string | null = null;
+  try {
+    const { getUncachableStripeClient } = await import("../lib/stripeClient");
+    const stripe = await getUncachableStripeClient();
+    const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: Math.round(row.amount * 100),
+            product_data: {
+              name: `Invoice #${row.id}`,
+              description: row.description ?? `Payment due ${fmtDate(row.due_date)}`,
+            },
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: { invoice_id: String(row.id) },
+      success_url: `${origin}/invoices?payment=success&invoice=${row.id}`,
+      cancel_url: `${origin}/invoices?payment=cancelled&invoice=${row.id}`,
+    });
+    stripePayUrl = session.url;
+  } catch {
+    // Stripe not configured or failed — email sent without pay button
+  }
+
+  const payButtonHtml = stripePayUrl
+    ? `<div style="text-align:center;margin:28px 0;">
+        <a href="${stripePayUrl}"
+          style="display:inline-block;background:#266b75;color:#ffffff;font-size:16px;font-weight:700;padding:14px 36px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
+          Pay Now — ${fmtAmount(row.amount)}
+        </a>
+        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Stripe. Cards accepted.</p>
+      </div>`
+    : "";
+
   const emailBody = `
     <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;">Invoice #${row.id}</h2>
     <p style="margin:0 0 20px;color:#475569;">Hi ${row.client_name ?? "there"},</p>
@@ -405,10 +446,14 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
 
     ${lineItemsHtml}
 
-    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:20px 0;display:flex;justify-content:space-between;align-items:center;">
-      <span style="color:#94a3b8;font-size:13px;">Total Due</span>
-      <span style="color:#ffffff;font-size:22px;font-weight:700;">${fmtAmount(row.amount)}</span>
-    </div>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:8px;margin:20px 0;">
+      <tr>
+        <td style="padding:16px 20px;color:#94a3b8;font-size:13px;">Total Due</td>
+        <td style="padding:16px 20px;text-align:right;color:#ffffff;font-size:22px;font-weight:700;">${fmtAmount(row.amount)}</td>
+      </tr>
+    </table>
+
+    ${payButtonHtml}
 
     ${row.notes ? `<p style="color:#64748b;font-size:13px;border-top:1px solid #e2e8f0;padding-top:16px;margin-top:16px;">${row.notes}</p>` : ""}
     ${row.thank_you_message ? `<p style="color:#475569;font-size:14px;margin-top:16px;font-style:italic;">${row.thank_you_message}</p>` : ""}
