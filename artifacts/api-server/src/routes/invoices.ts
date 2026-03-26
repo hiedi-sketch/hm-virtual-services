@@ -319,4 +319,128 @@ router.delete("/invoices/:id", requireAdmin, async (req, res) => {
   logAudit("invoice", id, "deleted", `Invoice #${id} deleted`, { id: actor?.id, name: actor?.name });
 });
 
+// ── Send invoice to client ────────────────────────────────────────────────────
+router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) {
+    res.status(400).json({ error: "Invalid invoice id" });
+    return;
+  }
+
+  const [row] = await db
+    .select({
+      id: invoicesTable.id,
+      client_id: invoicesTable.client_id,
+      amount: invoicesTable.amount,
+      status: invoicesTable.status,
+      due_date: invoicesTable.due_date,
+      description: invoicesTable.description,
+      line_items: invoicesTable.line_items,
+      notes: invoicesTable.notes,
+      thank_you_message: invoicesTable.thank_you_message,
+      client_name: clientsTable.name,
+      client_email: clientsTable.email,
+    })
+    .from(invoicesTable)
+    .leftJoin(clientsTable, eq(invoicesTable.client_id, clientsTable.id))
+    .where(eq(invoicesTable.id, id));
+
+  if (!row) {
+    res.status(404).json({ error: "Invoice not found" });
+    return;
+  }
+
+  if (!row.client_email) {
+    res.status(400).json({ error: "Client has no email address on file" });
+    return;
+  }
+
+  // Build email body
+  const fmtDate = (d: string) =>
+    new Date(d + "T00:00:00").toLocaleDateString("en-US", {
+      month: "long", day: "numeric", year: "numeric",
+    });
+  const fmtAmount = (n: number) =>
+    n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+
+  const lineItemsHtml = row.line_items && row.line_items.length > 0
+    ? `<table width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse;margin:16px 0;font-size:14px;">
+        <thead>
+          <tr style="background:#f8fafc;border-bottom:2px solid #e2e8f0;">
+            <th style="text-align:left;padding:8px 10px;color:#64748b;">Item</th>
+            <th style="text-align:center;padding:8px 10px;color:#64748b;">Qty</th>
+            <th style="text-align:right;padding:8px 10px;color:#64748b;">Unit Price</th>
+            <th style="text-align:right;padding:8px 10px;color:#64748b;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${row.line_items.map(li => `
+            <tr style="border-bottom:1px solid #e2e8f0;">
+              <td style="padding:8px 10px;color:#1e293b;">${li.name}${li.description ? `<br><span style="font-size:12px;color:#94a3b8;">${li.description}</span>` : ""}</td>
+              <td style="padding:8px 10px;text-align:center;color:#475569;">${li.qty}</td>
+              <td style="padding:8px 10px;text-align:right;color:#475569;">${fmtAmount(li.unit_price)}</td>
+              <td style="padding:8px 10px;text-align:right;font-weight:600;color:#1e293b;">${fmtAmount(li.qty * li.unit_price)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>`
+    : "";
+
+  const emailBody = `
+    <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;">Invoice #${row.id}</h2>
+    <p style="margin:0 0 20px;color:#475569;">Hi ${row.client_name ?? "there"},</p>
+    <p style="color:#475569;">Please find your invoice details below.</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+      <tr>
+        <td style="color:#64748b;font-size:13px;padding:4px 0;">Due Date</td>
+        <td style="text-align:right;font-weight:600;color:#1e293b;font-size:13px;">${fmtDate(row.due_date)}</td>
+      </tr>
+      ${row.description ? `
+      <tr>
+        <td style="color:#64748b;font-size:13px;padding:4px 0;">Description</td>
+        <td style="text-align:right;color:#1e293b;font-size:13px;">${row.description}</td>
+      </tr>` : ""}
+    </table>
+
+    ${lineItemsHtml}
+
+    <div style="background:#0f172a;border-radius:8px;padding:16px 20px;margin:20px 0;display:flex;justify-content:space-between;align-items:center;">
+      <span style="color:#94a3b8;font-size:13px;">Total Due</span>
+      <span style="color:#ffffff;font-size:22px;font-weight:700;">${fmtAmount(row.amount)}</span>
+    </div>
+
+    ${row.notes ? `<p style="color:#64748b;font-size:13px;border-top:1px solid #e2e8f0;padding-top:16px;margin-top:16px;">${row.notes}</p>` : ""}
+    ${row.thank_you_message ? `<p style="color:#475569;font-size:14px;margin-top:16px;font-style:italic;">${row.thank_you_message}</p>` : ""}
+  `;
+
+  const { sendMail, template, isMailConfigured } = await import("../lib/mailer");
+  const mailConfigured = isMailConfigured();
+
+  try {
+    await sendMail(
+      row.client_email,
+      `Invoice #${row.id} — ${fmtAmount(row.amount)} due ${fmtDate(row.due_date)}`,
+      template(emailBody)
+    );
+  } catch (err) {
+    if (mailConfigured) {
+      res.status(500).json({ error: "Failed to send email", detail: String(err) });
+      return;
+    }
+    // If mail not configured, still mark as sent but warn
+  }
+
+  // Update invoice status to "sent"
+  const [updated] = await db
+    .update(invoicesTable)
+    .set({ status: "sent", updated_at: new Date() })
+    .where(eq(invoicesTable.id, id))
+    .returning();
+
+  res.json({ ...updated, emailSent: mailConfigured });
+  const actor = req.session.user;
+  logAudit("invoice", id, "sent", `Invoice #${id} sent to ${row.client_email}`, { id: actor?.id, name: actor?.name });
+});
+
 export default router;

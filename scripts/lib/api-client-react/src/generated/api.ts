@@ -2706,3 +2706,392 @@ export const useRemoveClientService = <
 > => {
   return useMutation(getRemoveClientServiceMutationOptions(options));
 };
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Recurring Invoices
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getListRecurringInvoicesUrl = () => `/api/recurring-invoices`;
+
+export const listRecurringInvoices = async (options?: RequestInit): Promise<RecurringInvoice[]> => {
+  return customFetch<RecurringInvoice[]>(getListRecurringInvoicesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListRecurringInvoicesQueryKey = () => [`/api/recurring-invoices`] as const;
+
+export const getListRecurringInvoicesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listRecurringInvoices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listRecurringInvoices>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getListRecurringInvoicesQueryKey();
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listRecurringInvoices>>> = ({ signal }) =>
+    listRecurringInvoices({ signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listRecurringInvoices>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export function useListRecurringInvoices<
+  TData = Awaited<ReturnType<typeof listRecurringInvoices>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof listRecurringInvoices>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListRecurringInvoicesQueryOptions(options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & { queryKey: QueryKey };
+  query.queryKey = queryOptions.queryKey;
+  return query;
+}
+
+export const getCreateRecurringInvoiceUrl = () => `/api/recurring-invoices`;
+
+export const createRecurringInvoice = async (
+  createRecurringInvoiceInput: CreateRecurringInvoiceInput,
+  options?: RequestInit,
+): Promise<RecurringInvoice> => {
+  return customFetch<RecurringInvoice>(getCreateRecurringInvoiceUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createRecurringInvoiceInput),
+  });
+};
+
+export const getCreateRecurringInvoiceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRecurringInvoice>>,
+    TError,
+    { data: BodyType<CreateRecurringInvoiceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createRecurringInvoice>>,
+  TError,
+  { data: BodyType<CreateRecurringInvoiceInput> },
+  TContext
+> => {
+  const mutationKey = ["createRecurringInvoice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createRecurringInvoice>>,
+    { data: BodyType<CreateRecurringInvoiceInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+    return createRecurringInvoice(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useCreateRecurringInvoice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createRecurringInvoice>>,
+    TError,
+    { data: BodyType<CreateRecurringInvoiceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createRecurringInvoice>>,
+  TError,
+  { data: BodyType<CreateRecurringInvoiceInput> },
+  TContext
+> => {
+  return useMutation(getCreateRecurringInvoiceMutationOptions(options));
+};
+
+export const getUpdateRecurringInvoiceUrl = (id: number) => `/api/recurring-invoices/${id}`;
+
+export const updateRecurringInvoice = async (
+  id: number,
+  updateRecurringInvoiceInput: UpdateRecurringInvoiceInput,
+  options?: RequestInit,
+): Promise<RecurringInvoice> => {
+  return customFetch<RecurringInvoice>(getUpdateRecurringInvoiceUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateRecurringInvoiceInput),
+  });
+};
+
+export const getUpdateRecurringInvoiceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRecurringInvoice>>,
+    TError,
+    { id: number; data: BodyType<UpdateRecurringInvoiceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateRecurringInvoice>>,
+  TError,
+  { id: number; data: BodyType<UpdateRecurringInvoiceInput> },
+  TContext
+> => {
+  const mutationKey = ["updateRecurringInvoice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateRecurringInvoice>>,
+    { id: number; data: BodyType<UpdateRecurringInvoiceInput> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+    return updateRecurringInvoice(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useUpdateRecurringInvoice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateRecurringInvoice>>,
+    TError,
+    { id: number; data: BodyType<UpdateRecurringInvoiceInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateRecurringInvoice>>,
+  TError,
+  { id: number; data: BodyType<UpdateRecurringInvoiceInput> },
+  TContext
+> => {
+  return useMutation(getUpdateRecurringInvoiceMutationOptions(options));
+};
+
+export const getDeleteRecurringInvoiceUrl = (id: number) => `/api/recurring-invoices/${id}`;
+
+export const deleteRecurringInvoice = async (
+  id: number,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteRecurringInvoiceUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteRecurringInvoiceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRecurringInvoice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteRecurringInvoice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["deleteRecurringInvoice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteRecurringInvoice>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+    return deleteRecurringInvoice(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useDeleteRecurringInvoice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteRecurringInvoice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteRecurringInvoice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getDeleteRecurringInvoiceMutationOptions(options));
+};
+
+export const getGenerateRecurringInvoiceUrl = (id: number) =>
+  `/api/recurring-invoices/${id}/generate`;
+
+export const generateRecurringInvoice = async (
+  id: number,
+  options?: RequestInit,
+): Promise<Invoice> => {
+  return customFetch<Invoice>(getGenerateRecurringInvoiceUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getGenerateRecurringInvoiceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateRecurringInvoice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateRecurringInvoice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["generateRecurringInvoice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateRecurringInvoice>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+    return generateRecurringInvoice(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useGenerateRecurringInvoice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateRecurringInvoice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateRecurringInvoice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getGenerateRecurringInvoiceMutationOptions(options));
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Send Invoice
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const getSendInvoiceUrl = (id: number) => `/api/invoices/${id}/send`;
+
+export const sendInvoice = async (id: number, options?: RequestInit): Promise<Invoice> => {
+  return customFetch<Invoice>(getSendInvoiceUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getSendInvoiceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendInvoice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof sendInvoice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["sendInvoice"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof sendInvoice>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+    return sendInvoice(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export const useSendInvoice = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof sendInvoice>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof sendInvoice>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getSendInvoiceMutationOptions(options));
+};

@@ -1,0 +1,145 @@
+Enhance my Invoices System in my React + TypeScript + Express app to support full invoice editing, payments, and recurring billing.
+
+1. Edit Existing Invoices
+
+Allow editing of invoices even after they are sent.
+
+Editable Fields:
+
+Services / line items (add, remove, update)
+Quantities and pricing
+Due date
+Notes
+Thank you message
+
+Behavior:
+
+Preserve original invoice ID
+Recalculate totals automatically when changes are made
+Track last updated timestamp
+2. Invoice Status Actions
+
+Add the following actions to each invoice:
+
+Void Invoice
+Mark invoice as "void"
+Keep record in database (do NOT delete permanently)
+Exclude from active totals/reports
+Delete Invoice
+Allow permanent deletion with confirmation
+Mark as Paid (Manual / Offline Payment)
+Add button: "Mark as Paid"
+When clicked:
+Open modal/form with:
+Payment date
+Payment method (dropdown: cash, check, venmo, paypal, other)
+Notes field (free text)
+Save:
+paidAt
+paymentMethod
+paymentNotes
+Update invoice status to: "paid"
+3. Create Invoice (Improved Form)
+Service Selection
+Allow selecting multiple services
+Each selected service becomes a line item
+Auto-fill:
+Name
+Description
+Price
+Allow editing after selection
+Allow adding custom line items manually
+Automatic Calculations
+Calculate:
+Subtotal
+Taxes (optional if exists)
+Total
+Update totals in real time when items change
+Additional Fields
+
+Include:
+
+Due date picker
+Service date or date range (for recurring or bundled services)
+Notes field (internal or client-facing)
+Thank you message (shown on invoice)
+4. Recurring Invoices
+
+Add ability to create recurring invoices:
+
+Options:
+
+Frequency:
+Weekly
+Monthly
+Custom interval
+Start date
+Optional end date
+
+Behavior:
+
+Automatically generate new invoices based on schedule
+Link generated invoices to a parent recurring invoice ID
+5. Send Invoice to Client
+Add "Send Invoice" button
+
+Behavior:
+
+Sends invoice to client email
+Include:
+Invoice details
+Payment link (placeholder or mock if not implemented yet)
+Update status to: "sent"
+6. Database Updates
+Invoices Table Add Fields:
+status (draft, sent, paid, void)
+dueDate
+paidAt
+paymentMethod
+paymentNotes
+notes
+thankYouMessage
+recurringId (optional)
+createdAt
+updatedAt
+Invoice Line Items Table
+id
+invoiceId
+serviceId (optional)
+name
+description
+price
+quantity
+Recurring Invoices Table
+id
+frequency
+interval
+startDate
+endDate
+7. UI / UX
+Add action buttons on invoice detail page:
+Edit
+Void
+Delete
+Mark as Paid
+Send
+Use modals or separate pages for editing
+Show clear status badges (draft, sent, paid, void)
+8. API Routes
+PUT /invoices/:id (edit invoice)
+DELETE /invoices/:id
+POST /invoices/:id/void
+POST /invoices/:id/mark-paid
+POST /invoices/:id/send
+POST /recurring-invoices
+9. Validation & Logic
+Prevent editing if invoice is void (optional rule)
+Ensure totals always match line items
+Validate required fields before sending
+10. Deliverables
+Editable invoice system
+Manual payment tracking
+Multi-service invoice creation
+Recurring invoice functionality
+Send-to-client feature
+Updated database + API

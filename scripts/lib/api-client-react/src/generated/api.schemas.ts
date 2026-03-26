@@ -286,6 +286,8 @@ export interface UpdateSubtaskInput {
 export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
 
 export const InvoiceStatus = {
+  draft: "draft",
+  sent: "sent",
   paid: "paid",
   unpaid: "unpaid",
   void: "void",
@@ -312,12 +314,15 @@ export interface Invoice {
   payment_method?: string | null;
   payment_notes?: string | null;
   updated_at?: string | null;
+  recurring_id?: number | null;
 }
 
 export type CreateInvoiceInputStatus =
   (typeof CreateInvoiceInputStatus)[keyof typeof CreateInvoiceInputStatus];
 
 export const CreateInvoiceInputStatus = {
+  draft: "draft",
+  sent: "sent",
   paid: "paid",
   unpaid: "unpaid",
   void: "void",
@@ -332,12 +337,15 @@ export interface CreateInvoiceInput {
   line_items?: LineItem[] | null;
   notes?: string | null;
   thank_you_message?: string | null;
+  recurring_id?: number | null;
 }
 
 export type UpdateInvoiceInputStatus =
   (typeof UpdateInvoiceInputStatus)[keyof typeof UpdateInvoiceInputStatus];
 
 export const UpdateInvoiceInputStatus = {
+  draft: "draft",
+  sent: "sent",
   paid: "paid",
   unpaid: "unpaid",
   void: "void",
@@ -354,6 +362,61 @@ export interface UpdateInvoiceInput {
   paid_at?: string | null;
   payment_method?: string | null;
   payment_notes?: string | null;
+}
+
+export type RecurringInvoiceFrequency =
+  (typeof RecurringInvoiceFrequency)[keyof typeof RecurringInvoiceFrequency];
+
+export const RecurringInvoiceFrequency = {
+  weekly: "weekly",
+  monthly: "monthly",
+  custom: "custom",
+} as const;
+
+export interface RecurringInvoice {
+  id: number;
+  client_id: number;
+  frequency: RecurringInvoiceFrequency;
+  interval_days?: number | null;
+  start_date: string;
+  end_date?: string | null;
+  next_due_date: string;
+  description?: string | null;
+  line_items?: LineItem[] | null;
+  notes?: string | null;
+  thank_you_message?: string | null;
+  amount: number;
+  active: boolean;
+  created_at?: string | null;
+}
+
+export interface CreateRecurringInvoiceInput {
+  client_id: number;
+  frequency: RecurringInvoiceFrequency;
+  interval_days?: number | null;
+  start_date: string;
+  end_date?: string | null;
+  next_due_date: string;
+  description?: string | null;
+  line_items?: LineItem[] | null;
+  notes?: string | null;
+  thank_you_message?: string | null;
+  amount: number;
+  active?: boolean;
+}
+
+export interface UpdateRecurringInvoiceInput {
+  frequency?: RecurringInvoiceFrequency;
+  interval_days?: number | null;
+  start_date?: string;
+  end_date?: string | null;
+  next_due_date?: string;
+  description?: string | null;
+  line_items?: LineItem[] | null;
+  notes?: string | null;
+  thank_you_message?: string | null;
+  amount?: number;
+  active?: boolean;
 }
 
 export type ListTasksParams = {

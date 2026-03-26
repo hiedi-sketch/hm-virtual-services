@@ -407,7 +407,7 @@ export const ListInvoicesResponseItem = zod.object({
   id: zod.number(),
   client_id: zod.number(),
   amount: zod.number(),
-  status: zod.enum(["paid", "unpaid"]),
+  status: zod.enum(["draft", "sent", "paid", "unpaid", "void"]),
   due_date: zod.string(),
   description: zod.string().nullish(),
 });
@@ -426,12 +426,13 @@ const LineItemSchema = zod.object({
 export const CreateInvoiceBody = zod.object({
   client_id: zod.number(),
   amount: zod.number(),
-  status: zod.enum(["paid", "unpaid", "void"]).optional(),
+  status: zod.enum(["draft", "sent", "paid", "unpaid", "void"]).optional(),
   due_date: zod.string(),
   description: zod.string().nullish(),
   line_items: zod.array(LineItemSchema).nullish(),
   notes: zod.string().nullish(),
   thank_you_message: zod.string().nullish(),
+  recurring_id: zod.number().nullish(),
 });
 
 /**
@@ -443,7 +444,7 @@ export const UpdateInvoiceParams = zod.object({
 
 export const UpdateInvoiceBody = zod.object({
   amount: zod.number().optional(),
-  status: zod.enum(["paid", "unpaid", "void"]).optional(),
+  status: zod.enum(["draft", "sent", "paid", "unpaid", "void"]).optional(),
   due_date: zod.string().optional(),
   description: zod.string().nullish(),
   line_items: zod.array(LineItemSchema).nullish(),
@@ -458,7 +459,7 @@ export const UpdateInvoiceResponse = zod.object({
   id: zod.number(),
   client_id: zod.number(),
   amount: zod.number(),
-  status: zod.enum(["paid", "unpaid", "void"]),
+  status: zod.enum(["draft", "sent", "paid", "unpaid", "void"]),
   due_date: zod.string(),
   description: zod.string().nullish(),
   line_items: zod.array(LineItemSchema).nullish(),
@@ -468,11 +469,58 @@ export const UpdateInvoiceResponse = zod.object({
   payment_method: zod.string().nullish(),
   payment_notes: zod.string().nullish(),
   updated_at: zod.string().nullish(),
+  recurring_id: zod.number().nullish(),
 });
 
 /**
  * @summary Delete an invoice
  */
 export const DeleteInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+/**
+ * @summary Recurring Invoices
+ */
+export const RecurringInvoiceFrequency = zod.enum(["weekly", "monthly", "custom"]);
+
+export const CreateRecurringInvoiceBody = zod.object({
+  client_id: zod.number(),
+  frequency: RecurringInvoiceFrequency,
+  interval_days: zod.number().nullish(),
+  start_date: zod.string(),
+  end_date: zod.string().nullish(),
+  next_due_date: zod.string(),
+  description: zod.string().nullish(),
+  line_items: zod.array(LineItemSchema).nullish(),
+  notes: zod.string().nullish(),
+  thank_you_message: zod.string().nullish(),
+  amount: zod.number(),
+  active: zod.boolean().optional(),
+});
+
+export const UpdateRecurringInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateRecurringInvoiceBody = zod.object({
+  frequency: RecurringInvoiceFrequency.optional(),
+  interval_days: zod.number().nullish(),
+  start_date: zod.string().optional(),
+  end_date: zod.string().nullish(),
+  next_due_date: zod.string().optional(),
+  description: zod.string().nullish(),
+  line_items: zod.array(LineItemSchema).nullish(),
+  notes: zod.string().nullish(),
+  thank_you_message: zod.string().nullish(),
+  amount: zod.number().optional(),
+  active: zod.boolean().optional(),
+});
+
+export const DeleteRecurringInvoiceParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GenerateRecurringInvoiceParams = zod.object({
   id: zod.coerce.number(),
 });
