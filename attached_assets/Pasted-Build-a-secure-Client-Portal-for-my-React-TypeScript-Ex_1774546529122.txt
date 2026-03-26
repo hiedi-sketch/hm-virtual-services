@@ -1,0 +1,333 @@
+Build a secure Client Portal for my React + TypeScript + Express app where clients can log in and manage their own data (billing, services, time tracking, tasks, and messages).
+
+1. Authentication System (Client Access)
+Add client login functionality
+Each client should have:
+email
+password (hashed)
+Use JWT or session-based auth
+Restrict access so:
+Clients ONLY see their own data
+Admin/users see everything
+2. Client Portal Page
+
+Create a protected route: /portal
+
+Dashboard Sections:
+
+Billing / Invoices
+Time Tracking (time used/logs)
+Services assigned
+Tasks
+Messages
+
+Use tabs or a sidebar navigation inside the portal.
+
+3. Billing / Invoices View
+Show all invoices for the logged-in client
+Display:
+Invoice number
+Date
+Services (line items)
+Total amount
+Status (paid/unpaid)
+Optional:
+Download/print invoice
+4. Time Tracking View
+Show time entries tied to the client
+Display:
+Date
+Duration
+Associated task/service (if available)
+Show total time used
+5. Services View
+Show all services assigned to the client
+Display:
+Name
+Description
+Price
+Billing type
+6. Task Management (Core Feature)
+Client Capabilities:
+View all their tasks
+Create new tasks (form with title + description)
+Comment on tasks
+Admin/Team Capabilities:
+Assign tasks to clients
+Update task status (not started, in progress, completed)
+Add internal or shared comments
+Task Data Model Updates
+
+Tasks should include:
+
+id
+title
+description
+status
+clientId
+assignedTo (admin/team/client)
+createdBy
+dueDate (optional)
+Task Comments System
+
+Create a taskComments table:
+
+id
+taskId
+userId (or clientId)
+role (admin / client / team)
+comment
+createdAt
+
+Behavior:
+
+Show threaded comments under each task
+Display who left the comment
+Real-time update optional (or refresh-based)
+7. Messaging System (Simple Version)
+Create a messages section:
+Client ↔ Admin communication
+Basic thread system:
+subject
+message
+sender
+timestamp
+8. Permissions / Roles
+
+Define roles:
+
+admin
+team member
+client
+
+Rules:
+
+Clients:
+Can only see their own data
+Can create tasks
+Can comment
+Admin/team:
+Can assign tasks
+Can comment
+Can view all clients
+9. UI/UX
+Clean client-friendly dashboard
+Sidebar or tab navigation:
+Dashboard
+Tasks
+Billing
+Services
+Messages
+Mobile responsive
+10. API Routes
+
+Create endpoints like:
+
+Auth
+
+POST /client/login
+
+Tasks
+
+GET /tasks (filtered by client)
+POST /tasks
+PUT /tasks/:id
+
+Comments
+
+GET /tasks/:id/comments
+POST /tasks/:id/comments
+
+Invoices
+
+GET /invoices (client filtered)
+
+Messages
+
+GET /messages
+POST /messages
+11. Security
+Protect all routes with authentication middleware
+Ensure clientId is always validated server-side
+Never expose other clients' data
+12. Deliverables
+Client login system
+Portal dashboard UI
+Tasks with comments
+Messaging system
+Billing/services views
+API + database updates
+
+If you want, I can give you the exact folder/file structure + starter code for this so Replit doesn’t guess and break things (especially for auth and roles, which is where most builds go sideways).
+
+can you rewrite this to include that any comments made on tasks in the client portal shoudl be able to be viewed in the master task list as well as the admin client view 
+
+Here’s your revised, upgraded prompt with that requirement clearly built in 👇
+
+Prompt:
+
+Build a secure Client Portal for my React + TypeScript + Express app where clients can log in and manage their own data (billing, services, time tracking, tasks, and messages).
+
+1. Authentication System (Client Access)
+Add client login functionality
+Each client should have:
+email
+password (hashed)
+Use JWT or session-based auth
+Restrict access so:
+Clients ONLY see their own data
+Admin/users see everything
+2. Client Portal Page
+
+Create a protected route: /portal
+
+Dashboard Sections:
+
+Billing / Invoices
+Time Tracking (time used/logs)
+Services assigned
+Tasks
+Messages
+
+Use tabs or a sidebar navigation inside the portal.
+
+3. Billing / Invoices View
+Show all invoices for the logged-in client
+Display:
+Invoice number
+Date
+Services (line items)
+Total amount
+Status (paid/unpaid)
+4. Time Tracking View
+Show time entries tied to the client
+Display:
+Date
+Duration
+Associated task/service (if available)
+Show total time used
+5. Services View
+Show all services assigned to the client
+Display:
+Name
+Description
+Price
+Billing type
+6. Task Management (Core Feature)
+Client Capabilities:
+View all their tasks
+Create new tasks (title + description)
+Comment on tasks
+Admin/Team Capabilities:
+Assign tasks to clients
+Update task status (not started, in progress, completed)
+Add comments
+Task Data Model Updates
+
+Tasks should include:
+
+id
+title
+description
+status
+clientId
+assignedTo (admin/team/client)
+createdBy
+dueDate (optional)
+Task Comments System (SHARED ACROSS APP)
+
+Create a taskComments table:
+
+id
+taskId
+userId (or clientId)
+role (admin / client / team)
+comment
+createdAt
+CRITICAL REQUIREMENT: Shared Comment Visibility
+Any comment made on a task (whether from:
+Client Portal
+Admin dashboard
+Team member view
+)
+MUST be saved to the same centralized taskComments table.
+Comments must be visible in ALL of the following places:
+Client Portal (for that client)
+Admin Master Task List (all tasks view)
+Admin Client Detail Page (tasks under a specific client)
+This ensures a single source of truth for task communication.
+When displaying comments:
+Show author (admin, client, or team)
+Show timestamp
+Display in chronological/threaded order
+7. Messaging System (Simple Version)
+Create a messages section:
+Client ↔ Admin communication
+Basic thread system:
+subject
+message
+sender
+timestamp
+8. Permissions / Roles
+
+Define roles:
+
+admin
+team member
+client
+
+Rules:
+
+Clients:
+Can only see their own data
+Can create tasks
+Can comment
+Admin/team:
+Can assign tasks
+Can comment
+Can view all clients
+9. UI/UX
+Clean client-friendly dashboard
+Sidebar or tab navigation:
+Dashboard
+Tasks
+Billing
+Services
+Messages
+Mobile responsive
+10. API Routes
+
+Auth
+
+POST /client/login
+
+Tasks
+
+GET /tasks (filtered by client or role)
+POST /tasks
+PUT /tasks/:id
+
+Comments
+
+GET /tasks/:id/comments
+POST /tasks/:id/comments
+
+Invoices
+
+GET /invoices (client filtered)
+
+Messages
+
+GET /messages
+POST /messages
+11. Security
+Protect all routes with authentication middleware
+Ensure clientId is validated server-side
+Never expose other clients’ data
+12. Deliverables
+Client login system
+Portal dashboard UI
+Tasks with shared comment system
+Messaging system
+Billing/services views
+API + database updates

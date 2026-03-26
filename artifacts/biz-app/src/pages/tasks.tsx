@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   useListTasks,
   useCreateTask,
@@ -24,6 +24,9 @@ import {
   ArrowUpDown,
   AlertCircle,
   ChevronDown,
+  MessageSquare,
+  X,
+  Send,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -146,6 +149,8 @@ export default function Tasks() {
   // ── Modals ────────────────────────────────────────────────────────────────
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
+  const [commentTaskTitle, setCommentTaskTitle] = useState<string>("");
 
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
 
@@ -374,9 +379,24 @@ export default function Tasks() {
         onToggleStatus={handleToggleStatus}
         onUpdateField={handleUpdateField}
         onStartTimer={startForTask}
+        onComment={(id, title) => {
+          if (commentTaskId === id) { setCommentTaskId(null); }
+          else { setCommentTaskId(id); setCommentTaskTitle(title); }
+        }}
         activeTaskId={timerState.taskId}
+        activeCommentTaskId={commentTaskId}
         timerStatus={timerState.status}
       />
+
+      {/* ── Comment Panel ────────────────────────────────────────────────── */}
+      {commentTaskId !== null && (
+        <AdminTaskCommentPanel
+          taskId={commentTaskId}
+          taskTitle={commentTaskTitle}
+          onClose={() => setCommentTaskId(null)}
+          queryClient={queryClient}
+        />
+      )}
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}
       <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="New Task">

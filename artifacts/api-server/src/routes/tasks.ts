@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasksTable, clientsTable, subtasksTable } from "@workspace/db";
-import { eq, isNotNull, and } from "drizzle-orm";
+import { tasksTable, clientsTable, subtasksTable, taskCommentsTable } from "@workspace/db";
+import { eq, isNotNull, and, desc } from "drizzle-orm";
+import { z } from "zod";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { spawnRecurringTasks } from "../lib/spawn-recurring";
 import { sendMail, template } from "../lib/mailer";
@@ -219,6 +220,75 @@ router.delete("/subtasks/:id", requireRole("admin", "team_member"), async (req, 
   const { id } = DeleteSubtaskParams.parse(req.params);
   await db.delete(subtasksTable).where(eq(subtasksTable.id, id));
   res.status(204).send();
+});
+
+// ── Task Comments (shared between portal and admin) ──────────────────────────
+
+const createCommentSchema = z.object({
+  comment: z.string().min(1),
+});
+
+// GET /api/tasks/:taskId/comments
+router.get("/tasks/:taskId/comments", requireAuth, async (req, res) => {
+  const taskId = Number(req.params.taskId);
+  const user = req.session.user!;
+
+  // Clients can only access comments on tasks that belong to their client_id
+  if (user.role === "client") {
+    const [task] = await db
+      .select({ client_id: tasksTable.client_id })
+      .from(tasksTable)
+      .where(eq(tasksTable.id, taskId));
+    if (!task || task.client_id !== user.client_id) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+  }
+
+  const comments = await db
+    .select()
+    .from(taskCommentsTable)
+    .where(eq(taskCommentsTable.task_id, taskId))
+    .orderBy(taskCommentsTable.created_at);
+
+  res.json(comments);
+});
+
+// POST /api/tasks/:taskId/comments
+router.post("/tasks/:taskId/comments", requireAuth, async (req, res) => {
+  const taskId = Number(req.params.taskId);
+  const user = req.session.user!;
+
+  // Clients can only comment on tasks that belong to their client_id
+  if (user.role === "client") {
+    const [task] = await db
+      .select({ client_id: tasksTable.client_id })
+      .from(tasksTable)
+      .where(eq(tasksTable.id, taskId));
+    if (!task || task.client_id !== user.client_id) {
+      res.status(403).json({ error: "Access denied" });
+      return;
+    }
+  }
+
+  const body = createCommentSchema.safeParse(req.body);
+  if (!body.success) {
+    res.status(400).json({ error: "Comment text is required" });
+    return;
+  }
+
+  const [comment] = await db
+    .insert(taskCommentsTable)
+    .values({
+      task_id: taskId,
+      user_id: user.id,
+      author_name: user.name,
+      author_role: user.role as "admin" | "team_member" | "client",
+      comment: body.data.comment,
+    })
+    .returning();
+
+  res.status(201).json(comment);
 });
 
 export default router;

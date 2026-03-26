@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Play, Pause, Square } from "lucide-react";
+import { Play, Pause, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Task = {
@@ -10,6 +10,7 @@ type Task = {
   completed: boolean;
   client_id?: number | null;
   client_name?: string | null;
+  comment_count?: number;
 };
 
 type TaskTableProps = {
@@ -17,7 +18,9 @@ type TaskTableProps = {
   onToggleStatus: (task: Task) => void;
   onUpdateField: (id: string, field: string, value: any) => void;
   onStartTimer?: (taskId: number, taskTitle: string, clientId?: number | null, clientName?: string | null) => void;
+  onComment?: (taskId: number, taskTitle: string) => void;
   activeTaskId?: number | null;
+  activeCommentTaskId?: number | null;
   timerStatus?: "idle" | "running" | "paused";
 };
 
@@ -32,7 +35,9 @@ export default function TaskTable({
   onToggleStatus,
   onUpdateField,
   onStartTimer,
+  onComment,
   activeTaskId,
+  activeCommentTaskId,
   timerStatus,
 }: TaskTableProps) {
   const today = new Date().toISOString().split("T")[0];
@@ -72,6 +77,8 @@ export default function TaskTable({
   const sortIcon = (key: "title" | "due_date" | "assigned_to") =>
     sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
 
+  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + 5;
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -90,12 +97,13 @@ export default function TaskTable({
               </th>
               <th className="px-6 py-4">Status</th>
               {onStartTimer && <th className="px-6 py-4 text-center w-24">Timer</th>}
+              {onComment && <th className="px-6 py-4 text-center w-16">Notes</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
             {displayedTasks.length === 0 ? (
               <tr>
-                <td colSpan={onStartTimer ? 6 : 5} className="px-6 py-10 text-center text-slate-400">
+                <td colSpan={colSpan} className="px-6 py-10 text-center text-slate-400">
                   No tasks found.
                 </td>
               </tr>
@@ -106,9 +114,10 @@ export default function TaskTable({
                 const isThisTaskActive = activeTaskId === numId;
                 const isThisRunning = isThisTaskActive && timerStatus === "running";
                 const isThisPaused = isThisTaskActive && timerStatus === "paused";
+                const isCommentActive = activeCommentTaskId === numId;
 
                 return (
-                  <tr key={task.id} className="hover:bg-primary/5 transition-colors group">
+                  <tr key={task.id} className={cn("hover:bg-primary/5 transition-colors group", isCommentActive && "bg-primary/5")}>
                     <td className="px-6 py-4">
                       <button onClick={() => onToggleStatus(task)} className="text-lg leading-none">
                         {task.completed ? "✅" : "⬜"}
@@ -179,6 +188,27 @@ export default function TaskTable({
                             </button>
                           )}
                         </div>
+                      </td>
+                    )}
+                    {onComment && (
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={() => onComment(numId, task.title)}
+                          title="View / add comments"
+                          className={cn(
+                            "p-1.5 rounded-md transition-colors relative",
+                            isCommentActive
+                              ? "text-primary bg-primary/10"
+                              : "text-slate-400 hover:text-primary hover:bg-primary/10 opacity-0 group-hover:opacity-100"
+                          )}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                          {(task.comment_count ?? 0) > 0 && (
+                            <span className="absolute -top-1 -right-1 bg-primary text-white text-[9px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                              {task.comment_count}
+                            </span>
+                          )}
+                        </button>
                       </td>
                     )}
                   </tr>

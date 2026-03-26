@@ -19,6 +19,7 @@ import appNotificationsRouter from "./app-notifications";
 import uploadsRouter from "./uploads";
 import backupRouter from "./backup";
 import servicesRouter from "./services";
+import messagesRouter from "./messages";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(appNotificationsRouter);
 router.use(uploadsRouter);
 router.use(backupRouter);
 router.use(servicesRouter);
+router.use(messagesRouter);
 
 export default router;

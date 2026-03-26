@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useListTasks, useListInvoices, useListTimeEntries, useCreateTask } from "@workspace/api-client-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useListTasks, useListInvoices, useListTimeEntries, useCreateTask, useListClientServices } from "@workspace/api-client-react";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import {
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
   Plus, X, User, Sparkles, LayoutDashboard, Send,
   KeyRound, ShieldCheck, Paperclip, DollarSign,
+  MessageSquare, ChevronRight, Package,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentsTab } from "@/components/DocumentsTab";
@@ -74,7 +75,7 @@ const serviceSchema = z.object({
   message: z.string().min(10, "Please include some detail (at least 10 characters)"),
 });
 
-type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents";
+type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents" | "messages";
 
 // ================================================================
 export default function ClientPortal() {
@@ -120,11 +121,20 @@ export default function ClientPortal() {
   const totalOwed = unpaidInvoices.reduce((s, i) => s + Number(i.amount ?? 0), 0);
   const totalPaid = paidInvoices.reduce((s, i) => s + Number(i.amount ?? 0), 0);
 
+  const { data: messages = [] } = useQuery<any[]>({
+    queryKey: ["messages", clientId],
+    queryFn: () => fetch("/api/messages", { credentials: "include" }).then(r => r.json()),
+    enabled: !!clientId,
+    staleTime: 60 * 1000,
+  });
+  const unreadMessages = messages.filter((m: any) => !m.is_read && m.sender_role !== "client").length;
+
   const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "overview", label: "Overview", icon: <LayoutDashboard className="w-4 h-4" /> },
     { key: "tasks", label: "Tasks", icon: <CheckSquare className="w-4 h-4" />, badge: pendingTasks.length || undefined },
     { key: "invoices", label: "Invoices", icon: <FileText className="w-4 h-4" />, badge: unpaidInvoices.length || undefined },
     { key: "services", label: "Services", icon: <Sparkles className="w-4 h-4" /> },
+    { key: "messages", label: "Messages", icon: <MessageSquare className="w-4 h-4" />, badge: unreadMessages || undefined },
     { key: "documents", label: "Documents", icon: <Paperclip className="w-4 h-4" /> },
     { key: "profile", label: "My Profile", icon: <User className="w-4 h-4" /> },
   ];
@@ -211,7 +221,10 @@ export default function ClientPortal() {
           <InvoicesTab invoices={invoices} todayStr={todayStr} />
         )}
         {activeTab === "services" && (
-          <ServicesTab serviceRequests={serviceRequests} queryClient={queryClient} toast={toast} />
+          <ServicesTab serviceRequests={serviceRequests} queryClient={queryClient} toast={toast} clientId={clientId} />
+        )}
+        {activeTab === "messages" && (
+          <MessagesTab messages={messages} clientId={clientId} queryClient={queryClient} toast={toast} />
         )}
         {activeTab === "documents" && (
           <DocumentsTab />
@@ -474,6 +487,88 @@ function OverviewTab({
 }
 
 // ================================================================
+// TASK COMMENTS PANEL
+// ================================================================
+function TaskCommentsPanel({ taskId, currentUserName }: { taskId: number; currentUserName: string }) {
+  const queryClient = useQueryClient();
+  const [commentText, setCommentText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  const { data: comments = [], isLoading } = useQuery<any[]>({
+    queryKey: ["task-comments", taskId],
+    queryFn: () => fetch(`/api/tasks/${taskId}/comments`, { credentials: "include" }).then(r => r.json()),
+    staleTime: 30 * 1000,
+  });
+
+  const submitComment = async () => {
+    if (!commentText.trim()) return;
+    setSubmitting(true);
+    await fetch(`/api/tasks/${taskId}/comments`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comment: commentText.trim() }),
+    });
+    setCommentText("");
+    queryClient.invalidateQueries({ queryKey: ["task-comments", taskId] });
+    setSubmitting(false);
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
+  };
+
+  function fmtTime(d: string) {
+    return new Date(d).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  return (
+    <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4 space-y-3">
+      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Comments</p>
+      {isLoading ? (
+        <p className="text-xs text-slate-400">Loading…</p>
+      ) : comments.length === 0 ? (
+        <p className="text-xs text-slate-400 italic">No comments yet. Be the first to add one.</p>
+      ) : (
+        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+          {comments.map((c: any) => (
+            <div key={c.id} className={`flex gap-2 ${c.author_role === "client" ? "flex-row-reverse" : ""}`}>
+              <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${c.author_role === "client" ? "bg-primary" : "bg-slate-500"}`}>
+                {c.author_name?.[0]?.toUpperCase() ?? "?"}
+              </div>
+              <div className={`flex-1 min-w-0 ${c.author_role === "client" ? "text-right" : ""}`}>
+                <p className="text-[10px] text-slate-400 mb-0.5">
+                  <span className="font-medium text-slate-600">{c.author_name}</span>
+                  {c.author_role !== "client" && <span className="ml-1 px-1 py-0.5 bg-slate-200 rounded text-[9px] uppercase">{c.author_role === "admin" ? "Admin" : "Team"}</span>}
+                  {" · "}{fmtTime(c.created_at)}
+                </p>
+                <p className={`text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-1.5 inline-block max-w-[90%] text-left`}>{c.comment}</p>
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      )}
+      <div className="flex gap-2 items-end">
+        <textarea
+          rows={2}
+          value={commentText}
+          onChange={e => setCommentText(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitComment(); } }}
+          placeholder="Add a comment… (Enter to send)"
+          className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        <button
+          onClick={submitComment}
+          disabled={submitting || !commentText.trim()}
+          className="shrink-0 bg-primary text-white px-3 py-2 rounded-xl text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+        >
+          <Send className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
 // TASKS TAB
 // ================================================================
 function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
@@ -482,6 +577,8 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
 }) {
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "complete">("all");
+  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
+  const { user } = useAuth();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(taskSchema),
@@ -617,34 +714,47 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
             <p className="text-sm text-slate-500">No tasks to show.</p>
           </div>
         ) : (
-          <ul className="divide-y divide-slate-50">
+          <ul className="divide-y divide-slate-100">
             {filtered.map(task => {
               const isOverdue = task.status !== "complete" && task.due_date && task.due_date < todayStr;
+              const isExpanded = expandedTaskId === task.id;
               return (
-                <li key={task.id} className="px-5 py-3.5 flex items-start gap-3">
-                  <div className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${task.status === "complete" ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
-                    {task.status === "complete" && <CheckCircle2 className="w-3 h-3 text-white" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${task.status === "complete" ? "line-through text-slate-400" : "text-slate-800"}`}>
-                      {task.title}
-                    </p>
-                    {task.description && (
-                      <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{task.description}</p>
-                    )}
-                    {task.due_date && (
-                      <p className={`text-xs mt-0.5 ${isOverdue ? "text-red-500 font-medium" : "text-slate-400"}`}>
-                        {isOverdue ? "⚠ Overdue · " : "Due "}{fmtDate(task.due_date)}
+                <li key={task.id}>
+                  <button
+                    onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
+                    className="w-full text-left px-5 py-3.5 flex items-start gap-3 hover:bg-slate-50/50 transition-colors"
+                  >
+                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${task.status === "complete" ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
+                      {task.status === "complete" && <CheckCircle2 className="w-3 h-3 text-white" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm font-medium truncate ${task.status === "complete" ? "line-through text-slate-400" : "text-slate-800"}`}>
+                        {task.title}
                       </p>
-                    )}
-                  </div>
-                  <StatusBadge status={task.status} />
+                      {task.description && (
+                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{task.description}</p>
+                      )}
+                      {task.due_date && (
+                        <p className={`text-xs mt-0.5 ${isOverdue ? "text-red-500 font-medium" : "text-slate-400"}`}>
+                          {isOverdue ? "⚠ Overdue · " : "Due "}{fmtDate(task.due_date)}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <StatusBadge status={task.status} />
+                      <MessageSquare className={`w-4 h-4 ${isExpanded ? "text-primary" : "text-slate-300"}`} />
+                    </div>
+                  </button>
+                  {isExpanded && (
+                    <TaskCommentsPanel taskId={task.id} currentUserName={user?.name ?? ""} />
+                  )}
                 </li>
               );
             })}
           </ul>
         )}
       </div>
+      <p className="text-xs text-center text-slate-400">Click any task to view or add comments visible to your team.</p>
     </div>
   );
 }
@@ -718,11 +828,182 @@ function InvoicesTab({ invoices, todayStr }: { invoices: any[]; todayStr: string
 }
 
 // ================================================================
+// MESSAGES TAB
+// ================================================================
+function MessagesTab({ messages, clientId, queryClient, toast }: {
+  messages: any[]; clientId: number | undefined; queryClient: any; toast: any;
+}) {
+  const [newSubject, setNewSubject] = useState("");
+  const [newBody, setNewBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [replyTo, setReplyTo] = useState<number | null>(null);
+  const [replyBody, setReplyBody] = useState("");
+  const { user } = useAuth();
+
+  function fmtTime(d: string) {
+    return new Date(d).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  const roots = messages.filter((m: any) => !m.parent_id);
+  const replies = messages.filter((m: any) => !!m.parent_id);
+  const getReplies = (parentId: number) => replies.filter((m: any) => m.parent_id === parentId);
+
+  const sendMessage = async (subject: string, body: string, parentId?: number) => {
+    if (!body.trim()) return;
+    setSending(true);
+    const res = await fetch("/api/messages", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: parentId ? undefined : subject, body, parent_id: parentId }),
+    });
+    if (res.ok) {
+      setNewSubject("");
+      setNewBody("");
+      setReplyTo(null);
+      setReplyBody("");
+      queryClient.invalidateQueries({ queryKey: ["messages", clientId] });
+      toast({ title: "Message sent!" });
+    } else {
+      toast({ title: "Error", description: "Failed to send message", variant: "destructive" });
+    }
+    setSending(false);
+  };
+
+  const markRead = async (id: number) => {
+    await fetch(`/api/messages/${id}/read`, { method: "PATCH", credentials: "include" });
+    queryClient.invalidateQueries({ queryKey: ["messages", clientId] });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-xl font-bold text-slate-900">Messages</h2>
+        <p className="text-slate-500 text-sm mt-0.5">Communicate directly with our team.</p>
+      </div>
+
+      {/* New message form */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold text-slate-900 text-sm">New Message</h3>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Subject</label>
+            <input
+              value={newSubject}
+              onChange={e => setNewSubject(e.target.value)}
+              placeholder="What's this about?"
+              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 mb-1">Message *</label>
+            <textarea
+              rows={3}
+              value={newBody}
+              onChange={e => setNewBody(e.target.value)}
+              placeholder="Write your message here…"
+              className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <button
+            onClick={() => sendMessage(newSubject, newBody)}
+            disabled={sending || !newBody.trim()}
+            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 disabled:opacity-60 transition-colors"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {sending ? "Sending…" : "Send Message"}
+          </button>
+        </div>
+      </div>
+
+      {/* Thread list */}
+      {roots.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-700">Message History</h3>
+          {roots.map((msg: any) => {
+            const threadReplies = getReplies(msg.id);
+            const isExpanded = replyTo === msg.id;
+            const isFromClient = msg.sender_role === "client";
+            return (
+              <div key={msg.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div
+                  className={`px-5 py-4 cursor-pointer hover:bg-slate-50/50 transition-colors ${!msg.is_read && !isFromClient ? "border-l-4 border-primary" : ""}`}
+                  onClick={() => {
+                    if (!msg.is_read && !isFromClient) markRead(msg.id);
+                    setReplyTo(isExpanded ? null : msg.id);
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      {msg.subject && <p className="text-sm font-semibold text-slate-800 truncate">{msg.subject}</p>}
+                      <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{msg.body}</p>
+                    </div>
+                    <div className="shrink-0 text-right space-y-1">
+                      <p className="text-[10px] text-slate-400">{fmtTime(msg.created_at)}</p>
+                      <p className="text-[10px] font-medium text-slate-500">{msg.sender_name}</p>
+                      {threadReplies.length > 0 && (
+                        <p className="text-[10px] text-blue-500">{threadReplies.length} repl{threadReplies.length === 1 ? "y" : "ies"}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                {isExpanded && (
+                  <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4 space-y-3">
+                    {threadReplies.map((r: any) => (
+                      <div key={r.id} className={`flex gap-2 ${r.sender_role === "client" ? "flex-row-reverse" : ""}`}>
+                        <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ${r.sender_role === "client" ? "bg-primary" : "bg-slate-500"}`}>
+                          {r.sender_name?.[0]?.toUpperCase() ?? "?"}
+                        </div>
+                        <div className={`flex-1 min-w-0 ${r.sender_role === "client" ? "text-right" : ""}`}>
+                          <p className="text-[10px] text-slate-400 mb-1">
+                            <span className="font-semibold text-slate-600">{r.sender_name}</span>
+                            {r.sender_role !== "client" && <span className="ml-1 px-1 bg-slate-200 rounded text-[9px]">Team</span>}
+                            {" · "}{fmtTime(r.created_at)}
+                          </p>
+                          <p className="text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-1.5 inline-block max-w-[90%] text-left">{r.body}</p>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex gap-2 items-end pt-2 border-t border-slate-100">
+                      <textarea
+                        rows={2}
+                        value={replyBody}
+                        onChange={e => setReplyBody(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage("", replyBody, msg.id); }}}
+                        placeholder="Reply… (Enter to send)"
+                        className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <button
+                        onClick={() => sendMessage("", replyBody, msg.id)}
+                        disabled={sending || !replyBody.trim()}
+                        className="shrink-0 bg-primary text-white px-3 py-2 rounded-xl text-xs hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ================================================================
 // SERVICES TAB
 // ================================================================
-function ServicesTab({ serviceRequests, queryClient, toast }: {
-  serviceRequests: ServiceRequest[]; queryClient: any; toast: any;
+function ServicesTab({ serviceRequests, queryClient, toast, clientId }: {
+  serviceRequests: ServiceRequest[]; queryClient: any; toast: any; clientId: number | undefined;
 }) {
+  const { data: assignedServices = [] } = useListClientServices(clientId ?? 0, {
+    query: { enabled: !!clientId },
+  });
   const [sent, setSent] = useState(false);
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(serviceSchema),
@@ -751,8 +1032,39 @@ function ServicesTab({ serviceRequests, queryClient, toast }: {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">Request a Service</h2>
-        <p className="text-slate-500 text-sm mt-0.5">Let us know what you need and we'll get back to you.</p>
+        <h2 className="text-xl font-bold text-slate-900">Services</h2>
+        <p className="text-slate-500 text-sm mt-0.5">Your active services and requests.</p>
+      </div>
+
+      {/* Assigned services */}
+      {assignedServices.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+            <Package className="w-4 h-4 text-teal-600" />
+            <h3 className="font-semibold text-slate-900 text-sm">Your Active Services</h3>
+          </div>
+          <ul className="divide-y divide-slate-50">
+            {assignedServices.map((cs: any) => (
+              <li key={cs.id} className="px-5 py-4 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-slate-800">{cs.name}</p>
+                  {cs.description && <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{cs.description}</p>}
+                </div>
+                <div className="shrink-0 text-right">
+                  {cs.price != null && (
+                    <p className="text-sm font-bold text-slate-700">${Number(cs.price).toFixed(2)}<span className="text-xs font-normal text-slate-400">/{cs.billing_type === "recurring" ? "mo" : "one-time"}</span></p>
+                  )}
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Active</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div>
+        <h3 className="text-sm font-semibold text-slate-700 mb-1">Request a New Service</h3>
+        <p className="text-slate-400 text-xs">Let us know what you need and we'll get back to you.</p>
       </div>
 
       {/* Form */}
