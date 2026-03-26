@@ -288,7 +288,15 @@ export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
 export const InvoiceStatus = {
   paid: "paid",
   unpaid: "unpaid",
+  void: "void",
 } as const;
+
+export interface LineItem {
+  name: string;
+  description?: string;
+  qty: number;
+  unit_price: number;
+}
 
 export interface Invoice {
   id: number;
@@ -297,6 +305,13 @@ export interface Invoice {
   status: InvoiceStatus;
   due_date: string;
   description?: string | null;
+  line_items?: LineItem[] | null;
+  notes?: string | null;
+  thank_you_message?: string | null;
+  paid_at?: string | null;
+  payment_method?: string | null;
+  payment_notes?: string | null;
+  updated_at?: string | null;
 }
 
 export type CreateInvoiceInputStatus =
@@ -305,6 +320,7 @@ export type CreateInvoiceInputStatus =
 export const CreateInvoiceInputStatus = {
   paid: "paid",
   unpaid: "unpaid",
+  void: "void",
 } as const;
 
 export interface CreateInvoiceInput {
@@ -313,6 +329,9 @@ export interface CreateInvoiceInput {
   status?: CreateInvoiceInputStatus;
   due_date: string;
   description?: string | null;
+  line_items?: LineItem[] | null;
+  notes?: string | null;
+  thank_you_message?: string | null;
 }
 
 export type UpdateInvoiceInputStatus =
@@ -321,6 +340,7 @@ export type UpdateInvoiceInputStatus =
 export const UpdateInvoiceInputStatus = {
   paid: "paid",
   unpaid: "unpaid",
+  void: "void",
 } as const;
 
 export interface UpdateInvoiceInput {
@@ -328,6 +348,12 @@ export interface UpdateInvoiceInput {
   status?: UpdateInvoiceInputStatus;
   due_date?: string;
   description?: string | null;
+  line_items?: LineItem[] | null;
+  notes?: string | null;
+  thank_you_message?: string | null;
+  paid_at?: string | null;
+  payment_method?: string | null;
+  payment_notes?: string | null;
 }
 
 export type ListTasksParams = {

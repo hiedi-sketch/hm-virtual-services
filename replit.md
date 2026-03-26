@@ -58,7 +58,7 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 - **Tasks** (`/tasks`) — Create and manage tasks; team_member sees own assigned tasks; client sees their tasks
 - **Time Tracking** (`/time`) — Timer + manual entry; client sees their time only
 - **Leads CRM** (`/leads`) — 4-stage pipeline (New/Contacted/Proposal/Closed); admin + team_member
-- **Invoices** (`/invoices`) — Create invoices, track paid/unpaid/overdue; client sees their invoices only
+- **Invoices** (`/invoices`) — Full invoice lifecycle: create with line items (service picker + custom), edit, mark as paid (with date/method/notes), void, delete; status tabs (All/Unpaid/Paid/Void); void excluded from totals; client sees their invoices only
 - **Team** (`/team`) — User management (create/edit/delete users, assign roles & client links); admin only
 - **Client Portal** — Dedicated portal for client-role users: open tasks, hours used this month, unpaid balance, invoice list
 
@@ -68,7 +68,7 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 - **Tasks**: id, title, description, client_id, assigned_to, status (pending/complete), due_date, recurrence fields
 - **TimeEntries**: id, client_id, task_id (optional), duration_minutes, date, started_at, ended_at
 - **Leads**: id, name, email, estimated_value, status (new/contacted/proposal/closed), lead_source
-- **Invoices**: id, client_id, amount, status (paid/unpaid), due_date, description
+- **Invoices**: id, client_id, amount, status (paid/unpaid/void), due_date, description, line_items (json), notes, thank_you_message, paid_at, payment_method, payment_notes, updated_at
 - **Users**: id, email, password_hash, name, role (admin/team_member/client), client_id (nullable)
 
 ## API Routes

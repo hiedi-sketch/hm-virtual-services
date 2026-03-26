@@ -277,7 +277,7 @@ router.patch("/invoices/:id", requireAdmin, async (req, res) => {
   const body = UpdateInvoiceBody.parse(req.body);
   const [updated] = await db
     .update(invoicesTable)
-    .set(body)
+    .set({ ...body, updated_at: new Date() })
     .where(eq(invoicesTable.id, id))
     .returning();
   if (!updated) {
@@ -298,7 +298,7 @@ router.patch("/invoices/:id", requireAdmin, async (req, res) => {
           .select({ name: clientsTable.name })
           .from(clientsTable)
           .where(eq(clientsTable.id, updated.client_id));
-        const statusLabel = body.status === "paid" ? "marked as paid" : `updated to ${body.status}`;
+        const statusLabel = body.status === "paid" ? "marked as paid" : body.status === "void" ? "voided" : `updated to ${body.status}`;
         await notifyAdmins({
           type: "invoice_updated",
           title: `Invoice #${id} ${statusLabel}`,

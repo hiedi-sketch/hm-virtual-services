@@ -416,12 +416,22 @@ export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem);
 /**
  * @summary Create a new invoice
  */
+const LineItemSchema = zod.object({
+  name: zod.string(),
+  description: zod.string().optional(),
+  qty: zod.number(),
+  unit_price: zod.number(),
+});
+
 export const CreateInvoiceBody = zod.object({
   client_id: zod.number(),
   amount: zod.number(),
-  status: zod.enum(["paid", "unpaid"]).optional(),
+  status: zod.enum(["paid", "unpaid", "void"]).optional(),
   due_date: zod.string(),
   description: zod.string().nullish(),
+  line_items: zod.array(LineItemSchema).nullish(),
+  notes: zod.string().nullish(),
+  thank_you_message: zod.string().nullish(),
 });
 
 /**
@@ -433,18 +443,31 @@ export const UpdateInvoiceParams = zod.object({
 
 export const UpdateInvoiceBody = zod.object({
   amount: zod.number().optional(),
-  status: zod.enum(["paid", "unpaid"]).optional(),
+  status: zod.enum(["paid", "unpaid", "void"]).optional(),
   due_date: zod.string().optional(),
   description: zod.string().nullish(),
+  line_items: zod.array(LineItemSchema).nullish(),
+  notes: zod.string().nullish(),
+  thank_you_message: zod.string().nullish(),
+  paid_at: zod.string().nullish(),
+  payment_method: zod.string().nullish(),
+  payment_notes: zod.string().nullish(),
 });
 
 export const UpdateInvoiceResponse = zod.object({
   id: zod.number(),
   client_id: zod.number(),
   amount: zod.number(),
-  status: zod.enum(["paid", "unpaid"]),
+  status: zod.enum(["paid", "unpaid", "void"]),
   due_date: zod.string(),
   description: zod.string().nullish(),
+  line_items: zod.array(LineItemSchema).nullish(),
+  notes: zod.string().nullish(),
+  thank_you_message: zod.string().nullish(),
+  paid_at: zod.string().nullish(),
+  payment_method: zod.string().nullish(),
+  payment_notes: zod.string().nullish(),
+  updated_at: zod.string().nullish(),
 });
 
 /**
