@@ -25,6 +25,7 @@ import ClientPortal from "@/pages/client-portal";
 import NotificationsPage from "@/pages/notifications";
 import Backup from "@/pages/backup";
 import Services from "@/pages/services";
+import TimerPopout from "@/pages/timer-popout";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,9 @@ function Router() {
   if (location.startsWith("/reset-password")) return <ResetPassword />;
 
   if (!user) return <Login />;
+
+  // Standalone timer popout — auth required (session cookie carries over to new window)
+  if (location === "/timer-popout") return <TimerPopout />;
 
   // Client users get the client portal (standalone, no sidebar)
   if (user.role === "client") return <ClientPortal />;

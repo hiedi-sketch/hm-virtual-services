@@ -6,6 +6,7 @@ import {
   Square,
   CheckCircle2,
   X,
+  ExternalLink,
   ChevronDown,
   Briefcase,
   ClipboardList,
@@ -142,12 +143,29 @@ export function FloatingTimer() {
               <Timer className="w-4 h-4 text-white/80" />
               <span className="text-sm font-semibold text-white">Pop-out Timer</span>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/15 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  const base = import.meta.env.BASE_URL.replace(/\/$/, "");
+                  window.open(
+                    `${base}/timer-popout`,
+                    "hm-timer",
+                    "width=340,height=600,menubar=no,toolbar=no,location=no,status=no,resizable=yes"
+                  );
+                  setOpen(false);
+                }}
+                title="Open in its own window"
+                className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/15 transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/15 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           {/* Elapsed time display */}

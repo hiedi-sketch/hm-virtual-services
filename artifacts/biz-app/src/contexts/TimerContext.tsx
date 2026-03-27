@@ -87,6 +87,20 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     saveState(next);
   }, []);
 
+  // Sync state across windows (popout ↔ main) via localStorage storage events
+  useEffect(() => {
+    function handleStorage(e: StorageEvent) {
+      if (e.key === STORAGE_KEY && e.newValue) {
+        try {
+          const fresh = { ...DEFAULT_STATE, ...JSON.parse(e.newValue) };
+          setStateRaw(fresh);
+        } catch {}
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
   const computeElapsed = useCallback((s: TimerState): number => {
     if (s.status === "running" && s.startedAt != null) {
       return s.accumulatedMs + (Date.now() - s.startedAt);
