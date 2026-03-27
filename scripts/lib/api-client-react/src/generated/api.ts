@@ -17,6 +17,7 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  AssignClientServiceBody,
   Client,
   ClientDashboard,
   ClientService,
@@ -2570,14 +2571,14 @@ export const getAssignClientServiceUrl = (clientId: number) => `/api/clients/${c
 
 export const assignClientService = async (
   clientId: number,
-  service_id: number,
+  body: AssignClientServiceBody,
   options?: RequestInit,
 ): Promise<ClientService> => {
   return customFetch<ClientService>(getAssignClientServiceUrl(clientId), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...options?.headers },
-    body: JSON.stringify({ service_id }),
+    body: JSON.stringify(body),
   });
 };
 
@@ -2588,14 +2589,14 @@ export const getAssignClientServiceMutationOptions = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof assignClientService>>,
     TError,
-    { clientId: number; service_id: number },
+    { clientId: number; body: AssignClientServiceBody },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof assignClientService>>,
   TError,
-  { clientId: number; service_id: number },
+  { clientId: number; body: AssignClientServiceBody },
   TContext
 > => {
   const mutationKey = ["assignClientService"];
@@ -2606,10 +2607,10 @@ export const getAssignClientServiceMutationOptions = <
     : { mutation: { mutationKey }, request: undefined };
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof assignClientService>>,
-    { clientId: number; service_id: number }
+    { clientId: number; body: AssignClientServiceBody }
   > = (props) => {
-    const { clientId, service_id } = props ?? {};
-    return assignClientService(clientId, service_id, requestOptions);
+    const { clientId, body } = props ?? {};
+    return assignClientService(clientId, body, requestOptions);
   };
   return { mutationFn, ...mutationOptions };
 };
@@ -2624,17 +2625,90 @@ export const useAssignClientService = <
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof assignClientService>>,
     TError,
-    { clientId: number; service_id: number },
+    { clientId: number; body: AssignClientServiceBody },
     TContext
   >;
   request?: SecondParameter<typeof customFetch>;
 }): UseMutationResult<
   Awaited<ReturnType<typeof assignClientService>>,
   TError,
-  { clientId: number; service_id: number },
+  { clientId: number; body: AssignClientServiceBody },
   TContext
 > => {
   return useMutation(getAssignClientServiceMutationOptions(options));
+};
+
+export const getUpdateClientServiceUrl = (clientId: number, serviceId: number) =>
+  `/api/clients/${clientId}/services/${serviceId}`;
+
+export const updateClientService = async (
+  clientId: number,
+  serviceId: number,
+  body: { custom_price?: number | null; custom_hourly_rate?: number | null; custom_budgeted_hours?: number | null },
+  options?: RequestInit,
+): Promise<ClientService> => {
+  return customFetch<ClientService>(getUpdateClientServiceUrl(clientId, serviceId), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(body),
+  });
+};
+
+export const getUpdateClientServiceMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClientService>>,
+    TError,
+    { clientId: number; serviceId: number; body: { custom_price?: number | null; custom_hourly_rate?: number | null; custom_budgeted_hours?: number | null } },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateClientService>>,
+  TError,
+  { clientId: number; serviceId: number; body: { custom_price?: number | null; custom_hourly_rate?: number | null; custom_budgeted_hours?: number | null } },
+  TContext
+> => {
+  const mutationKey = ["updateClientService"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateClientService>>,
+    { clientId: number; serviceId: number; body: { custom_price?: number | null; custom_hourly_rate?: number | null; custom_budgeted_hours?: number | null } }
+  > = (props) => {
+    const { clientId, serviceId, body } = props ?? {};
+    return updateClientService(clientId, serviceId, body, requestOptions);
+  };
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateClientServiceMutationResult = NonNullable<Awaited<ReturnType<typeof updateClientService>>>;
+export type UpdateClientServiceMutationError = ErrorType<unknown>;
+
+export const useUpdateClientService = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateClientService>>,
+    TError,
+    { clientId: number; serviceId: number; body: { custom_price?: number | null; custom_hourly_rate?: number | null; custom_budgeted_hours?: number | null } },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateClientService>>,
+  TError,
+  { clientId: number; serviceId: number; body: { custom_price?: number | null; custom_hourly_rate?: number | null; custom_budgeted_hours?: number | null } },
+  TContext
+> => {
+  return useMutation(getUpdateClientServiceMutationOptions(options));
 };
 
 export const getRemoveClientServiceUrl = (clientId: number, serviceId: number) =>

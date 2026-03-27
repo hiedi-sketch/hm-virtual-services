@@ -1,0 +1,95 @@
+Update the “Add New Client” form so that the Services section is fully connected to the existing Services Library, instead of using standalone/manual inputs.
+
+1. Replace Current Services Section (CRITICAL FIX)
+Remove or refactor the existing services inputs that are:
+Manually typed
+Not connected to saved services
+Replace with a system that allows selecting from the Services Library
+2. Service Selection (FROM LIBRARY)
+UI Behavior:
+Add a dropdown or searchable select:
+👉 “Add Service”
+This should pull from:
+Existing services table
+When a Service is Selected:
+
+Automatically populate:
+
+Service Name
+Service Type (Bookkeeping / Virtual Assistant)
+Billing Type (Flat Rate / Hourly)
+3. Editable Fields Per Client (IMPORTANT)
+
+After selecting a service, allow client-specific overrides:
+
+For ALL Services:
+Ability to remove service
+Ability to edit if needed
+If Flat Rate:
+Editable Price (pre-filled from service)
+If Hourly:
+Editable Hourly Rate (pre-filled from service)
+If Virtual Assistant:
+Editable Budgeted Hours
+Pre-fill from service if exists
+Allow override per client
+If Bookkeeping:
+NO budgeted hours shown
+4. Data Storage (CRITICAL)
+
+Update clientServices table:
+
+id
+clientId
+serviceId
+customPrice (for flat rate)
+customHourlyRate (if hourly)
+customBudgetedHours (VA only)
+createdAt
+5. Behavior Rules
+Services MUST originate from Services Library
+No manual “free text” services allowed
+Each client can have multiple services
+Prevent duplicate service selection (optional)
+6. Client Monthly Value Calculation
+Flat Rate Services:
+Sum all prices → Monthly Total
+Hourly Services:
+Do NOT include in fixed total
+Display separately as:
+👉 “Hourly Services (Variable Billing)”
+7. Client Detail Page Update
+
+Display assigned services clearly:
+
+For Each Service:
+Name
+Type
+Billing Type
+Price OR Hourly Rate
+Budgeted Hours (VA only)
+Summary Section:
+Total Monthly (flat rate only)
+List of hourly services
+8. Integration Requirements
+Invoices:
+When creating invoice:
+Allow selecting from client’s assigned services
+Time Tracking:
+Ensure:
+Tasks + time entries align with assigned services
+VA hours pull from client-specific budgeted hours
+9. UI/UX (IMPORTANT)
+Clean, Notion-style layout
+Selected services should display as:
+Rows or cards with editable fields inline
+Use:
+#266b75 (primary)
+#7dbdc6 (hover)
+#c8c7cb (borders)
+10. Deliverables
+Fixed client services section (connected to Services Library)
+Client-specific overrides (price, hourly rate, VA hours)
+Proper database relationship (clientServices)
+Updated client detail display
+Invoice + time tracking compatibility

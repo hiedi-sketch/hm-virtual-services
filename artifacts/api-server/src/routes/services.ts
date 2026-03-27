@@ -33,6 +33,19 @@ const UpdateServiceBody = z.object({
   active: z.boolean().optional(),
 });
 
+const AssignServiceBody = z.object({
+  service_id: z.number(),
+  custom_price: z.number().min(0).nullable().optional(),
+  custom_hourly_rate: z.number().min(0).nullable().optional(),
+  custom_budgeted_hours: z.number().min(0).nullable().optional(),
+});
+
+const UpdateClientServiceBody = z.object({
+  custom_price: z.number().min(0).nullable().optional(),
+  custom_hourly_rate: z.number().min(0).nullable().optional(),
+  custom_budgeted_hours: z.number().min(0).nullable().optional(),
+});
+
 // ── List all services ─────────────────────────────────────────────────────
 router.get("/services", requireAuth, async (_req, res) => {
   const rows = await db.select().from(servicesTable).orderBy(servicesTable.name);
@@ -87,6 +100,9 @@ router.get("/clients/:clientId/services", requireAuth, async (req, res) => {
       id: clientServicesTable.id,
       client_id: clientServicesTable.client_id,
       service_id: clientServicesTable.service_id,
+      custom_price: clientServicesTable.custom_price,
+      custom_hourly_rate: clientServicesTable.custom_hourly_rate,
+      custom_budgeted_hours: clientServicesTable.custom_budgeted_hours,
       created_at: clientServicesTable.created_at,
       name: servicesTable.name,
       description: servicesTable.description,
@@ -109,18 +125,42 @@ router.post("/clients/:clientId/services", requireAdmin, async (req, res) => {
   const clientId = Number(req.params["clientId"]);
   if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid clientId" }); return; }
 
-  const { service_id } = z.object({ service_id: z.number() }).parse(req.body);
+  const body = AssignServiceBody.parse(req.body);
 
   // Prevent duplicates
   const [existing] = await db
     .select()
     .from(clientServicesTable)
-    .where(and(eq(clientServicesTable.client_id, clientId), eq(clientServicesTable.service_id, service_id)));
+    .where(and(eq(clientServicesTable.client_id, clientId), eq(clientServicesTable.service_id, body.service_id)));
 
   if (existing) { res.status(409).json({ error: "Service already assigned" }); return; }
 
-  const [row] = await db.insert(clientServicesTable).values({ client_id: clientId, service_id }).returning();
+  const [row] = await db.insert(clientServicesTable).values({
+    client_id: clientId,
+    service_id: body.service_id,
+    custom_price: body.custom_price ?? null,
+    custom_hourly_rate: body.custom_hourly_rate ?? null,
+    custom_budgeted_hours: body.custom_budgeted_hours ?? null,
+  }).returning();
   res.status(201).json(row);
+});
+
+// ── Update custom fields for a client service ──────────────────────────────
+router.patch("/clients/:clientId/services/:serviceId", requireAdmin, async (req, res) => {
+  const clientId = Number(req.params["clientId"]);
+  const serviceId = Number(req.params["serviceId"]);
+  if (!clientId || !serviceId) { res.status(400).json({ error: "Invalid ids" }); return; }
+
+  const body = UpdateClientServiceBody.parse(req.body);
+
+  const [updated] = await db
+    .update(clientServicesTable)
+    .set(body)
+    .where(and(eq(clientServicesTable.client_id, clientId), eq(clientServicesTable.service_id, serviceId)))
+    .returning();
+
+  if (!updated) { res.status(404).json({ error: "Client service not found" }); return; }
+  res.json(updated);
 });
 
 // ── Remove a service from a client ────────────────────────────────────────
@@ -142,10 +182,13 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
   const clientId = Number(req.params["clientId"]);
   if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid clientId" }); return; }
 
-  // Get all assigned services for client
+  // Get all assigned services for client (with custom overrides)
   const assignedServices = await db
     .select({
       service_id: clientServicesTable.service_id,
+      custom_price: clientServicesTable.custom_price,
+      custom_hourly_rate: clientServicesTable.custom_hourly_rate,
+      custom_budgeted_hours: clientServicesTable.custom_budgeted_hours,
       name: servicesTable.name,
       service_type: servicesTable.service_type,
       billing_type: servicesTable.billing_type,
@@ -158,7 +201,6 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
     .where(eq(clientServicesTable.client_id, clientId));
 
   // Get total hours tracked per service (via tasks tagged with service_type matching service)
-  // We'll get total time entries for this client grouped by task service_type
   const timeByServiceType = await db
     .select({
       service_type: tasksTable.service_type,
@@ -181,9 +223,10 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
     name: svc.name,
     service_type: svc.service_type,
     billing_type: svc.billing_type,
-    hourly_rate: svc.hourly_rate,
-    budgeted_hours: svc.budgeted_hours,
-    price: svc.price,
+    // Use custom overrides if set, else fall back to library defaults
+    hourly_rate: svc.custom_hourly_rate ?? svc.hourly_rate,
+    budgeted_hours: svc.custom_budgeted_hours ?? svc.budgeted_hours,
+    price: svc.custom_price ?? svc.price,
     hours_used: svc.service_type ? (minutesByType[svc.service_type] ?? 0) / 60 : 0,
   }));
 

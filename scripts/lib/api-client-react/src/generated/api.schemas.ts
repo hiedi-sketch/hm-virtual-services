@@ -496,6 +496,9 @@ export interface ClientService {
   id: number;
   client_id: number;
   service_id: number;
+  custom_price?: number | null;
+  custom_hourly_rate?: number | null;
+  custom_budgeted_hours?: number | null;
   created_at: string;
   name?: string | null;
   description?: string | null;
@@ -505,6 +508,19 @@ export interface ClientService {
   hourly_rate?: number | null;
   budgeted_hours?: number | null;
   active?: boolean | null;
+}
+
+export interface AssignClientServiceBody {
+  service_id: number;
+  custom_price?: number | null;
+  custom_hourly_rate?: number | null;
+  custom_budgeted_hours?: number | null;
+}
+
+export interface UpdateClientServiceBody {
+  custom_price?: number | null;
+  custom_hourly_rate?: number | null;
+  custom_budgeted_hours?: number | null;
 }
 
 export type ListTimeEntriesParams = {

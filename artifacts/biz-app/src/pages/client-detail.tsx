@@ -11,6 +11,7 @@ import {
   useListClientServices,
   useAssignClientService,
   useRemoveClientService,
+  useUpdateClientService,
   getListTasksQueryKey,
   getGetClientQueryKey,
   getListClientServicesQueryKey,
@@ -63,6 +64,13 @@ export default function ClientDetail() {
   const [taskFilter, setTaskFilter] = useState<"all" | "Pending" | "Confirmed" | "In Progress" | "Completed">("all");
   const [showAddService, setShowAddService] = useState(false);
   const [addServiceId, setAddServiceId] = useState("");
+  const [addCustomPrice, setAddCustomPrice] = useState("");
+  const [addCustomHourlyRate, setAddCustomHourlyRate] = useState("");
+  const [addCustomBudgetedHours, setAddCustomBudgetedHours] = useState("");
+  const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
+  const [editCustomPrice, setEditCustomPrice] = useState("");
+  const [editCustomHourlyRate, setEditCustomHourlyRate] = useState("");
+  const [editCustomBudgetedHours, setEditCustomBudgetedHours] = useState("");
   const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
   const [commentTaskTitle, setCommentTaskTitle] = useState<string>("");
 
@@ -111,17 +119,54 @@ export default function ClientDetail() {
 
   const assignServiceMutation = useAssignClientService({
     mutation: {
-      onSuccess: () => { invalidateClientServices(); setShowAddService(false); setAddServiceId(""); toast({ title: "Service assigned" }); },
+      onSuccess: () => {
+        invalidateClientServices();
+        queryClient.invalidateQueries({ queryKey: ["services-hours", clientId] });
+        setShowAddService(false);
+        setAddServiceId("");
+        setAddCustomPrice("");
+        setAddCustomHourlyRate("");
+        setAddCustomBudgetedHours("");
+        toast({ title: "Service assigned" });
+      },
       onError: (e: any) => toast({ title: e?.response?.data?.error === "Service already assigned" ? "Service already assigned" : "Failed to assign service", variant: "destructive" }),
     },
   });
 
   const removeServiceMutation = useRemoveClientService({
     mutation: {
-      onSuccess: () => { invalidateClientServices(); toast({ title: "Service removed" }); },
+      onSuccess: () => {
+        invalidateClientServices();
+        queryClient.invalidateQueries({ queryKey: ["services-hours", clientId] });
+        toast({ title: "Service removed" });
+      },
       onError: () => toast({ title: "Failed to remove service", variant: "destructive" }),
     },
   });
+
+  const updateServiceMutation = useUpdateClientService({
+    mutation: {
+      onSuccess: () => {
+        invalidateClientServices();
+        queryClient.invalidateQueries({ queryKey: ["services-hours", clientId] });
+        setEditingServiceId(null);
+        toast({ title: "Service updated" });
+      },
+      onError: () => toast({ title: "Failed to update service", variant: "destructive" }),
+    },
+  });
+
+  const selectedAddService = allServices.find(s => s.id === Number(addServiceId));
+
+  const startEditService = (cs: typeof clientServices[0]) => {
+    const effPrice = cs.custom_price ?? cs.price;
+    const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
+    const effHours = cs.custom_budgeted_hours ?? cs.budgeted_hours;
+    setEditCustomPrice(effPrice != null ? String(effPrice) : "");
+    setEditCustomHourlyRate(effRate != null ? String(effRate) : "");
+    setEditCustomBudgetedHours(effHours != null ? String(effHours) : "");
+    setEditingServiceId(cs.service_id);
+  };
 
   const assignedIds = new Set(clientServices.map(cs => cs.service_id));
   const availableToAdd = allServices.filter(s => s.active && !assignedIds.has(s.id));
@@ -674,36 +719,102 @@ export default function ClientDetail() {
 
         {/* Add Service Inline Form */}
         {showAddService && (
-          <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-end gap-3">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-slate-500 mb-1">Select a service</label>
+          <div className="p-4 bg-slate-50 border-b border-slate-100 space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Select from Services Library</label>
               <select
-                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-ring/50"
+                className="w-full border border-[#c8c7cb] rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] transition-colors"
                 value={addServiceId}
-                onChange={e => setAddServiceId(e.target.value)}
+                onChange={e => {
+                  const id = Number(e.target.value);
+                  setAddServiceId(e.target.value);
+                  const svc = allServices.find(s => s.id === id);
+                  if (svc) {
+                    setAddCustomPrice(svc.billing_type === "Flat Rate" ? String(svc.price ?? 0) : "");
+                    setAddCustomHourlyRate(svc.billing_type === "Hourly" ? String(svc.hourly_rate ?? "") : "");
+                    setAddCustomBudgetedHours(svc.service_type === "Virtual Assistant" ? String(svc.budgeted_hours ?? "") : "");
+                  }
+                }}
               >
-                <option value="">Choose service…</option>
+                <option value="">Choose service from library…</option>
                 {availableToAdd.map(s => (
-                  <option key={s.id} value={s.id}>{s.name} — {formatCurrency(s.price)}</option>
+                  <option key={s.id} value={s.id}>{s.name} — {s.service_type} · {s.billing_type}</option>
                 ))}
               </select>
             </div>
-            <button
-              onClick={() => {
-                if (!addServiceId) return;
-                assignServiceMutation.mutate({ clientId, service_id: Number(addServiceId) });
-              }}
-              disabled={!addServiceId || assignServiceMutation.isPending}
-              className="px-4 py-2 bg-primary text-white text-sm rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {assignServiceMutation.isPending ? "Assigning…" : "Assign"}
-            </button>
-            <button
-              onClick={() => { setShowAddService(false); setAddServiceId(""); }}
-              className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
-            >
-              Cancel
-            </button>
+
+            {/* Override fields based on selected service */}
+            {selectedAddService && (
+              <div className="grid grid-cols-2 gap-3">
+                {selectedAddService.billing_type === "Flat Rate" && (
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Price ($/mo)</label>
+                    <div className="relative">
+                      <DollarSign className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="number" step="0.01" min="0"
+                        className="w-full border border-slate-200 rounded-lg pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                        placeholder={String(selectedAddService.price ?? 0)}
+                        value={addCustomPrice}
+                        onChange={e => setAddCustomPrice(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+                {selectedAddService.billing_type === "Hourly" && (
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Hourly Rate ($/hr)</label>
+                    <div className="relative">
+                      <DollarSign className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input type="number" step="0.01" min="0"
+                        className="w-full border border-slate-200 rounded-lg pl-7 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                        placeholder={String(selectedAddService.hourly_rate ?? 0)}
+                        value={addCustomHourlyRate}
+                        onChange={e => setAddCustomHourlyRate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+                {selectedAddService.service_type === "Virtual Assistant" && (
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Budgeted Hours/mo</label>
+                    <input type="number" min="0" step="0.5"
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                      placeholder={String(selectedAddService.budgeted_hours ?? 0)}
+                      value={addCustomBudgetedHours}
+                      onChange={e => setAddCustomBudgetedHours(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  if (!addServiceId) return;
+                  assignServiceMutation.mutate({
+                    clientId,
+                    body: {
+                      service_id: Number(addServiceId),
+                      custom_price: addCustomPrice !== "" ? Number(addCustomPrice) : null,
+                      custom_hourly_rate: addCustomHourlyRate !== "" ? Number(addCustomHourlyRate) : null,
+                      custom_budgeted_hours: addCustomBudgetedHours !== "" ? Number(addCustomBudgetedHours) : null,
+                    },
+                  });
+                }}
+                disabled={!addServiceId || assignServiceMutation.isPending}
+                className="px-4 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-50 transition-colors"
+                style={{ background: "#266b75" }}
+              >
+                {assignServiceMutation.isPending ? "Assigning…" : "Assign Service"}
+              </button>
+              <button
+                onClick={() => { setShowAddService(false); setAddServiceId(""); setAddCustomPrice(""); setAddCustomHourlyRate(""); setAddCustomBudgetedHours(""); }}
+                className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
@@ -711,32 +822,36 @@ export default function ClientDetail() {
         {clientServices.length === 0 ? (
           <div className="p-8 text-center">
             <Package className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-            <p className="text-sm text-slate-500 font-medium">You're all caught up.</p>
-            <p className="text-xs text-slate-400 mt-0.5">Nothing needs your attention right now.</p>
+            <p className="text-sm text-slate-500 font-medium">No services assigned yet.</p>
+            <p className="text-xs text-slate-400 mt-0.5">Add services from your library to get started.</p>
             {availableToAdd.length > 0 && (
-              <button
-                onClick={() => setShowAddService(true)}
-                className="mt-3 text-xs text-primary hover:underline"
-              >
+              <button onClick={() => setShowAddService(true)} className="mt-3 text-xs text-primary hover:underline">
                 Assign a service
               </button>
             )}
           </div>
         ) : (
-          <div className="divide-y divide-slate-50">
+          <div className="divide-y divide-slate-100">
             {clientServices.map(cs => {
               const hoursInfo = servicesHours.find(h => h.service_id === cs.service_id);
               const isVA = cs.service_type === "Virtual Assistant";
               const isHourly = cs.billing_type === "Hourly";
-              const budgeted = cs.budgeted_hours ?? 0;
+              const isFlatRate = cs.billing_type === "Flat Rate";
+              const effPrice = cs.custom_price ?? cs.price;
+              const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
+              const effBudget = cs.custom_budgeted_hours ?? cs.budgeted_hours;
+              const budgeted = effBudget ?? 0;
               const used = hoursInfo?.hours_used ?? 0;
               const remaining = Math.max(0, budgeted - used);
               const pct = budgeted > 0 ? Math.min(100, Math.round((used / budgeted) * 100)) : 0;
               const overBudget = isVA && budgeted > 0 && used >= budgeted;
+              const isEditing = editingServiceId === cs.service_id;
+
               return (
                 <div key={cs.id} className="px-5 py-3.5">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${isVA ? "bg-[#266b75]/10" : "bg-blue-50"}`}>
+                  {/* Service Row */}
+                  <div className="flex items-start gap-3">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isVA ? "bg-[#266b75]/10" : "bg-blue-50"}`}>
                       {isVA
                         ? <Monitor className="w-3.5 h-3.5 text-[#266b75]" />
                         : <DollarSign className="w-3.5 h-3.5 text-blue-600" />
@@ -747,37 +862,118 @@ export default function ClientDetail() {
                       <div className="flex flex-wrap gap-1 mt-0.5">
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
                           isVA ? "bg-[#266b75]/10 text-[#266b75] border-[#266b75]/20" : "bg-blue-50 text-blue-700 border-blue-200"
-                        }`}>
-                          {cs.service_type ?? "Service"}
-                        </span>
+                        }`}>{cs.service_type ?? "Service"}</span>
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
                           isHourly ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-600 border-slate-200"
-                        }`}>
-                          {cs.billing_type ?? "Flat Rate"}
-                        </span>
+                        }`}>{cs.billing_type ?? "Flat Rate"}</span>
+                        {(cs.custom_price != null || cs.custom_hourly_rate != null || cs.custom_budgeted_hours != null) && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border bg-[#7dbdc6]/15 text-[#266b75] border-[#7dbdc6]/30">custom</span>
+                        )}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      {isHourly && cs.hourly_rate != null ? (
-                        <p className="text-sm font-semibold text-slate-700">{formatCurrency(cs.hourly_rate)}/hr</p>
-                      ) : cs.price != null ? (
-                        <p className="text-sm font-semibold text-slate-700">{formatCurrency(cs.price)}</p>
+                      {isHourly && effRate != null ? (
+                        <p className="text-sm font-semibold text-slate-700">{formatCurrency(effRate)}/hr</p>
+                      ) : effPrice != null ? (
+                        <p className="text-sm font-semibold text-slate-700">{formatCurrency(effPrice)}</p>
                       ) : (
                         <p className="text-sm text-slate-400">—</p>
                       )}
-                      {isHourly && isVA && budgeted > 0 && (
+                      {isVA && budgeted > 0 && (
                         <p className="text-[10px] text-slate-400">{budgeted} hrs budgeted</p>
                       )}
                     </div>
                     <button
+                      onClick={() => isEditing ? setEditingServiceId(null) : startEditService(cs)}
+                      className={`p-1.5 rounded-lg transition-colors ${isEditing ? "text-[#266b75] bg-[#266b75]/10" : "text-slate-300 hover:text-[#266b75] hover:bg-[#266b75]/10"}`}
+                      title="Edit overrides"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
                       onClick={() => removeServiceMutation.mutate({ clientId, serviceId: cs.service_id })}
                       disabled={removeServiceMutation.isPending}
-                      className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors ml-1"
+                      className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
                       title="Remove service"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+
+                  {/* Inline Edit Form */}
+                  {isEditing && (
+                    <div className="mt-3 ml-10 p-3 bg-slate-50 rounded-xl border border-[#c8c7cb] space-y-2">
+                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Client-Specific Overrides</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {isFlatRate && (
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Price ($/mo)</label>
+                            <div className="relative">
+                              <DollarSign className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                              <input type="number" step="0.01" min="0"
+                                className="w-full border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                                placeholder={String(cs.price ?? 0)}
+                                value={editCustomPrice}
+                                onChange={e => setEditCustomPrice(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {isHourly && (
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Hourly Rate ($/hr)</label>
+                            <div className="relative">
+                              <DollarSign className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                              <input type="number" step="0.01" min="0"
+                                className="w-full border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                                placeholder={String(cs.hourly_rate ?? 0)}
+                                value={editCustomHourlyRate}
+                                onChange={e => setEditCustomHourlyRate(e.target.value)}
+                              />
+                            </div>
+                          </div>
+                        )}
+                        {isVA && (
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Budgeted Hours/mo</label>
+                            <input type="number" min="0" step="0.5"
+                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                              placeholder={String(cs.budgeted_hours ?? 0)}
+                              value={editCustomBudgetedHours}
+                              onChange={e => setEditCustomBudgetedHours(e.target.value)}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => {
+                            updateServiceMutation.mutate({
+                              clientId,
+                              serviceId: cs.service_id,
+                              body: {
+                                custom_price: editCustomPrice !== "" ? Number(editCustomPrice) : null,
+                                custom_hourly_rate: editCustomHourlyRate !== "" ? Number(editCustomHourlyRate) : null,
+                                custom_budgeted_hours: editCustomBudgetedHours !== "" ? Number(editCustomBudgetedHours) : null,
+                              },
+                            });
+                          }}
+                          disabled={updateServiceMutation.isPending}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white rounded-lg disabled:opacity-50 transition-colors"
+                          style={{ background: "#266b75" }}
+                        >
+                          <Check className="w-3 h-3" />
+                          {updateServiceMutation.isPending ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          onClick={() => setEditingServiceId(null)}
+                          className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* VA hours usage bar */}
                   {isVA && budgeted > 0 && (
@@ -792,20 +988,19 @@ export default function ClientDetail() {
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      {isHourly && cs.hourly_rate != null && (
+                      {isHourly && effRate != null && (
                         <p className="text-[10px] text-slate-400 mt-1">
-                          Estimated cost: {formatCurrency(used * cs.hourly_rate)}
-                          {isHourly && ` (${cs.hourly_rate}/hr × ${used.toFixed(1)} hrs)`}
+                          Estimated cost: {formatCurrency(used * effRate)} ({formatCurrency(effRate)}/hr × {used.toFixed(1)} hrs)
                         </p>
                       )}
                     </div>
                   )}
 
                   {/* Hourly cost for Bookkeeping (no budget bar) */}
-                  {!isVA && isHourly && cs.hourly_rate != null && used > 0 && (
+                  {!isVA && isHourly && effRate != null && used > 0 && (
                     <div className="mt-1.5 ml-10">
                       <p className="text-[10px] text-slate-400">
-                        {used.toFixed(1)} hrs tracked — est. {formatCurrency(used * cs.hourly_rate)}
+                        {used.toFixed(1)} hrs tracked — est. {formatCurrency(used * effRate)}
                       </p>
                     </div>
                   )}
@@ -814,6 +1009,42 @@ export default function ClientDetail() {
             })}
           </div>
         )}
+
+        {/* Monthly Value Summary */}
+        {clientServices.length > 0 && (() => {
+          const flatTotal = clientServices
+            .filter(cs => cs.billing_type === "Flat Rate")
+            .reduce((sum, cs) => sum + ((cs.custom_price ?? cs.price) ?? 0), 0);
+          const hourlyList = clientServices.filter(cs => cs.billing_type === "Hourly");
+          return (
+            <div className="px-5 py-4 border-t border-slate-100 bg-slate-50/50 space-y-1.5">
+              <p className="text-xs font-semibold text-[#266b75] uppercase tracking-wider">Monthly Value Summary</p>
+              {flatTotal > 0 && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-600">Total Fixed Monthly</span>
+                  <span className="font-bold text-slate-900">{formatCurrency(flatTotal)}</span>
+                </div>
+              )}
+              {hourlyList.length > 0 && (
+                <div>
+                  <p className="text-xs text-slate-400 mt-1">Hourly Services <span className="text-amber-600 font-medium">(Variable Billing)</span></p>
+                  {hourlyList.map(cs => {
+                    const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
+                    return (
+                      <div key={cs.service_id} className="flex items-center justify-between text-xs text-slate-600 ml-2 mt-0.5">
+                        <span>{cs.name}</span>
+                        <span>{effRate != null ? `${formatCurrency(effRate)}/hr` : "—"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {flatTotal === 0 && hourlyList.length === 0 && (
+                <p className="text-xs text-slate-400">No pricing configured</p>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Client Documents */}
