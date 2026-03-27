@@ -15,7 +15,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, Building2, Mail, ChevronRight, Clock, Phone, Globe, User,
-  Package, X, DollarSign, Monitor,
+  Package, X, DollarSign, Monitor, TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -214,6 +214,14 @@ export default function Clients() {
 
   const availableToAdd = allServices.filter(s => s.active && !pendingServices.some(p => p.serviceId === s.id));
 
+  // ── Running monthly totals ─────────────────────────────────────────────────
+  const allClients = clients ?? [];
+  const runningMonthlyTotal = allClients.reduce((sum, c) => sum + (c.monthly_fee ?? 0), 0);
+  const bkMonthlyTotal = allClients
+    .filter(c => c.service_type === "bookkeeping" || c.service_type === "hybrid")
+    .reduce((sum, c) => sum + (c.bk_fee ?? 0), 0);
+  const vaMonthlyTotal = runningMonthlyTotal - bkMonthlyTotal;
+
   const flatTotal = pendingServices
     .filter(p => p.billingType === "Flat Rate")
     .reduce((sum, p) => sum + effectivePrice(p), 0);
@@ -231,6 +239,40 @@ export default function Clients() {
           Add New Client
         </button>
       </div>
+
+      {/* ── Running Monthly Total Card ──────────────────────────────────────── */}
+      {allClients.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#266b75" }}>
+              <TrendingUp className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Running Monthly Total</p>
+              <p className="text-3xl font-bold text-slate-900 leading-tight">{formatCurrency(runningMonthlyTotal)}</p>
+              <p className="text-xs text-slate-400 mt-0.5">across {allClients.length} client{allClients.length !== 1 ? "s" : ""}</p>
+            </div>
+          </div>
+          <div className="flex gap-6 sm:gap-8 sm:border-l sm:border-slate-100 sm:pl-6">
+            {bkMonthlyTotal > 0 && (
+              <div className="flex flex-col items-start">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-0.5">
+                  <DollarSign className="w-3 h-3" /> Bookkeeping
+                </span>
+                <span className="text-lg font-semibold text-slate-700">{formatCurrency(bkMonthlyTotal)}</span>
+              </div>
+            )}
+            {vaMonthlyTotal > 0 && (
+              <div className="flex flex-col items-start">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "#266b75" }}>
+                  <Monitor className="w-3 h-3" /> Virtual Assistant
+                </span>
+                <span className="text-lg font-semibold text-slate-700">{formatCurrency(vaMonthlyTotal)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
