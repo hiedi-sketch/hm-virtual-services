@@ -7,7 +7,7 @@ import {
   getListTasksQueryKey,
   Task,
 } from "@workspace/api-client-react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,7 +29,7 @@ import { useTimer } from "@/contexts/TimerContext";
 interface TeamMember { id: number; name: string; role: string }
 
 type ViewKey = "all" | "mine" | "overdue" | "completed";
-type SortKey = "due_asc" | "due_desc" | "client" | "status";
+type SortKey = "due_asc" | "due_desc" | "client" | "status" | "incomplete";
 type ServiceTypeFilter = "all" | "Bookkeeping" | "Virtual Assistant" | "Unassigned";
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
@@ -144,6 +144,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "due_desc", label: "Due date (latest first)" },
   { value: "client", label: "Client (A → Z)" },
   { value: "status", label: "Status (pending first)" },
+  { value: "incomplete", label: "Incomplete first" },
 ];
 
 // ── Schemas ─────────────────────────────────────────────────────────────────
@@ -246,6 +247,15 @@ export default function Tasks() {
     mutation: { onSuccess: () => { invalidateTasks(); setEditingTask(null); } },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/tasks/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Delete failed");
+    },
+    onSuccess: () => { invalidateTasks(); toast({ title: "Task deleted" }); },
+    onError: () => { toast({ title: "Failed to delete task", variant: "destructive" }); },
+  });
+
   // ── Forms ─────────────────────────────────────────────────────────────────
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({ resolver: zodResolver(formSchema) });
   const { register: registerEdit, handleSubmit: handleEditSubmit, reset: resetEdit, formState: { errors: editErrors } } = useForm<EditValues>({ resolver: zodResolver(editSchema) });
@@ -316,6 +326,15 @@ export default function Tasks() {
         const order: Record<string, number> = { Pending: 0, Confirmed: 1, "In Progress": 2, Completed: 3 };
         return (order[a.status] ?? 0) - (order[b.status] ?? 0);
       }
+      if (sortBy === "incomplete") {
+        const inc = (t: typeof a) => (t.status !== "Completed" ? 0 : 1);
+        const diff = inc(a) - inc(b);
+        if (diff !== 0) return diff;
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return a.due_date.localeCompare(b.due_date);
+      }
       return 0;
     });
   }, [allTasks, view, sortBy, user, today]);
@@ -360,6 +379,20 @@ export default function Tasks() {
 
   const handleUpdateField = (id: string, field: string, value: any) => {
     updateMutation.mutate({ id: Number(id), data: { [field]: value } });
+  };
+
+  const handleStartTimer = (
+    taskId: number,
+    taskTitle: string,
+    clientId?: number | null,
+    clientName?: string | null,
+    serviceType?: string | null,
+  ) => {
+    startForTask(taskId, taskTitle, clientId, clientName, serviceType);
+    const task = allTasks.find(t => t.id === taskId);
+    if (task && task.status !== "Completed" && task.status !== "In Progress") {
+      updateMutation.mutate({ id: taskId, data: { status: "In Progress" } });
+    }
   };
 
   return (
@@ -467,7 +500,8 @@ export default function Tasks() {
         }))}
         onToggleStatus={handleToggleStatus}
         onUpdateField={handleUpdateField}
-        onStartTimer={startForTask}
+        onStartTimer={handleStartTimer}
+        onDeleteTask={(id) => deleteMutation.mutate(id)}
         activeTaskId={timerState.taskId}
         timerStatus={timerState.status}
         serviceTypeFilter={serviceTypeFilter}

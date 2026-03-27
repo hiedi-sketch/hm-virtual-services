@@ -186,6 +186,15 @@ router.post("/tasks/spawn-recurring", requireAuth, async (req, res) => {
   res.json(spawned);
 });
 
+router.delete("/tasks/:id", requireRole("admin"), async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid task id" }); return; }
+  await db.delete(tasksTable).where(eq(tasksTable.id, id));
+  const actor = req.session.user;
+  logAudit("task", id, "deleted", `Task ${id} deleted`, { id: actor?.id, name: actor?.name });
+  res.status(204).send();
+});
+
 router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res) => {
   const { id } = UpdateTaskParams.parse(req.params);
   const body = UpdateTaskBody.parse(req.body);

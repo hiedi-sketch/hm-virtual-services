@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Play, Pause, ChevronDown, MessageSquare } from "lucide-react";
+import { Play, Pause, ChevronDown, MessageSquare, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
 import { TaskCommentPanel } from "@/components/TaskCommentPanel";
@@ -121,6 +121,7 @@ type TaskTableProps = {
     serviceType?: string | null,
   ) => void;
   onComment?: (taskId: number, taskTitle: string) => void;
+  onDeleteTask?: (taskId: number) => void;
   activeTaskId?: number | null;
   activeCommentTaskId?: number | null;
   timerStatus?: "idle" | "running" | "paused";
@@ -134,6 +135,7 @@ export default function TaskTable({
   onUpdateField,
   onStartTimer,
   onComment,
+  onDeleteTask,
   activeTaskId,
   activeCommentTaskId,
   timerStatus,
@@ -175,7 +177,7 @@ export default function TaskTable({
   const sortIcon = (key: SortKey) =>
     sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
 
-  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + 6 + 1;
+  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + (onDeleteTask ? 1 : 0) + 6 + 1;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -199,6 +201,7 @@ export default function TaskTable({
               <th className="px-6 py-4">Status</th>
               {onStartTimer && <th className="px-6 py-4 text-center w-24">Timer</th>}
               {onComment && <th className="px-6 py-4 text-center w-16">Notes</th>}
+              {onDeleteTask && <th className="px-6 py-4 text-center w-12" />}
               <th className="px-6 py-4 w-10" />
             </tr>
           </thead>
@@ -338,6 +341,23 @@ export default function TaskTable({
                                 {task.comment_count}
                               </span>
                             )}
+                          </button>
+                        </td>
+                      )}
+
+                      {/* Delete */}
+                      {onDeleteTask && (
+                        <td className="px-2 py-4 text-center" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => {
+                              if (window.confirm(`Delete "${task.title}"? This cannot be undone.`)) {
+                                onDeleteTask(numId);
+                              }
+                            }}
+                            title="Delete task"
+                            className="p-1.5 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </td>
                       )}
