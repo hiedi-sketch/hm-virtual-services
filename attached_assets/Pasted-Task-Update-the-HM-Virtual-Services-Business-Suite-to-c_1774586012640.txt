@@ -1,0 +1,62 @@
+Task:
+
+Update the HM Virtual Services Business Suite to centralize client monthly fee calculations and improve UI/UX on Client Hub and Client Details pages.
+
+1️⃣ Remove Redundant Fields
+Remove Monthly Services / Monthly Fee fields from the Edit Info section of client details.
+Keep only non-service fields like name, contact info, and notes.
+2️⃣ Centralize Monthly Fee Calculation
+All client monthly fees must be calculated dynamically based on the Assigned Services section.
+Calculation logic:
+monthlyFee = client.assignedServices
+  .reduce((sum, service) => sum + service.monthlyValue, 0);
+Notes:
+VA services contribute to monthly budgets (budgeted hours included)
+Bookkeeping services do not contribute to VA budget
+Flat rate or hourly rate should be factored correctly
+3️⃣ Update Client Hub Page
+Replace the “Monthly Package Breakdown” section with the Assigned Services table.
+Table columns should include:
+Service Name
+Service Type (VA / Bookkeeping)
+Monthly Value / Fee
+Budgeted Hours (if VA)
+Hourly Rate (if applicable)
+Display Monthly Fee as a read-only total at the top of the section:
+💰 Monthly Fee: $X,XXX (calculated from assigned services)
+Update dynamically when services are added, removed, or edited.
+4️⃣ Update Client Details Page
+Move Assigned Services to replace Monthly Package breakdown.
+Ensure the Monthly Fee is displayed prominently and updates automatically.
+Monthly Fee field should be read-only outside Assigned Services section.
+5️⃣ Parent Client Integration
+Parent Client dashboard should sum all subclient Assigned Services fees:
+Display total parent Monthly Fee
+Display total VA hours aggregated from subclients if applicable
+6️⃣ UI / UX Enhancements
+Use Notion-style table layout for Assigned Services:
+Clean, sortable, scrollable table
+Bold total fee at the top
+Service rows below with all relevant details
+Color-coded tags for VA vs Bookkeeping
+
+Optional tooltip:
+
+“Monthly Fee is calculated from all assigned services”
+
+7️⃣ Data Integrity
+Remove any manual budget overrides anywhere else in the system.
+Ensure all budgets, fees, and projections are derived solely from Assigned Services.
+8️⃣ Deliverables
+Monthly services removed from Edit Info box.
+Monthly Fee on Client Hub is dynamically calculated from Assigned Services.
+Assigned Services section moved to replace Monthly Package breakdown.
+Monthly Fee updates automatically when Assigned Services change.
+Parent Client aggregation respects new fee calculations.
+UI is clean, sortable, and Notion-style.
+
+💡 Notes for Replit Build:
+
+Update React state / hooks to recompute Monthly Fee whenever Assigned Services are edited.
+Update API endpoints if needed to fetch Assigned Services and recalc totals.
+Test dynamically on both single client pages and Parent Client pages.
