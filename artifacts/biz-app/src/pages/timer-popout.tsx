@@ -108,7 +108,7 @@ function TimerPopoutInner() {
 
   return (
     <div
-      className="min-h-screen flex flex-col select-none"
+      className="h-screen flex flex-col select-none overflow-hidden"
       style={{ background: "linear-gradient(160deg, #f0f9fa 0%, #f8fafc 100%)" }}
     >
       {/* Title bar */}
@@ -130,7 +130,7 @@ function TimerPopoutInner() {
       </div>
 
       {/* Clock */}
-      <div className="flex flex-col items-center pt-8 pb-4 px-5">
+      <div className="flex flex-col items-center pt-8 pb-4 px-5 shrink-0">
         <div
           className={cn(
             "font-mono text-[3.5rem] font-bold tracking-tight tabular-nums leading-none transition-colors",
@@ -170,7 +170,7 @@ function TimerPopoutInner() {
       </div>
 
       {/* Controls */}
-      <div className="flex justify-center gap-2 px-5 pb-4">
+      <div className="flex justify-center gap-2 px-5 pb-4 shrink-0">
         {isIdle ? (
           <button
             onClick={start}
@@ -222,10 +222,10 @@ function TimerPopoutInner() {
       </div>
 
       {/* Divider */}
-      <div className="mx-5 border-t border-slate-200/80" />
+      <div className="mx-5 border-t border-slate-200/80 shrink-0" />
 
       {/* Details */}
-      <div className="px-5 py-4 space-y-3 flex-1">
+      <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
         {/* Client */}
         <div>
           <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
@@ -323,7 +323,7 @@ function TimerPopoutInner() {
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-slate-100 text-center">
+      <div className="px-5 py-3 border-t border-slate-100 text-center shrink-0">
         <p className="text-[10px] text-slate-300">HM Virtual Services · Timer stays in sync with main app</p>
       </div>
 
