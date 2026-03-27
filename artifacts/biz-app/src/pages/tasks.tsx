@@ -28,7 +28,7 @@ import { useTimer } from "@/contexts/TimerContext";
 
 interface TeamMember { id: number; name: string; role: string }
 
-type ViewKey = "all" | "mine" | "overdue" | "completed";
+type ViewKey = "all" | "mine" | "overdue" | "incomplete" | "completed";
 type SortKey = "due_asc" | "due_desc" | "client" | "status" | "incomplete";
 type ServiceTypeFilter = "all" | "Bookkeeping" | "Virtual Assistant" | "Unassigned";
 
@@ -294,6 +294,7 @@ export default function Tasks() {
     all: allTasks.length,
     mine: allTasks.filter(t => t.assigned_to === user?.name).length,
     overdue: allTasks.filter(t => t.status !== "Completed" && t.due_date && t.due_date < today).length,
+    incomplete: allTasks.filter(t => t.status !== "Completed").length,
     completed: allTasks.filter(t => t.status === "Completed").length,
   }), [allTasks, user, today]);
 
@@ -303,6 +304,7 @@ export default function Tasks() {
     let result = allTasks;
     if (view === "mine") result = allTasks.filter(t => t.assigned_to === user?.name);
     else if (view === "overdue") result = allTasks.filter(t => t.status !== "Completed" && t.due_date && t.due_date < today);
+    else if (view === "incomplete") result = allTasks.filter(t => t.status !== "Completed");
     else if (view === "completed") result = allTasks.filter(t => t.status === "Completed");
 
     // 2. Sort
@@ -343,14 +345,16 @@ export default function Tasks() {
     { key: "all", label: "All", color: "text-slate-700", dotColor: "bg-slate-400" },
     { key: "mine", label: "My Tasks", color: "text-blue-700", dotColor: "bg-blue-500" },
     { key: "overdue", label: "Overdue", color: "text-red-700", dotColor: "bg-red-500" },
+    { key: "incomplete", label: "Incomplete", color: "text-amber-700", dotColor: "bg-amber-500" },
     { key: "completed", label: "Completed", color: "text-emerald-700", dotColor: "bg-emerald-500" },
   ];
 
   const emptyMessages: Record<ViewKey, string> = {
     all: "You're all caught up.",
     mine: "You're all caught up.",
-    overdue: "You're all caught up.",
-    completed: "You're all caught up.",
+    overdue: "No overdue tasks.",
+    incomplete: "No incomplete tasks — everything is done!",
+    completed: "No completed tasks yet.",
   };
 
   const handleToggleStatus = (tableTask: { id: string; status: string }) => {
