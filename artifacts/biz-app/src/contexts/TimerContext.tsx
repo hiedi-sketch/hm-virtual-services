@@ -8,9 +8,10 @@ import {
 } from "react";
 import { createTimeEntry } from "@workspace/api-client-react";
 
-const STORAGE_KEY = "flowstate_global_timer_v2";
+const STORAGE_KEY = "flowstate_global_timer_v3";
 
 export type TimerStatus = "idle" | "running" | "paused";
+export type ServiceType = "Bookkeeping" | "Virtual Assistant" | null;
 
 export interface TimerState {
   status: TimerStatus;
@@ -21,6 +22,7 @@ export interface TimerState {
   clientName: string | null;
   taskId: number | null;
   taskTitle: string | null;
+  serviceType: ServiceType;
 }
 
 const DEFAULT_STATE: TimerState = {
@@ -32,6 +34,7 @@ const DEFAULT_STATE: TimerState = {
   clientName: null,
   taskId: null,
   taskTitle: null,
+  serviceType: null,
 };
 
 interface TimerContextValue {
@@ -42,7 +45,14 @@ interface TimerContextValue {
   stop: () => void;
   assignClient: (id: number, name: string) => void;
   assignTask: (id: number, title: string) => void;
-  startForTask: (taskId: number, taskTitle: string, clientId?: number | null, clientName?: string | null) => void;
+  setServiceType: (type: ServiceType) => void;
+  startForTask: (
+    taskId: number,
+    taskTitle: string,
+    clientId?: number | null,
+    clientName?: string | null,
+    serviceType?: ServiceType,
+  ) => void;
   saveAndStop: () => Promise<void>;
 }
 
@@ -133,11 +143,16 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     setState({ ...state, taskId: id, taskTitle: title });
   }, [state, setState]);
 
+  const setServiceType = useCallback((type: ServiceType) => {
+    setState({ ...state, serviceType: type });
+  }, [state, setState]);
+
   const startForTask = useCallback((
     taskId: number,
     taskTitle: string,
     clientId?: number | null,
     clientName?: string | null,
+    serviceType?: ServiceType,
   ) => {
     if (state.status === "running" && state.taskId === taskId) {
       pause();
@@ -153,6 +168,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       clientName: clientName ?? null,
       taskId,
       taskTitle,
+      serviceType: serviceType ?? null,
     });
   }, [state, setState, pause]);
 
@@ -169,13 +185,14 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       date: getTodayLocal(),
       started_at: started_at ?? null,
       ended_at,
+      service_type: state.serviceType,
     } as any);
 
     setState({ ...DEFAULT_STATE });
   }, [state, setState, computeElapsed]);
 
   return (
-    <TimerContext.Provider value={{ state, elapsedMs, start, pause, stop, assignClient, assignTask, startForTask, saveAndStop }}>
+    <TimerContext.Provider value={{ state, elapsedMs, start, pause, stop, assignClient, assignTask, setServiceType, startForTask, saveAndStop }}>
       {children}
     </TimerContext.Provider>
   );

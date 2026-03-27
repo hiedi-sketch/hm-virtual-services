@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Play, Pause, ChevronDown, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
@@ -24,6 +24,12 @@ const TASK_STATUS_OPTIONS = [
   { value: "Completed",   label: "Completed" },
 ] as const;
 
+const SERVICE_TYPE_OPTIONS = [
+  { value: "", label: "Unassigned" },
+  { value: "Bookkeeping", label: "Bookkeeping" },
+  { value: "Virtual Assistant", label: "Virtual Assistant" },
+] as const;
+
 function statusBadge(status: string) {
   if (status === "Completed")   return "text-xs border rounded px-2 py-1 bg-emerald-50 text-emerald-700 border-emerald-200";
   if (status === "In Progress") return "text-xs border rounded px-2 py-1 bg-[#266b75]/10 text-[#266b75] border-[#266b75]/30";
@@ -47,9 +53,57 @@ function ServiceTypeBadge({ value }: { value?: string | null }) {
     );
   }
   return (
-    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 border border-slate-200 text-slate-400 whitespace-nowrap">
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 border border-slate-200 text-slate-400 whitespace-nowrap italic">
       Unassigned
     </span>
+  );
+}
+
+function InlineServiceTypeEditor({
+  value,
+  onSave,
+}: {
+  value?: string | null;
+  onSave: (v: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    if (editing && selectRef.current) {
+      selectRef.current.focus();
+    }
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={(e) => { e.stopPropagation(); setEditing(true); }}
+        className="group/svc flex items-center gap-1 rounded hover:ring-1 hover:ring-[#7dbdc6]/60 transition-all"
+        title="Click to change service type"
+      >
+        <ServiceTypeBadge value={value} />
+        <ChevronDown className="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover/svc:opacity-100 transition-opacity" />
+      </button>
+    );
+  }
+
+  return (
+    <select
+      ref={selectRef}
+      defaultValue={value ?? ""}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        onSave(e.target.value || null);
+        setEditing(false);
+      }}
+      onBlur={() => setEditing(false)}
+      className="text-xs border border-[#7dbdc6] rounded px-2 py-1 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 shadow-sm cursor-pointer"
+    >
+      {SERVICE_TYPE_OPTIONS.map(o => (
+        <option key={o.value} value={o.value}>{o.label}</option>
+      ))}
+    </select>
   );
 }
 
@@ -59,7 +113,13 @@ type TaskTableProps = {
   tasks: Task[];
   onToggleStatus: (task: Task) => void;
   onUpdateField: (id: string, field: string, value: any) => void;
-  onStartTimer?: (taskId: number, taskTitle: string, clientId?: number | null, clientName?: string | null) => void;
+  onStartTimer?: (
+    taskId: number,
+    taskTitle: string,
+    clientId?: number | null,
+    clientName?: string | null,
+    serviceType?: string | null,
+  ) => void;
   onComment?: (taskId: number, taskTitle: string) => void;
   activeTaskId?: number | null;
   activeCommentTaskId?: number | null;
@@ -82,7 +142,6 @@ export default function TaskTable({
 }: TaskTableProps) {
   const today = new Date().toISOString().split("T")[0];
   const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const [sortKey, setSortKey] = useState<SortKey>("title");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
@@ -98,19 +157,10 @@ export default function TaskTable({
     return [...list].sort((a, b) => {
       let valA = "";
       let valB = "";
-      if (sortKey === "title") {
-        valA = a.title.toLowerCase();
-        valB = b.title.toLowerCase();
-      } else if (sortKey === "due_date") {
-        valA = a.due_date || "";
-        valB = b.due_date || "";
-      } else if (sortKey === "assigned_to") {
-        valA = (a.assigned_to || "").toLowerCase();
-        valB = (b.assigned_to || "").toLowerCase();
-      } else if (sortKey === "service_type") {
-        valA = (a.service_type || "zzz").toLowerCase();
-        valB = (b.service_type || "zzz").toLowerCase();
-      }
+      if (sortKey === "title")         { valA = a.title.toLowerCase(); valB = b.title.toLowerCase(); }
+      else if (sortKey === "due_date") { valA = a.due_date || ""; valB = b.due_date || ""; }
+      else if (sortKey === "assigned_to") { valA = (a.assigned_to || "").toLowerCase(); valB = (b.assigned_to || "").toLowerCase(); }
+      else if (sortKey === "service_type") { valA = (a.service_type || "zzz").toLowerCase(); valB = (b.service_type || "zzz").toLowerCase(); }
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       return 0;
@@ -118,22 +168,14 @@ export default function TaskTable({
   }, [tasks, sortKey, sortDirection, serviceTypeFilter]);
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortKey(key);
-      setSortDirection("asc");
-    }
+    if (sortKey === key) setSortDirection(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDirection("asc"); }
   };
 
   const sortIcon = (key: SortKey) =>
     sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
 
   const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + 6 + 1;
-
-  const toggleExpand = (id: string) => {
-    setExpandedId(prev => (prev === id ? null : id));
-  };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -185,44 +227,46 @@ export default function TaskTable({
                         isCommentActive && "bg-primary/5",
                         isExpanded && "bg-slate-50/60"
                       )}
-                      onClick={() => toggleExpand(task.id)}
+                      onClick={() => setExpandedId(prev => prev === task.id ? null : task.id)}
                     >
+                      {/* Checkbox */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <button
-                          onClick={() => onToggleStatus(task)}
-                          className="text-lg leading-none"
-                        >
+                        <button onClick={() => onToggleStatus(task)} className="text-lg leading-none">
                           {task.status === "Completed" ? "✅" : "⬜"}
                         </button>
                       </td>
-                      <td className="px-6 py-4">
-                        <div
-                          className={`font-semibold ${task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"}`}
-                          onClick={e => e.stopPropagation()}
-                        >
-                          <input
-                            value={task.title}
-                            onChange={(e) => onUpdateField(task.id, "title", e.target.value)}
-                            onClick={e => e.stopPropagation()}
-                            className={`w-full bg-transparent outline-none font-semibold ${
-                              task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
-                            }`}
-                          />
-                        </div>
-                      </td>
+
+                      {/* Title */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <ServiceTypeBadge value={task.service_type} />
+                        <input
+                          value={task.title}
+                          onChange={(e) => onUpdateField(task.id, "title", e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          className={`w-full bg-transparent outline-none font-semibold ${
+                            task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
+                          }`}
+                        />
                       </td>
+
+                      {/* Service Type — inline editable */}
+                      <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
+                        <InlineServiceTypeEditor
+                          value={task.service_type}
+                          onSave={(v) => onUpdateField(task.id, "service_type", v)}
+                        />
+                      </td>
+
+                      {/* Due date */}
                       <td className={`px-6 py-4 ${isOverdue ? "text-red-600 font-semibold" : "text-slate-600"}`} onClick={e => e.stopPropagation()}>
                         <input
                           type="date"
                           value={task.due_date || ""}
                           onChange={(e) => onUpdateField(task.id, "due_date", e.target.value)}
-                          className={`bg-transparent border rounded px-2 py-1 text-xs ${
-                            isOverdue ? "border-red-300" : "border-slate-200"
-                          }`}
+                          className={`bg-transparent border rounded px-2 py-1 text-xs ${isOverdue ? "border-red-300" : "border-slate-200"}`}
                         />
                       </td>
+
+                      {/* Assigned */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                         <input
                           value={task.assigned_to || ""}
@@ -231,6 +275,8 @@ export default function TaskTable({
                           placeholder="—"
                         />
                       </td>
+
+                      {/* Status */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                         <select
                           value={task.status}
@@ -242,12 +288,14 @@ export default function TaskTable({
                           ))}
                         </select>
                       </td>
+
+                      {/* Timer */}
                       {onStartTimer && (
                         <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
                             {isThisRunning ? (
                               <button
-                                onClick={() => onStartTimer(numId, task.title, task.client_id, task.client_name)}
+                                onClick={() => onStartTimer(numId, task.title, task.client_id, task.client_name, task.service_type)}
                                 title="Pause timer"
                                 className="p-1.5 rounded-md text-amber-600 hover:bg-amber-50 transition-colors"
                               >
@@ -255,7 +303,7 @@ export default function TaskTable({
                               </button>
                             ) : (
                               <button
-                                onClick={() => onStartTimer(numId, task.title, task.client_id, task.client_name)}
+                                onClick={() => onStartTimer(numId, task.title, task.client_id, task.client_name, task.service_type)}
                                 title={isThisPaused ? "Resume timer" : "Start timer for this task"}
                                 className={cn(
                                   "p-1.5 rounded-md transition-colors",
@@ -270,6 +318,8 @@ export default function TaskTable({
                           </div>
                         </td>
                       )}
+
+                      {/* Notes / Comments */}
                       {onComment && (
                         <td className="px-6 py-4 text-center" onClick={e => e.stopPropagation()}>
                           <button
@@ -291,6 +341,8 @@ export default function TaskTable({
                           </button>
                         </td>
                       )}
+
+                      {/* Expand chevron */}
                       <td className="px-4 py-4">
                         <ChevronDown className={cn(
                           "w-4 h-4 text-slate-400 transition-transform duration-200",
@@ -299,6 +351,7 @@ export default function TaskTable({
                       </td>
                     </tr>
 
+                    {/* Expanded row */}
                     {isExpanded && (
                       <tr className="bg-slate-50/80 border-b border-slate-100">
                         <td colSpan={colSpan} className="px-8 py-4">

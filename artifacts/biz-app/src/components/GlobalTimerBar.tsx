@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Play, Pause, Square, Timer, X, CheckCircle2, ChevronDown } from "lucide-react";
-import { useTimer, formatElapsed } from "@/contexts/TimerContext";
+import { useTimer, formatElapsed, type ServiceType } from "@/contexts/TimerContext";
 import {
   useListClients,
   useListTasks,
@@ -12,6 +12,30 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+const SERVICE_TYPE_OPTIONS: { value: ServiceType; label: string }[] = [
+  { value: null,                label: "— Unassigned —" },
+  { value: "Bookkeeping",       label: "Bookkeeping" },
+  { value: "Virtual Assistant", label: "Virtual Assistant" },
+];
+
+function ServiceTypePill({ value }: { value: ServiceType }) {
+  if (value === "Bookkeeping") {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold border border-[#c8c7cb] bg-[#c8c7cb]/40 text-slate-800 whitespace-nowrap">
+        Bookkeeping
+      </span>
+    );
+  }
+  if (value === "Virtual Assistant") {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-[#7dbdc6]/30 border border-[#7dbdc6] text-slate-800 whitespace-nowrap">
+        VA
+      </span>
+    );
+  }
+  return null;
+}
+
 export function GlobalTimerBar() {
   const { state, elapsedMs, start, pause, stop } = useTimer();
   const { data: clients } = useListClients();
@@ -21,22 +45,21 @@ export function GlobalTimerBar() {
 
   const [saving, setSaving] = useState(false);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
-  const [promptClientId, setPromptClientId] = useState<number | "">("") ;
+  const [promptClientId, setPromptClientId] = useState<number | "">("");
   const [promptTaskId, setPromptTaskId] = useState<number | "">("");
+  const [promptServiceType, setPromptServiceType] = useState<ServiceType>(null);
   const promptRef = useRef<HTMLDivElement>(null);
 
   const isIdle = state.status === "idle";
   const isRunning = state.status === "running";
-  const isPaused = state.status === "paused";
 
-  // When prompt opens, pre-fill with currently assigned values
   function openSavePrompt() {
     setPromptClientId(state.clientId ?? "");
     setPromptTaskId(state.taskId ?? "");
+    setPromptServiceType(state.serviceType ?? null);
     setShowSavePrompt(true);
   }
 
-  // Close prompt on outside click
   useEffect(() => {
     if (!showSavePrompt) return;
     function handler(e: MouseEvent) {
@@ -48,10 +71,22 @@ export function GlobalTimerBar() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showSavePrompt]);
 
+  // When task changes in prompt, auto-fill service type from task
   const promptClientTasks =
     tasks?.filter((t) =>
       promptClientId ? t.client_id === Number(promptClientId) : false
     ) ?? [];
+
+  function handlePromptTaskChange(taskIdVal: string) {
+    const id = taskIdVal ? Number(taskIdVal) : "";
+    setPromptTaskId(id);
+    if (id) {
+      const task = tasks?.find(t => t.id === id);
+      if (task?.service_type) {
+        setPromptServiceType(task.service_type as ServiceType);
+      }
+    }
+  }
 
   const durationMins = Math.max(1, Math.round(elapsedMs / 60000));
   const durationLabel =
@@ -75,20 +110,17 @@ export function GlobalTimerBar() {
         date: getTodayLocal(),
         started_at: state.firstStartedAt ? new Date(state.firstStartedAt).toISOString() : null,
         ended_at: new Date().toISOString(),
+        service_type: promptServiceType,
       } as any);
       stop();
       qc.invalidateQueries({ queryKey: getListTimeEntriesQueryKey() });
       qc.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
       toast({
         title: "Time entry saved",
-        description: `Logged ${durationLabel} successfully.`,
+        description: `Logged ${durationLabel}${promptServiceType ? ` · ${promptServiceType}` : ""} successfully.`,
       });
     } catch {
-      toast({
-        title: "Save failed",
-        description: "Could not save time entry.",
-        variant: "destructive",
-      });
+      toast({ title: "Save failed", description: "Could not save time entry.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -99,7 +131,7 @@ export function GlobalTimerBar() {
     setShowSavePrompt(false);
   }
 
-  // ── Idle bar ──────────────────────────────────────────────────────────────
+  // ── Idle bar ───────────────────────────────────────────────────────────────
   if (isIdle) {
     return (
       <div className="border-t border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
@@ -121,43 +153,35 @@ export function GlobalTimerBar() {
     );
   }
 
-  // ── Active bar ────────────────────────────────────────────────────────────
+  // ── Active bar ─────────────────────────────────────────────────────────────
   return (
-    <div
-      className={cn(
-        "relative border-t px-4 sm:px-6 lg:px-8 transition-colors",
-        isRunning
-          ? "bg-[#266b75] border-[#1e5560]"
-          : "bg-amber-500 border-amber-600"
-      )}
-    >
+    <div className={cn(
+      "relative border-t px-4 sm:px-6 lg:px-8 transition-colors",
+      isRunning ? "bg-[#266b75] border-[#1e5560]" : "bg-amber-500 border-amber-600"
+    )}>
       <div className="max-w-7xl mx-auto h-12 flex items-center gap-4">
+
         {/* Pulsing dot + elapsed */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <span
-            className={cn(
-              "w-2 h-2 rounded-full bg-white shrink-0",
-              isRunning ? "animate-pulse" : "opacity-70"
-            )}
-          />
+          <span className={cn("w-2 h-2 rounded-full bg-white shrink-0", isRunning ? "animate-pulse" : "opacity-70")} />
           <span className="font-mono text-lg font-bold tracking-tight text-white tabular-nums">
             {formatElapsed(elapsedMs)}
           </span>
         </div>
 
-        {/* Divider */}
         <div className="h-5 w-px bg-white/25 shrink-0" />
 
-        {/* Assignment badge */}
-        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+        {/* Assignment + service type */}
+        <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
           {state.clientName || state.taskTitle ? (
             <span className="text-sm text-white/90 font-medium truncate">
               {[state.clientName, state.taskTitle].filter(Boolean).join(" · ")}
             </span>
           ) : (
-            <span className="text-sm text-white/60 italic">
-              No client or task assigned
-            </span>
+            <span className="text-sm text-white/60 italic">No client or task assigned</span>
+          )}
+          {state.serviceType && (
+            <ServiceTypePill value={state.serviceType} />
           )}
         </div>
 
@@ -181,7 +205,7 @@ export function GlobalTimerBar() {
             </button>
           )}
 
-          {/* Save & Stop → opens prompt */}
+          {/* Save & Stop → save prompt */}
           <div className="relative" ref={promptRef}>
             <button
               onClick={openSavePrompt}
@@ -193,9 +217,8 @@ export function GlobalTimerBar() {
               <ChevronDown className="w-3 h-3 opacity-70" />
             </button>
 
-            {/* Save prompt dropdown */}
             {showSavePrompt && (
-              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
                   <p className="text-sm font-semibold text-slate-800">Save Time Entry</p>
                   <p className="text-xs text-slate-500 mt-0.5">
@@ -218,11 +241,7 @@ export function GlobalTimerBar() {
                       className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
                     >
                       <option value="">No client</option>
-                      {clients?.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
+                      {clients?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   </div>
 
@@ -233,21 +252,35 @@ export function GlobalTimerBar() {
                     </label>
                     <select
                       value={promptTaskId}
-                      onChange={(e) =>
-                        setPromptTaskId(e.target.value ? Number(e.target.value) : "")
-                      }
+                      onChange={(e) => handlePromptTaskChange(e.target.value)}
                       disabled={!promptClientId}
                       className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] disabled:opacity-50 disabled:bg-slate-50"
                     >
                       <option value="">No task</option>
-                      {promptClientTasks.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.title}
-                        </option>
+                      {promptClientTasks.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+                    </select>
+                    {!promptClientId && <p className="text-xs text-slate-400 mt-1">Select a client first</p>}
+                  </div>
+
+                  {/* Service Type */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block mb-1.5">
+                      Service Type
+                    </label>
+                    <select
+                      value={promptServiceType ?? ""}
+                      onChange={(e) => setPromptServiceType((e.target.value as ServiceType) || null)}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                    >
+                      {SERVICE_TYPE_OPTIONS.map(o => (
+                        <option key={String(o.value)} value={o.value ?? ""}>{o.label}</option>
                       ))}
                     </select>
-                    {!promptClientId && (
-                      <p className="text-xs text-slate-400 mt-1">Select a client first</p>
+                    {promptServiceType === "Virtual Assistant" && (
+                      <p className="text-xs text-[#266b75] mt-1 font-medium">↳ Will deduct from client's VA hour budget</p>
+                    )}
+                    {promptServiceType === "Bookkeeping" && (
+                      <p className="text-xs text-slate-400 mt-1">↳ Tracked for reporting only (no budget deduction)</p>
                     )}
                   </div>
                 </div>

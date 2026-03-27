@@ -40,6 +40,27 @@ interface ActiveTimer {
   startedAt: string;
 }
 
+const SERVICE_TYPES = ["Bookkeeping", "Virtual Assistant"] as const;
+type ServiceTypeVal = typeof SERVICE_TYPES[number] | null;
+
+function ServiceTypeBadge({ value }: { value?: string | null }) {
+  if (value === "Bookkeeping") {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border border-[#c8c7cb] bg-[#c8c7cb]/40 text-slate-800 whitespace-nowrap">
+        BK
+      </span>
+    );
+  }
+  if (value === "Virtual Assistant") {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#7dbdc6]/30 border border-[#7dbdc6] text-slate-800 whitespace-nowrap">
+        VA
+      </span>
+    );
+  }
+  return null;
+}
+
 const manualSchema = z.object({
   client_id: z.coerce.number().min(1, "Please select a client"),
   task_id: z.preprocess(
@@ -48,6 +69,7 @@ const manualSchema = z.object({
   ),
   duration_minutes: z.coerce.number().min(1, "Must be at least 1 minute"),
   date: z.string().min(1, "Date is required"),
+  service_type: z.enum(["Bookkeeping", "Virtual Assistant"]).nullable().optional(),
 });
 
 const editSchema = z.object({
@@ -60,6 +82,7 @@ const editSchema = z.object({
   date: z.string().min(1, "Date is required"),
   started_at: z.string().optional(),
   ended_at: z.string().optional(),
+  service_type: z.enum(["Bookkeeping", "Virtual Assistant"]).nullable().optional(),
 });
 
 type ManualValues = z.infer<typeof manualSchema>;
@@ -110,7 +133,7 @@ function EditTimeEntryModal({
   onCancel,
   isPending,
 }: {
-  entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null };
+  entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null };
   clients: { id: number; name: string }[] | undefined;
   tasks: { id: number; title: string; client_id: number | null; status: string }[] | undefined;
   onSave: (id: number, data: EditValues) => void;
@@ -126,6 +149,7 @@ function EditTimeEntryModal({
       date: entry.date,
       started_at: toDatetimeLocal(entry.started_at),
       ended_at: toDatetimeLocal(entry.ended_at),
+      service_type: (entry.service_type as "Bookkeeping" | "Virtual Assistant" | null) ?? null,
     },
   });
 
@@ -230,6 +254,15 @@ function EditTimeEntryModal({
             </div>
           </div>
 
+          <div>
+            <label className="label-text">Service Type</label>
+            <select {...register("service_type")} className="input-field">
+              <option value="">— Unassigned —</option>
+              <option value="Bookkeeping">Bookkeeping</option>
+              <option value="Virtual Assistant">Virtual Assistant</option>
+            </select>
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -274,7 +307,7 @@ export default function TimeTracking() {
   const [timerClientId, setTimerClientId] = useState("");
   const [timerTaskId, setTimerTaskId] = useState("");
   const [activeTab, setActiveTab] = useState<"timer" | "manual">("timer");
-  const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null } | null>(null);
+  const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null } | null>(null);
 
   // Ref used to pass client_id into the shared onSuccess handler without typed callback params
   const pendingClientIdRef = useRef<number | null>(null);
@@ -632,6 +665,15 @@ export default function TimeTracking() {
                   </div>
                 </div>
 
+                <div>
+                  <label className="label-text">Service Type</label>
+                  <select {...register("service_type")} className="input-field bg-slate-50">
+                    <option value="">— Unassigned —</option>
+                    <option value="Bookkeeping">Bookkeeping</option>
+                    <option value="Virtual Assistant">Virtual Assistant</option>
+                  </select>
+                </div>
+
                 <button
                   type="submit"
                   className="btn-primary w-full py-3 mt-2"
@@ -681,7 +723,7 @@ export default function TimeTracking() {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                             <Briefcase className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                             <span className="font-medium text-slate-900 text-sm truncate">
                               {entry.client_name ?? "Unknown Client"}
@@ -691,6 +733,7 @@ export default function TimeTracking() {
                                 timed
                               </span>
                             )}
+                            <ServiceTypeBadge value={entry.service_type} />
                           </div>
                           {entry.task_title ? (
                             <p className="text-xs text-slate-500 truncate">{entry.task_title}</p>
