@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Play, Pause, ChevronDown } from "lucide-react";
+import { Play, Pause, ChevronDown, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
 import { TaskCommentPanel } from "@/components/TaskCommentPanel";
