@@ -17,7 +17,59 @@ const router: IRouter = Router();
 
 router.get("/clients", requireAdmin, async (req, res) => {
   const clients = await db.select().from(clientsTable).orderBy(clientsTable.name);
-  const parsed = ListClientsResponse.parse(clients);
+
+  // Compute monthly fees from assigned services so the list stays in sync with the detail page
+  const clientIds = clients.map(c => c.id);
+  const assignedServices = clientIds.length > 0
+    ? await db
+        .select({
+          client_id: clientServicesTable.client_id,
+          service_type: servicesTable.service_type,
+          billing_type: servicesTable.billing_type,
+          price: servicesTable.price,
+          hourly_rate: servicesTable.hourly_rate,
+          budgeted_hours: servicesTable.budgeted_hours,
+          custom_price: clientServicesTable.custom_price,
+          custom_hourly_rate: clientServicesTable.custom_hourly_rate,
+          custom_budgeted_hours: clientServicesTable.custom_budgeted_hours,
+        })
+        .from(clientServicesTable)
+        .leftJoin(servicesTable, eq(clientServicesTable.service_id, servicesTable.id))
+        .where(inArray(clientServicesTable.client_id, clientIds))
+    : [];
+
+  // Build per-client monthly fee map using the same logic as the detail page
+  const feeByClient = new Map<number, { monthly_fee: number; bk_fee: number | null }>();
+  for (const svc of assignedServices) {
+    const clientId = svc.client_id;
+    const cur = feeByClient.get(clientId) ?? { monthly_fee: 0, bk_fee: null };
+
+    const effPrice = svc.custom_price ?? svc.price ?? 0;
+    const effRate = svc.custom_hourly_rate ?? svc.hourly_rate;
+    const effHours = svc.custom_budgeted_hours ?? svc.budgeted_hours;
+    const isFlat = svc.billing_type === "Flat Rate";
+    const isHourly = svc.billing_type === "Hourly";
+
+    const hourlyComputed = isHourly && effRate != null && effHours != null && effHours > 0
+      ? effRate * effHours
+      : 0;
+    const svcValue = isFlat ? effPrice : hourlyComputed > 0 ? hourlyComputed : effPrice;
+
+    cur.monthly_fee += svcValue;
+    if (svc.service_type === "Bookkeeping") {
+      cur.bk_fee = (cur.bk_fee ?? 0) + svcValue;
+    }
+    feeByClient.set(clientId, cur);
+  }
+
+  // Merge computed fees into client records
+  const enriched = clients.map(c => ({
+    ...c,
+    monthly_fee: feeByClient.get(c.id)?.monthly_fee ?? c.monthly_fee,
+    bk_fee: feeByClient.has(c.id) ? (feeByClient.get(c.id)!.bk_fee ?? null) : c.bk_fee,
+  }));
+
+  const parsed = ListClientsResponse.parse(enriched);
   res.json(parsed);
 });
 
