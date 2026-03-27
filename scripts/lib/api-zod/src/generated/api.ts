@@ -145,6 +145,19 @@ const normalizeTaskStatus = (v: unknown) => {
   return map[v.toLowerCase()] ?? v;
 };
 
+const RECURRENCE_VALUES = [
+  "daily", "weekdays",
+  "weekly", "weekly_sun", "weekly_mon", "weekly_tue", "weekly_wed", "weekly_thu", "weekly_fri", "weekly_sat",
+  "monthly",
+  "monthly_1", "monthly_2", "monthly_3", "monthly_4", "monthly_5", "monthly_6", "monthly_7",
+  "monthly_8", "monthly_9", "monthly_10", "monthly_11", "monthly_12", "monthly_13", "monthly_14",
+  "monthly_15", "monthly_16", "monthly_17", "monthly_18", "monthly_19", "monthly_20", "monthly_21",
+  "monthly_22", "monthly_23", "monthly_24", "monthly_25", "monthly_26", "monthly_27", "monthly_28",
+  "monthly_last",
+  "annually",
+] as const;
+const recurrenceZod = zod.enum(RECURRENCE_VALUES).nullish();
+
 export const ListTasksResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
@@ -154,9 +167,7 @@ export const ListTasksResponseItem = zod.object({
   status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
-  recurrence: zod
-    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
-    .nullish(),
+  recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
@@ -172,9 +183,7 @@ export const CreateTaskBody = zod.object({
   assigned_to: zod.string().nullish(),
   due_date: zod.string().nullish(),
   status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])).optional(),
-  recurrence: zod
-    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
-    .nullish(),
+  recurrence: recurrenceZod,
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
 
@@ -190,9 +199,7 @@ export const SpawnRecurringTasksResponseItem = zod.object({
   status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
-  recurrence: zod
-    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
-    .nullish(),
+  recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
 });
 export const SpawnRecurringTasksResponse = zod.array(
@@ -264,9 +271,7 @@ export const UpdateTaskBody = zod.object({
   assigned_to: zod.string().nullish(),
   status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]).optional(),
   due_date: zod.string().nullish(),
-  recurrence: zod
-    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
-    .nullish(),
+  recurrence: recurrenceZod,
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
 
@@ -279,9 +284,7 @@ export const UpdateTaskResponse = zod.object({
   status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
-  recurrence: zod
-    .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
-    .nullish(),
+  recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });

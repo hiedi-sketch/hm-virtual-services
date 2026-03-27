@@ -30,8 +30,8 @@ function isDue(recurrence: string, lastGeneratedAt: string | null): boolean {
 
   if (recurrence === "daily") return diffDays >= 1;
   if (recurrence === "weekdays") return diffDays >= 1;
-  if (recurrence === "weekly") return diffDays >= 7;
-  if (recurrence === "monthly") return diffDays >= 28;
+  if (recurrence === "weekly" || recurrence.startsWith("weekly_")) return diffDays >= 7;
+  if (recurrence === "monthly" || recurrence.startsWith("monthly_")) return diffDays >= 28;
   if (recurrence === "annually") return diffDays >= 365;
   return false;
 }
@@ -43,6 +43,33 @@ function nextDueDate(recurrence: string): string {
 
   const toStr = (date: Date) => date.toISOString().split("T")[0]!;
   const MS = 86_400_000;
+
+  // Weekly with specific day of week
+  if (recurrence.startsWith("weekly_")) {
+    const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+    const target = dayMap[recurrence.replace("weekly_", "")];
+    if (target !== undefined) {
+      let next = new Date(Date.UTC(y, m - 1, d + 1));
+      while (next.getUTCDay() !== target) next = new Date(next.getTime() + MS);
+      return toStr(next);
+    }
+  }
+
+  // Monthly with specific day of month
+  if (recurrence.startsWith("monthly_")) {
+    const part = recurrence.replace("monthly_", "");
+    if (part === "last") {
+      // Last day of next month (UTC)
+      return toStr(new Date(Date.UTC(y, m + 1, 0)));
+    }
+    const dom = parseInt(part);
+    // Next occurrence: this month if not yet passed, otherwise next month
+    const thisMonthTarget = new Date(Date.UTC(y, m - 1, dom));
+    if (thisMonthTarget.getTime() > parseDateUTC(todayStr)) {
+      return toStr(thisMonthTarget);
+    }
+    return toStr(new Date(Date.UTC(y, m, dom)));
+  }
 
   if (recurrence === "daily") {
     return toStr(new Date(Date.UTC(y, m - 1, d + 1)));
@@ -58,7 +85,7 @@ function nextDueDate(recurrence: string): string {
     return toStr(new Date(Date.UTC(y, m - 1, d + 7)));
   }
   if (recurrence === "monthly") {
-    return toStr(new Date(Date.UTC(y, m, d)));   // m (1-indexed) = 0-indexed next month
+    return toStr(new Date(Date.UTC(y, m, d)));
   }
   if (recurrence === "annually") {
     return toStr(new Date(Date.UTC(y + 1, m - 1, d)));

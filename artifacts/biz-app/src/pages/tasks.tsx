@@ -63,18 +63,55 @@ function isWeekday(d: Date): boolean {
 }
 
 function nextDueDate(recurrence: string): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  if (recurrence.startsWith("weekly_")) {
+    const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+    const target = dayMap[recurrence.replace("weekly_", "")];
+    if (target !== undefined) {
+      const d = new Date(); d.setDate(d.getDate() + 1);
+      while (d.getDay() !== target) d.setDate(d.getDate() + 1);
+      return fmt(d);
+    }
+  }
+  if (recurrence.startsWith("monthly_")) {
+    const part = recurrence.replace("monthly_", "");
+    const today = new Date();
+    if (part === "last") {
+      return fmt(new Date(today.getFullYear(), today.getMonth() + 2, 0));
+    }
+    const dom = parseInt(part);
+    const thisMonth = new Date(today.getFullYear(), today.getMonth(), dom);
+    const target = thisMonth > today ? thisMonth : new Date(today.getFullYear(), today.getMonth() + 1, dom);
+    return fmt(target);
+  }
   const d = new Date();
-  if (recurrence === "daily") { d.setDate(d.getDate() + 1); }
+  if (recurrence === "daily") d.setDate(d.getDate() + 1);
   else if (recurrence === "weekdays") { d.setDate(d.getDate() + 1); while (!isWeekday(d)) d.setDate(d.getDate() + 1); }
-  else if (recurrence === "weekly") { d.setDate(d.getDate() + 7); }
-  else if (recurrence === "monthly") { d.setMonth(d.getMonth() + 1); }
-  else if (recurrence === "annually") { d.setFullYear(d.getFullYear() + 1); }
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
+  else if (recurrence === "monthly") d.setMonth(d.getMonth() + 1);
+  else if (recurrence === "annually") d.setFullYear(d.getFullYear() + 1);
+  return fmt(d);
+}
+
+function computeRecurrence(base: string, weekDay: string, monthDay: string): string | null {
+  if (!base) return null;
+  if (base === "weekly") return `weekly_${weekDay}`;
+  if (base === "monthly") return `monthly_${monthDay}`;
+  return base;
+}
+
+function parseRecurrence(rec: string | null | undefined): { base: string; weekDay: string; monthDay: string } {
+  if (!rec) return { base: "", weekDay: "mon", monthDay: "1" };
+  if (rec.startsWith("weekly_")) return { base: "weekly", weekDay: rec.replace("weekly_", ""), monthDay: "1" };
+  if (rec.startsWith("monthly_")) return { base: "monthly", weekDay: "mon", monthDay: rec.replace("monthly_", "") };
+  return { base: rec, weekDay: "mon", monthDay: "1" };
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const RECURRENCE_OPTIONS = [
+const RECURRENCE_BASE_OPTIONS = [
   { value: "", label: "No recurrence" },
   { value: "daily", label: "Daily" },
   { value: "weekdays", label: "Weekdays (Mon–Fri)" },
@@ -83,13 +120,24 @@ const RECURRENCE_OPTIONS = [
   { value: "annually", label: "Annually" },
 ];
 
-const RECURRENCE_BADGE: Record<string, string> = {
-  daily: "bg-violet-100 text-violet-700",
-  weekdays: "bg-orange-100 text-orange-700",
-  weekly: "bg-blue-100 text-blue-700",
-  monthly: "bg-teal-100 text-teal-700",
-  annually: "bg-rose-100 text-rose-700",
-};
+const WEEKDAY_OPTIONS = [
+  { value: "sun", label: "Sunday" },
+  { value: "mon", label: "Monday" },
+  { value: "tue", label: "Tuesday" },
+  { value: "wed", label: "Wednesday" },
+  { value: "thu", label: "Thursday" },
+  { value: "fri", label: "Friday" },
+  { value: "sat", label: "Saturday" },
+];
+
+const MONTH_DAY_OPTIONS = [
+  ...Array.from({ length: 28 }, (_, i) => {
+    const n = i + 1;
+    const s = n === 1 ? "st" : n === 2 ? "nd" : n === 3 ? "rd" : "th";
+    return { value: String(n), label: `${n}${s} of the month` };
+  }),
+  { value: "last", label: "Last day of the month" },
+];
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "due_asc", label: "Due date (earliest first)" },
@@ -125,10 +173,6 @@ const formSchema = z.object({
   assigned_to: z.string().optional(),
   due_date: z.string().optional(),
   status: z.string().optional().default("Pending"),
-  recurrence: z.preprocess(
-    val => (val === "" ? null : val),
-    z.enum(["daily", "weekdays", "weekly", "monthly", "annually"]).nullable().optional()
-  ),
   service_type: z.preprocess(
     val => (val === "" ? null : val),
     z.enum(["Bookkeeping", "Virtual Assistant"]).nullable().optional()
@@ -164,6 +208,16 @@ export default function Tasks() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
+  // ── Recurrence sub-selectors ──────────────────────────────────────────────
+  const [createRecBase, setCreateRecBase] = useState("");
+  const [createRecWeekDay, setCreateRecWeekDay] = useState("mon");
+  const [createRecMonthDay, setCreateRecMonthDay] = useState("1");
+  const [editRecBase, setEditRecBase] = useState("");
+  const [editRecWeekDay, setEditRecWeekDay] = useState("mon");
+  const [editRecMonthDay, setEditRecMonthDay] = useState("1");
+
+  const resetCreateRec = () => { setCreateRecBase(""); setCreateRecWeekDay("mon"); setCreateRecMonthDay("1"); };
+
   const invalidateTasks = () => queryClient.invalidateQueries({ queryKey: getListTasksQueryKey() });
 
   // ── Spawn recurring (on load) ─────────────────────────────────────────────
@@ -182,7 +236,7 @@ export default function Tasks() {
   // ── Mutations ─────────────────────────────────────────────────────────────
   const createMutation = useCreateTask({
     mutation: {
-      onSuccess: () => { invalidateTasks(); setIsModalOpen(false); reset(); toast({ title: "Task created" }); },
+      onSuccess: () => { invalidateTasks(); setIsModalOpen(false); reset(); resetCreateRec(); toast({ title: "Task created" }); },
     },
   });
   const spawnNextMutation = useCreateTask({
@@ -197,12 +251,17 @@ export default function Tasks() {
   const { register: registerEdit, handleSubmit: handleEditSubmit, reset: resetEdit, formState: { errors: editErrors } } = useForm<EditValues>({ resolver: zodResolver(editSchema) });
 
   const onSubmit = (data: FormValues) => {
+    const recurrence = computeRecurrence(createRecBase, createRecWeekDay, createRecMonthDay);
     const finalData = !isAdmin ? { ...data, assigned_to: user?.name ?? undefined } : data;
-    createMutation.mutate({ data: { ...finalData, recurrence: finalData.recurrence || null } });
+    createMutation.mutate({ data: { ...finalData, recurrence: recurrence as any } });
   };
 
   const openEdit = (task: Task) => {
     setEditingTask(task);
+    const parsed = parseRecurrence(task.recurrence);
+    setEditRecBase(parsed.base);
+    setEditRecWeekDay(parsed.weekDay);
+    setEditRecMonthDay(parsed.monthDay);
     resetEdit({
       title: task.title,
       description: task.description ?? undefined,
@@ -210,31 +269,14 @@ export default function Tasks() {
       assigned_to: task.assigned_to ?? undefined,
       due_date: task.due_date ?? undefined,
       status: task.status,
-      recurrence: (task.recurrence as EditValues["recurrence"]) ?? null,
       service_type: (task.service_type as EditValues["service_type"]) ?? null,
     });
   };
 
   const onEditSubmit = (data: EditValues) => {
     if (!editingTask) return;
-    updateMutation.mutate({ id: editingTask.id, data: { ...data, status: data.status || "Pending", recurrence: data.recurrence || null } });
-  };
-
-  const toggleStatus = (task: Task) => {
-    const completing = task.status !== "Completed";
-    updateMutation.mutate({ id: task.id, data: { status: completing ? "Completed" : "Pending" } });
-    if (completing && task.recurrence) {
-      spawnNextMutation.mutate({
-        data: {
-          title: task.title,
-          description: task.description ?? undefined,
-          client_id: task.client_id,
-          assigned_to: task.assigned_to ?? undefined,
-          recurrence: task.recurrence,
-          due_date: nextDueDate(task.recurrence),
-        },
-      });
-    }
+    const recurrence = computeRecurrence(editRecBase, editRecWeekDay, editRecMonthDay);
+    updateMutation.mutate({ id: editingTask.id, data: { ...data, status: data.status || "Pending", recurrence: recurrence || null } });
   };
 
   // ── Computed counts (from ALL tasks, before view filter) ──────────────────
@@ -306,8 +348,10 @@ export default function Tasks() {
             description: fullTask.description ?? undefined,
             client_id: fullTask.client_id,
             assigned_to: fullTask.assigned_to ?? undefined,
-            recurrence: fullTask.recurrence,
+            recurrence: fullTask.recurrence as any,
             due_date: nextDueDate(fullTask.recurrence),
+            service_type: (fullTask.service_type as any) ?? undefined,
+            status: "Confirmed",
           },
         });
       }
@@ -430,7 +474,7 @@ export default function Tasks() {
       />
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}
-      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); }} title="Add Task">
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); reset(); resetCreateRec(); }} title="Add Task">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <label className="label-text">Task Title</label>
@@ -483,8 +527,8 @@ export default function Tasks() {
                 <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
                 Recurrence
               </label>
-              <select {...register("recurrence")} className="input-field">
-                {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              <select value={createRecBase} onChange={e => setCreateRecBase(e.target.value)} className="input-field">
+                {RECURRENCE_BASE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div>
@@ -496,8 +540,24 @@ export default function Tasks() {
               </select>
             </div>
           </div>
+          {createRecBase === "weekly" && (
+            <div>
+              <label className="label-text">Day of Week</label>
+              <select value={createRecWeekDay} onChange={e => setCreateRecWeekDay(e.target.value)} className="input-field">
+                {WEEKDAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          )}
+          {createRecBase === "monthly" && (
+            <div>
+              <label className="label-text">Day of Month</label>
+              <select value={createRecMonthDay} onChange={e => setCreateRecMonthDay(e.target.value)} className="input-field">
+                {MONTH_DAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          )}
           <div className="pt-4 flex justify-end gap-3">
-            <button type="button" onClick={() => { setIsModalOpen(false); reset(); }} className="btn-secondary">Cancel</button>
+            <button type="button" onClick={() => { setIsModalOpen(false); reset(); resetCreateRec(); }} className="btn-secondary">Cancel</button>
             <button type="submit" disabled={isSubmitting || createMutation.isPending} className="btn-primary">
               {createMutation.isPending ? "Adding..." : "Add Task"}
             </button>
@@ -553,8 +613,8 @@ export default function Tasks() {
                   <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
                   Recurrence
                 </label>
-                <select {...registerEdit("recurrence")} className="input-field">
-                  {RECURRENCE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                <select value={editRecBase} onChange={e => setEditRecBase(e.target.value)} className="input-field">
+                  {RECURRENCE_BASE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
               <div>
@@ -566,6 +626,22 @@ export default function Tasks() {
                 </select>
               </div>
             </div>
+            {editRecBase === "weekly" && (
+              <div>
+                <label className="label-text">Day of Week</label>
+                <select value={editRecWeekDay} onChange={e => setEditRecWeekDay(e.target.value)} className="input-field">
+                  {WEEKDAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
+            {editRecBase === "monthly" && (
+              <div>
+                <label className="label-text">Day of Month</label>
+                <select value={editRecMonthDay} onChange={e => setEditRecMonthDay(e.target.value)} className="input-field">
+                  {MONTH_DAY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            )}
             <div className="pt-4 flex justify-end gap-3">
               <button type="button" onClick={() => setEditingTask(null)} className="btn-secondary">Cancel</button>
               <button type="submit" disabled={updateMutation.isPending} className="btn-primary">

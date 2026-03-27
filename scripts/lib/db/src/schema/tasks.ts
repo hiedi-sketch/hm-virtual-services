@@ -10,7 +10,7 @@ export const tasksTable = pgTable("tasks", {
   assigned_to: text("assigned_to"),
   status: text("status", { enum: ["Pending", "Confirmed", "In Progress", "Completed"] }).notNull().default("Pending"),
   due_date: text("due_date"),
-  recurrence: text("recurrence", { enum: ["daily", "weekdays", "weekly", "monthly", "annually"] }),
+  recurrence: text("recurrence"),
   last_generated_at: text("last_generated_at"),
   service_type: text("service_type", { enum: ["Bookkeeping", "Virtual Assistant"] }),
 });
