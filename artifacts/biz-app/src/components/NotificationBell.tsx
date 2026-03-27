@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { Bell, CheckCheck, AlertCircle, FileText, Sparkles, ChevronRight, CheckCircle2 } from "lucide-react";
+import { useLocation } from "wouter";
+import {
+  Bell, CheckCheck, AlertCircle, FileText, Sparkles, ChevronRight,
+  CheckCircle2, MessageSquare, ClipboardList, Send,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type AppNotification = {
@@ -15,12 +18,41 @@ type AppNotification = {
   created_at: string;
 };
 
-const TYPE_CONFIG: Record<string, { icon: typeof AlertCircle; color: string; bg: string }> = {
-  overdue_task: { icon: AlertCircle, color: "text-red-600", bg: "bg-red-50" },
-  service_request: { icon: Sparkles, color: "text-violet-600", bg: "bg-violet-50" },
-  invoice_created: { icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
-  invoice_updated: { icon: FileText, color: "text-emerald-600", bg: "bg-emerald-50" },
+type TypeConfig = {
+  icon: typeof AlertCircle;
+  color: string;
+  bg: string;
 };
+
+const TYPE_CONFIG: Record<string, TypeConfig> = {
+  overdue_task:    { icon: AlertCircle,    color: "text-red-600",     bg: "bg-red-50" },
+  task_assigned:   { icon: ClipboardList,  color: "text-[#266b75]",   bg: "bg-[#266b75]/10" },
+  task_comment:    { icon: MessageSquare,  color: "text-amber-600",   bg: "bg-amber-50" },
+  new_message:     { icon: MessageSquare,  color: "text-violet-600",  bg: "bg-violet-50" },
+  invoice_created: { icon: FileText,       color: "text-blue-600",    bg: "bg-blue-50" },
+  invoice_updated: { icon: FileText,       color: "text-emerald-600", bg: "bg-emerald-50" },
+  invoice_sent:    { icon: Send,           color: "text-[#266b75]",   bg: "bg-[#266b75]/10" },
+  invoice_reminder:{ icon: AlertCircle,    color: "text-amber-600",   bg: "bg-amber-50" },
+  service_request: { icon: Sparkles,       color: "text-violet-600",  bg: "bg-violet-50" },
+};
+
+const DEFAULT_CONFIG: TypeConfig = {
+  icon: Bell, color: "text-slate-600", bg: "bg-slate-100",
+};
+
+function getNavLink(n: AppNotification, role?: string): string | null {
+  const isClient = role === "client";
+  switch (n.entity_type) {
+    case "task":
+      return isClient ? "/client-portal" : "/tasks";
+    case "invoice":
+      return isClient ? "/client-portal" : "/invoices";
+    case "message":
+      return isClient ? "/client-portal" : "/messages";
+    default:
+      return null;
+  }
+}
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -41,21 +73,21 @@ function useNotifications() {
       if (!res.ok) return { notifications: [], unreadCount: 0 };
       return res.json();
     },
-    refetchInterval: 60_000, // poll every 60s
-    staleTime: 30_000,
+    refetchInterval: 30_000,
+    staleTime: 15_000,
   });
 }
 
-export function NotificationBell() {
+export function NotificationBell({ userRole }: { userRole?: string }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { data } = useNotifications();
 
   const unread = data?.unreadCount ?? 0;
   const notifications = data?.notifications ?? [];
 
-  // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -64,7 +96,6 @@ export function NotificationBell() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Trigger scan when opening the panel
   const scanMutation = useMutation({
     mutationFn: () =>
       fetch("/api/app-notifications/scan", { method: "POST", credentials: "include" }).then(r => r.json()),
@@ -84,13 +115,22 @@ export function NotificationBell() {
   });
 
   const handleOpen = () => {
-    setOpen(v => !v);
-    if (!open) scanMutation.mutate();
+    const next = !open;
+    setOpen(next);
+    if (next) scanMutation.mutate();
+  };
+
+  const handleNotificationClick = (n: AppNotification) => {
+    if (!n.is_read) readOneMutation.mutate(n.id);
+    const link = getNavLink(n, userRole);
+    if (link) {
+      navigate(link);
+      setOpen(false);
+    }
   };
 
   return (
     <div ref={ref} className="relative">
-      {/* Bell button */}
       <button
         onClick={handleOpen}
         className="relative p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
@@ -98,13 +138,12 @@ export function NotificationBell() {
       >
         <Bell className="w-4 h-4" />
         {unread > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center bg-red-500 text-white text-[9px] font-bold rounded-full leading-none">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center text-white text-[9px] font-bold rounded-full leading-none" style={{ background: "#266b75" }}>
             {unread > 99 ? "99+" : unread}
           </span>
         )}
       </button>
 
-      {/* Dropdown panel */}
       {open && (
         <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-xl border border-slate-200 z-50 overflow-hidden">
           {/* Header */}
@@ -113,14 +152,16 @@ export function NotificationBell() {
               <Bell className="w-4 h-4 text-slate-500" />
               <span className="font-semibold text-slate-900 text-sm">Notifications</span>
               {unread > 0 && (
-                <span className="text-xs font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded-full">{unread} new</span>
+                <span className="text-xs font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: "#266b75" }}>
+                  {unread} new
+                </span>
               )}
             </div>
             {unread > 0 && (
               <button
                 onClick={() => readAllMutation.mutate()}
                 disabled={readAllMutation.isPending}
-                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 disabled:opacity-60"
+                className="flex items-center gap-1 text-xs font-medium text-[#266b75] hover:text-[#266b75]/80 disabled:opacity-60"
                 title="Mark all as read"
               >
                 <CheckCheck className="w-3.5 h-3.5" />
@@ -140,16 +181,21 @@ export function NotificationBell() {
             ) : (
               <ul className="divide-y divide-slate-50">
                 {notifications.map(n => {
-                  const cfg = TYPE_CONFIG[n.type] ?? TYPE_CONFIG["invoice_created"];
+                  const cfg = TYPE_CONFIG[n.type] ?? DEFAULT_CONFIG;
                   const Icon = cfg.icon;
+                  const hasLink = !!getNavLink(n, userRole);
                   return (
                     <li
                       key={n.id}
-                      onClick={() => { if (!n.is_read) readOneMutation.mutate(n.id); }}
+                      onClick={() => handleNotificationClick(n)}
                       className={cn(
-                        "flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors",
-                        n.is_read ? "hover:bg-slate-50" : "bg-blue-50/40 hover:bg-blue-50/70"
+                        "flex items-start gap-3 px-4 py-3 transition-colors",
+                        hasLink ? "cursor-pointer" : "cursor-default",
+                        n.is_read
+                          ? "hover:bg-slate-50"
+                          : "hover:bg-[#7dbdc6]/20"
                       )}
+                      style={!n.is_read ? { background: "rgba(125,189,198,0.12)" } : undefined}
                     >
                       <div className={cn("p-2 rounded-xl shrink-0 mt-0.5", cfg.bg)}>
                         <Icon className={cn("w-3.5 h-3.5", cfg.color)} />
@@ -161,9 +207,14 @@ export function NotificationBell() {
                         <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{n.message}</p>
                         <p className="text-[10px] text-slate-400 mt-1">{timeAgo(n.created_at)}</p>
                       </div>
-                      {!n.is_read && (
-                        <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0 mt-1.5" />
-                      )}
+                      <div className="shrink-0 flex items-center gap-1.5 mt-0.5">
+                        {!n.is_read && (
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: "#266b75" }} />
+                        )}
+                        {hasLink && (
+                          <ChevronRight className="w-3 h-3 text-slate-300" />
+                        )}
+                      </div>
                     </li>
                   );
                 })}
@@ -173,13 +224,12 @@ export function NotificationBell() {
 
           {/* Footer */}
           <div className="border-t border-slate-100 px-4 py-2.5 bg-slate-50/50">
-            <Link
-              href="/notifications"
-              onClick={() => setOpen(false)}
-              className="flex items-center justify-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+            <button
+              onClick={() => { navigate("/notifications"); setOpen(false); }}
+              className="flex items-center justify-center gap-1 text-xs font-medium w-full text-[#266b75] hover:text-[#266b75]/80"
             >
               View all notifications <ChevronRight className="w-3 h-3" />
-            </Link>
+            </button>
           </div>
         </div>
       )}

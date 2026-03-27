@@ -1,0 +1,110 @@
+1. Notification Types (Initial Scope)
+
+Create notifications for:
+
+New message received
+New task assigned
+New comment on task
+Invoice sent
+Invoice reminder (due / overdue)
+2. Notification Data Model
+
+Create a notifications table:
+
+id
+userId (or clientId for portal users)
+type (message, task, invoice, etc.)
+title (short message)
+description (optional detail)
+relatedId (taskId, messageId, invoiceId, etc.)
+isRead (boolean)
+createdAt
+3. Trigger Notifications (CRITICAL)
+
+Automatically create a notification when:
+
+Messages
+When a new message is sent:
+Notify the recipient user/client
+Tasks
+When a task is assigned to a user/client
+When a comment is added to a task
+Invoices
+When invoice is sent
+When reminder is triggered
+4. In-App Notifications (Dashboard + Portal)
+Notification Bell Icon (Top Navbar)
+Add bell icon in top right
+Show unread count badge
+Dropdown Behavior
+Click opens dropdown list of notifications
+Show:
+Title
+Time (e.g., “2 hours ago”)
+Read/unread styling
+Actions
+Click notification:
+Navigate to related item (task, message, invoice)
+Mark as read
+Add:
+“Mark all as read” option
+5. Notifications Page (Optional but Recommended)
+
+Create /notifications page:
+
+Full list of notifications
+Filter:
+All / Unread
+Ability to mark read/unread
+6. Client Portal Notifications
+Same notification system should work for:
+Admin users
+Clients (portal)
+Client Portal Should Show:
+New messages
+Task updates
+Invoice notifications
+7. Email Notifications (IMPORTANT)
+
+Send email notifications for key events:
+
+Trigger Emails For:
+New message
+Task assigned
+Invoice sent
+Invoice reminders
+Behavior:
+Use existing email system
+Respect branding:
+HM Virtual Services Business Suite
+Keep emails simple:
+“You have a new message”
+“A task has been assigned to you”
+8. Notification Preferences (Optional Future-Proofing)
+
+Structure system so later we can add:
+
+Toggle email notifications ON/OFF per user
+Choose which notifications to receive
+9. Real-Time Updates (Optional Enhancement)
+
+If possible:
+
+Use WebSockets or polling
+Auto-refresh notifications without page reload
+10. UI/UX (Match Branding)
+Clean, minimal dropdown (Notion-style)
+Colors:
+Unread = subtle highlight (#7dbdc6 background)
+Keep layout simple and readable
+11. API Routes
+GET /notifications
+POST /notifications (internal use)
+PUT /notifications/:id/read
+PUT /notifications/read-all
+12. Deliverables
+Notification database + triggers
+Bell icon with unread count
+Dropdown notification UI
+Client portal notifications
+Email notifications for key events

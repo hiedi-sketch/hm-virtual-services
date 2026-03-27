@@ -4,6 +4,7 @@ import { messagesTable, clientsTable } from "@workspace/db";
 import { eq, and, or, desc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { z } from "zod";
+import { notifyAdmins, notifyClientUser } from "../lib/notify";
 
 const router: IRouter = Router();
 
@@ -91,6 +92,27 @@ router.post("/messages", requireAuth, async (req, res) => {
     .returning();
 
   res.status(201).json(msg);
+
+  // Fire-and-forget: create in-app notification
+  if (msg) {
+    (async () => {
+      const snippet = msg.body.length > 80 ? msg.body.slice(0, 80) + "…" : msg.body;
+      const notifOpts = {
+        type: "new_message" as const,
+        title: `New message from ${msg.sender_name}`,
+        message: snippet,
+        entityType: "message" as const,
+        entityId: msg.id,
+      };
+      if (user.role === "client") {
+        // Client sent → notify all admins
+        await notifyAdmins(notifOpts);
+      } else {
+        // Admin/team sent → notify the client portal user
+        await notifyClientUser(clientId, notifOpts);
+      }
+    })();
+  }
 });
 
 // PATCH /api/messages/:id/read — mark message as read

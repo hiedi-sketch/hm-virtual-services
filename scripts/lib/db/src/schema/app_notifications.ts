@@ -3,9 +3,7 @@ import { pgTable, serial, integer, text, boolean, timestamp } from "drizzle-orm/
 export const appNotificationsTable = pgTable("app_notifications", {
   id: serial("id").primaryKey(),
   user_id: integer("user_id").notNull(),
-  type: text("type", {
-    enum: ["overdue_task", "service_request", "invoice_created", "invoice_updated"],
-  }).notNull(),
+  type: text("type").notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),
   entity_type: text("entity_type"), // 'task' | 'invoice' | 'service_request'

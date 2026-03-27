@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
+import { notifyAdmins, notifyClientUser } from "../lib/notify";
 
 const router: IRouter = Router();
 
@@ -257,7 +258,6 @@ router.post("/invoices", requireAdmin, async (req, res) => {
   logAudit("invoice", invoice.id, "created", `Invoice #${invoice.id} created ($${Number(invoice.amount).toFixed(2)})`, { id: actor?.id, name: actor?.name });
 
   // Notify all admins about the new invoice
-  const { notifyAdmins } = await import("../lib/notify");
   (async () => {
     try {
       const [client] = await db.select({ name: clientsTable.name }).from(clientsTable).where(eq(clientsTable.id, body.client_id));
@@ -291,7 +291,6 @@ router.patch("/invoices/:id", requireAdmin, async (req, res) => {
 
   // Notify admins on meaningful status changes
   if (body.status) {
-    const { notifyAdmins } = await import("../lib/notify");
     (async () => {
       try {
         const [client] = await db
@@ -486,6 +485,28 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
   res.json({ ...updated, emailSent: mailConfigured });
   const actor = req.session.user;
   logAudit("invoice", id, "sent", `Invoice #${id} sent to ${row.client_email}`, { id: actor?.id, name: actor?.name });
+
+  // Fire-and-forget: in-app notification
+  (async () => {
+    try {
+      const amountStr = fmtAmount(row.amount);
+      const notifOpts = {
+        type: "invoice_sent" as const,
+        title: `Invoice #${id} sent — ${amountStr}`,
+        message: `Invoice sent to ${row.client_name ?? row.client_email}. Due: ${fmtDate(row.due_date)}.`,
+        entityType: "invoice" as const,
+        entityId: id,
+      };
+      await notifyAdmins(notifOpts);
+      if (row.client_id) {
+        await notifyClientUser(row.client_id, {
+          ...notifOpts,
+          title: `Invoice #${id} — ${amountStr} due`,
+          message: `You have a new invoice for ${amountStr} due on ${fmtDate(row.due_date)}.`,
+        });
+      }
+    } catch { /* ignore */ }
+  })();
 });
 
 export default router;

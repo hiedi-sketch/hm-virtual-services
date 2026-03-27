@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasksTable, clientsTable, subtasksTable, taskCommentsTable } from "@workspace/db";
+import { tasksTable, clientsTable, subtasksTable, taskCommentsTable, usersTable } from "@workspace/db";
 import { eq, isNotNull, and, desc } from "drizzle-orm";
+import { notifyAdmins, notifyClientUser, createNotification } from "../lib/notify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { spawnRecurringTasks } from "../lib/spawn-recurring";
@@ -124,6 +125,57 @@ router.post("/tasks", requireAuth, async (req, res) => {
       } catch (err) {
         console.error("[tasks] Failed to send new-task email:", err);
       }
+    })();
+  }
+
+  // Fire-and-forget: in-app notifications on task creation
+  if (task) {
+    (async () => {
+      try {
+        const dueStr = task.due_date
+          ? ` Due: ${new Date(task.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}.`
+          : "";
+
+        if (user.role === "client" && task.client_id) {
+          // Client submitted a task request → notify all admins
+          await notifyAdmins({
+            type: "task_assigned",
+            title: `New task request: ${task.title}`,
+            message: `Submitted by client.${dueStr}`,
+            entityType: "task",
+            entityId: task.id,
+          });
+        } else {
+          // Admin/team created task: notify the assigned team member (if any)
+          if (task.assigned_to) {
+            const [assignedUser] = await db
+              .select({ id: usersTable.id })
+              .from(usersTable)
+              .where(eq(usersTable.name, task.assigned_to))
+              .limit(1);
+            if (assignedUser) {
+              await createNotification({
+                userId: assignedUser.id,
+                type: "task_assigned",
+                title: `Task assigned to you: ${task.title}`,
+                message: `Assigned by ${user.name}.${dueStr}`,
+                entityType: "task",
+                entityId: task.id,
+              });
+            }
+          }
+          // Also notify the client's portal user
+          if (task.client_id) {
+            await notifyClientUser(task.client_id, {
+              type: "task_assigned",
+              title: `New task: ${task.title}`,
+              message: `A new task has been added to your account.${dueStr}`,
+              entityType: "task",
+              entityId: task.id,
+            });
+          }
+        }
+      } catch { /* ignore */ }
     })();
   }
 });
@@ -290,6 +342,43 @@ router.post("/tasks/:taskId/comments", requireAuth, async (req, res) => {
     .returning();
 
   res.status(201).json(comment);
+
+  // Fire-and-forget: in-app notification for new comment
+  if (comment) {
+    (async () => {
+      try {
+        const [task] = await db
+          .select({ title: tasksTable.title, client_id: tasksTable.client_id, assigned_to: tasksTable.assigned_to })
+          .from(tasksTable)
+          .where(eq(tasksTable.id, taskId));
+        if (!task) return;
+
+        const snippet = body.data.comment.length > 80 ? body.data.comment.slice(0, 80) + "…" : body.data.comment;
+
+        if (user.role === "client") {
+          // Client commented → notify admins
+          await notifyAdmins({
+            type: "task_comment",
+            title: `New comment on: ${task.title}`,
+            message: `${user.name}: "${snippet}"`,
+            entityType: "task",
+            entityId: taskId,
+          });
+        } else {
+          // Admin/team commented → notify the client portal user
+          if (task.client_id) {
+            await notifyClientUser(task.client_id, {
+              type: "task_comment",
+              title: `New comment on your task: ${task.title}`,
+              message: `${user.name}: "${snippet}"`,
+              entityType: "task",
+              entityId: taskId,
+            });
+          }
+        }
+      } catch { /* ignore */ }
+    })();
+  }
 });
 
 export default router;

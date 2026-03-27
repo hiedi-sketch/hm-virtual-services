@@ -2,7 +2,16 @@ import { db } from "@workspace/db";
 import { appNotificationsTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
-type NotifyType = "overdue_task" | "service_request" | "invoice_created" | "invoice_updated";
+export type NotifyType =
+  | "overdue_task"
+  | "service_request"
+  | "invoice_created"
+  | "invoice_updated"
+  | "invoice_sent"
+  | "invoice_reminder"
+  | "task_assigned"
+  | "task_comment"
+  | "new_message";
 
 interface CreateNotificationOpts {
   userId: number;
@@ -53,5 +62,19 @@ export async function notifyAdmins(opts: Omit<CreateNotificationOpts, "userId">)
       .from(usersTable)
       .where(eq(usersTable.role, "admin"));
     await Promise.all(admins.map(a => createNotification({ ...opts, userId: a.id })));
+  } catch { /* ignore */ }
+}
+
+/** Notify the portal user(s) linked to a given clientId */
+export async function notifyClientUser(
+  clientId: number,
+  opts: Omit<CreateNotificationOpts, "userId">
+): Promise<void> {
+  try {
+    const clientUsers = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(and(eq(usersTable.role, "client"), eq(usersTable.client_id, clientId)));
+    await Promise.all(clientUsers.map(u => createNotification({ ...opts, userId: u.id })));
   } catch { /* ignore */ }
 }
