@@ -62,12 +62,14 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 - **Recurring Invoices** — Recurring schedules (weekly/monthly/custom) auto-generate invoices daily via cron; `auto_send` flag emails invoice to client when generated; per-schedule active/auto_send toggles; manual "Generate" button per schedule
 - **Payment Reminders** — Automated reminders at: due date, 3 days overdue, 5 days overdue, 10 days overdue; deduped in `invoice_reminders` DB table; manual send via bell icon → Reminder Modal; Stripe pay-link embedded in reminder emails
 - **Team** (`/team`) — User management (create/edit/delete users, assign roles & client links); admin only
-- **Client Portal** — Dedicated portal for client-role users: open tasks, hours used this month, unpaid balance, invoice list
+- **Client Portal** — Dedicated portal for client-role users: open tasks, hours used this month (reset-date-aware for VA), unpaid balance, invoice list; shows VA hours reset countdown
+- **Monthly VA Hours Reset** — Per-client-service `monthly_hours_reset_day` (1–31) field on VA services; `computeResetWindow()` helper computes last/next reset date; services-hours endpoint filters VA time entries from last reset forward; admin sees "Resets in X days" on VA service cards and client detail; dashboard cards show VA reset countdown; client portal displays reset-window-aware hours + countdown
 
 ## Data Models
 
 - **Clients**: id, name, email, monthly_hour_budget, monthly_fee, service_type (bookkeeping/va/hybrid)
 - **Services**: id, name, description, service_type ("Bookkeeping"|"Virtual Assistant"), price, billing_type ("Flat Rate"|"Hourly"), hourly_rate (nullable), budgeted_hours (nullable, VA only), active, created_at
+- **ClientServices**: id, client_id, service_id, custom_price, custom_hourly_rate, custom_budgeted_hours, monthly_hours_reset_day (1–31, nullable), created_at
 - **Tasks**: id, title, description, client_id, assigned_to, status ("Pending"|"Confirmed"|"In Progress"|"Completed"), due_date, recurrence fields, service_type (nullable, "Bookkeeping"|"Virtual Assistant")
 - **TimeEntries**: id, client_id, task_id (optional), duration_minutes, date, started_at, ended_at
 - **Leads**: id, name, email, estimated_value, status (new/contacted/proposal/closed), lead_source

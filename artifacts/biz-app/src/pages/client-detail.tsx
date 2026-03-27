@@ -67,10 +67,12 @@ export default function ClientDetail() {
   const [addCustomPrice, setAddCustomPrice] = useState("");
   const [addCustomHourlyRate, setAddCustomHourlyRate] = useState("");
   const [addCustomBudgetedHours, setAddCustomBudgetedHours] = useState("");
+  const [addResetDay, setAddResetDay] = useState("");
   const [editingServiceId, setEditingServiceId] = useState<number | null>(null);
   const [editCustomPrice, setEditCustomPrice] = useState("");
   const [editCustomHourlyRate, setEditCustomHourlyRate] = useState("");
   const [editCustomBudgetedHours, setEditCustomBudgetedHours] = useState("");
+  const [editResetDay, setEditResetDay] = useState("");
   const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
   const [commentTaskTitle, setCommentTaskTitle] = useState<string>("");
 
@@ -104,6 +106,9 @@ export default function ClientDetail() {
     budgeted_hours: number | null;
     price: number | null;
     hours_used: number;
+    monthly_hours_reset_day: number | null;
+    next_reset_date: string | null;
+    days_until_reset: number | null;
   }>>({
     queryKey: ["services-hours", clientId],
     queryFn: async () => {
@@ -127,6 +132,7 @@ export default function ClientDetail() {
         setAddCustomPrice("");
         setAddCustomHourlyRate("");
         setAddCustomBudgetedHours("");
+        setAddResetDay("");
         toast({ title: "Service assigned" });
       },
       onError: (e: any) => toast({ title: e?.response?.data?.error === "Service already assigned" ? "Service already assigned" : "Failed to assign service", variant: "destructive" }),
@@ -162,9 +168,11 @@ export default function ClientDetail() {
     const effPrice = cs.custom_price ?? cs.price;
     const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
     const effHours = cs.custom_budgeted_hours ?? cs.budgeted_hours;
+    const resetDay = (cs as any).monthly_hours_reset_day;
     setEditCustomPrice(effPrice != null ? String(effPrice) : "");
     setEditCustomHourlyRate(effRate != null ? String(effRate) : "");
     setEditCustomBudgetedHours(effHours != null ? String(effHours) : "");
+    setEditResetDay(resetDay != null ? String(resetDay) : "");
     setEditingServiceId(cs.service_id);
   };
 
@@ -786,6 +794,17 @@ export default function ClientDetail() {
                     />
                   </div>
                 )}
+                {selectedAddService.service_type === "Virtual Assistant" && (
+                  <div>
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Monthly Hours Reset Day (1–31)</label>
+                    <input type="number" min="1" max="31" step="1"
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                      placeholder="e.g. 1 (first of month)"
+                      value={addResetDay}
+                      onChange={e => setAddResetDay(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -800,6 +819,7 @@ export default function ClientDetail() {
                       custom_price: addCustomPrice !== "" ? Number(addCustomPrice) : null,
                       custom_hourly_rate: addCustomHourlyRate !== "" ? Number(addCustomHourlyRate) : null,
                       custom_budgeted_hours: addCustomBudgetedHours !== "" ? Number(addCustomBudgetedHours) : null,
+                      monthly_hours_reset_day: addResetDay !== "" ? Number(addResetDay) : null,
                     },
                   });
                 }}
@@ -810,7 +830,7 @@ export default function ClientDetail() {
                 {assignServiceMutation.isPending ? "Assigning…" : "Assign Service"}
               </button>
               <button
-                onClick={() => { setShowAddService(false); setAddServiceId(""); setAddCustomPrice(""); setAddCustomHourlyRate(""); setAddCustomBudgetedHours(""); }}
+                onClick={() => { setShowAddService(false); setAddServiceId(""); setAddCustomPrice(""); setAddCustomHourlyRate(""); setAddCustomBudgetedHours(""); setAddResetDay(""); }}
                 className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Cancel
@@ -945,6 +965,17 @@ export default function ClientDetail() {
                             />
                           </div>
                         )}
+                        {isVA && (
+                          <div>
+                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Monthly Hours Reset Day (1–31)</label>
+                            <input type="number" min="1" max="31" step="1"
+                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                              placeholder="e.g. 1"
+                              value={editResetDay}
+                              onChange={e => setEditResetDay(e.target.value)}
+                            />
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2 pt-1">
                         <button
@@ -956,6 +987,7 @@ export default function ClientDetail() {
                                 custom_price: editCustomPrice !== "" ? Number(editCustomPrice) : null,
                                 custom_hourly_rate: editCustomHourlyRate !== "" ? Number(editCustomHourlyRate) : null,
                                 custom_budgeted_hours: editCustomBudgetedHours !== "" ? Number(editCustomBudgetedHours) : null,
+                                monthly_hours_reset_day: editResetDay !== "" ? Number(editResetDay) : null,
                               },
                             });
                           }}
@@ -992,6 +1024,12 @@ export default function ClientDetail() {
                       {isHourly && effRate != null && (
                         <p className="text-[10px] text-slate-400 mt-1">
                           Estimated cost: {formatCurrency(used * effRate)} ({formatCurrency(effRate)}/hr × {used.toFixed(1)} hrs)
+                        </p>
+                      )}
+                      {hoursInfo?.days_until_reset != null && (
+                        <p className="text-[10px] mt-1 font-medium" style={{ color: "#266b75" }}>
+                          Resets in {hoursInfo.days_until_reset} day{hoursInfo.days_until_reset !== 1 ? "s" : ""}
+                          {hoursInfo.next_reset_date ? ` (${hoursInfo.next_reset_date})` : ""}
                         </p>
                       )}
                     </div>

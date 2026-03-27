@@ -1554,6 +1554,12 @@ export default function Dashboard() {
                     />
                   </div>
 
+                  {client.days_until_va_reset != null && (client.service_type === "va" || client.service_type === "hybrid") && (
+                    <p className="text-[11px] mt-2 font-medium" style={{ color: "#266b75" }}>
+                      VA hours reset in {client.days_until_va_reset} day{client.days_until_va_reset !== 1 ? "s" : ""}
+                      {client.va_next_reset_date ? ` (${client.va_next_reset_date})` : ""}
+                    </p>
+                  )}
                   {isOverBudget && (
                     <div className="mt-3 flex items-center gap-2 text-xs font-medium text-red-600 bg-red-50 p-2 rounded-lg border border-red-100">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0" />

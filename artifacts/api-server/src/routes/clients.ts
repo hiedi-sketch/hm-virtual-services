@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { clientsTable, timeEntriesTable } from "@workspace/db";
+import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable } from "@workspace/db";
 import { eq, and, gte, lt, sql } from "drizzle-orm";
 import {
   CreateClientBody,
@@ -11,6 +11,7 @@ import {
   GetDashboardResponse,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
+import { computeResetWindow } from "./services";
 
 const router: IRouter = Router();
 
@@ -80,14 +81,43 @@ router.get("/dashboard", requireAdmin, async (req, res) => {
     minuteMap[row.client_id] = Number(row.total_minutes) || 0;
   }
 
+  // Fetch VA service reset days per client
+  const vaResetRows = await db
+    .select({
+      client_id: clientServicesTable.client_id,
+      monthly_hours_reset_day: clientServicesTable.monthly_hours_reset_day,
+    })
+    .from(clientServicesTable)
+    .leftJoin(servicesTable, eq(clientServicesTable.service_id, servicesTable.id))
+    .where(eq(servicesTable.service_type, "Virtual Assistant"));
+
+  const vaResetDayByClient: Record<number, number> = {};
+  for (const row of vaResetRows) {
+    if (row.monthly_hours_reset_day && !vaResetDayByClient[row.client_id]) {
+      vaResetDayByClient[row.client_id] = row.monthly_hours_reset_day;
+    }
+  }
+
   const dashboard = clients.map((c) => {
     const minutes = minuteMap[c.id] || 0;
     const hours_used = Math.round((minutes / 60) * 10) / 10;
     const hours_remaining = Math.round((c.monthly_hour_budget - hours_used) * 10) / 10;
+
+    const vaResetDay = vaResetDayByClient[c.id] ?? null;
+    let va_next_reset_date: string | null = null;
+    let days_until_va_reset: number | null = null;
+    if (vaResetDay) {
+      const window = computeResetWindow(vaResetDay);
+      va_next_reset_date = window.nextResetDate;
+      days_until_va_reset = window.daysUntilReset;
+    }
+
     return {
       ...c,
       hours_used_this_month: hours_used,
       hours_remaining,
+      va_next_reset_date,
+      days_until_va_reset,
     };
   });
 

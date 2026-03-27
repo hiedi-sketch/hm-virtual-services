@@ -120,6 +120,8 @@ export const GetDashboardResponseItem = zod.object({
   service_type: zod.enum(["bookkeeping", "va", "hybrid"]),
   hours_used_this_month: zod.number(),
   hours_remaining: zod.number(),
+  va_next_reset_date: zod.string().nullish(),
+  days_until_va_reset: zod.number().nullish(),
 });
 export const GetDashboardResponse = zod.array(GetDashboardResponseItem);
 

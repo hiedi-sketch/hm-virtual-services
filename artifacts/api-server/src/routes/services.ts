@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { servicesTable, clientServicesTable, timeEntriesTable, tasksTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, gte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
@@ -38,13 +38,45 @@ const AssignServiceBody = z.object({
   custom_price: z.number().min(0).nullable().optional(),
   custom_hourly_rate: z.number().min(0).nullable().optional(),
   custom_budgeted_hours: z.number().min(0).nullable().optional(),
+  monthly_hours_reset_day: z.number().int().min(1).max(31).nullable().optional(),
 });
 
 const UpdateClientServiceBody = z.object({
   custom_price: z.number().min(0).nullable().optional(),
   custom_hourly_rate: z.number().min(0).nullable().optional(),
   custom_budgeted_hours: z.number().min(0).nullable().optional(),
+  monthly_hours_reset_day: z.number().int().min(1).max(31).nullable().optional(),
 });
+
+// ── Helper: compute reset window from a day-of-month ──────────────────────
+function computeResetWindow(resetDay: number, refDate = new Date()) {
+  const clampDay = (year: number, month: number, day: number): Date => {
+    const maxDay = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, maxDay));
+  };
+
+  const todayDay = refDate.getDate();
+  let lastResetDate: Date;
+  let nextResetDate: Date;
+
+  if (todayDay >= resetDay) {
+    lastResetDate = clampDay(refDate.getFullYear(), refDate.getMonth(), resetDay);
+    const nm = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 1);
+    nextResetDate = clampDay(nm.getFullYear(), nm.getMonth(), resetDay);
+  } else {
+    const lm = new Date(refDate.getFullYear(), refDate.getMonth() - 1, 1);
+    lastResetDate = clampDay(lm.getFullYear(), lm.getMonth(), resetDay);
+    nextResetDate = clampDay(refDate.getFullYear(), refDate.getMonth(), resetDay);
+  }
+
+  const todayMidnight = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate()).getTime();
+  const daysUntilReset = Math.ceil((nextResetDate.getTime() - todayMidnight) / 86400000);
+
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  return { lastResetDate: fmt(lastResetDate), nextResetDate: fmt(nextResetDate), daysUntilReset };
+}
 
 // ── List all services ─────────────────────────────────────────────────────
 router.get("/services", requireAuth, async (_req, res) => {
@@ -67,12 +99,7 @@ router.patch("/services/:id", requireAdmin, async (req, res) => {
   if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
 
   const body = UpdateServiceBody.parse(req.body);
-  const [updated] = await db
-    .update(servicesTable)
-    .set(body)
-    .where(eq(servicesTable.id, id))
-    .returning();
-
+  const [updated] = await db.update(servicesTable).set(body).where(eq(servicesTable.id, id)).returning();
   if (!updated) { res.status(404).json({ error: "Service not found" }); return; }
   res.json(updated);
   const actor = req.session.user;
@@ -103,6 +130,7 @@ router.get("/clients/:clientId/services", requireAuth, async (req, res) => {
       custom_price: clientServicesTable.custom_price,
       custom_hourly_rate: clientServicesTable.custom_hourly_rate,
       custom_budgeted_hours: clientServicesTable.custom_budgeted_hours,
+      monthly_hours_reset_day: clientServicesTable.monthly_hours_reset_day,
       created_at: clientServicesTable.created_at,
       name: servicesTable.name,
       description: servicesTable.description,
@@ -127,7 +155,6 @@ router.post("/clients/:clientId/services", requireAdmin, async (req, res) => {
 
   const body = AssignServiceBody.parse(req.body);
 
-  // Prevent duplicates
   const [existing] = await db
     .select()
     .from(clientServicesTable)
@@ -141,6 +168,7 @@ router.post("/clients/:clientId/services", requireAdmin, async (req, res) => {
     custom_price: body.custom_price ?? null,
     custom_hourly_rate: body.custom_hourly_rate ?? null,
     custom_budgeted_hours: body.custom_budgeted_hours ?? null,
+    monthly_hours_reset_day: body.monthly_hours_reset_day ?? null,
   }).returning();
   res.status(201).json(row);
 });
@@ -176,19 +204,18 @@ router.delete("/clients/:clientId/services/:serviceId", requireAdmin, async (req
   res.status(204).send();
 });
 
-// ── VA hours usage summary for a client's assigned services ───────────────
-// Returns hours tracked per service (task-scoped time entries)
+// ── VA/BK hours usage per assigned service (reset-date-aware) ─────────────
 router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) => {
   const clientId = Number(req.params["clientId"]);
   if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid clientId" }); return; }
 
-  // Get all assigned services for client (with custom overrides)
   const assignedServices = await db
     .select({
       service_id: clientServicesTable.service_id,
       custom_price: clientServicesTable.custom_price,
       custom_hourly_rate: clientServicesTable.custom_hourly_rate,
       custom_budgeted_hours: clientServicesTable.custom_budgeted_hours,
+      monthly_hours_reset_day: clientServicesTable.monthly_hours_reset_day,
       name: servicesTable.name,
       service_type: servicesTable.service_type,
       billing_type: servicesTable.billing_type,
@@ -200,37 +227,73 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
     .leftJoin(servicesTable, eq(clientServicesTable.service_id, servicesTable.id))
     .where(eq(clientServicesTable.client_id, clientId));
 
-  // Get total hours tracked per service (via tasks tagged with service_type matching service)
-  const timeByServiceType = await db
-    .select({
-      service_type: tasksTable.service_type,
-      total_minutes: sql<number>`coalesce(sum(${timeEntriesTable.duration_minutes}), 0)`.as("total_minutes"),
-    })
-    .from(timeEntriesTable)
-    .leftJoin(tasksTable, eq(timeEntriesTable.task_id, tasksTable.id))
-    .where(eq(timeEntriesTable.client_id, clientId))
-    .groupBy(tasksTable.service_type);
+  // Compute reset windows per service type
+  const vaService = assignedServices.find(s => s.service_type === "Virtual Assistant");
+  const vaResetDay = vaService?.monthly_hours_reset_day ?? null;
 
-  const minutesByType: Record<string, number> = {};
-  for (const row of timeByServiceType) {
-    if (row.service_type) {
-      minutesByType[row.service_type] = row.total_minutes;
-    }
+  let vaLastReset: string | null = null;
+  let vaNextReset: string | null = null;
+  let vaDaysUntilReset: number | null = null;
+
+  if (vaResetDay) {
+    const window = computeResetWindow(vaResetDay);
+    vaLastReset = window.lastResetDate;
+    vaNextReset = window.nextResetDate;
+    vaDaysUntilReset = window.daysUntilReset;
   }
 
-  const result = assignedServices.map(svc => ({
-    service_id: svc.service_id,
-    name: svc.name,
-    service_type: svc.service_type,
-    billing_type: svc.billing_type,
-    // Use custom overrides if set, else fall back to library defaults
-    hourly_rate: svc.custom_hourly_rate ?? svc.hourly_rate,
-    budgeted_hours: svc.custom_budgeted_hours ?? svc.budgeted_hours,
-    price: svc.custom_price ?? svc.price,
-    hours_used: svc.service_type ? (minutesByType[svc.service_type] ?? 0) / 60 : 0,
-  }));
+  // Helper: sum minutes for a given service type with optional date filter
+  async function sumMinutes(serviceType: string, since: string | null): Promise<number> {
+    const baseWhere = and(
+      eq(timeEntriesTable.client_id, clientId),
+      or(
+        eq(timeEntriesTable.service_type, serviceType),
+        eq(tasksTable.service_type, serviceType)
+      )
+    );
+    const whereClause = since ? and(baseWhere, gte(timeEntriesTable.date, since)) : baseWhere;
+
+    const [row] = await db
+      .select({ total: sql<number>`coalesce(sum(${timeEntriesTable.duration_minutes}), 0)`.as("total") })
+      .from(timeEntriesTable)
+      .leftJoin(tasksTable, eq(timeEntriesTable.task_id, tasksTable.id))
+      .where(whereClause);
+    return Number(row?.total ?? 0);
+  }
+
+  // Build minutes cache per service type
+  const minutesByType: Record<string, number> = {};
+  const serviceTypes = [...new Set(assignedServices.map(s => s.service_type).filter(Boolean))];
+
+  for (const st of serviceTypes) {
+    if (!st) continue;
+    const since = st === "Virtual Assistant" ? vaLastReset : null;
+    minutesByType[st] = await sumMinutes(st, since);
+  }
+
+  const result = assignedServices.map(svc => {
+    const svcResetDay = svc.service_type === "Virtual Assistant" ? vaResetDay : null;
+    const nextReset = svc.service_type === "Virtual Assistant" ? vaNextReset : null;
+    const daysUntilReset = svc.service_type === "Virtual Assistant" ? vaDaysUntilReset : null;
+
+    return {
+      service_id: svc.service_id,
+      name: svc.name,
+      service_type: svc.service_type,
+      billing_type: svc.billing_type,
+      hourly_rate: svc.custom_hourly_rate ?? svc.hourly_rate,
+      budgeted_hours: svc.custom_budgeted_hours ?? svc.budgeted_hours,
+      price: svc.custom_price ?? svc.price,
+      hours_used: svc.service_type ? (minutesByType[svc.service_type] ?? 0) / 60 : 0,
+      monthly_hours_reset_day: svcResetDay,
+      next_reset_date: nextReset,
+      days_until_reset: daysUntilReset,
+    };
+  });
 
   res.json(result);
 });
 
+// ── Helper export for dashboard route ─────────────────────────────────────
+export { computeResetWindow };
 export default router;

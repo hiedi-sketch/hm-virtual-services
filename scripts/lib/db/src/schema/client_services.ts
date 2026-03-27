@@ -13,6 +13,7 @@ export const clientServicesTable = pgTable("client_services", {
   custom_price: real("custom_price"),
   custom_hourly_rate: real("custom_hourly_rate"),
   custom_budgeted_hours: real("custom_budgeted_hours"),
+  monthly_hours_reset_day: integer("monthly_hours_reset_day"),
   created_at: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),
