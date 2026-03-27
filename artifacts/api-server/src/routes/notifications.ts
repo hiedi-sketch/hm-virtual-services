@@ -96,7 +96,7 @@ router.post("/notifications/overdue-tasks", requireAdmin, async (req, res) => {
         <p>The following task${tasks.length !== 1 ? "s" : ""} assigned to you ${tasks.length !== 1 ? "are" : "is"} overdue:</p>
         <ul style="margin:12px 0;padding-left:20px;">${taskList}</ul>
         <p>Please complete these as soon as possible or reach out if you need help.</p>
-        <p style="margin-top:24px;color:#64748b;">— The Flowstate Team</p>
+        <p style="margin-top:24px;color:#64748b;">— The HM Virtual Services Team</p>
       `)
     );
     sent++;
@@ -119,7 +119,7 @@ router.post("/notifications/overdue-tasks", requireAdmin, async (req, res) => {
   for (const admin of admins) {
     await sendMail(
       admin.email,
-      `[Flowstate] ${overdueTasks.length} overdue task${overdueTasks.length !== 1 ? "s" : ""} summary`,
+      `[HM Virtual Services] ${overdueTasks.length} overdue task${overdueTasks.length !== 1 ? "s" : ""} summary`,
       template(`
         <p>Hi ${admin.name},</p>
         <p>Here is a summary of all currently overdue tasks:</p>
@@ -133,7 +133,7 @@ router.post("/notifications/overdue-tasks", requireAdmin, async (req, res) => {
           </thead>
           <tbody>${allTaskRows}</tbody>
         </table>
-        <p style="margin-top:24px;color:#64748b;">— Flowstate Notifications</p>
+        <p style="margin-top:24px;color:#64748b;">— HM Virtual Services Notifications</p>
       `)
     );
     sent++;
@@ -212,7 +212,7 @@ router.post("/notifications/invoice-reminders", requireAdmin, async (req, res) =
         </table>
         <p style="font-size:16px;font-weight:700;">Total due: $${total.toFixed(2)}</p>
         <p>Please arrange payment before the due date. Reply to this email with any questions.</p>
-        <p style="margin-top:24px;color:#64748b;">— The Flowstate Team</p>
+        <p style="margin-top:24px;color:#64748b;">— The HM Virtual Services Team</p>
       `)
     );
     sent++;
@@ -293,7 +293,7 @@ router.post("/notifications/followup-reminders", requireAdmin, async (req, res) 
   for (const recipient of recipients) {
     await sendMail(
       recipient.email,
-      `[Flowstate] ${allLeads.length} lead${allLeads.length !== 1 ? "s" : ""} need follow-up`,
+      `[HM Virtual Services] ${allLeads.length} lead${allLeads.length !== 1 ? "s" : ""} need follow-up`,
       template(`
         <p>Hi ${recipient.name},</p>
         <p>The following lead${allLeads.length !== 1 ? "s" : ""} ${allLeads.length !== 1 ? "require" : "requires"} follow-up today:</p>
@@ -308,7 +308,7 @@ router.post("/notifications/followup-reminders", requireAdmin, async (req, res) 
           </thead>
           <tbody>${rows}</tbody>
         </table>
-        <p style="margin-top:24px;color:#64748b;">— Flowstate Notifications</p>
+        <p style="margin-top:24px;color:#64748b;">— HM Virtual Services Notifications</p>
       `)
     );
     sent++;

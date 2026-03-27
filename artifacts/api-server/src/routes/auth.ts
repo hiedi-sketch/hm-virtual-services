@@ -108,15 +108,15 @@ router.post("/auth/forgot-password", async (req, res) => {
 
       await sendMail(
         user.email,
-        "Reset your Flowstate password",
+        "Reset your HM Virtual Services Business Suite password",
         template(`
           <p>Hi ${user.name},</p>
           <p>We received a request to reset your password. Click the button below to choose a new one. This link expires in <strong>1 hour</strong>.</p>
           <p style="text-align:center;margin:28px 0;">
-            <a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px;">Reset Password</a>
+            <a href="${resetUrl}" style="display:inline-block;background:#266b75;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px;">Reset Password</a>
           </p>
           <p style="color:#64748b;font-size:13px;">If you didn't request this, you can safely ignore this email. Your password will not change.</p>
-          <p style="color:#64748b;font-size:13px;">Or copy and paste this link into your browser:<br><a href="${resetUrl}" style="color:#2563eb;word-break:break-all;">${resetUrl}</a></p>
+          <p style="color:#64748b;font-size:13px;">Or copy and paste this link into your browser:<br><a href="${resetUrl}" style="color:#266b75;word-break:break-all;">${resetUrl}</a></p>
         `)
       );
     }

@@ -41,8 +41,8 @@ export function template(body: string): string {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;">
         <tr>
-          <td style="background:#0f172a;padding:20px 28px;">
-            <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.5px;">Flowstate</span>
+          <td style="background:#266b75;padding:20px 28px;">
+            <span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.3px;">HM Virtual Services Business Suite</span>
           </td>
         </tr>
         <tr>
@@ -52,7 +52,7 @@ export function template(body: string): string {
         </tr>
         <tr>
           <td style="padding:16px 28px;border-top:1px solid #e2e8f0;background:#f8fafc;">
-            <span style="color:#94a3b8;font-size:12px;">Sent by Flowstate &mdash; your business manager.</span>
+            <span style="color:#94a3b8;font-size:12px;">Sent by HM Virtual Services Business Suite &mdash; Helping you get your day running smoothly.</span>
           </td>
         </tr>
       </table>

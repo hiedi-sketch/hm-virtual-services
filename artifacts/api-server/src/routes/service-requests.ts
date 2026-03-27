@@ -105,17 +105,17 @@ router.post("/service-requests", requireAuth, async (req, res) => {
         if (!admin.email) continue;
         await sendMail(
           admin.email,
-          `[Flowstate] New ${typeLabel} from ${clientName}`,
+          `[HM Virtual Services] New ${typeLabel} from ${clientName}`,
           template(`
             <p>Hi ${admin.name},</p>
             <p>A client has submitted a new service request:</p>
-            <div style="margin:16px 0;padding:16px;background:#f8fafc;border-left:4px solid #6366f1;border-radius:4px;">
-              <p style="margin:0;font-size:13px;font-weight:600;text-transform:uppercase;color:#6366f1;">${typeLabel}</p>
+            <div style="margin:16px 0;padding:16px;background:#f8fafc;border-left:4px solid #266b75;border-radius:4px;">
+              <p style="margin:0;font-size:13px;font-weight:600;text-transform:uppercase;color:#266b75;">${typeLabel}</p>
               <p style="margin:8px 0 0;font-size:17px;font-weight:600;color:#1e293b;">${body.data.subject}</p>
               <p style="margin:8px 0 0;color:#475569;">${body.data.message}</p>
             </div>
             <p><strong>From:</strong> ${clientName} (${user.email})</p>
-            <p style="color:#64748b;">Log in to Flowstate to review and respond.</p>
+            <p style="color:#64748b;">Log in to HM Virtual Services Business Suite to review and respond.</p>
           `)
         );
       }

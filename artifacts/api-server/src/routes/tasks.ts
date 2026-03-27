@@ -111,13 +111,13 @@ router.post("/tasks", requireAuth, async (req, res) => {
             template(`
               <p>Hi ${client.name ?? "there"},</p>
               <p>A new task has been assigned to your account:</p>
-              <div style="margin:16px 0;padding:16px;background:#f8fafc;border-left:4px solid #3b82f6;border-radius:4px;">
+              <div style="margin:16px 0;padding:16px;background:#f8fafc;border-left:4px solid #266b75;border-radius:4px;">
                 <p style="margin:0;font-size:17px;font-weight:600;">${task.title}</p>
                 ${task.description ? `<p style="margin:8px 0 0;color:#64748b;">${task.description}</p>` : ""}
                 ${dueStr ? `<p style="margin:8px 0 0;color:#475569;">${dueStr}</p>` : ""}
               </div>
               <p>Log in to your account to view details or track progress.</p>
-              <p style="margin-top:24px;color:#64748b;">— The Flowstate Team</p>
+              <p style="margin-top:24px;color:#64748b;">— The HM Virtual Services Team</p>
             `)
           );
         }
