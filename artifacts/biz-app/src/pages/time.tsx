@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   useListTimeEntries,
   useCreateTimeEntry,
@@ -27,12 +27,118 @@ import {
   Check,
   X,
   User as UserIcon,
+  Sun,
+  CalendarDays,
+  ArrowUpDown,
+  ChevronUp,
+  ChevronDown as ChevronDownIcon,
+  TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 const TIMER_KEY = "flowstate_timer";
+
+// ─── Summary Card ────────────────────────────────────────────────
+function SummaryCard({
+  title,
+  minutes,
+  icon,
+  subtitle,
+  accent,
+}: {
+  title: string;
+  minutes: number;
+  icon: React.ReactNode;
+  subtitle?: string;
+  accent?: "teal" | "blue" | "violet";
+}) {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  const display =
+    h > 0 && m > 0 ? `${h}h ${m}m` : h > 0 ? `${h}h` : `${m}m`;
+  const colors: Record<string, string> = {
+    teal: "bg-[#266b75]/10 text-[#266b75]",
+    blue: "bg-blue-50 text-blue-600",
+    violet: "bg-violet-50 text-violet-600",
+  };
+  const iconColor = colors[accent ?? "teal"];
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 px-5 py-4 flex items-center gap-4 min-w-0">
+      <div className={cn("p-3 rounded-xl shrink-0", iconColor)}>{icon}</div>
+      <div className="min-w-0">
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 truncate">
+          {title}
+        </p>
+        <p className="text-2xl font-bold text-slate-900 mt-0.5 leading-none">
+          {minutes === 0 ? "—" : display}
+        </p>
+        {subtitle && (
+          <p className="text-[11px] text-slate-400 mt-1 truncate">{subtitle}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Sort utilities ──────────────────────────────────────────────
+type SortField = "date" | "client";
+type SortDir = "asc" | "desc";
+
+function sortEntries<T extends { date: string; client_name?: string | null; duration_minutes: number }>(
+  entries: T[],
+  field: SortField,
+  dir: SortDir
+): T[] {
+  return [...entries].sort((a, b) => {
+    let cmp = 0;
+    if (field === "date") {
+      cmp = a.date.localeCompare(b.date);
+    } else if (field === "client") {
+      cmp = (a.client_name ?? "").localeCompare(b.client_name ?? "");
+    }
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
+
+function SortButton({
+  label,
+  field,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  field: SortField;
+  active: boolean;
+  dir: SortDir;
+  onClick: (f: SortField) => void;
+}) {
+  return (
+    <button
+      onClick={() => onClick(field)}
+      aria-pressed={active}
+      className={cn(
+        "flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors",
+        active
+          ? "bg-[#266b75] text-white"
+          : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+      )}
+    >
+      {label}
+      {active ? (
+        dir === "asc" ? (
+          <ChevronUp className="w-3 h-3" />
+        ) : (
+          <ChevronDownIcon className="w-3 h-3" />
+        )
+      ) : (
+        <ArrowUpDown className="w-3 h-3 opacity-50" />
+      )}
+    </button>
+  );
+}
 
 interface ActiveTimer {
   clientId: number;
@@ -326,6 +432,34 @@ export default function TimeTracking() {
   const [timerTaskId, setTimerTaskId] = useState("");
   const [activeTab, setActiveTab] = useState<"timer" | "manual">("timer");
   const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null } | null>(null);
+  const [sortField, setSortField] = useState<SortField>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const today = getTodayLocal();
+  const currentMonth = today.slice(0, 7); // "YYYY-MM"
+
+  const todayMinutes = useMemo(
+    () => (entries ?? []).filter(e => e.date === today).reduce((s, e) => s + e.duration_minutes, 0),
+    [entries, today]
+  );
+  const monthMinutes = useMemo(
+    () => (entries ?? []).filter(e => e.date.startsWith(currentMonth)).reduce((s, e) => s + e.duration_minutes, 0),
+    [entries, currentMonth]
+  );
+
+  const sortedEntries = useMemo(
+    () => sortEntries(entries ?? [], sortField, sortDir),
+    [entries, sortField, sortDir]
+  );
+
+  const handleSort = (field: SortField) => {
+    if (field === sortField) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("desc");
+    }
+  };
 
   // Ref used to pass client_id into the shared onSuccess handler without typed callback params
   const pendingClientIdRef = useRef<number | null>(null);
@@ -478,10 +612,28 @@ export default function TimeTracking() {
 
   return (
     <>
-    <div className="space-y-8 max-w-5xl mx-auto">
+    <div className="space-y-6 max-w-5xl mx-auto">
       <div>
         <h1 className="text-3xl font-display font-bold text-slate-900">Time Tracking</h1>
         <p className="text-slate-500 mt-1">Log billable hours manually or with the timer.</p>
+      </div>
+
+      {/* ── Summary Cards ─────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <SummaryCard
+          title="Today's Hours"
+          minutes={todayMinutes}
+          icon={<Sun className="w-5 h-5" />}
+          subtitle={new Date().toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+          accent="teal"
+        />
+        <SummaryCard
+          title="This Month"
+          minutes={monthMinutes}
+          icon={<CalendarDays className="w-5 h-5" />}
+          subtitle={new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+          accent="blue"
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -717,108 +869,143 @@ export default function TimeTracking() {
         {/* Right: Recent Entries */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="font-semibold text-slate-900">Recent Entries</h2>
-              <Clock className="w-5 h-5 text-slate-400" />
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-slate-900">Recent Entries</h2>
+                {entries && entries.length > 0 && (
+                  <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                    {entries.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-400 font-medium">Sort:</span>
+                <SortButton
+                  label="Date"
+                  field="date"
+                  active={sortField === "date"}
+                  dir={sortDir}
+                  onClick={handleSort}
+                />
+                <SortButton
+                  label="Client"
+                  field="client"
+                  active={sortField === "client"}
+                  dir={sortDir}
+                  onClick={handleSort}
+                />
+              </div>
             </div>
 
             <div className="divide-y divide-slate-100">
               {entriesLoading ? (
                 <div className="p-8 text-center text-slate-400">Loading entries…</div>
-              ) : !entries?.length ? (
+              ) : !sortedEntries.length ? (
                 <div className="p-12 text-center">
                   <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                   <p className="text-slate-700 font-medium">You're all caught up.</p>
                   <p className="text-sm text-slate-400 mt-1">Nothing needs your attention right now.</p>
                 </div>
-              ) : (
-                [...entries].reverse().map(entry => (
+              ) : (() => {
+                let cumulativeMinutes = 0;
+                return sortedEntries.map(entry => {
+                  cumulativeMinutes += entry.duration_minutes;
+                  const ch = Math.floor(cumulativeMinutes / 60);
+                  const cm = cumulativeMinutes % 60;
+                  const runningLabel =
+                    ch > 0 && cm > 0 ? `${ch}h ${cm}m` : ch > 0 ? `${ch}h` : `${cm}m`;
+                  return (
                   <div key={entry.id}>
-                      <div className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors group">
-                        {/* Duration badge */}
-                        <div className={cn(
-                          "hidden sm:flex flex-col items-center justify-center w-14 h-14 rounded-full shrink-0",
-                          entry.started_at ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
-                        )}>
-                          <span className="text-sm font-bold leading-tight">
-                            {Math.floor(entry.duration_minutes / 60) > 0
-                              ? `${Math.floor(entry.duration_minutes / 60)}h`
-                              : `${entry.duration_minutes}m`}
+                    <div className="p-4 flex items-center gap-4 hover:bg-slate-50/50 transition-colors group">
+                      {/* Duration badge */}
+                      <div className={cn(
+                        "hidden sm:flex flex-col items-center justify-center w-14 h-14 rounded-full shrink-0",
+                        entry.started_at ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
+                      )}>
+                        <span className="text-sm font-bold leading-tight">
+                          {Math.floor(entry.duration_minutes / 60) > 0
+                            ? `${Math.floor(entry.duration_minutes / 60)}h`
+                            : `${entry.duration_minutes}m`}
+                        </span>
+                        {Math.floor(entry.duration_minutes / 60) > 0 && entry.duration_minutes % 60 > 0 && (
+                          <span className="text-[10px] font-medium">{entry.duration_minutes % 60}m</span>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                          <Briefcase className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                          <span className="font-medium text-slate-900 text-sm truncate">
+                            {entry.client_name ?? "Unknown Client"}
                           </span>
-                          {Math.floor(entry.duration_minutes / 60) > 0 && entry.duration_minutes % 60 > 0 && (
-                            <span className="text-[10px] font-medium">{entry.duration_minutes % 60}m</span>
-                          )}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                            <Briefcase className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                            <span className="font-medium text-slate-900 text-sm truncate">
-                              {entry.client_name ?? "Unknown Client"}
-                            </span>
-                            {entry.started_at && (
-                              <span className="text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded-full shrink-0">
-                                timed
-                              </span>
-                            )}
-                            <ServiceTypeBadge value={entry.service_type} />
-                          </div>
-                          {entry.task_title ? (
-                            <p className="text-xs text-slate-500 truncate">{entry.task_title}</p>
-                          ) : (
-                            <p className="text-xs text-slate-400 italic">General</p>
-                          )}
-                          {isAdmin && entry.logged_by && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                              <UserIcon className="w-3 h-3" />
-                              {entry.logged_by}
+                          {entry.started_at && (
+                            <span className="text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5 rounded-full shrink-0">
+                              timed
                             </span>
                           )}
-                          {entry.started_at && entry.ended_at && (
-                            <p className="text-xs text-slate-400 mt-0.5">
-                              {formatTime(entry.started_at)} → {formatTime(entry.ended_at)}
-                            </p>
-                          )}
-                          {entry.notes && (
-                            <p className="text-xs text-slate-500 mt-1 italic truncate max-w-xs">"{entry.notes}"</p>
-                          )}
+                          <ServiceTypeBadge value={entry.service_type} />
                         </div>
+                        {entry.task_title ? (
+                          <p className="text-xs text-slate-500 truncate">{entry.task_title}</p>
+                        ) : (
+                          <p className="text-xs text-slate-400 italic">General</p>
+                        )}
+                        {isAdmin && entry.logged_by && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                            <UserIcon className="w-3 h-3" />
+                            {entry.logged_by}
+                          </span>
+                        )}
+                        {entry.started_at && entry.ended_at && (
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            {formatTime(entry.started_at)} → {formatTime(entry.ended_at)}
+                          </p>
+                        )}
+                        {entry.notes && (
+                          <p className="text-xs text-slate-500 mt-1 italic truncate max-w-xs">"{entry.notes}"</p>
+                        )}
+                      </div>
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className="text-right">
-                            <div className="text-sm font-semibold text-slate-700 sm:hidden mb-1">
-                              {formatDuration(entry.duration_minutes)}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
-                              <Calendar className="w-3.5 h-3.5" />
-                              {new Date(entry.date + "T00:00:00").toLocaleDateString(undefined, {
-                                month: "short",
-                                day: "numeric",
-                              })}
-                            </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <div className="text-right space-y-1">
+                          <div className="text-sm font-semibold text-slate-700 sm:hidden">
+                            {formatDuration(entry.duration_minutes)}
                           </div>
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => setEditingEntry(entry)}
-                              className="p-1.5 text-slate-300 hover:text-blue-500 transition-colors rounded"
-                              title="Edit entry"
-                            >
-                              <Pencil className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => deleteMutation.mutate({ id: entry.id })}
-                              disabled={deleteMutation.isPending}
-                              className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded"
-                              title="Delete entry"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
+                            <Calendar className="w-3.5 h-3.5" />
+                            {new Date(entry.date + "T00:00:00").toLocaleDateString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                            })}
                           </div>
+                          <div className="flex items-center gap-1 text-[10px] text-[#266b75] font-medium justify-end">
+                            <TrendingUp className="w-2.5 h-2.5" />
+                            {runningLabel}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => setEditingEntry(entry)}
+                            className="p-1.5 text-slate-300 hover:text-blue-500 transition-colors rounded"
+                            title="Edit entry"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => deleteMutation.mutate({ id: entry.id })}
+                            disabled={deleteMutation.isPending}
+                            className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded"
+                            title="Delete entry"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
+                    </div>
                   </div>
-                ))
-              )}
+                  );
+                });
+              })()}
             </div>
           </div>
         </div>
