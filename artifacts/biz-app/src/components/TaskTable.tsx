@@ -107,7 +107,7 @@ function InlineServiceTypeEditor({
   );
 }
 
-type SortKey = "title" | "due_date" | "assigned_to" | "service_type";
+type SortKey = "title" | "due_date" | "assigned_to" | "service_type" | "client_name";
 
 type TaskTableProps = {
   tasks: Task[];
@@ -144,7 +144,7 @@ export default function TaskTable({
 }: TaskTableProps) {
   const today = new Date().toISOString().split("T")[0];
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("title");
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const displayedTasks = useMemo(() => {
@@ -156,13 +156,15 @@ export default function TaskTable({
         list = list.filter(t => t.service_type === serviceTypeFilter);
       }
     }
+    if (!sortKey) return list;
     return [...list].sort((a, b) => {
       let valA = "";
       let valB = "";
-      if (sortKey === "title")         { valA = a.title.toLowerCase(); valB = b.title.toLowerCase(); }
-      else if (sortKey === "due_date") { valA = a.due_date || ""; valB = b.due_date || ""; }
-      else if (sortKey === "assigned_to") { valA = (a.assigned_to || "").toLowerCase(); valB = (b.assigned_to || "").toLowerCase(); }
-      else if (sortKey === "service_type") { valA = (a.service_type || "zzz").toLowerCase(); valB = (b.service_type || "zzz").toLowerCase(); }
+      if (sortKey === "title")           { valA = a.title.toLowerCase(); valB = b.title.toLowerCase(); }
+      else if (sortKey === "due_date")   { valA = a.due_date || ""; valB = b.due_date || ""; }
+      else if (sortKey === "assigned_to"){ valA = (a.assigned_to || "").toLowerCase(); valB = (b.assigned_to || "").toLowerCase(); }
+      else if (sortKey === "service_type"){ valA = (a.service_type || "zzz").toLowerCase(); valB = (b.service_type || "zzz").toLowerCase(); }
+      else if (sortKey === "client_name"){ valA = (a.client_name || "").toLowerCase(); valB = (b.client_name || "").toLowerCase(); }
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       return 0;
@@ -177,7 +179,7 @@ export default function TaskTable({
   const sortIcon = (key: SortKey) =>
     sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
 
-  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + (onDeleteTask ? 1 : 0) + 6 + 1;
+  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + (onDeleteTask ? 1 : 0) + 7 + 1;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -188,6 +190,9 @@ export default function TaskTable({
               <th className="px-6 py-4 w-10" />
               <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("title")}>
                 Task{sortIcon("title")}
+              </th>
+              <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("client_name")}>
+                Client{sortIcon("client_name")}
               </th>
               <th className="px-6 py-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("service_type")}>
                 Service Type{sortIcon("service_type")}
@@ -249,6 +254,11 @@ export default function TaskTable({
                             task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
                           }`}
                         />
+                      </td>
+
+                      {/* Client */}
+                      <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">
+                        {task.client_name ?? <span className="text-slate-300">—</span>}
                       </td>
 
                       {/* Service Type — inline editable */}
