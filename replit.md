@@ -129,3 +129,16 @@ Database layer using Drizzle ORM with PostgreSQL. Schema tables: clients, tasks,
 ### `lib/api-spec` (`@workspace/api-spec`)
 
 OpenAPI 3.1 spec (`openapi.yaml`) and Orval config. Run codegen: `pnpm --filter @workspace/api-spec run codegen`
+
+## Parent Client / Subclients
+
+Clients support a self-referential parent/subclient hierarchy via `parent_id` (nullable FK on `clients`).
+
+- **Schema**: `clients.parent_id` → integer, nullable, references `clients(id)`.
+- **Backend endpoint**: `GET /api/clients/:id/subclients` — returns subclient rows with VA hours computed via reset-window-aware logic (`computeResetWindow`), including `monthly_va_budget`, `va_hours_used`, `hours_remaining`, `hours_remaining_pct`, `next_reset_date`, `days_until_reset`.
+- **Client detail page** (`client-detail.tsx`):
+  - Subclients section renders only when the client has subclients.
+  - Shows 3 summary cards: Total VA Budget, Hours Used, Total Remaining.
+  - Sortable table (Name, VA Budget, Used, Remaining, Usage bar, Resets) with color-coded rows: red < 20%, amber 20–50%, green ≥ 50% remaining.
+  - Low-hours alert banner when any subclient is below 20%.
+  - Edit Profile form has a "Parent Client (optional)" dropdown populated from the dashboard client list.

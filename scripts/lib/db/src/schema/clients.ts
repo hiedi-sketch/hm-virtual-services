@@ -1,4 +1,4 @@
-import { pgTable, serial, text, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -18,6 +18,8 @@ export const clientsTable = pgTable("clients", {
   va_hourly_rate: real("va_hourly_rate"),
   /** VA monthly hour cap; time over this limit triggers an alert (null = unlimited) */
   va_hour_limit: real("va_hour_limit"),
+  /** Parent client id — set for sub-clients; null for top-level clients */
+  parent_id: integer("parent_id"),
 });
 
 export const insertClientSchema = createInsertSchema(clientsTable).omit({ id: true });

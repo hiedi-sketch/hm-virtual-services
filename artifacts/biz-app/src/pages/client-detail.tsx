@@ -24,6 +24,7 @@ import {
   Plus, ArrowLeft, X, Paperclip, Mail, Phone, DollarSign,
   Monitor, Pencil, Check, AlertCircle, Globe, User, Package,
   RefreshCw, ShoppingBag, Trash2, MessageSquare, Send, ChevronDown, ChevronUp,
+  Users, ArrowUpDown, ArrowUp, ArrowDown, Link as LinkIcon,
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 
@@ -90,6 +91,10 @@ export default function ClientDetail() {
   const [editBkFee, setEditBkFee] = useState<string>("");
   const [editVaRate, setEditVaRate] = useState<string>("");
   const [editVaLimit, setEditVaLimit] = useState<string>("");
+  const [editParentId, setEditParentId] = useState<string>("");
+
+  // Subclients sort state
+  const [subclientSort, setSubclientSort] = useState<{ col: "name" | "hours_remaining" | "next_reset_date"; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
 
   const { data: client, isLoading: clientLoading } = useGetClient(clientId);
   const { data: tasks } = useListTasks({ clientId });
@@ -117,6 +122,25 @@ export default function ClientDetail() {
       return res.json();
     },
     enabled: !!clientId,
+  });
+
+  // Subclients query
+  type SubclientRow = {
+    id: number; name: string; email: string; service_type: string;
+    monthly_va_budget: number; va_hours_used: number; hours_remaining: number;
+    hours_remaining_pct: number | null; monthly_hours_reset_day: number | null;
+    next_reset_date: string | null; days_until_reset: number | null;
+    va_hourly_rate: number | null;
+  };
+  const { data: subclients = [] } = useQuery<SubclientRow[]>({
+    queryKey: ["subclients", clientId],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/subclients`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!clientId,
+    staleTime: 2 * 60 * 1000,
   });
 
   const invalidateClientServices = () =>
@@ -254,6 +278,7 @@ export default function ClientDetail() {
     setEditBkFee(client.bk_fee != null ? String(client.bk_fee) : "");
     setEditVaRate(client.va_hourly_rate != null ? String(client.va_hourly_rate) : "");
     setEditVaLimit(client.va_hour_limit != null ? String(client.va_hour_limit) : "");
+    setEditParentId((client as any).parent_id != null ? String((client as any).parent_id) : "");
     setShowEditProfile(true);
   };
 
@@ -283,6 +308,7 @@ export default function ClientDetail() {
         va_hour_limit: vaLimit,
         monthly_fee: totalFee > 0 ? totalFee : undefined,
         monthly_hour_budget: totalHours > 0 ? totalHours : undefined,
+        parent_id: editParentId !== "" ? Number(editParentId) : null,
       } as any,
     });
   };
@@ -438,6 +464,22 @@ export default function ClientDetail() {
                 </div>
               </div>
             )}
+
+            {/* Parent Client */}
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Parent Client (optional)</label>
+              <select
+                className={inputCls}
+                value={editParentId}
+                onChange={e => setEditParentId(e.target.value)}
+              >
+                <option value="">— None (top-level client) —</option>
+                {(dashboard ?? []).filter(c => c.id !== clientId).map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-slate-400 mt-1">Set this if the client is a sub-account of another client.</p>
+            </div>
 
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={updateClientMutation.isPending} className="btn-primary flex items-center gap-1.5 text-sm px-4 py-2 min-h-0 rounded-lg">
@@ -1085,6 +1127,197 @@ export default function ClientDetail() {
           );
         })()}
       </div>
+
+      {/* ── Subclients Overview ──────────────────────────────────────────────── */}
+      {subclients.length > 0 && (() => {
+        // Computed sort
+        const sorted = [...subclients].sort((a, b) => {
+          const dir = subclientSort.dir === "asc" ? 1 : -1;
+          if (subclientSort.col === "name") return a.name.localeCompare(b.name) * dir;
+          if (subclientSort.col === "hours_remaining") return (a.hours_remaining - b.hours_remaining) * dir;
+          if (subclientSort.col === "next_reset_date") {
+            const da = a.next_reset_date ?? "9999-99-99";
+            const db2 = b.next_reset_date ?? "9999-99-99";
+            return da.localeCompare(db2) * dir;
+          }
+          return 0;
+        });
+
+        const totalBudget = subclients.reduce((s, c) => s + c.monthly_va_budget, 0);
+        const totalRemaining = subclients.reduce((s, c) => s + c.hours_remaining, 0);
+        const totalUsed = subclients.reduce((s, c) => s + c.va_hours_used, 0);
+
+        const toggleSort = (col: typeof subclientSort.col) => {
+          setSubclientSort(prev => ({
+            col,
+            dir: prev.col === col && prev.dir === "asc" ? "desc" : "asc",
+          }));
+        };
+
+        const SortIcon = ({ col }: { col: typeof subclientSort.col }) => {
+          if (subclientSort.col !== col) return <ArrowUpDown className="w-3 h-3 text-slate-300 ml-1" />;
+          return subclientSort.dir === "asc"
+            ? <ArrowUp className="w-3 h-3 text-[#266b75] ml-1" />
+            : <ArrowDown className="w-3 h-3 text-[#266b75] ml-1" />;
+        };
+
+        const statusColor = (pct: number | null) => {
+          if (pct === null) return { bar: "bg-slate-200", badge: "bg-slate-50 text-slate-500 border-slate-200", row: "" };
+          if (pct < 20) return { bar: "bg-red-500", badge: "bg-red-50 text-red-700 border-red-200", row: "bg-red-50/40" };
+          if (pct < 50) return { bar: "bg-amber-500", badge: "bg-amber-50 text-amber-700 border-amber-200", row: "bg-amber-50/30" };
+          return { bar: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 border-emerald-200", row: "" };
+        };
+
+        return (
+          <div className="mt-8">
+            {/* Header */}
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-5 h-5 text-[#266b75]" />
+              <h2 className="text-lg font-semibold text-slate-900">Subclients</h2>
+              <span className="text-xs font-medium bg-[#266b75]/10 text-[#266b75] px-2 py-0.5 rounded-full border border-[#266b75]/20">
+                {subclients.length}
+              </span>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-3 gap-4 mb-5">
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Total VA Budget</p>
+                <p className="text-2xl font-bold text-slate-900">{totalBudget}h</p>
+                <p className="text-xs text-slate-400 mt-0.5">across {subclients.length} subclient{subclients.length !== 1 ? "s" : ""}</p>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Hours Used</p>
+                <p className="text-2xl font-bold text-slate-900">{Math.round(totalUsed * 10) / 10}h</p>
+                <p className="text-xs text-slate-400 mt-0.5">this period</p>
+              </div>
+              <div className={`rounded-xl border shadow-sm p-4 ${totalBudget > 0 && (totalRemaining / totalBudget) < 0.2 ? "bg-red-50 border-red-200" : "bg-white border-slate-200"}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Total Remaining</p>
+                <p className={`text-2xl font-bold ${totalBudget > 0 && (totalRemaining / totalBudget) < 0.2 ? "text-red-600" : "text-emerald-600"}`}>
+                  {Math.round(totalRemaining * 10) / 10}h
+                </p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {totalBudget > 0 ? `${Math.round((totalRemaining / totalBudget) * 100)}% of total budget` : "no budget set"}
+                </p>
+              </div>
+            </div>
+
+            {/* Sortable Table */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/60">
+                      <th className="text-left px-4 py-3">
+                        <button onClick={() => toggleSort("name")} className="flex items-center text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-[#266b75] transition-colors">
+                          Subclient <SortIcon col="name" />
+                        </button>
+                      </th>
+                      <th className="text-right px-4 py-3">
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">VA Budget</span>
+                      </th>
+                      <th className="text-right px-4 py-3">
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Used</span>
+                      </th>
+                      <th className="text-right px-4 py-3">
+                        <button onClick={() => toggleSort("hours_remaining")} className="flex items-center justify-end text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-[#266b75] transition-colors ml-auto">
+                          Remaining <SortIcon col="hours_remaining" />
+                        </button>
+                      </th>
+                      <th className="text-center px-4 py-3">
+                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Usage</span>
+                      </th>
+                      <th className="text-right px-4 py-3">
+                        <button onClick={() => toggleSort("next_reset_date")} className="flex items-center justify-end text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-[#266b75] transition-colors ml-auto">
+                          Resets <SortIcon col="next_reset_date" />
+                        </button>
+                      </th>
+                      <th className="px-4 py-3" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sorted.map(sc => {
+                      const pct = sc.hours_remaining_pct;
+                      const usedPct = sc.monthly_va_budget > 0 ? Math.min(100, Math.round((sc.va_hours_used / sc.monthly_va_budget) * 100)) : 0;
+                      const colors = statusColor(pct);
+                      return (
+                        <tr key={sc.id} className={`hover:bg-slate-50/60 transition-colors ${colors.row}`}>
+                          {/* Name */}
+                          <td className="px-4 py-3">
+                            <div>
+                              <p className="font-medium text-slate-900">{sc.name}</p>
+                              <p className="text-xs text-slate-400 mt-0.5">{sc.email}</p>
+                            </div>
+                          </td>
+                          {/* Budget */}
+                          <td className="px-4 py-3 text-right">
+                            <span className="font-semibold text-slate-700">{sc.monthly_va_budget > 0 ? `${sc.monthly_va_budget}h` : "—"}</span>
+                          </td>
+                          {/* Used */}
+                          <td className="px-4 py-3 text-right">
+                            <span className="text-slate-600">{sc.va_hours_used}h</span>
+                          </td>
+                          {/* Remaining */}
+                          <td className="px-4 py-3 text-right">
+                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${colors.badge}`}>
+                              {sc.monthly_va_budget > 0 ? `${sc.hours_remaining}h` : "—"}
+                            </span>
+                          </td>
+                          {/* Progress bar */}
+                          <td className="px-4 py-3">
+                            {sc.monthly_va_budget > 0 ? (
+                              <div className="flex items-center gap-2 min-w-[100px]">
+                                <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${colors.bar}`} style={{ width: `${usedPct}%` }} />
+                                </div>
+                                <span className="text-[10px] text-slate-400 w-7 text-right shrink-0">{usedPct}%</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-300">—</span>
+                            )}
+                          </td>
+                          {/* Reset date */}
+                          <td className="px-4 py-3 text-right">
+                            {sc.next_reset_date ? (
+                              <div>
+                                <p className="text-xs font-medium" style={{ color: "#266b75" }}>
+                                  {sc.days_until_reset != null ? `in ${sc.days_until_reset}d` : sc.next_reset_date}
+                                </p>
+                                <p className="text-[10px] text-slate-400">{sc.next_reset_date}</p>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-300">—</span>
+                            )}
+                          </td>
+                          {/* Link */}
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => navigate(`/clients/${sc.id}`)}
+                              className="p-1.5 rounded-lg text-slate-300 hover:text-[#266b75] hover:bg-[#266b75]/10 transition-colors"
+                              title={`View ${sc.name}`}
+                            >
+                              <LinkIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {/* Low hours alert banner */}
+              {subclients.some(sc => sc.hours_remaining_pct !== null && sc.hours_remaining_pct < 20) && (
+                <div className="px-5 py-2.5 border-t border-red-100 bg-red-50/50 flex items-center gap-2">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                  <p className="text-xs text-red-600 font-medium">
+                    {subclients.filter(sc => sc.hours_remaining_pct !== null && sc.hours_remaining_pct < 20).length} subclient(s) are below 20% of their VA hour budget.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Client Documents */}
       <div className="mt-8">
