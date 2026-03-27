@@ -1,0 +1,83 @@
+Update my Tasks and Time Tracking system in my React + TypeScript + Express app to support:
+
+Service Type selection in timer
+Proper VA vs Bookkeeping hour tracking
+Inline editing of Service Type directly in the Task Table
+1. Task Table Update (IMPORTANT)
+
+Ensure all task tables (Task Manager, Client Details, Client Portal) include:
+
+Column: Service Type
+Display as badge/tag:
+Virtual Assistant
+Bookkeeping
+2. Inline Editing (CRITICAL FEATURE)
+
+Allow Service Type to be edited directly in the table:
+
+Behavior:
+Clicking the Service Type badge OR cell:
+Turns into a dropdown
+Dropdown Options:
+Virtual Assistant
+Bookkeeping
+On Change:
+Immediately update task via API:
+PUT /tasks/:id
+Persist change in database
+Update UI instantly (optimistic update or refetch)
+3. Data Requirements
+
+Ensure tasks table includes:
+
+serviceType:
+"Virtual Assistant"
+"Bookkeeping"
+4. Validation + Logic
+Service Type is REQUIRED on all tasks
+Default (if none):
+Set to “Virtual Assistant” OR require user selection
+IMPORTANT LOGIC:
+
+If Service Type is changed:
+
+Future time entries should use updated type
+Existing time entries:
+Do NOT automatically change (optional future enhancement)
+5. Timer Integration
+Global Timer Update:
+Add Service Type dropdown:
+Virtual Assistant
+Bookkeeping
+Smart Behavior:
+If timer started from a task:
+Auto-fill Service Type from task
+If Service Type on task is changed later:
+Does NOT affect past time entries
+6. Time Tracking Logic
+Virtual Assistant:
+Deduct from budgeted hours
+Bookkeeping:
+Track time only
+Do NOT deduct from budget
+7. UI/UX (IMPORTANT)
+Keep interaction smooth and fast:
+No page reloads
+Inline editing should feel instant
+Badge styles:
+Virtual Assistant → #7dbdc6
+Bookkeeping → #c8c7cb
+Dropdown:
+Clean, minimal, matches Notion-style UI
+8. API Updates
+
+Ensure endpoint supports updating serviceType:
+
+PUT /tasks/:id
+Accepts: serviceType
+9. Deliverables
+Editable Service Type column in all task tables
+Inline dropdown editing
+Timer updated with Service Type
+Correct VA vs Bookkeeping hour tracking
+Persistent updates across app

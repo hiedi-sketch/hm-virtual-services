@@ -30,6 +30,7 @@ interface TeamMember { id: number; name: string; role: string }
 
 type ViewKey = "all" | "mine" | "overdue" | "completed";
 type SortKey = "due_asc" | "due_desc" | "client" | "status";
+type ServiceTypeFilter = "all" | "Bookkeeping" | "Virtual Assistant" | "Unassigned";
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
 
@@ -149,6 +150,7 @@ export default function Tasks() {
   const [view, setView] = useState<ViewKey>("all");
   const [sortBy, setSortBy] = useState<SortKey>("due_asc");
   const [selectedClientId, setSelectedClientId] = useState<number | undefined>(undefined);
+  const [serviceTypeFilter, setServiceTypeFilter] = useState<ServiceTypeFilter>("all");
 
   // ── Data ─────────────────────────────────────────────────────────────────
   const { data: allTasks = [], isLoading } = useListTasks({ clientId: selectedClientId });
@@ -362,6 +364,21 @@ export default function Tasks() {
           </div>
         )}
 
+        {/* Service type filter */}
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm min-w-[170px]">
+          <Filter className="w-4 h-4 text-slate-400 shrink-0" />
+          <select
+            value={serviceTypeFilter}
+            onChange={e => setServiceTypeFilter(e.target.value as ServiceTypeFilter)}
+            className="flex-1 text-sm text-slate-700 bg-transparent border-none outline-none cursor-pointer min-w-0"
+          >
+            <option value="all">All Types</option>
+            <option value="Bookkeeping">Bookkeeping</option>
+            <option value="Virtual Assistant">Virtual Assistant</option>
+            <option value="Unassigned">Unassigned</option>
+          </select>
+        </div>
+
         {/* Sort */}
         <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm min-w-[200px]">
           <ArrowUpDown className="w-4 h-4 text-slate-400 shrink-0" />
@@ -383,6 +400,7 @@ export default function Tasks() {
           due_date: t.due_date ?? undefined,
           assigned_to: t.assigned_to ?? undefined,
           status: t.status ?? "Pending",
+          service_type: t.service_type ?? null,
           client_id: t.client_id ?? null,
           client_name: t.client_name ?? null,
         }))}
@@ -391,6 +409,7 @@ export default function Tasks() {
         onStartTimer={startForTask}
         activeTaskId={timerState.taskId}
         timerStatus={timerState.status}
+        serviceTypeFilter={serviceTypeFilter}
       />
 
       {/* ── New Task Modal ─────────────────────────────────────────────────── */}

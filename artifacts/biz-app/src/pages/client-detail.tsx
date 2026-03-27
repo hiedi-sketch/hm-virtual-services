@@ -291,6 +291,7 @@ export default function ClientDetail() {
     due_date: t.due_date ?? undefined,
     assigned_to: t.assigned_to ?? undefined,
     status: t.status ?? "Pending",
+    service_type: (t as any).service_type ?? null,
   }));
 
   if (clientLoading) {

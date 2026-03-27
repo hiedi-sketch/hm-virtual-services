@@ -1,0 +1,100 @@
+Update the global timer and time tracking system in my React + TypeScript + Express app to include Service Type selection and ensure correct handling of Virtual Assistant vs Bookkeeping hours.
+
+1. Timer UI Update (GLOBAL TIMER BAR)
+
+Add a Service Type selector to the timer (top of every page):
+
+Field:
+Label: Service Type
+Type: dropdown
+Options:
+Virtual Assistant
+Bookkeeping
+2. Timer Behavior (CRITICAL)
+When starting the timer:
+User must either:
+Select a Service Type, OR
+Start timer without it and assign later (see below)
+Allow Flexible Assignment:
+Timer can start WITHOUT:
+Client
+Task
+Service Type
+
+BUT:
+
+Before saving/logging the time entry:
+Require Service Type to be selected
+3. Time Entry Data Model Update
+
+Update timeEntries table:
+
+id
+startTime
+endTime
+duration
+clientId (optional initially)
+taskId (optional initially)
+serviceType ("Virtual Assistant" | "Bookkeeping")
+notes
+4. Core Business Logic (IMPORTANT)
+Virtual Assistant Time:
+Count toward budgeted hours
+Link to:
+Client
+VA service
+Deduct from remaining hours
+Bookkeeping Time:
+Track time
+DO NOT deduct from budgeted hours
+Used for:
+Reporting
+Hourly billing (if applicable)
+5. Task Integration (SMART DEFAULT)
+
+If a timer is started from a task:
+
+Automatically inherit:
+Service Type from task
+Client from task
+Allow override if needed (optional)
+6. Editing Time Entries
+
+When editing a time entry:
+
+Allow changing:
+Service Type
+Start time
+End time
+Client / Task
+If Service Type changes:
+Recalculate VA hours usage accordingly
+7. Validation Rules
+Service Type is REQUIRED before saving a time entry
+If Service Type = Virtual Assistant:
+Must be linked to a client with a VA service
+Prevent invalid deductions if no VA service exists
+8. UI/UX (Match Branding)
+Keep timer clean and minimal (Notion-style)
+Service Type dropdown should be:
+Compact
+Inline with timer controls
+Use:
+#266b75 for active timer
+#7dbdc6 for hover
+9. Reporting / Future-Proofing
+
+Structure system so we can later:
+
+Show:
+VA hours used vs remaining
+Bookkeeping hours separately
+Generate invoices based on:
+Hourly time entries
+10. Deliverables
+Timer updated with Service Type selector
+Time entries store serviceType
+VA hours deducted correctly
+Bookkeeping time excluded from budgets
+Task integration for auto-fill
+Editable time entries with recalculation

@@ -764,7 +764,17 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                      {task.service_type === "Bookkeeping" && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-[#c8c7cb] bg-[#c8c7cb]/40 text-slate-800 whitespace-nowrap">
+                          Bookkeeping
+                        </span>
+                      )}
+                      {task.service_type === "Virtual Assistant" && (
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-[#7dbdc6] bg-[#7dbdc6]/30 text-slate-800 whitespace-nowrap">
+                          Virtual Assistant
+                        </span>
+                      )}
                       <StatusBadge status={task.status} />
                       <MessageSquare className={`w-4 h-4 ${isExpanded ? "text-primary" : "text-slate-300"}`} />
                     </div>

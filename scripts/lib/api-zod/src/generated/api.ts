@@ -130,13 +130,23 @@ export const ListTasksQueryParams = zod.object({
   clientId: zod.coerce.number().optional(),
 });
 
+const normalizeTaskStatus = (v: unknown) => {
+  if (typeof v !== "string") return v;
+  const map: Record<string, string> = {
+    pending: "Pending", confirmed: "Confirmed",
+    "in progress": "In Progress", in_progress: "In Progress",
+    completed: "Completed",
+  };
+  return map[v.toLowerCase()] ?? v;
+};
+
 export const ListTasksResponseItem = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullish(),
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]),
+  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
   recurrence: zod
@@ -171,7 +181,7 @@ export const SpawnRecurringTasksResponseItem = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]),
+  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
   recurrence: zod

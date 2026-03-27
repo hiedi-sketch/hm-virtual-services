@@ -11,6 +11,7 @@ type Task = {
   due_date?: string;
   assigned_to?: string;
   status: string;
+  service_type?: string | null;
   client_id?: number | null;
   client_name?: string | null;
   comment_count?: number;
@@ -30,6 +31,30 @@ function statusBadge(status: string) {
   return "text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-600";
 }
 
+function ServiceTypeBadge({ value }: { value?: string | null }) {
+  if (value === "Bookkeeping") {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border border-[#c8c7cb] bg-[#c8c7cb]/40 text-slate-800 whitespace-nowrap">
+        Bookkeeping
+      </span>
+    );
+  }
+  if (value === "Virtual Assistant") {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#7dbdc6]/30 border border-[#7dbdc6] text-slate-800 whitespace-nowrap">
+        Virtual Assistant
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 border border-slate-200 text-slate-400 whitespace-nowrap">
+      Unassigned
+    </span>
+  );
+}
+
+type SortKey = "title" | "due_date" | "assigned_to" | "service_type";
+
 type TaskTableProps = {
   tasks: Task[];
   onToggleStatus: (task: Task) => void;
@@ -40,6 +65,7 @@ type TaskTableProps = {
   activeCommentTaskId?: number | null;
   timerStatus?: "idle" | "running" | "paused";
   showComments?: boolean;
+  serviceTypeFilter?: string;
 };
 
 export default function TaskTable({
@@ -52,15 +78,24 @@ export default function TaskTable({
   activeCommentTaskId,
   timerStatus,
   showComments = true,
+  serviceTypeFilter,
 }: TaskTableProps) {
   const today = new Date().toISOString().split("T")[0];
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const [sortKey, setSortKey] = useState<"title" | "due_date" | "assigned_to">("title");
+  const [sortKey, setSortKey] = useState<SortKey>("title");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const displayedTasks = useMemo(() => {
-    return [...tasks].sort((a, b) => {
+    let list = tasks;
+    if (serviceTypeFilter && serviceTypeFilter !== "all") {
+      if (serviceTypeFilter === "Unassigned") {
+        list = list.filter(t => !t.service_type);
+      } else {
+        list = list.filter(t => t.service_type === serviceTypeFilter);
+      }
+    }
+    return [...list].sort((a, b) => {
       let valA = "";
       let valB = "";
       if (sortKey === "title") {
@@ -72,14 +107,17 @@ export default function TaskTable({
       } else if (sortKey === "assigned_to") {
         valA = (a.assigned_to || "").toLowerCase();
         valB = (b.assigned_to || "").toLowerCase();
+      } else if (sortKey === "service_type") {
+        valA = (a.service_type || "zzz").toLowerCase();
+        valB = (b.service_type || "zzz").toLowerCase();
       }
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
       if (valA > valB) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
-  }, [tasks, sortKey, sortDirection]);
+  }, [tasks, sortKey, sortDirection, serviceTypeFilter]);
 
-  const handleSort = (key: "title" | "due_date" | "assigned_to") => {
+  const handleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
@@ -88,10 +126,10 @@ export default function TaskTable({
     }
   };
 
-  const sortIcon = (key: "title" | "due_date" | "assigned_to") =>
+  const sortIcon = (key: SortKey) =>
     sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
 
-  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + 5 + 1;
+  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + 6 + 1;
 
   const toggleExpand = (id: string) => {
     setExpandedId(prev => (prev === id ? null : id));
@@ -106,6 +144,9 @@ export default function TaskTable({
               <th className="px-6 py-4 w-10" />
               <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("title")}>
                 Task{sortIcon("title")}
+              </th>
+              <th className="px-6 py-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("service_type")}>
+                Service Type{sortIcon("service_type")}
               </th>
               <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("due_date")}>
                 Due{sortIcon("due_date")}
@@ -168,6 +209,9 @@ export default function TaskTable({
                             }`}
                           />
                         </div>
+                      </td>
+                      <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
+                        <ServiceTypeBadge value={task.service_type} />
                       </td>
                       <td className={`px-6 py-4 ${isOverdue ? "text-red-600 font-semibold" : "text-slate-600"}`} onClick={e => e.stopPropagation()}>
                         <input
