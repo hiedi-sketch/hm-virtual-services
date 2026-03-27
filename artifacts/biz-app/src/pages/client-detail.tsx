@@ -86,11 +86,6 @@ export default function ClientDetail() {
   const [editContactName, setEditContactName] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
-  const [editHasBK, setEditHasBK] = useState(false);
-  const [editHasVA, setEditHasVA] = useState(false);
-  const [editBkFee, setEditBkFee] = useState<string>("");
-  const [editVaRate, setEditVaRate] = useState<string>("");
-  const [editVaLimit, setEditVaLimit] = useState<string>("");
   const [editParentId, setEditParentId] = useState<string>("");
 
   // Subclients sort state
@@ -271,29 +266,12 @@ export default function ClientDetail() {
     setEditContactName(client.contact_name ?? "");
     setEditPhone(client.phone ?? "");
     setEditWebsite(client.website ?? "");
-    const hasBK = client.service_type === "bookkeeping" || client.service_type === "hybrid";
-    const hasVA = client.service_type === "va" || client.service_type === "hybrid";
-    setEditHasBK(hasBK);
-    setEditHasVA(hasVA);
-    setEditBkFee(client.bk_fee != null ? String(client.bk_fee) : "");
-    setEditVaRate(client.va_hourly_rate != null ? String(client.va_hourly_rate) : "");
-    setEditVaLimit(client.va_hour_limit != null ? String(client.va_hour_limit) : "");
     setEditParentId((client as any).parent_id != null ? String((client as any).parent_id) : "");
     setShowEditProfile(true);
   };
 
   const handleEditProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editHasBK && !editHasVA) {
-      toast({ title: "Select at least one service", variant: "destructive" });
-      return;
-    }
-    const serviceType = editHasBK && editHasVA ? "hybrid" : editHasBK ? "bookkeeping" : "va";
-    const bkFee = editHasBK && editBkFee ? parseFloat(editBkFee) : null;
-    const vaRate = editHasVA && editVaRate ? parseFloat(editVaRate) : null;
-    const vaLimit = editHasVA && editVaLimit ? parseFloat(editVaLimit) : null;
-    const totalFee = ((bkFee ?? 0) + (vaRate ?? 0) * (vaLimit ?? 0)) || (client?.monthly_fee ?? 0);
-    const totalHours = (vaLimit ?? client?.monthly_hour_budget) ?? 0;
     updateClientMutation.mutate({
       id: clientId,
       data: {
@@ -302,12 +280,6 @@ export default function ClientDetail() {
         contact_name: editContactName.trim() || null,
         phone: editPhone.trim() || null,
         website: editWebsite.trim() || null,
-        service_type: serviceType as any,
-        bk_fee: bkFee,
-        va_hourly_rate: vaRate,
-        va_hour_limit: vaLimit,
-        monthly_fee: totalFee > 0 ? totalFee : undefined,
-        monthly_hour_budget: totalHours > 0 ? totalHours : undefined,
         parent_id: editParentId !== "" ? Number(editParentId) : null,
       } as any,
     });
@@ -350,9 +322,20 @@ export default function ClientDetail() {
     );
   }
 
-  const hasBK = client.service_type === "bookkeeping" || client.service_type === "hybrid";
-  const hasVA = client.service_type === "va" || client.service_type === "hybrid";
+  const hasBK = clientServices.some(cs => cs.service_type === "Bookkeeping");
+  const hasVA = clientServices.some(cs => cs.service_type === "Virtual Assistant");
   const barColor = isOverBudget ? "bg-red-500" : isNearBudget ? "bg-amber-500" : "bg-primary";
+
+  // Compute monthly fee from assigned services
+  // For hourly services: use hourly_rate × budgeted_hours; fall back to base price if not set
+  const computedMonthlyFee = servicesHours.reduce((sum, s) => {
+    if (s.billing_type === "Flat Rate") return sum + (s.price ?? 0);
+    if (s.billing_type === "Hourly") {
+      const hourlyTotal = (s.hourly_rate ?? 0) * (s.budgeted_hours ?? 0);
+      return sum + (hourlyTotal > 0 ? hourlyTotal : (s.price ?? 0));
+    }
+    return sum + (s.price ?? 0);
+  }, 0);
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -412,58 +395,6 @@ export default function ClientDetail() {
                 placeholder="https://acmecorp.com"
               />
             </div>
-
-            {/* Service checkboxes */}
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-2">Services</label>
-              <div className="flex flex-col gap-2">
-                <label className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${editHasBK ? "bg-emerald-50 border-emerald-200" : "bg-slate-50 border-slate-200"}`}>
-                  <input type="checkbox" checked={editHasBK} onChange={e => setEditHasBK(e.target.checked)} className="mt-0.5 accent-emerald-600" />
-                  <div>
-                    <div className="text-sm font-medium text-slate-800">Bookkeeping</div>
-                    <div className="text-xs text-slate-400">Flat monthly fee</div>
-                  </div>
-                </label>
-                <label
-                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${editHasVA ? "border-primary/25 bg-primary/5" : "bg-slate-50 border-slate-200"}`}
-                  style={editHasVA ? { backgroundColor: "hsl(188 51% 30% / 0.05)", borderColor: "hsl(188 51% 30% / 0.25)" } : {}}
-                >
-                  <input type="checkbox" checked={editHasVA} onChange={e => setEditHasVA(e.target.checked)} className="mt-0.5 accent-primary" />
-                  <div>
-                    <div className="text-sm font-medium text-slate-800">Virtual Assistant</div>
-                    <div className="text-xs text-slate-400">Hourly with monthly cap</div>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {/* Bookkeeping package */}
-            {editHasBK && (
-              <div className="bg-emerald-50 rounded-xl p-3 space-y-2 border border-emerald-100">
-                <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Bookkeeping Package</p>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1">Flat Monthly Fee ($)</label>
-                  <input type="number" step="0.01" className={inputCls} value={editBkFee} onChange={e => setEditBkFee(e.target.value)} placeholder="500.00" />
-                </div>
-              </div>
-            )}
-
-            {/* VA package */}
-            {editHasVA && (
-              <div className="rounded-xl p-3 space-y-2 border" style={{ backgroundColor: "hsl(188 51% 30% / 0.04)", borderColor: "hsl(188 51% 30% / 0.15)" }}>
-                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "#266b75" }}>VA Package</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Hourly Rate ($/hr)</label>
-                    <input type="number" step="0.01" className={inputCls} value={editVaRate} onChange={e => setEditVaRate(e.target.value)} placeholder="75.00" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1">Monthly Hour Limit</label>
-                    <input type="number" className={inputCls} value={editVaLimit} onChange={e => setEditVaLimit(e.target.value)} placeholder="20" />
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Parent Client */}
             <div>
@@ -543,9 +474,7 @@ export default function ClientDetail() {
                       style={{ backgroundColor: "hsl(188 51% 30% / 0.07)", borderColor: "hsl(188 51% 30% / 0.2)", color: "#266b75" }}
                     >
                       <Monitor className="w-3 h-3" />
-                      VA
-                      {client.va_hourly_rate != null && <span className="ml-1 font-normal">{formatCurrency(client.va_hourly_rate)}/hr</span>}
-                      {client.va_hour_limit != null && <span className="font-normal text-slate-400"> · {client.va_hour_limit}h cap</span>}
+                      Virtual Assistant
                     </span>
                   )}
                 </div>
@@ -559,30 +488,14 @@ export default function ClientDetail() {
                 <Pencil className="w-3.5 h-3.5" />
                 Edit Info
               </button>
-              {/* Right-side fee summary */}
-              <div className="text-right space-y-1">
-                {hasBK && client.bk_fee != null && (
-                  <div>
-                    <p className="text-xs text-slate-400">Bookkeeping</p>
-                    <p className="text-lg font-bold text-emerald-700">
-                      {formatCurrency(client.bk_fee)}<span className="text-xs font-normal text-slate-400">/mo</span>
-                    </p>
-                  </div>
-                )}
-                {hasVA && client.va_hourly_rate != null && (
-                  <div>
-                    <p className="text-xs text-slate-400">VA rate</p>
-                    <p className="text-lg font-bold" style={{ color: "#266b75" }}>
-                      {formatCurrency(client.va_hourly_rate)}/hr
-                      {client.va_hour_limit != null && <span className="text-xs font-normal text-slate-400 ml-1">· {client.va_hour_limit}h</span>}
-                    </p>
-                  </div>
-                )}
-                {!hasBK && !hasVA && (
-                  <div>
-                    <p className="text-xs text-slate-500">Monthly Fee</p>
-                    <p className="text-2xl font-bold text-slate-900">{formatCurrency(client.monthly_fee)}</p>
-                  </div>
+              {/* Monthly fee — computed from assigned services */}
+              <div className="text-right">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Monthly Fee</p>
+                <p className="text-2xl font-bold text-slate-900 mt-0.5">
+                  {formatCurrency(computedMonthlyFee || client.monthly_fee)}
+                </p>
+                {clientServices.length > 0 && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">from {clientServices.length} service{clientServices.length !== 1 ? "s" : ""}</p>
                 )}
               </div>
             </div>
@@ -626,37 +539,6 @@ export default function ClientDetail() {
               This client has exceeded their monthly VA hour cap.
             </div>
           )}
-        </div>
-      )}
-
-      {/* Package cost summary (hybrid clients) */}
-      {hasBK && hasVA && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Monthly Package Breakdown</h3>
-          <div className="flex flex-col gap-2">
-            {client.bk_fee != null && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="flex items-center gap-2 text-slate-600">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                  Bookkeeping (flat fee)
-                </span>
-                <span className="font-semibold text-slate-900">{formatCurrency(client.bk_fee)}</span>
-              </div>
-            )}
-            {client.va_hourly_rate != null && client.va_hour_limit != null && (
-              <div className="flex justify-between items-center text-sm">
-                <span className="flex items-center gap-2 text-slate-600">
-                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
-                  VA ({formatCurrency(client.va_hourly_rate)}/hr × {client.va_hour_limit}h cap)
-                </span>
-                <span className="font-semibold text-slate-900">{formatCurrency(client.va_hourly_rate * client.va_hour_limit)}</span>
-              </div>
-            )}
-            <div className="border-t border-slate-100 pt-2 flex justify-between items-center text-sm font-semibold">
-              <span className="text-slate-700">Total monthly</span>
-              <span className="text-slate-900">{formatCurrency(client.monthly_fee)}</span>
-            </div>
-          </div>
         </div>
       )}
 
@@ -754,14 +636,23 @@ export default function ClientDetail() {
       )}
 
       {/* Assigned Services */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-          <Package className="w-4 h-4 text-slate-500" />
-          <span className="font-semibold text-slate-900 text-sm">Assigned Services</span>
-          <span className="ml-1 text-xs text-slate-400">({clientServices.length})</span>
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-2 flex-1">
+            <Package className="w-4 h-4 text-slate-500" />
+            <span className="font-semibold text-slate-900 text-sm">Assigned Services</span>
+            <span className="text-xs text-slate-400">({clientServices.length})</span>
+          </div>
+          {/* Monthly fee total pill */}
+          {clientServices.length > 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border font-semibold text-sm" style={{ background: "#266b75", borderColor: "#266b75", color: "white" }} title="Monthly Fee is calculated from all assigned services">
+              <DollarSign className="w-3.5 h-3.5" />
+              {formatCurrency(computedMonthlyFee)}<span className="font-normal text-white/70 text-xs ml-1">/mo</span>
+            </div>
+          )}
           <button
             onClick={() => setShowAddService(v => !v)}
-            className="ml-auto flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Service
@@ -881,7 +772,7 @@ export default function ClientDetail() {
           </div>
         )}
 
-        {/* Services List */}
+        {/* Services Table */}
         {clientServices.length === 0 ? (
           <div className="p-8 text-center">
             <Package className="w-8 h-8 text-slate-200 mx-auto mb-2" />
@@ -894,238 +785,236 @@ export default function ClientDetail() {
             )}
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {clientServices.map(cs => {
-              const hoursInfo = servicesHours.find(h => h.service_id === cs.service_id);
-              const isVA = cs.service_type === "Virtual Assistant";
-              const isHourly = cs.billing_type === "Hourly";
-              const isFlatRate = cs.billing_type === "Flat Rate";
-              const effPrice = cs.custom_price ?? cs.price;
-              const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
-              const effBudget = cs.custom_budgeted_hours ?? cs.budgeted_hours;
-              const budgeted = effBudget ?? 0;
-              const used = hoursInfo?.hours_used ?? 0;
-              const remaining = Math.max(0, budgeted - used);
-              const pct = budgeted > 0 ? Math.min(100, Math.round((used / budgeted) * 100)) : 0;
-              const overBudget = isVA && budgeted > 0 && used >= budgeted;
-              const isEditing = editingServiceId === cs.service_id;
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50/40">
+                  <th className="text-left px-5 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Service</th>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Type</th>
+                  <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Monthly Value</th>
+                  <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Budgeted Hrs</th>
+                  <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Hourly Rate</th>
+                  <th className="px-3 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {clientServices.map(cs => {
+                  const hoursInfo = servicesHours.find(h => h.service_id === cs.service_id);
+                  const isVA = cs.service_type === "Virtual Assistant";
+                  const isHourly = cs.billing_type === "Hourly";
+                  const isFlatRate = cs.billing_type === "Flat Rate";
+                  const effPrice = cs.custom_price ?? cs.price;
+                  const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
+                  const effBudget = cs.custom_budgeted_hours ?? cs.budgeted_hours;
+                  const budgeted = effBudget ?? 0;
+                  const used = hoursInfo?.hours_used ?? 0;
+                  const pct = budgeted > 0 ? Math.min(100, Math.round((used / budgeted) * 100)) : 0;
+                  const overBudget = isVA && budgeted > 0 && used >= budgeted;
+                  const isEditing = editingServiceId === cs.service_id;
+                  // For hourly services: use rate × budgeted hours; fall back to base price when not configured
+                  const hourlyComputed = isHourly && effRate != null && budgeted > 0 ? effRate * budgeted : 0;
+                  const monthlyValue = isFlatRate
+                    ? (effPrice ?? 0)
+                    : hourlyComputed > 0
+                      ? hourlyComputed
+                      : (effPrice ?? 0);
+                  const hasCustom = cs.custom_price != null || cs.custom_hourly_rate != null || cs.custom_budgeted_hours != null;
 
-              return (
-                <div key={cs.id} className="px-5 py-3.5">
-                  {/* Service Row */}
-                  <div className="flex items-start gap-3">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${isVA ? "bg-[#266b75]/10" : "bg-blue-50"}`}>
-                      {isVA
-                        ? <Monitor className="w-3.5 h-3.5 text-[#266b75]" />
-                        : <DollarSign className="w-3.5 h-3.5 text-blue-600" />
-                      }
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-900 truncate">{cs.name}</p>
-                      <div className="flex flex-wrap gap-1 mt-0.5">
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
-                          isVA ? "bg-[#266b75]/10 text-[#266b75] border-[#266b75]/20" : "bg-blue-50 text-blue-700 border-blue-200"
-                        }`}>{cs.service_type ?? "Service"}</span>
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full border ${
-                          isHourly ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-slate-50 text-slate-600 border-slate-200"
-                        }`}>{cs.billing_type ?? "Flat Rate"}</span>
-                        {(cs.custom_price != null || cs.custom_hourly_rate != null || cs.custom_budgeted_hours != null) && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full border bg-[#7dbdc6]/15 text-[#266b75] border-[#7dbdc6]/30">custom</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      {isHourly && effRate != null ? (
-                        <p className="text-sm font-semibold text-slate-700">{formatCurrency(effRate)}/hr</p>
-                      ) : effPrice != null ? (
-                        <p className="text-sm font-semibold text-slate-700">{formatCurrency(effPrice)}</p>
-                      ) : (
-                        <p className="text-sm text-slate-400">—</p>
-                      )}
-                      {isVA && budgeted > 0 && (
-                        <p className="text-[10px] text-slate-400">{budgeted} hrs budgeted</p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => isEditing ? setEditingServiceId(null) : startEditService(cs)}
-                      className={`p-1.5 rounded-lg transition-colors ${isEditing ? "text-[#266b75] bg-[#266b75]/10" : "text-slate-300 hover:text-[#266b75] hover:bg-[#266b75]/10"}`}
-                      title="Edit overrides"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => removeServiceMutation.mutate({ clientId, serviceId: cs.service_id })}
-                      disabled={removeServiceMutation.isPending}
-                      className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                      title="Remove service"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Inline Edit Form */}
-                  {isEditing && (
-                    <div className="mt-3 ml-10 p-3 bg-slate-50 rounded-xl border border-[#c8c7cb] space-y-2">
-                      <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Client-Specific Overrides</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        {isFlatRate && (
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Price ($/mo)</label>
-                            <div className="relative">
-                              <DollarSign className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-                              <input type="number" step="0.01" min="0"
-                                className="w-full border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
-                                placeholder={String(cs.price ?? 0)}
-                                value={editCustomPrice}
-                                onChange={e => setEditCustomPrice(e.target.value)}
-                              />
+                  return (
+                    <React.Fragment key={cs.id}>
+                      {/* Main row */}
+                      <tr className={`hover:bg-slate-50/60 transition-colors ${isEditing ? "bg-[#266b75]/5" : ""}`}>
+                        {/* Service name */}
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${isVA ? "bg-[#266b75]/10" : "bg-blue-50"}`}>
+                              {isVA ? <Monitor className="w-3 h-3 text-[#266b75]" /> : <DollarSign className="w-3 h-3 text-blue-600" />}
+                            </div>
+                            <div>
+                              <p className="font-medium text-slate-900 leading-tight">{cs.name}</p>
+                              {hasCustom && (
+                                <span className="text-[9px] font-semibold uppercase tracking-wider text-[#266b75]">custom override</span>
+                              )}
                             </div>
                           </div>
-                        )}
-                        {isHourly && (
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Hourly Rate ($/hr)</label>
-                            <div className="relative">
-                              <DollarSign className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
-                              <input type="number" step="0.01" min="0"
-                                className="w-full border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
-                                placeholder={String(cs.hourly_rate ?? 0)}
-                                value={editCustomHourlyRate}
-                                onChange={e => setEditCustomHourlyRate(e.target.value)}
-                              />
+                        </td>
+                        {/* Type */}
+                        <td className="px-4 py-3.5">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                            isVA ? "bg-[#266b75]/10 text-[#266b75] border-[#266b75]/20" : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                          }`}>
+                            {isVA ? <Monitor className="w-2.5 h-2.5" /> : <DollarSign className="w-2.5 h-2.5" />}
+                            {cs.service_type ?? "Service"}
+                          </span>
+                          {isHourly && (
+                            <span className="inline-flex items-center text-[9px] font-medium px-1.5 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-200 ml-1">Hourly</span>
+                          )}
+                        </td>
+                        {/* Monthly Value */}
+                        <td className="px-4 py-3.5 text-right">
+                          <span className="font-semibold text-slate-900">{monthlyValue > 0 ? formatCurrency(monthlyValue) : "—"}</span>
+                          {isHourly && budgeted > 0 && (
+                            <p className="text-[10px] text-slate-400">{formatCurrency(effRate ?? 0)}/hr × {budgeted}h</p>
+                          )}
+                        </td>
+                        {/* Budgeted Hrs */}
+                        <td className="px-4 py-3.5 text-right">
+                          {isVA && budgeted > 0 ? (
+                            <div>
+                              <span className="font-medium text-slate-700">{budgeted}h</span>
+                              {budgeted > 0 && (
+                                <div className="mt-1 flex items-center gap-1.5 justify-end">
+                                  <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${overBudget ? "bg-red-500" : "bg-[#266b75]"}`} style={{ width: `${pct}%` }} />
+                                  </div>
+                                  <span className="text-[9px] text-slate-400">{used.toFixed(1)}h used</span>
+                                </div>
+                              )}
+                              {hoursInfo?.days_until_reset != null && (
+                                <p className="text-[9px] font-medium mt-0.5" style={{ color: "#266b75" }}>
+                                  resets in {hoursInfo.days_until_reset}d
+                                </p>
+                              )}
                             </div>
+                          ) : (
+                            <span className="text-slate-300 text-xs">—</span>
+                          )}
+                        </td>
+                        {/* Hourly Rate */}
+                        <td className="px-4 py-3.5 text-right">
+                          {effRate != null ? (
+                            <span className="font-medium text-slate-600">{formatCurrency(effRate)}/hr</span>
+                          ) : (
+                            <span className="text-slate-300 text-xs">—</span>
+                          )}
+                        </td>
+                        {/* Actions */}
+                        <td className="px-3 py-3.5">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => isEditing ? setEditingServiceId(null) : startEditService(cs)}
+                              className={`p-1.5 rounded-lg transition-colors ${isEditing ? "text-[#266b75] bg-[#266b75]/10" : "text-slate-300 hover:text-[#266b75] hover:bg-[#266b75]/10"}`}
+                              title="Edit overrides"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => removeServiceMutation.mutate({ clientId, serviceId: cs.service_id })}
+                              disabled={removeServiceMutation.isPending}
+                              className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                              title="Remove service"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           </div>
-                        )}
-                        {isVA && (
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Budgeted Hours/mo</label>
-                            <input type="number" min="0" step="0.5"
-                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
-                              placeholder={String(cs.budgeted_hours ?? 0)}
-                              value={editCustomBudgetedHours}
-                              onChange={e => setEditCustomBudgetedHours(e.target.value)}
-                            />
-                          </div>
-                        )}
-                        {isVA && (
-                          <div>
-                            <label className="block text-[11px] font-medium text-slate-500 mb-1">Monthly Hours Reset Day (1–31)</label>
-                            <input type="number" min="1" max="31" step="1"
-                              className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
-                              placeholder="e.g. 1"
-                              value={editResetDay}
-                              onChange={e => setEditResetDay(e.target.value)}
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-2 pt-1">
-                        <button
-                          onClick={() => {
-                            updateServiceMutation.mutate({
-                              clientId,
-                              serviceId: cs.service_id,
-                              body: {
-                                custom_price: editCustomPrice !== "" ? Number(editCustomPrice) : null,
-                                custom_hourly_rate: editCustomHourlyRate !== "" ? Number(editCustomHourlyRate) : null,
-                                custom_budgeted_hours: editCustomBudgetedHours !== "" ? Number(editCustomBudgetedHours) : null,
-                                monthly_hours_reset_day: editResetDay !== "" ? Number(editResetDay) : null,
-                              },
-                            });
-                          }}
-                          disabled={updateServiceMutation.isPending}
-                          className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white rounded-lg disabled:opacity-50 transition-colors"
-                          style={{ background: "#266b75" }}
-                        >
-                          <Check className="w-3 h-3" />
-                          {updateServiceMutation.isPending ? "Saving…" : "Save"}
-                        </button>
-                        <button
-                          onClick={() => setEditingServiceId(null)}
-                          className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                        </td>
+                      </tr>
 
-                  {/* VA hours usage bar */}
-                  {isVA && budgeted > 0 && (
-                    <div className="mt-2.5 ml-10">
-                      <div className="flex justify-between text-xs text-slate-500 mb-1">
-                        <span>{used.toFixed(1)} hrs used</span>
-                        <span className={overBudget ? "text-red-500 font-semibold" : ""}>{remaining.toFixed(1)} hrs remaining</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${overBudget ? "bg-red-500" : "bg-[#266b75]"}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      {isHourly && effRate != null && (
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          Estimated cost: {formatCurrency(used * effRate)} ({formatCurrency(effRate)}/hr × {used.toFixed(1)} hrs)
-                        </p>
+                      {/* Inline edit row */}
+                      {isEditing && (
+                        <tr>
+                          <td colSpan={6} className="px-5 py-3 bg-[#266b75]/5 border-b border-[#266b75]/10">
+                            <div className="space-y-2">
+                              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Client-Specific Overrides</p>
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {isFlatRate && (
+                                  <div>
+                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Price ($/mo)</label>
+                                    <div className="relative">
+                                      <DollarSign className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                                      <input type="number" step="0.01" min="0"
+                                        className="w-full border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                                        placeholder={String(cs.price ?? 0)}
+                                        value={editCustomPrice}
+                                        onChange={e => setEditCustomPrice(e.target.value)}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                                {isHourly && (
+                                  <div>
+                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Hourly Rate ($/hr)</label>
+                                    <div className="relative">
+                                      <DollarSign className="w-3 h-3 absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                                      <input type="number" step="0.01" min="0"
+                                        className="w-full border border-slate-200 rounded-lg pl-6 pr-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                                        placeholder={String(cs.hourly_rate ?? 0)}
+                                        value={editCustomHourlyRate}
+                                        onChange={e => setEditCustomHourlyRate(e.target.value)}
+                                      />
+                                    </div>
+                                  </div>
+                                )}
+                                {isVA && (
+                                  <div>
+                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Budgeted Hours/mo</label>
+                                    <input type="number" min="0" step="0.5"
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                                      placeholder={String(cs.budgeted_hours ?? 0)}
+                                      value={editCustomBudgetedHours}
+                                      onChange={e => setEditCustomBudgetedHours(e.target.value)}
+                                    />
+                                  </div>
+                                )}
+                                {isVA && (
+                                  <div>
+                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Reset Day (1–31)</label>
+                                    <input type="number" min="1" max="31" step="1"
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                                      placeholder="e.g. 1"
+                                      value={editResetDay}
+                                      onChange={e => setEditResetDay(e.target.value)}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  onClick={() => {
+                                    updateServiceMutation.mutate({
+                                      clientId,
+                                      serviceId: cs.service_id,
+                                      body: {
+                                        custom_price: editCustomPrice !== "" ? Number(editCustomPrice) : null,
+                                        custom_hourly_rate: editCustomHourlyRate !== "" ? Number(editCustomHourlyRate) : null,
+                                        custom_budgeted_hours: editCustomBudgetedHours !== "" ? Number(editCustomBudgetedHours) : null,
+                                        monthly_hours_reset_day: editResetDay !== "" ? Number(editResetDay) : null,
+                                      },
+                                    });
+                                  }}
+                                  disabled={updateServiceMutation.isPending}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white rounded-lg disabled:opacity-50 transition-colors"
+                                  style={{ background: "#266b75" }}
+                                >
+                                  <Check className="w-3 h-3" />
+                                  {updateServiceMutation.isPending ? "Saving…" : "Save"}
+                                </button>
+                                <button
+                                  onClick={() => setEditingServiceId(null)}
+                                  className="px-3 py-1.5 text-xs border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                      {hoursInfo?.days_until_reset != null && (
-                        <p className="text-[10px] mt-1 font-medium" style={{ color: "#266b75" }}>
-                          Resets in {hoursInfo.days_until_reset} day{hoursInfo.days_until_reset !== 1 ? "s" : ""}
-                          {hoursInfo.next_reset_date ? ` (${hoursInfo.next_reset_date})` : ""}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Hourly cost for Bookkeeping (no budget bar) */}
-                  {!isVA && isHourly && effRate != null && used > 0 && (
-                    <div className="mt-1.5 ml-10">
-                      <p className="text-[10px] text-slate-400">
-                        {used.toFixed(1)} hrs tracked — est. {formatCurrency(used * effRate)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+              {/* Table footer total row */}
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 bg-slate-50/60">
+                  <td colSpan={2} className="px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Monthly</td>
+                  <td className="px-4 py-3 text-right text-base font-bold text-slate-900">{formatCurrency(computedMonthlyFee)}</td>
+                  <td colSpan={3} className="px-4 py-3 text-right text-xs text-slate-400">calculated from assigned services</td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         )}
-
-        {/* Monthly Value Summary */}
-        {clientServices.length > 0 && (() => {
-          const flatTotal = clientServices
-            .filter(cs => cs.billing_type === "Flat Rate")
-            .reduce((sum, cs) => sum + ((cs.custom_price ?? cs.price) ?? 0), 0);
-          const hourlyList = clientServices.filter(cs => cs.billing_type === "Hourly");
-          return (
-            <div className="px-5 py-4 border-t border-slate-100 bg-slate-50/50 space-y-1.5">
-              <p className="text-xs font-semibold text-[#266b75] uppercase tracking-wider">Monthly Value Summary</p>
-              {flatTotal > 0 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-slate-600">Total Fixed Monthly</span>
-                  <span className="font-bold text-slate-900">{formatCurrency(flatTotal)}</span>
-                </div>
-              )}
-              {hourlyList.length > 0 && (
-                <div>
-                  <p className="text-xs text-slate-400 mt-1">Hourly Services <span className="text-amber-600 font-medium">(Variable Billing)</span></p>
-                  {hourlyList.map(cs => {
-                    const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
-                    return (
-                      <div key={cs.service_id} className="flex items-center justify-between text-xs text-slate-600 ml-2 mt-0.5">
-                        <span>{cs.name}</span>
-                        <span>{effRate != null ? `${formatCurrency(effRate)}/hr` : "—"}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-              {flatTotal === 0 && hourlyList.length === 0 && (
-                <p className="text-xs text-slate-400">No pricing configured</p>
-              )}
-            </div>
-          );
-        })()}
       </div>
 
       {/* ── Subclients Overview ──────────────────────────────────────────────── */}
