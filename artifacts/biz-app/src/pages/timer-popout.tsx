@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Briefcase,
   ClipboardList,
+  StickyNote,
   X,
 } from "lucide-react";
 import { TimerProvider, useTimer, formatElapsed, type ServiceType } from "@/contexts/TimerContext";
@@ -37,7 +38,7 @@ function getTodayLocal() {
 }
 
 function TimerPopoutInner() {
-  const { state, elapsedMs, start, pause, stop, assignClient, assignTask, setServiceType } = useTimer();
+  const { state, elapsedMs, start, pause, stop, assignClient, assignTask, setServiceType, setNotes } = useTimer();
   const { data: clients } = useListClients();
   const { data: tasks } = useListTasks();
   const { toast } = useToast();
@@ -83,6 +84,7 @@ function TimerPopoutInner() {
         started_at:       startedAt,
         ended_at:         endedAt,
         service_type:     state.serviceType,
+        notes:            state.notes ?? undefined,
       } as any);
       stop();
       setSaved(true);
@@ -303,6 +305,20 @@ function TimerPopoutInner() {
           {state.serviceType === "Bookkeeping" && (
             <p className="text-[10px] text-slate-400 mt-1.5 pl-1">↳ Tracked for reporting only</p>
           )}
+        </div>
+
+        {/* Notes */}
+        <div>
+          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+            <StickyNote className="w-3 h-3" /> Notes <span className="normal-case font-normal text-slate-300">(optional)</span>
+          </label>
+          <textarea
+            rows={3}
+            placeholder="What are you working on?"
+            value={state.notes ?? ""}
+            onChange={e => setNotes(e.target.value || null)}
+            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 text-slate-700 bg-white shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] placeholder:text-slate-300"
+          />
         </div>
       </div>
 

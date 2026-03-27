@@ -25,6 +25,7 @@ const withJoins = {
   started_at: timeEntriesTable.started_at,
   ended_at: timeEntriesTable.ended_at,
   service_type: timeEntriesTable.service_type,
+  notes: timeEntriesTable.notes,
   client_name: clientsTable.name,
   task_title: tasksTable.title,
   logged_by: usersTable.name,

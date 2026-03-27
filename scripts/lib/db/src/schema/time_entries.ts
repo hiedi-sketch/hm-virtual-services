@@ -12,6 +12,7 @@ export const timeEntriesTable = pgTable("time_entries", {
   started_at: text("started_at"),
   ended_at: text("ended_at"),
   service_type: text("service_type", { enum: ["Bookkeeping", "Virtual Assistant"] }),
+  notes: text("notes"),
 });
 
 export const insertTimeEntrySchema = createInsertSchema(timeEntriesTable).omit({ id: true });

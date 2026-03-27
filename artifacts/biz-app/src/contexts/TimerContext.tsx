@@ -23,6 +23,7 @@ export interface TimerState {
   taskId: number | null;
   taskTitle: string | null;
   serviceType: ServiceType;
+  notes: string | null;
 }
 
 const DEFAULT_STATE: TimerState = {
@@ -35,6 +36,7 @@ const DEFAULT_STATE: TimerState = {
   taskId: null,
   taskTitle: null,
   serviceType: null,
+  notes: null,
 };
 
 interface TimerContextValue {
@@ -46,6 +48,7 @@ interface TimerContextValue {
   assignClient: (id: number, name: string) => void;
   assignTask: (id: number, title: string) => void;
   setServiceType: (type: ServiceType) => void;
+  setNotes: (notes: string | null) => void;
   startForTask: (
     taskId: number,
     taskTitle: string,
@@ -161,6 +164,10 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
     setState({ ...state, serviceType: type });
   }, [state, setState]);
 
+  const setNotes = useCallback((notes: string | null) => {
+    setState({ ...state, notes });
+  }, [state, setState]);
+
   const startForTask = useCallback((
     taskId: number,
     taskTitle: string,
@@ -200,13 +207,14 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
       started_at: started_at ?? null,
       ended_at,
       service_type: state.serviceType,
+      notes: state.notes ?? undefined,
     } as any);
 
     setState({ ...DEFAULT_STATE });
   }, [state, setState, computeElapsed]);
 
   return (
-    <TimerContext.Provider value={{ state, elapsedMs, start, pause, stop, assignClient, assignTask, setServiceType, startForTask, saveAndStop }}>
+    <TimerContext.Provider value={{ state, elapsedMs, start, pause, stop, assignClient, assignTask, setServiceType, setNotes, startForTask, saveAndStop }}>
       {children}
     </TimerContext.Provider>
   );

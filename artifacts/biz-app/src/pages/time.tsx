@@ -61,6 +61,11 @@ function ServiceTypeBadge({ value }: { value?: string | null }) {
   return null;
 }
 
+const serviceTypeSchema = z.preprocess(
+  val => (val === "" || val === null || val === undefined) ? null : val,
+  z.enum(["Bookkeeping", "Virtual Assistant"]).nullable()
+);
+
 const manualSchema = z.object({
   client_id: z.coerce.number().min(1, "Please select a client"),
   task_id: z.preprocess(
@@ -69,7 +74,8 @@ const manualSchema = z.object({
   ),
   duration_minutes: z.coerce.number().min(1, "Must be at least 1 minute"),
   date: z.string().min(1, "Date is required"),
-  service_type: z.enum(["Bookkeeping", "Virtual Assistant"]).nullable().optional(),
+  service_type: serviceTypeSchema,
+  notes: z.string().optional(),
 });
 
 const editSchema = z.object({
@@ -82,7 +88,8 @@ const editSchema = z.object({
   date: z.string().min(1, "Date is required"),
   started_at: z.string().optional(),
   ended_at: z.string().optional(),
-  service_type: z.enum(["Bookkeeping", "Virtual Assistant"]).nullable().optional(),
+  service_type: serviceTypeSchema,
+  notes: z.string().optional(),
 });
 
 type ManualValues = z.infer<typeof manualSchema>;
@@ -133,7 +140,7 @@ function EditTimeEntryModal({
   onCancel,
   isPending,
 }: {
-  entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null };
+  entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null };
   clients: { id: number; name: string }[] | undefined;
   tasks: { id: number; title: string; client_id: number | null; status: string }[] | undefined;
   onSave: (id: number, data: EditValues) => void;
@@ -150,6 +157,7 @@ function EditTimeEntryModal({
       started_at: toDatetimeLocal(entry.started_at),
       ended_at: toDatetimeLocal(entry.ended_at),
       service_type: (entry.service_type as "Bookkeeping" | "Virtual Assistant" | null) ?? null,
+      notes: entry.notes ?? "",
     },
   });
 
@@ -263,6 +271,16 @@ function EditTimeEntryModal({
             </select>
           </div>
 
+          <div>
+            <label className="label-text">Notes <span className="text-slate-400 font-normal">(optional)</span></label>
+            <textarea
+              {...register("notes")}
+              rows={2}
+              placeholder="What was worked on?"
+              className="input-field resize-none"
+            />
+          </div>
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -307,7 +325,7 @@ export default function TimeTracking() {
   const [timerClientId, setTimerClientId] = useState("");
   const [timerTaskId, setTimerTaskId] = useState("");
   const [activeTab, setActiveTab] = useState<"timer" | "manual">("timer");
-  const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null } | null>(null);
+  const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null } | null>(null);
 
   // Ref used to pass client_id into the shared onSuccess handler without typed callback params
   const pendingClientIdRef = useRef<number | null>(null);
@@ -674,6 +692,16 @@ export default function TimeTracking() {
                   </select>
                 </div>
 
+                <div>
+                  <label className="label-text">Notes <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <textarea
+                    {...register("notes")}
+                    rows={2}
+                    placeholder="What was worked on?"
+                    className="input-field bg-slate-50 resize-none"
+                  />
+                </div>
+
                 <button
                   type="submit"
                   className="btn-primary w-full py-3 mt-2"
@@ -750,6 +778,9 @@ export default function TimeTracking() {
                             <p className="text-xs text-slate-400 mt-0.5">
                               {formatTime(entry.started_at)} → {formatTime(entry.ended_at)}
                             </p>
+                          )}
+                          {entry.notes && (
+                            <p className="text-xs text-slate-500 mt-1 italic truncate max-w-xs">"{entry.notes}"</p>
                           )}
                         </div>
 
