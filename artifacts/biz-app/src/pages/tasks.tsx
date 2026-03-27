@@ -294,7 +294,24 @@ export default function Tasks() {
 
   const handleToggleStatus = (tableTask: { id: string; status: string }) => {
     const newStatus = tableTask.status === "Completed" ? "Pending" : "Completed";
-    updateMutation.mutate({ id: Number(tableTask.id), data: { status: newStatus } });
+    const taskId = Number(tableTask.id);
+    updateMutation.mutate({ id: taskId, data: { status: newStatus } });
+
+    if (newStatus === "Completed") {
+      const fullTask = allTasks.find(t => t.id === taskId);
+      if (fullTask?.recurrence) {
+        spawnNextMutation.mutate({
+          data: {
+            title: fullTask.title,
+            description: fullTask.description ?? undefined,
+            client_id: fullTask.client_id,
+            assigned_to: fullTask.assigned_to ?? undefined,
+            recurrence: fullTask.recurrence,
+            due_date: nextDueDate(fullTask.recurrence),
+          },
+        });
+      }
+    }
   };
 
   const handleUpdateField = (id: string, field: string, value: any) => {

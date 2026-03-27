@@ -171,6 +171,7 @@ export const CreateTaskBody = zod.object({
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
   due_date: zod.string().nullish(),
+  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])).optional(),
   recurrence: zod
     .enum(["daily", "weekdays", "weekly", "monthly", "annually"])
     .nullish(),
