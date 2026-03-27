@@ -375,6 +375,12 @@ export default function TaskTable({
                     {isExpanded && (
                       <tr className="bg-slate-50/80 border-b border-slate-100">
                         <td colSpan={colSpan} className="px-8 py-4">
+                          <p className={cn(
+                            "text-base font-semibold mb-3 break-words",
+                            task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
+                          )}>
+                            {task.title}
+                          </p>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl">
                             <div className="space-y-3">
                               {task.description && (
