@@ -81,7 +81,6 @@ export default function Clients() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingServices, setPendingServices] = useState<PendingService[]>([]);
   const [selectedServiceId, setSelectedServiceId] = useState("");
-  const [noServicesError, setNoServicesError] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -109,7 +108,6 @@ export default function Clients() {
         reset();
         setPendingServices([]);
         setSelectedServiceId("");
-        setNoServicesError(false);
         toast({ title: "Client created successfully" });
       },
       onError: (error) => {
@@ -146,7 +144,6 @@ export default function Clients() {
       },
     ]);
     setSelectedServiceId("");
-    setNoServicesError(false);
   };
 
   const updatePending = (serviceId: number, field: keyof PendingService, value: string) => {
@@ -160,14 +157,11 @@ export default function Clients() {
   };
 
   const onSubmit = (data: FormValues) => {
-    if (pendingServices.length === 0) {
-      setNoServicesError(true);
-      return;
-    }
-
     const hasBK = pendingServices.some(p => p.serviceType === "Bookkeeping");
     const hasVA = pendingServices.some(p => p.serviceType === "Virtual Assistant");
-    const serviceType = hasBK && hasVA ? "hybrid" : hasBK ? "bookkeeping" : "va";
+    const serviceType = pendingServices.length === 0
+      ? null
+      : hasBK && hasVA ? "hybrid" : hasBK ? "bookkeeping" : "va";
 
     const monthlyFee = pendingServices
       .filter(p => p.billingType === "Flat Rate")
@@ -192,7 +186,7 @@ export default function Clients() {
         website: data.website?.trim() || null,
         service_type: serviceType as any,
         monthly_fee: monthlyFee,
-        monthly_hour_budget: monthlyHourBudget || 1,
+        monthly_hour_budget: monthlyHourBudget || null,
         bk_fee: firstBK ? effectivePrice(firstBK) : null,
         va_hourly_rate: firstVA
           ? (firstVA.customHourlyRate !== "" ? Number(firstVA.customHourlyRate) : firstVA.baseHourlyRate)
@@ -209,7 +203,6 @@ export default function Clients() {
     reset();
     setPendingServices([]);
     setSelectedServiceId("");
-    setNoServicesError(false);
   };
 
   const availableToAdd = allServices.filter(s => s.active && !pendingServices.some(p => p.serviceId === s.id));
@@ -359,7 +352,7 @@ export default function Clients() {
       </div>
 
       {/* ── Add New Client Modal ────────────────────────────────────────── */}
-      <Modal isOpen={isModalOpen} onClose={closeModal} title="Add New Client" description="Enter the client's contact details and assign services from your library.">
+      <Modal isOpen={isModalOpen} onClose={closeModal} title="Add New Client" description="Enter the client's contact details. You can assign services now or later.">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
 
           {/* Contact Info */}
@@ -440,10 +433,6 @@ export default function Clients() {
                 Add
               </button>
             </div>
-
-            {noServicesError && (
-              <p className="text-destructive text-xs">Please add at least one service from the library.</p>
-            )}
 
             {/* Pending Services List */}
             {pendingServices.length > 0 && (
