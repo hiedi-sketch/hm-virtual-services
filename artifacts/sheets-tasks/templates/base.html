@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Task Manager{% endblock %} — Google Sheets Sync</title>
+
+  <!-- DataTables + jQuery -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* ── Reset & base ───────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', Arial, sans-serif; background: #f8f9fa; color: #202124; font-size: 14px; }
+
+    /* ── Top bar ────────────────────────────────────────────────────────────── */
+    .topbar {
+      display: flex; align-items: center; gap: 16px;
+      background: #fff; border-bottom: 1px solid #e0e0e0;
+      padding: 10px 20px; position: sticky; top: 0; z-index: 200;
+    }
+    .topbar .logo { font-size: 18px; font-weight: 600; color: #188038; display: flex; align-items: center; gap: 8px; }
+    .topbar .logo svg { width: 22px; height: 22px; }
+    .topbar nav { display: flex; gap: 4px; }
+    .topbar nav a {
+      padding: 6px 14px; border-radius: 20px; text-decoration: none;
+      color: #444; font-size: 13px; font-weight: 500; transition: background 0.15s;
+    }
+    .topbar nav a:hover, .topbar nav a.active { background: #e8f5e9; color: #188038; }
+    .topbar .spacer { flex: 1; }
+    .sync-status { font-size: 12px; color: #666; display: flex; align-items: center; gap: 6px; }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; display: inline-block; }
+    .sync-dot.ok { background: #34a853; }
+    .sync-dot.error { background: #ea4335; }
+    .sync-dot.syncing { background: #fbbc04; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .btn {
+      padding: 6px 14px; border-radius: 4px; border: 1px solid #dadce0; background: #fff;
+      cursor: pointer; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
+      transition: background 0.15s, box-shadow 0.15s; color: #444;
+    }
+    .btn:hover { background: #f1f3f4; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .btn.primary { background: #188038; color: #fff; border-color: #188038; }
+    .btn.primary:hover { background: #137333; }
+    .btn.danger { background: #ea4335; color: #fff; border-color: #ea4335; }
+    .btn.danger:hover { background: #c5221f; }
+
+    /* ── Main layout ────────────────────────────────────────────────────────── */
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+
+    /* ── Toolbar ────────────────────────────────────────────────────────────── */
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+    .toolbar h1 { font-size: 20px; font-weight: 600; color: #202124; flex: 1 1 auto; }
+
+    /* ── Alert banner ───────────────────────────────────────────────────────── */
+    .alert {
+      padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;
+      font-size: 13px; display: flex; align-items: flex-start; gap: 10px;
+    }
+    .alert.warn { background: #fef7e0; border: 1px solid #fbbc04; color: #7a6000; }
+    .alert.info { background: #e8f0fe; border: 1px solid #4285f4; color: #1a4c8b; }
+    .alert code { font-family: monospace; background: rgba(0,0,0,.07); padding: 1px 5px; border-radius: 3px; }
+
+    /* ── Sheets-like table wrapper ──────────────────────────────────────────── */
+    .table-wrap {
+      background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden;
+    }
+    table.dataTable {
+      border-collapse: collapse; width: 100% !important;
+      font-size: 13px;
+    }
+    table.dataTable thead th {
+      background: #f8f9fa; color: #444; font-weight: 600; font-size: 12px;
+      border: 1px solid #e0e0e0; padding: 8px 12px; white-space: nowrap;
+      user-select: none; text-align: left;
+    }
+    table.dataTable thead th:hover { background: #f1f3f4; }
+    table.dataTable tbody td {
+      border: 1px solid #e0e0e0; padding: 7px 12px; vertical-align: middle; line-height: 1.4;
+      color: #202124; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    table.dataTable tbody tr:hover td { background: #f8f9fa; }
+    table.dataTable tbody tr.completed td { background: #e8f5e9 !important; color: #1e7e34; text-decoration: line-through; }
+    table.dataTable tbody tr.overdue td { background: #fce8e6 !important; color: #c5221f; }
+
+    /* ── Status badges ──────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge.pending   { background: #fef7e0; color: #7a6000; border: 1px solid #fbbc04; }
+    .badge.progress  { background: #e8f0fe; color: #1a4c8b; border: 1px solid #4285f4; }
+    .badge.completed { background: #e8f5e9; color: #137333; border: 1px solid #34a853; }
+    .badge.overdue   { background: #fce8e6; color: #c5221f; border: 1px solid #ea4335; }
+
+    /* ── Inline edit input ──────────────────────────────────────────────────── */
+    .cell-edit {
+      width: 100%; border: none; background: transparent; font: inherit; color: inherit;
+      outline: none; padding: 0;
+    }
+    td:focus-within { outline: 2px solid #4285f4; outline-offset: -1px; background: #fff !important; }
+    td:focus-within .cell-edit { color: #202124; }
+
+    /* ── Action icons ───────────────────────────────────────────────────────── */
+    .action-btn {
+      background: none; border: none; cursor: pointer; padding: 3px 6px;
+      border-radius: 4px; color: #666; font-size: 15px; line-height: 1;
+      transition: background 0.1s, color 0.1s;
+    }
+    .action-btn:hover { background: #f1f3f4; color: #333; }
+    .action-btn.del:hover { background: #fce8e6; color: #c5221f; }
+    .action-btn.complete:hover { background: #e8f5e9; color: #137333; }
+
+    /* ── DataTables custom controls ─────────────────────────────────────────── */
+    .dataTables_wrapper .dataTables_filter input {
+      border: 1px solid #dadce0; border-radius: 4px; padding: 5px 10px;
+      font-size: 13px; margin-left: 6px;
+    }
+    .dataTables_wrapper .dataTables_filter input:focus { outline: 2px solid #4285f4; border-color: #4285f4; }
+    .dataTables_wrapper .dataTables_length select { border: 1px solid #dadce0; border-radius: 4px; padding: 4px 6px; font-size: 13px; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+      background: #188038 !important; color: #fff !important; border-color: #188038 !important; border-radius: 4px;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+      background: #f1f3f4 !important; color: #333 !important; border-color: #dadce0 !important;
+    }
+    .dataTables_info { font-size: 12px; color: #666; }
+
+    /* ── Add task form ───────────────────────────────────────────────────────── */
+    .add-form {
+      display: none; background: #fff; border: 1px solid #e0e0e0;
+      border-radius: 6px; padding: 20px; margin-bottom: 16px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
+    }
+    .add-form.hidden { display: none !important; }
+    .form-group label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; }
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%; border: 1px solid #dadce0; border-radius: 4px; padding: 7px 10px;
+      font: inherit; font-size: 13px; color: #202124; transition: border 0.15s, box-shadow 0.15s;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+      outline: none; border-color: #4285f4; box-shadow: 0 0 0 2px rgba(66,133,244,.2);
+    }
+    .form-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ── Timer widget ───────────────────────────────────────────────────────── */
+    .timer-widget {
+      position: fixed; bottom: 24px; right: 24px;
+      background: #fff; border: 1px solid #e0e0e0; border-radius: 12px;
+      padding: 14px 18px; box-shadow: 0 4px 20px rgba(0,0,0,.15);
+      min-width: 200px; z-index: 300;
+    }
+    .timer-widget h4 { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; margin-bottom: 8px; }
+    .timer-task-label { font-size: 12px; color: #444; margin-bottom: 6px; min-height: 18px; font-style: italic; }
+    .timer-display { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; color: #188038; letter-spacing: 1px; }
+    .timer-btns { display: flex; gap: 8px; margin-top: 10px; }
+    .timer-btns button { flex: 1; padding: 6px; border-radius: 6px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; transition: background 0.15s; }
+    #timerStart { background: #188038; color: #fff; }
+    #timerStart:hover { background: #137333; }
+    #timerPause { background: #fbbc04; color: #333; }
+    #timerPause:hover { background: #f9a825; }
+    #timerStop { background: #ea4335; color: #fff; }
+    #timerStop:hover { background: #c5221f; }
+
+    /* ── Modal ──────────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
+      z-index: 500; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #fff; border-radius: 10px; padding: 28px 30px;
+      width: 500px; max-width: 95vw; box-shadow: 0 8px 40px rgba(0,0,0,.2);
+    }
+    .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 18px; }
+    .modal .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .modal .full { grid-column: 1 / -1; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+    /* ── Responsive ─────────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .topbar { gap: 8px; padding: 8px 12px; }
+      .container { padding: 12px; }
+      .timer-widget { bottom: 12px; right: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="18" height="18" rx="2" fill="#34a853" opacity=".15"/>
+      <rect x="3" y="3" width="18" height="18" rx="2" stroke="#188038" stroke-width="1.5"/>
+      <line x1="3" y1="8" x2="21" y2="8" stroke="#188038" stroke-width="1"/>
+      <line x1="3" y1="13" x2="21" y2="13" stroke="#188038" stroke-width="1"/>
+      <line x1="9" y1="3" x2="9" y2="21" stroke="#188038" stroke-width="1"/>
+    </svg>
+    Sheet Tasks
+  </div>
+  <nav>
+    <a href="/" id="navAll">All Tasks</a>
+  </nav>
+  <div class="spacer"></div>
+  <div class="sync-status">
+    <span class="sync-dot" id="syncDot"></span>
+    <span id="syncText">Not synced yet</span>
+  </div>
+  <button class="btn" onclick="triggerSync()">↻ Sync Now</button>
+</div>
+
+<div class="container">
+  {% block content %}{% endblock %}
+</div>
+
+<!-- Timer widget -->
+<div class="timer-widget">
+  <h4>⏱ Timer</h4>
+  <div class="timer-task-label" id="timerTaskLabel">No task selected</div>
+  <div class="timer-display" id="timerDisplay">00:00:00</div>
+  <div class="timer-btns">
+    <button id="timerStart" onclick="startTimer()">▶ Start</button>
+    <button id="timerPause" onclick="pauseTimer()" style="display:none">⏸ Pause</button>
+    <button id="timerStop" onclick="stopTimer()">■ Stop</button>
+  </div>
+</div>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <h2>Edit Task</h2>
+    <div class="form-grid">
+      <div class="form-group full">
+        <label>Task Name</label>
+        <input type="text" id="editName">
+      </div>
+      <div class="form-group">
+        <label>Due Date</label>
+        <input type="date" id="editDue">
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="editStatus">
+          <option>Pending</option>
+          <option>In Progress</option>
+          <option>Completed</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Client</label>
+        <input type="text" id="editClient">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <input type="text" id="editNotes">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeEditModal()">Cancel</button>
+      <button class="btn primary" onclick="saveEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Sync status polling ───────────────────────────────────────────────────────
+let editingId = null;
+
+function updateSyncUI(data) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncText');
+  dot.className = 'sync-dot';
+  if (data.syncing) {
+    dot.classList.add('syncing');
+    txt.textContent = 'Syncing…';
+  } else if (data.error) {
+    dot.classList.add('error');
+    txt.textContent = 'Sync error';
+    txt.title = data.error;
+  } else if (data.last_sync) {
+    dot.classList.add('ok');
+    txt.textContent = 'Synced ' + data.last_sync;
+  }
+}
+
+async function triggerSync() {
+  const dot = document.getElementById('syncDot');
+  dot.className = 'sync-dot syncing';
+  document.getElementById('syncText').textContent = 'Syncing…';
+  await fetch('/api/sync', { method: 'POST' });
+  setTimeout(checkSyncStatus, 1500);
+}
+
+async function checkSyncStatus() {
+  const r = await fetch('/api/sync/status');
+  const data = await r.json();
+  updateSyncUI(data);
+  if (data.syncing) setTimeout(checkSyncStatus, 1000);
+  else if (window._taskTable) window._taskTable.ajax.reload(null, false);
+}
+
+setInterval(checkSyncStatus, 5000);
+checkSyncStatus();
+
+// ── Timer ──────────────────────────────────────────────────────────────────
+let timerInterval = null;
+let timerSeconds = 0;
+let timerRunning = false;
+let timerTaskName = null;
+
+function fmtTime(s) {
+  const h = Math.floor(s / 3600).toString().padStart(2, '0');
+  const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+  const sec = (s % 60).toString().padStart(2, '0');
+  return `${h}:${m}:${sec}`;
+}
+
+function startTimer(taskName) {
+  if (taskName) { timerTaskName = taskName; document.getElementById('timerTaskLabel').textContent = taskName; }
+  timerRunning = true;
+  timerInterval = setInterval(() => {
+    timerSeconds++;
+    document.getElementById('timerDisplay').textContent = fmtTime(timerSeconds);
+  }, 1000);
+  document.getElementById('timerStart').style.display = 'none';
+  document.getElementById('timerPause').style.display = '';
+}
+
+function pauseTimer() {
+  clearInterval(timerInterval);
+  timerRunning = false;
+  document.getElementById('timerPause').style.display = 'none';
+  document.getElementById('timerStart').style.display = '';
+  document.getElementById('timerStart').textContent = '▶ Resume';
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+  timerRunning = false;
+  timerSeconds = 0;
+  timerTaskName = null;
+  document.getElementById('timerDisplay').textContent = '00:00:00';
+  document.getElementById('timerTaskLabel').textContent = 'No task selected';
+  document.getElementById('timerPause').style.display = 'none';
+  document.getElementById('timerStart').style.display = '';
+  document.getElementById('timerStart').textContent = '▶ Start';
+}
+
+// ── Edit modal ────────────────────────────────────────────────────────────────
+function openEditModal(task) {
+  editingId = task.id;
+  document.getElementById('editName').value = task.task_name || '';
+  document.getElementById('editDue').value = task.due_date || '';
+  document.getElementById('editStatus').value = task.status || 'Pending';
+  document.getElementById('editClient').value = task.client || '';
+  document.getElementById('editNotes').value = task.notes || '';
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+  editingId = null;
+}
+
+async function saveEdit() {
+  if (!editingId) return;
+  const payload = {
+    task_name: document.getElementById('editName').value,
+    due_date:  document.getElementById('editDue').value || null,
+    status:    document.getElementById('editStatus').value,
+    client:    document.getElementById('editClient').value,
+    notes:     document.getElementById('editNotes').value,
+  };
+  await fetch('/api/tasks/' + editingId, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  });
+  closeEditModal();
+  if (window._taskTable) window._taskTable.ajax.reload(null, false);
+}
+
+document.getElementById('editModal').addEventListener('click', function(e) {
+  if (e.target === this) closeEditModal();
+});
+
+// ── Delete helper (shared) ────────────────────────────────────────────────────
+async function deleteTask(id) {
+  if (!confirm('Delete this task? This will also remove it from Google Sheets.')) return;
+  await fetch('/api/tasks/' + id, { method: 'DELETE' });
+  if (window._taskTable) window._taskTable.ajax.reload(null, false);
+}
+
+async function completeTask(id) {
+  await fetch('/api/tasks/' + id, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'Completed' }),
+  });
+  if (window._taskTable) window._taskTable.ajax.reload(null, false);
+}
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

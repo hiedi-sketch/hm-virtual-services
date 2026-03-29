@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ client_name }} — Tasks{% endblock %}
+
+{% block content %}
+<div class="toolbar">
+  <h1>
+    <a href="/" style="color:#666;text-decoration:none;font-weight:400">All Tasks</a>
+    <span style="margin:0 8px;color:#ccc">/</span>
+    {{ client_name }}
+  </h1>
+  <button class="btn primary" onclick="toggleAddForm()">+ New Task</button>
+</div>
+
+<div class="alert info">
+  📋 Showing tasks assigned to <strong>{{ client_name }}</strong>.
+  Changes here sync back to Google Sheets automatically.
+</div>
+
+<!-- Add form -->
+<div class="add-form hidden" id="addForm">
+  <div class="form-group">
+    <label>Task Name *</label>
+    <input type="text" id="newName" placeholder="e.g. Prepare report">
+  </div>
+  <div class="form-group">
+    <label>Due Date</label>
+    <input type="date" id="newDue">
+  </div>
+  <div class="form-group">
+    <label>Status</label>
+    <select id="newStatus">
+      <option>Pending</option>
+      <option>In Progress</option>
+      <option>Completed</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label>Notes</label>
+    <input type="text" id="newNotes" placeholder="Optional notes">
+  </div>
+  <div class="form-actions">
+    <button class="btn" onclick="toggleAddForm()">Cancel</button>
+    <button class="btn primary" onclick="addTask()">Add Task</button>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table id="taskTable" class="dataTable" style="width:100%">
+    <thead>
+      <tr>
+        <th>Task Name</th>
+        <th>Due Date</th>
+        <th>Status</th>
+        <th>Notes</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CLIENT_NAME = {{ client_name | tojson }};
+
+function toggleAddForm() {
+  document.getElementById('addForm').classList.toggle('hidden');
+}
+
+async function addTask() {
+  const name = document.getElementById('newName').value.trim();
+  if (!name) { alert('Task Name is required.'); return; }
+  await fetch('/api/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      task_name: name,
+      due_date:  document.getElementById('newDue').value || null,
+      status:    document.getElementById('newStatus').value,
+      client:    CLIENT_NAME,
+      notes:     document.getElementById('newNotes').value || null,
+    }),
+  });
+  document.getElementById('newName').value = '';
+  document.getElementById('newDue').value = '';
+  document.getElementById('newNotes').value = '';
+  window._taskTable.ajax.reload(null, false);
+}
+
+function rowClass(d) {
+  if (d.status === 'Completed') return 'completed';
+  if (d.due_date && d.due_date < new Date().toISOString().slice(0,10) && d.status !== 'Completed') return 'overdue';
+  return '';
+}
+
+function badgeHtml(status) {
+  const map = { Pending:'pending', 'In Progress':'progress', Completed:'completed' };
+  return `<span class="badge ${map[status]||'pending'}">${status}</span>`;
+}
+
+$(function() {
+  window._taskTable = $('#taskTable').DataTable({
+    ajax: { url: `/api/tasks?client=${encodeURIComponent(CLIENT_NAME)}`, dataSrc: '' },
+    order: [[1, 'asc']],
+    pageLength: 25,
+    dom: '<"dt-top"lf>t<"dt-bottom"ip>',
+    columns: [
+      {
+        data: 'task_name',
+        render: (d, t, row) => t === 'display'
+          ? `<span style="cursor:pointer;font-weight:500" onclick="startTimer('${d.replace(/'/g,"\\'")}')">▶ ${d}</span>`
+          : d
+      },
+      { data: 'due_date', defaultContent: '' },
+      { data: 'status',   render: (d, t) => t === 'display' ? badgeHtml(d) : d },
+      { data: 'notes', defaultContent: '' },
+      {
+        data: null, orderable: false, searchable: false,
+        render: (d) => `
+          <button class="action-btn complete" title="Mark completed" onclick="completeTask(${d.id})">✓</button>
+          <button class="action-btn" title="Edit" onclick='openEditModal(${JSON.stringify(d)})'>✎</button>
+          <button class="action-btn del" title="Delete" onclick="deleteTask(${d.id})">✕</button>
+        `
+      },
+    ],
+    createdRow: (row, data) => {
+      const cls = rowClass(data);
+      if (cls) $(row).addClass(cls);
+    },
+  });
+});
+</script>
+{% endblock %}
