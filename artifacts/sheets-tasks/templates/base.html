@@ -171,6 +171,10 @@
 </head>
 <body>
 
+<script>
+const BASE_PATH = '{{ base_path }}';
+</script>
+
 <div class="topbar">
   <div class="logo">
     <svg viewBox="0 0 24 24" fill="none">
@@ -262,7 +266,6 @@
 </div>
 
 <script>
-// ── Sync status ───────────────────────────────────────────────────────────────
 let editingId = null;
 
 function updateSyncUI(d) {
@@ -282,7 +285,7 @@ function updateSyncUI(d) {
 
 async function checkSyncStatus() {
   try {
-    const r = await fetch('/api/sync/status');
+    const r = await fetch(BASE_PATH + 'api/sync/status');
     const d = await r.json();
     updateSyncUI(d);
     if (d.syncing) setTimeout(checkSyncStatus, 1000);
@@ -293,14 +296,13 @@ async function checkSyncStatus() {
 async function triggerSync() {
   document.getElementById('syncDot').className = 'sync-dot syncing';
   document.getElementById('syncText').textContent = 'Syncing…';
-  await fetch('/api/sync', { method: 'POST' });
+  await fetch(BASE_PATH + 'api/sync', { method: 'POST' });
   setTimeout(checkSyncStatus, 2000);
 }
 
 setInterval(checkSyncStatus, 8000);
 checkSyncStatus();
 
-// ── Shared table helpers ──────────────────────────────────────────────────────
 function rowClass(d) {
   if (d.status === 'Completed') return 'completed';
   const today = new Date().toISOString().slice(0,10);
@@ -314,7 +316,7 @@ function badgeHtml(status) {
 }
 
 async function completeTask(id) {
-  await fetch('/api/tasks/'+id, {
+  await fetch(BASE_PATH + 'api/tasks/' + id, {
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({status:'Completed'})
   });
@@ -323,11 +325,10 @@ async function completeTask(id) {
 
 async function deleteTask(id) {
   if (!confirm('Delete this task? It will also be removed from Google Sheets.')) return;
-  await fetch('/api/tasks/'+id, { method:'DELETE' });
+  await fetch(BASE_PATH + 'api/tasks/' + id, { method:'DELETE' });
   if (window._taskTable) window._taskTable.ajax.reload(null, false);
 }
 
-// ── Edit modal ────────────────────────────────────────────────────────────────
 function openEditModal(task) {
   editingId = task.id;
   document.getElementById('editName').value      = task.task_name || '';
@@ -347,7 +348,7 @@ function closeEditModal() {
 
 async function saveEdit() {
   if (!editingId) return;
-  await fetch('/api/tasks/'+editingId, {
+  await fetch(BASE_PATH + 'api/tasks/' + editingId, {
     method:'PUT', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       task_name:    document.getElementById('editName').value,
@@ -367,7 +368,6 @@ document.getElementById('editModal').addEventListener('click', e => {
   if (e.target === document.getElementById('editModal')) closeEditModal();
 });
 
-// ── Timer ─────────────────────────────────────────────────────────────────────
 let _timerInterval = null, _timerSec = 0, _timerRunning = false;
 
 function fmtTime(s) {

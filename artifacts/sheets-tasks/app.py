@@ -15,6 +15,33 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# ── Path-prefix middleware (for reverse-proxy with base path) ──────────────────
+
+BASE_PATH = os.environ.get("BASE_PATH", "/").rstrip("/")
+
+class PrefixMiddleware:
+    """Strip a URL prefix so Flask sees root-relative paths."""
+    def __init__(self, wsgi_app, prefix):
+        self.app = wsgi_app
+        self.prefix = prefix
+
+    def __call__(self, environ, start_response):
+        path = environ.get("PATH_INFO", "")
+        if path.startswith(self.prefix + "/") or path == self.prefix:
+            environ["PATH_INFO"] = path[len(self.prefix):] or "/"
+            environ["SCRIPT_NAME"] = environ.get("SCRIPT_NAME", "") + self.prefix
+        return self.app(environ, start_response)
+
+if BASE_PATH and BASE_PATH != "/":
+    app.wsgi_app = PrefixMiddleware(app.wsgi_app, BASE_PATH)
+
+@app.context_processor
+def inject_base_path():
+    bp = (BASE_PATH or "").rstrip("/") + "/"
+    if bp == "/":
+        bp = "/"
+    return {"base_path": bp}
+
 DB_PATH = os.path.join(os.path.dirname(__file__), "tasks.db")
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",

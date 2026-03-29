@@ -30,13 +30,13 @@ args = "artifacts/sheets-tasks: Task Manager"
 name = "artifacts/sheets-tasks: Task Manager"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd artifacts/sheets-tasks && PORT=5000 python app.py"
-waitForPort = 5000
-
 [workflows.workflow.metadata]
 outputType = "webview"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/sheets-tasks && BASE_PATH=/sheets-tasks/ PORT=5000 python app.py"
+waitForPort = 5000
 
 [agent]
 stack = "PNPM_WORKSPACE"

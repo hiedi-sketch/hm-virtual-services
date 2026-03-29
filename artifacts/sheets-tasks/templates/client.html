@@ -4,7 +4,7 @@
 {% block content %}
 <div class="toolbar">
   <h1>
-    <a href="/" style="color:#666;text-decoration:none;font-weight:400">All Tasks</a>
+    <a href="{{ base_path }}" style="color:#666;text-decoration:none;font-weight:400">All Tasks</a>
     <span style="margin:0 8px;color:#ccc">/</span>
     {{ client_name }}
   </h1>
@@ -87,7 +87,7 @@ function toggleAddForm() {
 async function addTask() {
   const name = document.getElementById('newName').value.trim();
   if (!name) { alert('Task Description is required.'); return; }
-  await fetch('/api/tasks', {
+  await fetch(BASE_PATH + 'api/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -113,7 +113,7 @@ function fmtFreq(freq, day) {
 
 $(function() {
   window._taskTable = $('#taskTable').DataTable({
-    ajax: { url: `/api/tasks?client=${encodeURIComponent(CLIENT_NAME)}`, dataSrc: '' },
+    ajax: { url: BASE_PATH + `api/tasks?client=${encodeURIComponent(CLIENT_NAME)}`, dataSrc: '' },
     order: [[3,'asc']],
     pageLength: 25,
     dom: '<"dt-top"lf>t<"dt-bottom"ip>',

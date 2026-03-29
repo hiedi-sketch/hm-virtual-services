@@ -105,7 +105,7 @@ function applyFilters() {
   _serviceFilter = document.getElementById('filterService').value;
   _statusFilter  = document.getElementById('filterStatus').value;
 
-  let url = '/api/tasks?';
+  let url = BASE_PATH + 'api/tasks?';
   if (_clientFilter)  url += 'client='       + encodeURIComponent(_clientFilter)  + '&';
   if (_serviceFilter) url += 'service_type=' + encodeURIComponent(_serviceFilter) + '&';
 
@@ -125,7 +125,7 @@ function toggleAddForm() {
 async function addTask() {
   const name = document.getElementById('newName').value.trim();
   if (!name) { alert('Task Description is required.'); return; }
-  await fetch('/api/tasks', {
+  await fetch(BASE_PATH + 'api/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -150,21 +150,21 @@ function fmtFreq(freq, day) {
 }
 
 $(function() {
-  fetch('/api/clients').then(r=>r.json()).then(list => {
+  fetch(BASE_PATH + 'api/clients').then(r=>r.json()).then(list => {
     const sel = document.getElementById('filterClient');
     list.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   });
-  fetch('/api/service_types').then(r=>r.json()).then(list => {
+  fetch(BASE_PATH + 'api/service_types').then(r=>r.json()).then(list => {
     const sel = document.getElementById('filterService');
     list.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   });
 
-  fetch('/api/sync/status').then(r=>r.json()).then(d => {
+  fetch(BASE_PATH + 'api/sync/status').then(r=>r.json()).then(d => {
     if (d.error && d.error.includes('not set')) document.getElementById('configAlert').style.display='';
   });
 
   window._taskTable = $('#taskTable').DataTable({
-    ajax: { url: '/api/tasks', dataSrc: '' },
+    ajax: { url: BASE_PATH + 'api/tasks', dataSrc: '' },
     order: [[4,'asc']],
     pageLength: 25,
     dom: '<"dt-top"lf>t<"dt-bottom"ip>',
@@ -178,7 +178,7 @@ $(function() {
       {
         data: 'client', defaultContent: '',
         render: (d, t) => t==='display' && d
-          ? `<a href="/client/${encodeURIComponent(d)}" class="client-link">${d}</a>`
+          ? `<a href="${BASE_PATH}client/${encodeURIComponent(d)}" class="client-link">${d}</a>`
           : (d||'')
       },
       { data: 'service_type', defaultContent: '' },
