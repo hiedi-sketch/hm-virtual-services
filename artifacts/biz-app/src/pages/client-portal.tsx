@@ -39,20 +39,22 @@ function fmtCurrency(n: number) {
 }
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    Pending:      "bg-slate-100 text-slate-700",
-    Confirmed:    "bg-blue-50 text-blue-700",
-    "In Progress": "bg-amber-50 text-amber-700",
-    Completed:    "bg-emerald-100 text-emerald-800",
-    paid:         "bg-emerald-100 text-emerald-800",
-    unpaid:       "bg-red-100 text-red-800",
-    in_review:    "bg-blue-100 text-blue-800",
-    resolved:     "bg-slate-100 text-slate-600",
+    "Not Started": "bg-slate-100 text-slate-500",
+    Pending:       "bg-amber-50 text-amber-700",
+    Confirmed:     "bg-blue-50 text-blue-700",
+    "In Progress": "bg-teal-50 text-teal-700",
+    Completed:     "bg-emerald-100 text-emerald-800",
+    paid:          "bg-emerald-100 text-emerald-800",
+    unpaid:        "bg-red-100 text-red-800",
+    in_review:     "bg-blue-100 text-blue-800",
+    resolved:      "bg-slate-100 text-slate-600",
   };
   const labels: Record<string, string> = {
-    Pending:      "Pending",
-    Confirmed:    "Confirmed",
+    "Not Started": "Not Started",
+    Pending:       "Pending",
+    Confirmed:     "Confirmed",
     "In Progress": "In Progress",
-    Completed:    "Completed",
+    Completed:     "Completed",
   };
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${map[status] ?? "bg-slate-100 text-slate-700"}`}>
@@ -612,7 +614,7 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
   queryClient: any; toast: any;
 }) {
   const [showForm, setShowForm] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<"all" | "pending" | "confirmed" | "in_progress" | "complete">("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
   const { user } = useAuth();
 
@@ -642,12 +644,12 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
         description: data.description || undefined,
         due_date: data.due_date || undefined,
         client_id: clientId!,
-        status: "pending",
+        status: "Pending",
       },
     });
   };
 
-  const filtered = tasks.filter(t => filterStatus === "all" || t.status === filterStatus as string);
+  const filtered = tasks.filter(t => filterStatus === "all" || t.status === filterStatus);
   const pending = tasks.filter(t => t.status !== "Completed").length;
   const completed = tasks.filter(t => t.status === "Completed").length;
 
@@ -728,12 +730,13 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
       {/* Filter pills */}
       <div className="flex flex-wrap gap-2">
         {([
-          { key: "all",         label: `All (${tasks.length})` },
-          { key: "pending",     label: `Pending (${tasks.filter(t => t.status === "pending").length})` },
-          { key: "confirmed",   label: `Confirmed (${tasks.filter(t => t.status === "confirmed").length})` },
-          { key: "in_progress", label: `In Progress (${tasks.filter(t => t.status === "in_progress").length})` },
-          { key: "complete",    label: `Completed (${completed})` },
-        ] as const).map(f => (
+          { key: "all",          label: `All (${tasks.length})` },
+          { key: "Not Started",  label: `Not Started (${tasks.filter(t => t.status === "Not Started").length})` },
+          { key: "Pending",      label: `Pending (${tasks.filter(t => t.status === "Pending").length})` },
+          { key: "Confirmed",    label: `Confirmed (${tasks.filter(t => t.status === "Confirmed").length})` },
+          { key: "In Progress",  label: `In Progress (${tasks.filter(t => t.status === "In Progress").length})` },
+          { key: "Completed",    label: `Completed (${completed})` },
+        ]).map(f => (
           <button
             key={f.key}
             onClick={() => setFilterStatus(f.key as any)}

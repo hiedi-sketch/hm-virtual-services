@@ -12,7 +12,7 @@
 </div>
 
 <div class="alert info">
-  📋 Tasks assigned to <strong>{{ client_name }}</strong>. Changes here sync back to Google Sheets automatically.
+  📋 Tasks assigned to <strong>{{ client_name }}</strong>. Changes sync back to Google Sheets automatically.
 </div>
 
 <div class="add-form hidden" id="addForm">
@@ -21,8 +21,12 @@
     <input type="text" id="newName" placeholder="e.g. Import Transactions">
   </div>
   <div class="form-group">
-    <label>Category</label>
-    <input type="text" id="newCategory" placeholder="e.g. Transaction Management">
+    <label>Service Type</label>
+    <select id="newService">
+      <option value="">—</option>
+      <option>Bookkeeping</option>
+      <option>Virtual Assistant</option>
+    </select>
   </div>
   <div class="form-group">
     <label>Frequency</label>
@@ -45,7 +49,7 @@
   <div class="form-group">
     <label>Status</label>
     <select id="newStatus">
-      <option>Pending</option>
+      <option>Not Started</option>
       <option>In Progress</option>
       <option>Completed</option>
     </select>
@@ -61,7 +65,7 @@
     <thead>
       <tr>
         <th>Task Description</th>
-        <th>Category</th>
+        <th>Service Type</th>
         <th>Frequency</th>
         <th>Due Date</th>
         <th>Status</th>
@@ -87,13 +91,13 @@ async function addTask() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      task_name: name,
-      client:    CLIENT_NAME,
-      category:  document.getElementById('newCategory').value || null,
-      frequency: document.getElementById('newFrequency').value || null,
-      day_spec:  document.getElementById('newDaySpec').value || null,
-      due_date:  document.getElementById('newDue').value || null,
-      status:    document.getElementById('newStatus').value,
+      task_name:    name,
+      client:       CLIENT_NAME,
+      service_type: document.getElementById('newService').value || null,
+      frequency:    document.getElementById('newFrequency').value || null,
+      day_spec:     document.getElementById('newDaySpec').value || null,
+      due_date:     document.getElementById('newDue').value || null,
+      status:       document.getElementById('newStatus').value,
     }),
   });
   document.getElementById('newName').value = '';
@@ -120,7 +124,7 @@ $(function() {
           ? `<span class="task-link" onclick="startTimer('${d.replace(/'/g,"\\'")}')">▶ ${d}</span>`
           : d
       },
-      { data: 'category', defaultContent: '' },
+      { data: 'service_type', defaultContent: '' },
       {
         data: null, defaultContent: '',
         render: (d,t) => t==='display' ? fmtFreq(d.frequency, d.day_spec) : (d.frequency||'')

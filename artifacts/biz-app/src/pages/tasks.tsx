@@ -150,6 +150,7 @@ const SORT_OPTIONS: { value: SortKey; label: string }[] = [
 // ── Schemas ─────────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS = [
+  { value: "Not Started",  label: "Not Started" },
   { value: "Pending",      label: "Pending" },
   { value: "Confirmed",    label: "Confirmed" },
   { value: "In Progress",  label: "In Progress" },
@@ -164,7 +165,8 @@ function statusBadgeCls(s: string) {
   if (s === "Completed")   return "bg-emerald-50 text-emerald-700 border border-emerald-200";
   if (s === "In Progress") return "bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/30";
   if (s === "Confirmed")   return "bg-blue-50 text-blue-700 border border-blue-200";
-  return "bg-slate-100 text-slate-600 border border-slate-200";
+  if (s === "Pending")     return "bg-amber-50 text-amber-700 border border-amber-200";
+  return "bg-slate-100 text-slate-500 border border-slate-200";
 }
 
 const formSchema = z.object({
@@ -173,7 +175,7 @@ const formSchema = z.object({
   client_id: z.coerce.number().min(1, "Client is required"),
   assigned_to: z.string().optional(),
   due_date: z.string().optional(),
-  status: z.string().optional().default("Pending"),
+  status: z.string().optional().default("Not Started"),
   service_type: z.preprocess(
     val => (val === "" ? null : val),
     z.enum(["Bookkeeping", "Virtual Assistant"]).nullable().optional()
@@ -325,7 +327,7 @@ export default function Tasks() {
         return (a.client_name ?? "").localeCompare(b.client_name ?? "");
       }
       if (sortBy === "status") {
-        const order: Record<string, number> = { Pending: 0, Confirmed: 1, "In Progress": 2, Completed: 3 };
+        const order: Record<string, number> = { "Not Started": 0, Pending: 1, Confirmed: 2, "In Progress": 3, Completed: 4 };
         return (order[a.status] ?? 0) - (order[b.status] ?? 0);
       }
       if (sortBy === "incomplete") {
@@ -358,7 +360,7 @@ export default function Tasks() {
   };
 
   const handleToggleStatus = (tableTask: { id: string; status: string }) => {
-    const newStatus = tableTask.status === "Completed" ? "Pending" : "Completed";
+    const newStatus = tableTask.status === "Completed" ? "Not Started" : "Completed";
     const taskId = Number(tableTask.id);
     updateMutation.mutate({ id: taskId, data: { status: newStatus } });
 
@@ -497,7 +499,7 @@ export default function Tasks() {
           title: t.title,
           due_date: t.due_date ?? undefined,
           assigned_to: t.assigned_to ?? undefined,
-          status: t.status ?? "Pending",
+          status: t.status ?? "Not Started",
           service_type: t.service_type ?? null,
           client_id: t.client_id ?? null,
           client_name: t.client_name ?? null,

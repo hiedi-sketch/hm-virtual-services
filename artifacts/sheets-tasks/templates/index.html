@@ -15,12 +15,12 @@
   <select id="filterClient" class="filter-select" onchange="applyFilters()">
     <option value="">All Clients</option>
   </select>
-  <select id="filterCategory" class="filter-select" onchange="applyFilters()">
-    <option value="">All Categories</option>
+  <select id="filterService" class="filter-select" onchange="applyFilters()">
+    <option value="">All Service Types</option>
   </select>
   <select id="filterStatus" class="filter-select" onchange="applyFilters()">
     <option value="">All Statuses</option>
-    <option value="Pending">Pending</option>
+    <option value="Not Started">Not Started</option>
     <option value="In Progress">In Progress</option>
     <option value="Completed">Completed</option>
   </select>
@@ -38,8 +38,12 @@
     <input type="text" id="newClient" placeholder="e.g. HM Virtual Services">
   </div>
   <div class="form-group">
-    <label>Category</label>
-    <input type="text" id="newCategory" placeholder="e.g. Transaction Management">
+    <label>Service Type</label>
+    <select id="newService">
+      <option value="">—</option>
+      <option>Bookkeeping</option>
+      <option>Virtual Assistant</option>
+    </select>
   </div>
   <div class="form-group">
     <label>Frequency</label>
@@ -62,7 +66,7 @@
   <div class="form-group">
     <label>Status</label>
     <select id="newStatus">
-      <option>Pending</option>
+      <option>Not Started</option>
       <option>In Progress</option>
       <option>Completed</option>
     </select>
@@ -79,7 +83,7 @@
       <tr>
         <th>Task Description</th>
         <th>Client</th>
-        <th>Category</th>
+        <th>Service Type</th>
         <th>Frequency</th>
         <th>Due Date</th>
         <th>Status</th>
@@ -92,22 +96,21 @@
 
 {% block scripts %}
 <script>
-let _clientFilter = '';
-let _categoryFilter = '';
-let _statusFilter = '';
+let _clientFilter  = '';
+let _serviceFilter = '';
+let _statusFilter  = '';
 
 function applyFilters() {
-  _clientFilter   = document.getElementById('filterClient').value;
-  _categoryFilter = document.getElementById('filterCategory').value;
-  _statusFilter   = document.getElementById('filterStatus').value;
+  _clientFilter  = document.getElementById('filterClient').value;
+  _serviceFilter = document.getElementById('filterService').value;
+  _statusFilter  = document.getElementById('filterStatus').value;
 
   let url = '/api/tasks?';
-  if (_clientFilter)   url += 'client='   + encodeURIComponent(_clientFilter)   + '&';
-  if (_categoryFilter) url += 'category=' + encodeURIComponent(_categoryFilter) + '&';
+  if (_clientFilter)  url += 'client='       + encodeURIComponent(_clientFilter)  + '&';
+  if (_serviceFilter) url += 'service_type=' + encodeURIComponent(_serviceFilter) + '&';
 
   window._taskTable.ajax.url(url).load(null, false);
 
-  // Apply client-side status filter via DataTables search
   if (_statusFilter) {
     window._taskTable.column(5).search(_statusFilter, false, false).draw();
   } else {
@@ -126,13 +129,13 @@ async function addTask() {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      task_name:  name,
-      client:     document.getElementById('newClient').value || null,
-      category:   document.getElementById('newCategory').value || null,
-      frequency:  document.getElementById('newFrequency').value || null,
-      day_spec:   document.getElementById('newDaySpec').value || null,
-      due_date:   document.getElementById('newDue').value || null,
-      status:     document.getElementById('newStatus').value,
+      task_name:    name,
+      client:       document.getElementById('newClient').value || null,
+      service_type: document.getElementById('newService').value || null,
+      frequency:    document.getElementById('newFrequency').value || null,
+      day_spec:     document.getElementById('newDaySpec').value || null,
+      due_date:     document.getElementById('newDue').value || null,
+      status:       document.getElementById('newStatus').value,
     }),
   });
   document.getElementById('newName').value = '';
@@ -147,13 +150,12 @@ function fmtFreq(freq, day) {
 }
 
 $(function() {
-  // Populate dropdowns
   fetch('/api/clients').then(r=>r.json()).then(list => {
     const sel = document.getElementById('filterClient');
     list.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   });
-  fetch('/api/categories').then(r=>r.json()).then(list => {
-    const sel = document.getElementById('filterCategory');
+  fetch('/api/service_types').then(r=>r.json()).then(list => {
+    const sel = document.getElementById('filterService');
     list.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   });
 
@@ -179,7 +181,7 @@ $(function() {
           ? `<a href="/client/${encodeURIComponent(d)}" class="client-link">${d}</a>`
           : (d||'')
       },
-      { data: 'category', defaultContent: '' },
+      { data: 'service_type', defaultContent: '' },
       {
         data: null, defaultContent: '',
         render: (d, t) => t==='display' ? fmtFreq(d.frequency, d.day_spec) : (d.frequency||'')

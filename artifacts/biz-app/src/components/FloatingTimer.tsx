@@ -320,7 +320,10 @@ export function FloatingTimer() {
                 ))}
               </div>
               {state.serviceType === "Virtual Assistant" && (
-                <p className="text-[10px] text-[#266b75] mt-1 font-medium">↳ Will deduct from VA hour budget</p>
+                <p className="text-[10px] text-[#266b75] mt-1 font-medium">↳ Counts toward VA budgeted hours</p>
+              )}
+              {state.serviceType === "Bookkeeping" && (
+                <p className="text-[10px] text-slate-400 mt-1 font-medium">↳ BK only — does not count toward VA hours</p>
               )}
             </div>
 
