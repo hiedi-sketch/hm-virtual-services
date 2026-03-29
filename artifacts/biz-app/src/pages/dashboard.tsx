@@ -15,7 +15,7 @@ import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { formatCurrency, cn } from "@/lib/utils";
+import { formatCurrency, cn, fmtHours } from "@/lib/utils";
 import {
   Users,
   DollarSign,
@@ -181,14 +181,14 @@ export default function Dashboard() {
         for (const c of result.overBudgetClients ?? []) {
           toast({
             title: `${c.name} is over budget`,
-            description: `${c.hoursUsed}h used of ${c.budget}h monthly budget.`,
+            description: `${fmtHours(c.hoursUsed)}h used of ${c.budget}h monthly budget.`,
             variant: "destructive",
           });
         }
         for (const c of result.nearBudgetClients ?? []) {
           toast({
             title: `${c.name} is nearing their budget`,
-            description: `${c.hoursUsed}h used of ${c.budget}h — over 90% consumed.`,
+            description: `${fmtHours(c.hoursUsed)}h used of ${c.budget}h — over 90% consumed.`,
           });
         }
       })
@@ -296,13 +296,13 @@ export default function Dashboard() {
                 if (b.status === "over") {
                   toast({
                     title: `${b.clientName} is over budget`,
-                    description: `${b.hoursUsed}h logged of ${b.budget}h monthly budget.`,
+                    description: `${fmtHours(b.hoursUsed)}h logged of ${b.budget}h monthly budget.`,
                     variant: "destructive",
                   });
                 } else if (b.status === "near") {
                   toast({
                     title: `${b.clientName} is nearing their budget`,
-                    description: `${b.hoursUsed}h of ${b.budget}h used — over 90%.`,
+                    description: `${fmtHours(b.hoursUsed)}h of ${b.budget}h used — over 90%.`,
                   });
                 }
               },
@@ -792,7 +792,7 @@ export default function Dashboard() {
                 Total Hours (Used / Budget)
               </p>
               <h3 className="text-2xl font-bold text-slate-900 mt-0.5">
-                {totalHoursUsed}{" "}
+                {fmtHours(totalHoursUsed)}{" "}
                 <span className="text-slate-400 text-lg">
                   / {totalHoursBudgeted}
                 </span>
@@ -1309,7 +1309,7 @@ export default function Dashboard() {
           <div className="space-y-1.5">
             <div className="flex items-baseline justify-between">
               <span className="text-2xl font-bold text-slate-900">
-                {totalHoursUsed}h
+                {fmtHours(totalHoursUsed)}h
               </span>
               <span className="text-sm text-slate-600">
                 of {totalHoursBudgeted}h budgeted
@@ -1350,7 +1350,7 @@ export default function Dashboard() {
                         {c.client_name}
                       </span>
                       <span className="text-xs font-semibold text-slate-800 shrink-0">
-                        {c.hours_used_this_month}h / {c.monthly_hour_budget}h
+                        {fmtHours(c.hours_used_this_month)}h / {c.monthly_hour_budget}h
                       </span>
                     </div>
                     <div className="h-1.5 w-full bg-[#c8c7cb] rounded-full overflow-hidden">
@@ -1533,7 +1533,7 @@ export default function Dashboard() {
                   <div className="flex items-end justify-between mb-2">
                     <div>
                       <span className="text-2xl font-bold text-slate-900">
-                        {client.hours_used_this_month}
+                        {fmtHours(client.hours_used_this_month)}
                       </span>
                       <span className="text-sm text-slate-400 ml-1">
                         / {client.monthly_hour_budget} hrs
@@ -1541,8 +1541,8 @@ export default function Dashboard() {
                     </div>
                     <span className={`text-sm font-semibold ${remainingColor}`}>
                       {isOverBudget
-                        ? `${Math.abs(client.hours_remaining)} hrs over`
-                        : `${client.hours_remaining} hrs left`}
+                        ? `${fmtHours(Math.abs(client.hours_remaining))} hrs over`
+                        : `${fmtHours(client.hours_remaining)} hrs left`}
                     </span>
                   </div>
 

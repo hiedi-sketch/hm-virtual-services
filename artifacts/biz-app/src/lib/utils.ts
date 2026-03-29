@@ -11,3 +11,7 @@ export function formatCurrency(amount: number) {
     currency: "USD",
   }).format(amount);
 }
+
+export function fmtHours(hours: number): string {
+  return (Math.round(hours * 100) / 100).toFixed(2);
+}

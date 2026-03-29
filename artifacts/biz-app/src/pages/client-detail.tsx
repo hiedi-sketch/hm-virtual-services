@@ -26,7 +26,7 @@ import {
   RefreshCw, ShoppingBag, Trash2, MessageSquare, Send, ChevronDown, ChevronUp,
   Users, ArrowUpDown, ArrowUp, ArrowDown, Link as LinkIcon,
 } from "lucide-react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, fmtHours } from "@/lib/utils";
 
 function isWeekday(d: Date): boolean {
   const day = d.getDay();
@@ -511,12 +511,12 @@ export default function ClientDetail() {
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Used This Month</p>
-          <p className="text-2xl font-bold text-slate-900">{hoursUsed} <span className="text-base font-medium text-slate-400">hrs</span></p>
+          <p className="text-2xl font-bold text-slate-900">{fmtHours(hoursUsed)} <span className="text-base font-medium text-slate-400">hrs</span></p>
         </div>
         <div className={`rounded-2xl border shadow-xl p-5 ${isOverBudget ? "bg-red-50 border-red-200" : "bg-white border-slate-200"}`}>
           <p className={`text-xs font-semibold uppercase tracking-wider mb-1 ${isOverBudget ? "text-red-400" : "text-slate-400"}`}>Remaining</p>
           <p className={`text-2xl font-bold ${isOverBudget ? "text-red-600" : "text-slate-900"}`}>
-            {hoursRemaining} <span className="text-base font-medium opacity-60">hrs</span>
+            {fmtHours(hoursRemaining)} <span className="text-base font-medium opacity-60">hrs</span>
           </p>
         </div>
       </div>
@@ -528,7 +528,7 @@ export default function ClientDetail() {
             <span className="font-medium text-slate-700">
               VA hours — {percentage}% of {budget}h monthly cap used
             </span>
-            <span className="text-slate-500">{hoursUsed} / {budget} hrs</span>
+            <span className="text-slate-500">{fmtHours(hoursUsed)} / {budget} hrs</span>
           </div>
           <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-700 ${barColor}`} style={{ width: `${percentage}%` }} />
@@ -1144,12 +1144,12 @@ export default function ClientDetail() {
                           </td>
                           {/* Used */}
                           <td className="px-4 py-3 text-right">
-                            <span className="text-slate-600">{sc.va_hours_used}h</span>
+                            <span className="text-slate-600">{fmtHours(sc.va_hours_used)}h</span>
                           </td>
                           {/* Remaining */}
                           <td className="px-4 py-3 text-right">
                             <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full border ${colors.badge}`}>
-                              {sc.monthly_va_budget > 0 ? `${sc.hours_remaining}h` : "—"}
+                              {sc.monthly_va_budget > 0 ? `${fmtHours(sc.hours_remaining)}h` : "—"}
                             </span>
                           </td>
                           {/* Progress bar */}

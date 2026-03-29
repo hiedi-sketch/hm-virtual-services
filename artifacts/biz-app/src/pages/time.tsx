@@ -35,7 +35,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
+import { cn, fmtHours } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 const TIMER_KEY = "flowstate_timer";
@@ -482,13 +482,13 @@ export default function TimeTracking() {
         if (b.status === "over") {
           toast({
             title: `${b.clientName} is over budget`,
-            description: `${b.hoursUsed}h logged of ${b.budget}h monthly budget.`,
+            description: `${fmtHours(b.hoursUsed)}h logged of ${b.budget}h monthly budget.`,
             variant: "destructive",
           });
         } else if (b.status === "near") {
           toast({
             title: `${b.clientName} is nearing their budget`,
-            description: `${b.hoursUsed}h of ${b.budget}h used — over 90%.`,
+            description: `${fmtHours(b.hoursUsed)}h of ${b.budget}h used — over 90%.`,
           });
         }
       })
