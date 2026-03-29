@@ -3,8 +3,10 @@ import json
 import sqlite3
 import threading
 import logging
+import time
 from datetime import datetime, date
 
+import requests as http_requests
 from flask import Flask, jsonify, request, render_template, abort
 from apscheduler.schedulers.background import BackgroundScheduler
 import gspread
@@ -12,6 +14,34 @@ from google.oauth2.service_account import Credentials
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
+
+# ── Completion webhook ─────────────────────────────────────────────────────────
+
+WEBHOOK_URL = (
+    "https://script.google.com/macros/s/"
+    "AKfycbypfsBkNWTnNoUhLy_nDahx6je7kPNatXbCRv0Qujyd2AfRyfk7EB-29EbZrb7DX31lKw"
+    "/exec?token=mySecret123"
+)
+
+def trigger_completion_webhook(task_id: int, task_name: str) -> None:
+    """POST to the Google Apps Script webhook (up to 3 attempts)."""
+    payload = {"task_id": task_id, "task_name": task_name}
+    for attempt in range(1, 4):
+        try:
+            resp = http_requests.post(WEBHOOK_URL, json=payload, timeout=15)
+            log.info(
+                "Completion webhook triggered for task %s (%r): HTTP %s",
+                task_id, task_name, resp.status_code,
+            )
+            return
+        except Exception as exc:
+            log.warning(
+                "Completion webhook attempt %d/%d failed for task %s: %s",
+                attempt, 3, task_id, exc,
+            )
+            if attempt < 3:
+                time.sleep(2 ** (attempt - 1))
+    log.error("Completion webhook failed after 3 attempts for task %s", task_id)
 
 app = Flask(__name__)
 
@@ -359,18 +389,20 @@ def update_task(task_id):
         ex = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         if not ex:
             abort(404)
-        new_status = data.get("status", ex["status"])
+        prev_status = ex["status"]
+        new_status = data.get("status", prev_status)
         comp_date = ex["completed_date"]
         if new_status == "Completed" and not comp_date:
             comp_date = date.today().isoformat()
         elif new_status != "Completed":
             comp_date = None
+        new_task_name = data.get("task_name", ex["task_name"])
         conn.execute(
             """UPDATE tasks SET task_name=?,service_type=?,frequency=?,day_spec=?,
                due_date=?,status=?,completed_date=?,client=?,updated_at=datetime('now')
                WHERE id=?""",
             (
-                data.get("task_name", ex["task_name"]),
+                new_task_name,
                 data.get("service_type", ex["service_type"]),
                 data.get("frequency", ex["frequency"]),
                 data.get("day_spec", ex["day_spec"]),
@@ -383,7 +415,17 @@ def update_task(task_id):
         )
         conn.commit()
         row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        just_completed = prev_status != "Completed" and new_status == "Completed"
+
     threading.Thread(target=push_task_to_sheet, args=(task_id,), daemon=True).start()
+
+    if just_completed:
+        threading.Thread(
+            target=trigger_completion_webhook,
+            args=(task_id, new_task_name),
+            daemon=True,
+        ).start()
+
     return jsonify(dict(row))
 
 
