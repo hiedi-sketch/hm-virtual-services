@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{{ client_name }} — Tasks{% endblock %}
+{% block title %}{{ client_name }}{% endblock %}
 
 {% block content %}
 <div class="toolbar">
@@ -12,15 +12,31 @@
 </div>
 
 <div class="alert info">
-  📋 Showing tasks assigned to <strong>{{ client_name }}</strong>.
-  Changes here sync back to Google Sheets automatically.
+  📋 Tasks assigned to <strong>{{ client_name }}</strong>. Changes here sync back to Google Sheets automatically.
 </div>
 
-<!-- Add form -->
 <div class="add-form hidden" id="addForm">
   <div class="form-group">
-    <label>Task Name *</label>
-    <input type="text" id="newName" placeholder="e.g. Prepare report">
+    <label>Task Description *</label>
+    <input type="text" id="newName" placeholder="e.g. Import Transactions">
+  </div>
+  <div class="form-group">
+    <label>Category</label>
+    <input type="text" id="newCategory" placeholder="e.g. Transaction Management">
+  </div>
+  <div class="form-group">
+    <label>Frequency</label>
+    <select id="newFrequency">
+      <option value="">—</option>
+      <option>Daily</option>
+      <option>Weekly</option>
+      <option>Monthly</option>
+      <option>One-Time</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label>Day / Detail</label>
+    <input type="text" id="newDaySpec" placeholder="e.g. Tuesday">
   </div>
   <div class="form-group">
     <label>Due Date</label>
@@ -34,10 +50,6 @@
       <option>Completed</option>
     </select>
   </div>
-  <div class="form-group">
-    <label>Notes</label>
-    <input type="text" id="newNotes" placeholder="Optional notes">
-  </div>
   <div class="form-actions">
     <button class="btn" onclick="toggleAddForm()">Cancel</button>
     <button class="btn primary" onclick="addTask()">Add Task</button>
@@ -48,10 +60,11 @@
   <table id="taskTable" class="dataTable" style="width:100%">
     <thead>
       <tr>
-        <th>Task Name</th>
+        <th>Task Description</th>
+        <th>Category</th>
+        <th>Frequency</th>
         <th>Due Date</th>
         <th>Status</th>
-        <th>Notes</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -69,55 +82,55 @@ function toggleAddForm() {
 
 async function addTask() {
   const name = document.getElementById('newName').value.trim();
-  if (!name) { alert('Task Name is required.'); return; }
+  if (!name) { alert('Task Description is required.'); return; }
   await fetch('/api/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       task_name: name,
+      client:    CLIENT_NAME,
+      category:  document.getElementById('newCategory').value || null,
+      frequency: document.getElementById('newFrequency').value || null,
+      day_spec:  document.getElementById('newDaySpec').value || null,
       due_date:  document.getElementById('newDue').value || null,
       status:    document.getElementById('newStatus').value,
-      client:    CLIENT_NAME,
-      notes:     document.getElementById('newNotes').value || null,
     }),
   });
   document.getElementById('newName').value = '';
+  document.getElementById('newDaySpec').value = '';
   document.getElementById('newDue').value = '';
-  document.getElementById('newNotes').value = '';
   window._taskTable.ajax.reload(null, false);
 }
 
-function rowClass(d) {
-  if (d.status === 'Completed') return 'completed';
-  if (d.due_date && d.due_date < new Date().toISOString().slice(0,10) && d.status !== 'Completed') return 'overdue';
-  return '';
-}
-
-function badgeHtml(status) {
-  const map = { Pending:'pending', 'In Progress':'progress', Completed:'completed' };
-  return `<span class="badge ${map[status]||'pending'}">${status}</span>`;
+function fmtFreq(freq, day) {
+  if (!freq) return '';
+  return day ? `${freq} · <span style="color:#666;font-size:11px">${day}</span>` : freq;
 }
 
 $(function() {
   window._taskTable = $('#taskTable').DataTable({
     ajax: { url: `/api/tasks?client=${encodeURIComponent(CLIENT_NAME)}`, dataSrc: '' },
-    order: [[1, 'asc']],
+    order: [[3,'asc']],
     pageLength: 25,
     dom: '<"dt-top"lf>t<"dt-bottom"ip>',
     columns: [
       {
         data: 'task_name',
-        render: (d, t, row) => t === 'display'
-          ? `<span style="cursor:pointer;font-weight:500" onclick="startTimer('${d.replace(/'/g,"\\'")}')">▶ ${d}</span>`
+        render: (d, t, row) => t==='display'
+          ? `<span class="task-link" onclick="startTimer('${d.replace(/'/g,"\\'")}')">▶ ${d}</span>`
           : d
       },
-      { data: 'due_date', defaultContent: '' },
-      { data: 'status',   render: (d, t) => t === 'display' ? badgeHtml(d) : d },
-      { data: 'notes', defaultContent: '' },
+      { data: 'category', defaultContent: '' },
+      {
+        data: null, defaultContent: '',
+        render: (d,t) => t==='display' ? fmtFreq(d.frequency, d.day_spec) : (d.frequency||'')
+      },
+      { data: 'due_date', defaultContent: '', render: (d,t) => t==='display' ? (d||'—') : (d||'') },
+      { data: 'status',   render: (d, t) => t==='display' ? badgeHtml(d) : d },
       {
         data: null, orderable: false, searchable: false,
-        render: (d) => `
-          <button class="action-btn complete" title="Mark completed" onclick="completeTask(${d.id})">✓</button>
+        render: d => `
+          <button class="action-btn complete" title="Mark Completed" onclick="completeTask(${d.id})">✓</button>
           <button class="action-btn" title="Edit" onclick='openEditModal(${JSON.stringify(d)})'>✎</button>
           <button class="action-btn del" title="Delete" onclick="deleteTask(${d.id})">✕</button>
         `

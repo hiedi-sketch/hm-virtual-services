@@ -3,193 +3,169 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}Task Manager{% endblock %} — Google Sheets Sync</title>
+  <title>{% block title %}Task Manager{% endblock %} — Sheet Sync</title>
 
-  <!-- DataTables + jQuery -->
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
-  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-  <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
-
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
-    /* ── Reset & base ───────────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', Arial, sans-serif; background: #f8f9fa; color: #202124; font-size: 14px; }
+    body { font-family: 'Inter', sans-serif; background: #f3f4f6; color: #111827; font-size: 13px; }
 
-    /* ── Top bar ────────────────────────────────────────────────────────────── */
+    /* Top bar */
     .topbar {
-      display: flex; align-items: center; gap: 16px;
-      background: #fff; border-bottom: 1px solid #e0e0e0;
-      padding: 10px 20px; position: sticky; top: 0; z-index: 200;
+      display: flex; align-items: center; gap: 14px;
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: 10px 24px; position: sticky; top: 0; z-index: 200;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
     }
-    .topbar .logo { font-size: 18px; font-weight: 600; color: #188038; display: flex; align-items: center; gap: 8px; }
-    .topbar .logo svg { width: 22px; height: 22px; }
-    .topbar nav { display: flex; gap: 4px; }
-    .topbar nav a {
-      padding: 6px 14px; border-radius: 20px; text-decoration: none;
-      color: #444; font-size: 13px; font-weight: 500; transition: background 0.15s;
-    }
-    .topbar nav a:hover, .topbar nav a.active { background: #e8f5e9; color: #188038; }
+    .logo { font-size: 16px; font-weight: 700; color: #188038; display: flex; align-items: center; gap: 8px; }
+    .logo svg { width: 20px; height: 20px; }
     .topbar .spacer { flex: 1; }
-    .sync-status { font-size: 12px; color: #666; display: flex; align-items: center; gap: 6px; }
-    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; display: inline-block; }
-    .sync-dot.ok { background: #34a853; }
-    .sync-dot.error { background: #ea4335; }
-    .sync-dot.syncing { background: #fbbc04; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .sync-status { font-size: 12px; color: #6b7280; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; display: inline-block; flex-shrink:0; }
+    .sync-dot.ok { background: #22c55e; }
+    .sync-dot.error { background: #ef4444; }
+    .sync-dot.syncing { background: #f59e0b; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    /* Buttons */
     .btn {
-      padding: 6px 14px; border-radius: 4px; border: 1px solid #dadce0; background: #fff;
-      cursor: pointer; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px;
-      transition: background 0.15s, box-shadow 0.15s; color: #444;
+      padding: 6px 14px; border-radius: 6px; border: 1px solid #d1d5db; background: #fff;
+      cursor: pointer; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center;
+      gap: 5px; transition: background .12s, box-shadow .12s; color: #374151; white-space: nowrap;
     }
-    .btn:hover { background: #f1f3f4; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+    .btn:hover { background: #f9fafb; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
     .btn.primary { background: #188038; color: #fff; border-color: #188038; }
-    .btn.primary:hover { background: #137333; }
-    .btn.danger { background: #ea4335; color: #fff; border-color: #ea4335; }
-    .btn.danger:hover { background: #c5221f; }
+    .btn.primary:hover { background: #146c2e; }
 
-    /* ── Main layout ────────────────────────────────────────────────────────── */
-    .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+    /* Layout */
+    .container { max-width: 1440px; margin: 0 auto; padding: 20px 24px; }
 
-    /* ── Toolbar ────────────────────────────────────────────────────────────── */
-    .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
-    .toolbar h1 { font-size: 20px; font-weight: 600; color: #202124; flex: 1 1 auto; }
+    /* Toolbar */
+    .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .toolbar h1 { font-size: 18px; font-weight: 700; flex: 1 1 auto; }
+    .filter-select {
+      padding: 5px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+      background: #fff; font: inherit; font-size: 12px; color: #374151; cursor: pointer;
+    }
+    .filter-select:focus { outline: 2px solid #188038; border-color: #188038; }
 
-    /* ── Alert banner ───────────────────────────────────────────────────────── */
-    .alert {
-      padding: 12px 16px; border-radius: 6px; margin-bottom: 16px;
-      font-size: 13px; display: flex; align-items: flex-start; gap: 10px;
-    }
-    .alert.warn { background: #fef7e0; border: 1px solid #fbbc04; color: #7a6000; }
-    .alert.info { background: #e8f0fe; border: 1px solid #4285f4; color: #1a4c8b; }
-    .alert code { font-family: monospace; background: rgba(0,0,0,.07); padding: 1px 5px; border-radius: 3px; }
+    /* Alerts */
+    .alert { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; font-size: 13px; display: flex; gap: 10px; }
+    .alert.warn { background: #fffbeb; border: 1px solid #fbbf24; color: #92400e; }
+    .alert.info { background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; }
+    .alert code { font-family: monospace; background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
 
-    /* ── Sheets-like table wrapper ──────────────────────────────────────────── */
-    .table-wrap {
-      background: #fff; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden;
-    }
-    table.dataTable {
-      border-collapse: collapse; width: 100% !important;
-      font-size: 13px;
-    }
-    table.dataTable thead th {
-      background: #f8f9fa; color: #444; font-weight: 600; font-size: 12px;
-      border: 1px solid #e0e0e0; padding: 8px 12px; white-space: nowrap;
-      user-select: none; text-align: left;
-    }
-    table.dataTable thead th:hover { background: #f1f3f4; }
-    table.dataTable tbody td {
-      border: 1px solid #e0e0e0; padding: 7px 12px; vertical-align: middle; line-height: 1.4;
-      color: #202124; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    table.dataTable tbody tr:hover td { background: #f8f9fa; }
-    table.dataTable tbody tr.completed td { background: #e8f5e9 !important; color: #1e7e34; text-decoration: line-through; }
-    table.dataTable tbody tr.overdue td { background: #fce8e6 !important; color: #c5221f; }
-
-    /* ── Status badges ──────────────────────────────────────────────────────── */
-    .badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
-      white-space: nowrap;
-    }
-    .badge.pending   { background: #fef7e0; color: #7a6000; border: 1px solid #fbbc04; }
-    .badge.progress  { background: #e8f0fe; color: #1a4c8b; border: 1px solid #4285f4; }
-    .badge.completed { background: #e8f5e9; color: #137333; border: 1px solid #34a853; }
-    .badge.overdue   { background: #fce8e6; color: #c5221f; border: 1px solid #ea4335; }
-
-    /* ── Inline edit input ──────────────────────────────────────────────────── */
-    .cell-edit {
-      width: 100%; border: none; background: transparent; font: inherit; color: inherit;
-      outline: none; padding: 0;
-    }
-    td:focus-within { outline: 2px solid #4285f4; outline-offset: -1px; background: #fff !important; }
-    td:focus-within .cell-edit { color: #202124; }
-
-    /* ── Action icons ───────────────────────────────────────────────────────── */
-    .action-btn {
-      background: none; border: none; cursor: pointer; padding: 3px 6px;
-      border-radius: 4px; color: #666; font-size: 15px; line-height: 1;
-      transition: background 0.1s, color 0.1s;
-    }
-    .action-btn:hover { background: #f1f3f4; color: #333; }
-    .action-btn.del:hover { background: #fce8e6; color: #c5221f; }
-    .action-btn.complete:hover { background: #e8f5e9; color: #137333; }
-
-    /* ── DataTables custom controls ─────────────────────────────────────────── */
-    .dataTables_wrapper .dataTables_filter input {
-      border: 1px solid #dadce0; border-radius: 4px; padding: 5px 10px;
-      font-size: 13px; margin-left: 6px;
-    }
-    .dataTables_wrapper .dataTables_filter input:focus { outline: 2px solid #4285f4; border-color: #4285f4; }
-    .dataTables_wrapper .dataTables_length select { border: 1px solid #dadce0; border-radius: 4px; padding: 4px 6px; font-size: 13px; }
-    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
-      background: #188038 !important; color: #fff !important; border-color: #188038 !important; border-radius: 4px;
-    }
-    .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
-      background: #f1f3f4 !important; color: #333 !important; border-color: #dadce0 !important;
-    }
-    .dataTables_info { font-size: 12px; color: #666; }
-
-    /* ── Add task form ───────────────────────────────────────────────────────── */
+    /* Add form */
     .add-form {
-      display: none; background: #fff; border: 1px solid #e0e0e0;
-      border-radius: 6px; padding: 20px; margin-bottom: 16px;
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+      padding: 18px 20px; margin-bottom: 14px;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
     }
     .add-form.hidden { display: none !important; }
-    .form-group label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; }
-    .form-group input, .form-group select, .form-group textarea {
-      width: 100%; border: 1px solid #dadce0; border-radius: 4px; padding: 7px 10px;
-      font: inherit; font-size: 13px; color: #202124; transition: border 0.15s, box-shadow 0.15s;
+    .form-group label { display: block; font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
+    .form-group input, .form-group select {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 5px;
+      padding: 6px 9px; font: inherit; font-size: 13px; color: #111827;
     }
-    .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
-      outline: none; border-color: #4285f4; box-shadow: 0 0 0 2px rgba(66,133,244,.2);
-    }
-    .form-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+    .form-group input:focus, .form-group select:focus { outline: 2px solid #188038; border-color: #188038; }
+    .form-actions { grid-column: 1/-1; display: flex; gap: 8px; justify-content: flex-end; }
 
-    /* ── Timer widget ───────────────────────────────────────────────────────── */
+    /* Table */
+    .table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+    table.dataTable { border-collapse: collapse; width: 100% !important; font-size: 13px; }
+    table.dataTable thead th {
+      background: #f9fafb; color: #374151; font-weight: 600; font-size: 12px;
+      border: 1px solid #e5e7eb; padding: 8px 12px; white-space: nowrap;
+      text-align: left; user-select: none;
+    }
+    table.dataTable thead th:hover { background: #f3f4f6; }
+    table.dataTable tbody td {
+      border: 1px solid #e5e7eb; padding: 7px 12px; vertical-align: middle;
+      color: #111827; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    table.dataTable tbody tr:hover td { background: #f9fafb; }
+    table.dataTable tbody tr.completed td { background: #f0fdf4 !important; color: #166534; }
+    table.dataTable tbody tr.completed td .task-link { text-decoration: line-through; opacity: .7; }
+    table.dataTable tbody tr.overdue td { background: #fef2f2 !important; }
+    table.dataTable tbody tr.overdue td .task-link { color: #dc2626; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .badge.pending   { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+    .badge.progress  { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+    .badge.completed { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+    .badge.overdue   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+    /* Action buttons */
+    .action-btn {
+      background: none; border: none; cursor: pointer; padding: 3px 7px;
+      border-radius: 4px; color: #9ca3af; font-size: 14px; line-height: 1;
+      transition: background .1s, color .1s;
+    }
+    .action-btn:hover       { background: #f3f4f6; color: #111827; }
+    .action-btn.del:hover   { background: #fee2e2; color: #dc2626; }
+    .action-btn.complete:hover { background: #dcfce7; color: #166534; }
+
+    /* Task & client links */
+    .task-link   { cursor: pointer; font-weight: 500; }
+    .task-link:hover { text-decoration: underline; }
+    .client-link { color: #2563eb; text-decoration: none; }
+    .client-link:hover { text-decoration: underline; }
+
+    /* DataTables chrome */
+    .dataTables_wrapper .dataTables_filter input {
+      border: 1px solid #d1d5db; border-radius: 5px; padding: 5px 9px; font-size: 13px; margin-left: 6px;
+    }
+    .dataTables_wrapper .dataTables_filter input:focus { outline: 2px solid #188038; }
+    .dataTables_wrapper .dataTables_length select { border: 1px solid #d1d5db; border-radius: 5px; padding: 4px 6px; font-size: 13px; }
+    .dt-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #e5e7eb; }
+    .dt-bottom { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-top: 1px solid #e5e7eb; }
+    .dataTables_info { font-size: 12px; color: #6b7280; }
+    .dataTables_paginate .paginate_button { padding: 3px 9px !important; border-radius: 5px !important; font-size: 13px !important; }
+    .dataTables_paginate .paginate_button.current { background: #188038 !important; color: #fff !important; border-color: #188038 !important; }
+    .dataTables_paginate .paginate_button:hover { background: #f3f4f6 !important; color: #111827 !important; border-color: #d1d5db !important; }
+
+    /* Timer widget */
     .timer-widget {
       position: fixed; bottom: 24px; right: 24px;
-      background: #fff; border: 1px solid #e0e0e0; border-radius: 12px;
-      padding: 14px 18px; box-shadow: 0 4px 20px rgba(0,0,0,.15);
-      min-width: 200px; z-index: 300;
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+      padding: 14px 18px; box-shadow: 0 4px 24px rgba(0,0,0,.12);
+      min-width: 210px; z-index: 300;
     }
-    .timer-widget h4 { font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; margin-bottom: 8px; }
-    .timer-task-label { font-size: 12px; color: #444; margin-bottom: 6px; min-height: 18px; font-style: italic; }
-    .timer-display { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; color: #188038; letter-spacing: 1px; }
-    .timer-btns { display: flex; gap: 8px; margin-top: 10px; }
-    .timer-btns button { flex: 1; padding: 6px; border-radius: 6px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; transition: background 0.15s; }
-    #timerStart { background: #188038; color: #fff; }
-    #timerStart:hover { background: #137333; }
-    #timerPause { background: #fbbc04; color: #333; }
-    #timerPause:hover { background: #f9a825; }
-    #timerStop { background: #ea4335; color: #fff; }
-    #timerStop:hover { background: #c5221f; }
+    .timer-widget h4 { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+    .timer-task-label { font-size: 11px; color: #374151; margin-bottom: 6px; min-height: 16px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 174px; }
+    .timer-display { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; color: #188038; letter-spacing: 2px; }
+    .timer-btns { display: flex; gap: 6px; margin-top: 10px; }
+    .timer-btns button { flex: 1; padding: 6px 4px; border-radius: 6px; font-size: 12px; font-weight: 600; border: none; cursor: pointer; }
+    #timerStart  { background: #188038; color: #fff; }
+    #timerStart:hover { background: #146c2e; }
+    #timerPause  { background: #fbbf24; color: #111827; }
+    #timerPause:hover { background: #f59e0b; }
+    #timerStop   { background: #ef4444; color: #fff; }
+    #timerStop:hover  { background: #dc2626; }
 
-    /* ── Modal ──────────────────────────────────────────────────────────────── */
-    .modal-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45);
-      z-index: 500; align-items: center; justify-content: center;
-    }
+    /* Edit modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 500; align-items: center; justify-content: center; }
     .modal-overlay.open { display: flex; }
-    .modal {
-      background: #fff; border-radius: 10px; padding: 28px 30px;
-      width: 500px; max-width: 95vw; box-shadow: 0 8px 40px rgba(0,0,0,.2);
-    }
-    .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 18px; }
+    .modal { background: #fff; border-radius: 10px; padding: 26px 28px; width: 520px; max-width: 95vw; box-shadow: 0 10px 40px rgba(0,0,0,.18); }
+    .modal h2 { font-size: 16px; font-weight: 700; margin-bottom: 18px; }
     .modal .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .modal .full { grid-column: 1 / -1; }
+    .modal .full { grid-column: 1/-1; }
+    .modal .form-group label { display: block; font-size: 11px; font-weight: 600; color: #6b7280; margin-bottom: 4px; text-transform: uppercase; }
+    .modal .form-group input, .modal .form-group select, .modal .form-group textarea {
+      width: 100%; border: 1px solid #d1d5db; border-radius: 5px; padding: 7px 10px; font: inherit; font-size: 13px;
+    }
+    .modal .form-group input:focus, .modal .form-group select:focus { outline: 2px solid #188038; border-color: #188038; }
     .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
-    /* ── Responsive ─────────────────────────────────────────────────────────── */
     @media (max-width: 640px) {
-      .topbar { gap: 8px; padding: 8px 12px; }
+      .topbar { padding: 8px 12px; }
       .container { padding: 12px; }
-      .timer-widget { bottom: 12px; right: 12px; }
+      .timer-widget { bottom: 12px; right: 12px; min-width: 180px; }
     }
   </style>
 </head>
@@ -197,22 +173,19 @@
 
 <div class="topbar">
   <div class="logo">
-    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg viewBox="0 0 24 24" fill="none">
       <rect x="3" y="3" width="18" height="18" rx="2" fill="#34a853" opacity=".15"/>
       <rect x="3" y="3" width="18" height="18" rx="2" stroke="#188038" stroke-width="1.5"/>
-      <line x1="3" y1="8" x2="21" y2="8" stroke="#188038" stroke-width="1"/>
+      <line x1="3" y1="8"  x2="21" y2="8"  stroke="#188038" stroke-width="1"/>
       <line x1="3" y1="13" x2="21" y2="13" stroke="#188038" stroke-width="1"/>
-      <line x1="9" y1="3" x2="9" y2="21" stroke="#188038" stroke-width="1"/>
+      <line x1="9" y1="3"  x2="9"  y2="21" stroke="#188038" stroke-width="1"/>
     </svg>
-    Sheet Tasks
+    Sheet Task Manager
   </div>
-  <nav>
-    <a href="/" id="navAll">All Tasks</a>
-  </nav>
   <div class="spacer"></div>
   <div class="sync-status">
     <span class="sync-dot" id="syncDot"></span>
-    <span id="syncText">Not synced yet</span>
+    <span id="syncText">Checking…</span>
   </div>
   <button class="btn" onclick="triggerSync()">↻ Sync Now</button>
 </div>
@@ -221,7 +194,7 @@
   {% block content %}{% endblock %}
 </div>
 
-<!-- Timer widget -->
+<!-- Floating timer -->
 <div class="timer-widget">
   <h4>⏱ Timer</h4>
   <div class="timer-task-label" id="timerTaskLabel">No task selected</div>
@@ -229,7 +202,7 @@
   <div class="timer-btns">
     <button id="timerStart" onclick="startTimer()">▶ Start</button>
     <button id="timerPause" onclick="pauseTimer()" style="display:none">⏸ Pause</button>
-    <button id="timerStop" onclick="stopTimer()">■ Stop</button>
+    <button id="timerStop"  onclick="stopTimer()">■ Stop</button>
   </div>
 </div>
 
@@ -239,8 +212,30 @@
     <h2>Edit Task</h2>
     <div class="form-grid">
       <div class="form-group full">
-        <label>Task Name</label>
+        <label>Task Description</label>
         <input type="text" id="editName">
+      </div>
+      <div class="form-group">
+        <label>Client</label>
+        <input type="text" id="editClient">
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <input type="text" id="editCategory">
+      </div>
+      <div class="form-group">
+        <label>Frequency</label>
+        <select id="editFrequency">
+          <option value="">—</option>
+          <option>Daily</option>
+          <option>Weekly</option>
+          <option>Monthly</option>
+          <option>One-Time</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Day / Detail</label>
+        <input type="text" id="editDaySpec">
       </div>
       <div class="form-group">
         <label>Due Date</label>
@@ -254,114 +249,91 @@
           <option>Completed</option>
         </select>
       </div>
-      <div class="form-group">
-        <label>Client</label>
-        <input type="text" id="editClient">
-      </div>
-      <div class="form-group">
-        <label>Notes</label>
-        <input type="text" id="editNotes">
-      </div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeEditModal()">Cancel</button>
-      <button class="btn primary" onclick="saveEdit()">Save</button>
+      <button class="btn primary" onclick="saveEdit()">Save Changes</button>
     </div>
   </div>
 </div>
 
 <script>
-// ── Sync status polling ───────────────────────────────────────────────────────
+// ── Sync status ───────────────────────────────────────────────────────────────
 let editingId = null;
 
-function updateSyncUI(data) {
+function updateSyncUI(d) {
   const dot = document.getElementById('syncDot');
   const txt = document.getElementById('syncText');
   dot.className = 'sync-dot';
-  if (data.syncing) {
-    dot.classList.add('syncing');
-    txt.textContent = 'Syncing…';
-  } else if (data.error) {
-    dot.classList.add('error');
-    txt.textContent = 'Sync error';
-    txt.title = data.error;
-  } else if (data.last_sync) {
-    dot.classList.add('ok');
-    txt.textContent = 'Synced ' + data.last_sync;
+  if (d.syncing) {
+    dot.classList.add('syncing'); txt.textContent = 'Syncing…';
+  } else if (d.error) {
+    dot.classList.add('error'); txt.textContent = 'Sync error'; txt.title = d.error;
+  } else if (d.last_sync) {
+    dot.classList.add('ok'); txt.textContent = 'Synced ' + d.last_sync;
+  } else {
+    txt.textContent = 'Not synced yet';
   }
 }
 
+async function checkSyncStatus() {
+  try {
+    const r = await fetch('/api/sync/status');
+    const d = await r.json();
+    updateSyncUI(d);
+    if (d.syncing) setTimeout(checkSyncStatus, 1000);
+    else if (window._taskTable) window._taskTable.ajax.reload(null, false);
+  } catch {}
+}
+
 async function triggerSync() {
-  const dot = document.getElementById('syncDot');
-  dot.className = 'sync-dot syncing';
+  document.getElementById('syncDot').className = 'sync-dot syncing';
   document.getElementById('syncText').textContent = 'Syncing…';
   await fetch('/api/sync', { method: 'POST' });
-  setTimeout(checkSyncStatus, 1500);
+  setTimeout(checkSyncStatus, 2000);
 }
 
-async function checkSyncStatus() {
-  const r = await fetch('/api/sync/status');
-  const data = await r.json();
-  updateSyncUI(data);
-  if (data.syncing) setTimeout(checkSyncStatus, 1000);
-  else if (window._taskTable) window._taskTable.ajax.reload(null, false);
-}
-
-setInterval(checkSyncStatus, 5000);
+setInterval(checkSyncStatus, 8000);
 checkSyncStatus();
 
-// ── Timer ──────────────────────────────────────────────────────────────────
-let timerInterval = null;
-let timerSeconds = 0;
-let timerRunning = false;
-let timerTaskName = null;
-
-function fmtTime(s) {
-  const h = Math.floor(s / 3600).toString().padStart(2, '0');
-  const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
-  const sec = (s % 60).toString().padStart(2, '0');
-  return `${h}:${m}:${sec}`;
+// ── Shared table helpers ──────────────────────────────────────────────────────
+function rowClass(d) {
+  if (d.status === 'Completed') return 'completed';
+  const today = new Date().toISOString().slice(0,10);
+  if (d.due_date && d.due_date < today) return 'overdue';
+  return '';
 }
 
-function startTimer(taskName) {
-  if (taskName) { timerTaskName = taskName; document.getElementById('timerTaskLabel').textContent = taskName; }
-  timerRunning = true;
-  timerInterval = setInterval(() => {
-    timerSeconds++;
-    document.getElementById('timerDisplay').textContent = fmtTime(timerSeconds);
-  }, 1000);
-  document.getElementById('timerStart').style.display = 'none';
-  document.getElementById('timerPause').style.display = '';
+function badgeHtml(status) {
+  const today = new Date().toISOString().slice(0,10);
+  const map = { Pending:'pending', 'In Progress':'progress', Completed:'completed' };
+  return `<span class="badge ${map[status]||'pending'}">${status}</span>`;
 }
 
-function pauseTimer() {
-  clearInterval(timerInterval);
-  timerRunning = false;
-  document.getElementById('timerPause').style.display = 'none';
-  document.getElementById('timerStart').style.display = '';
-  document.getElementById('timerStart').textContent = '▶ Resume';
+async function completeTask(id) {
+  await fetch('/api/tasks/'+id, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({status:'Completed'})
+  });
+  if (window._taskTable) window._taskTable.ajax.reload(null, false);
 }
 
-function stopTimer() {
-  clearInterval(timerInterval);
-  timerRunning = false;
-  timerSeconds = 0;
-  timerTaskName = null;
-  document.getElementById('timerDisplay').textContent = '00:00:00';
-  document.getElementById('timerTaskLabel').textContent = 'No task selected';
-  document.getElementById('timerPause').style.display = 'none';
-  document.getElementById('timerStart').style.display = '';
-  document.getElementById('timerStart').textContent = '▶ Start';
+async function deleteTask(id) {
+  if (!confirm('Delete this task? It will also be removed from Google Sheets.')) return;
+  await fetch('/api/tasks/'+id, { method:'DELETE' });
+  if (window._taskTable) window._taskTable.ajax.reload(null, false);
 }
 
 // ── Edit modal ────────────────────────────────────────────────────────────────
 function openEditModal(task) {
   editingId = task.id;
-  document.getElementById('editName').value = task.task_name || '';
-  document.getElementById('editDue').value = task.due_date || '';
-  document.getElementById('editStatus').value = task.status || 'Pending';
-  document.getElementById('editClient').value = task.client || '';
-  document.getElementById('editNotes').value = task.notes || '';
+  document.getElementById('editName').value      = task.task_name || '';
+  document.getElementById('editClient').value    = task.client   || '';
+  document.getElementById('editCategory').value  = task.category || '';
+  document.getElementById('editFrequency').value = task.frequency|| '';
+  document.getElementById('editDaySpec').value   = task.day_spec || '';
+  document.getElementById('editDue').value       = task.due_date || '';
+  document.getElementById('editStatus').value    = task.status   || 'Pending';
   document.getElementById('editModal').classList.add('open');
 }
 
@@ -372,37 +344,61 @@ function closeEditModal() {
 
 async function saveEdit() {
   if (!editingId) return;
-  const payload = {
-    task_name: document.getElementById('editName').value,
-    due_date:  document.getElementById('editDue').value || null,
-    status:    document.getElementById('editStatus').value,
-    client:    document.getElementById('editClient').value,
-    notes:     document.getElementById('editNotes').value,
-  };
-  await fetch('/api/tasks/' + editingId, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+  await fetch('/api/tasks/'+editingId, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      task_name: document.getElementById('editName').value,
+      client:    document.getElementById('editClient').value,
+      category:  document.getElementById('editCategory').value,
+      frequency: document.getElementById('editFrequency').value,
+      day_spec:  document.getElementById('editDaySpec').value,
+      due_date:  document.getElementById('editDue').value || null,
+      status:    document.getElementById('editStatus').value,
+    }),
   });
   closeEditModal();
   if (window._taskTable) window._taskTable.ajax.reload(null, false);
 }
 
-document.getElementById('editModal').addEventListener('click', function(e) {
-  if (e.target === this) closeEditModal();
+document.getElementById('editModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('editModal')) closeEditModal();
 });
 
-// ── Delete helper (shared) ────────────────────────────────────────────────────
-async function deleteTask(id) {
-  if (!confirm('Delete this task? This will also remove it from Google Sheets.')) return;
-  await fetch('/api/tasks/' + id, { method: 'DELETE' });
-  if (window._taskTable) window._taskTable.ajax.reload(null, false);
+// ── Timer ─────────────────────────────────────────────────────────────────────
+let _timerInterval = null, _timerSec = 0, _timerRunning = false;
+
+function fmtTime(s) {
+  return [Math.floor(s/3600), Math.floor((s%3600)/60), s%60]
+    .map(n => String(n).padStart(2,'0')).join(':');
 }
 
-async function completeTask(id) {
-  await fetch('/api/tasks/' + id, {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'Completed' }),
-  });
-  if (window._taskTable) window._taskTable.ajax.reload(null, false);
+function startTimer(taskName) {
+  if (taskName) {
+    document.getElementById('timerTaskLabel').textContent = taskName;
+  }
+  _timerRunning = true;
+  _timerInterval = setInterval(() => {
+    _timerSec++;
+    document.getElementById('timerDisplay').textContent = fmtTime(_timerSec);
+  }, 1000);
+  document.getElementById('timerStart').style.display = 'none';
+  document.getElementById('timerPause').style.display = '';
+}
+
+function pauseTimer() {
+  clearInterval(_timerInterval); _timerRunning = false;
+  document.getElementById('timerPause').style.display = 'none';
+  document.getElementById('timerStart').style.display = '';
+  document.getElementById('timerStart').textContent = '▶ Resume';
+}
+
+function stopTimer() {
+  clearInterval(_timerInterval); _timerRunning = false; _timerSec = 0;
+  document.getElementById('timerDisplay').textContent = '00:00:00';
+  document.getElementById('timerTaskLabel').textContent = 'No task selected';
+  document.getElementById('timerPause').style.display = 'none';
+  document.getElementById('timerStart').style.display = '';
+  document.getElementById('timerStart').textContent = '▶ Start';
 }
 </script>
 

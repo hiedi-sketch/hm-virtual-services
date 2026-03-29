@@ -4,7 +4,6 @@ import sqlite3
 import threading
 import logging
 from datetime import datetime, date
-from zoneinfo import ZoneInfo
 
 from flask import Flask, jsonify, request, render_template, abort
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -22,8 +21,67 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 
+# Sheet layout constants
+HEADER_ROW = 2       # row 2 has headers
+DATA_START  = 3      # data starts at row 3
+
+# Column indices (0-based within each row)
+COL_CLIENT    = 0
+COL_CATEGORY  = 1
+COL_FREQUENCY = 2
+COL_DAY_SPEC  = 3
+COL_TASK_DESC = 4
+COL_DUE_DATE  = 5
+COL_COMPLETED = 6    # TRUE / FALSE
+COL_COMP_DATE = 7
+COL_STATUS    = 8    # "Not Started" / "In Progress" / etc.
+
 sync_status = {"last_sync": None, "syncing": False, "error": None}
 _sync_lock = threading.Lock()
+
+
+# ── Date helpers ──────────────────────────────────────────────────────────────
+
+def sheet_date_to_iso(val: str) -> str | None:
+    """Convert M/D/YYYY → YYYY-MM-DD. Return None if blank/invalid."""
+    val = (val or "").strip()
+    if not val:
+        return None
+    for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%m-%d-%Y"):
+        try:
+            return datetime.strptime(val, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+    return None
+
+
+def iso_to_sheet_date(val: str) -> str:
+    """Convert YYYY-MM-DD → M/D/YYYY."""
+    if not val:
+        return ""
+    try:
+        return datetime.strptime(val, "%Y-%m-%d").strftime("%-m/%-d/%Y")
+    except ValueError:
+        return val
+
+
+def resolve_status(completed_flag: str, text_status: str) -> str:
+    """Map sheet columns → app status string."""
+    if (completed_flag or "").strip().upper() == "TRUE":
+        return "Completed"
+    ts = (text_status or "").strip().lower()
+    if ts == "in progress":
+        return "In Progress"
+    return "Pending"
+
+
+def status_to_sheet(status: str):
+    """Return (completed_bool_str, text_status) for writing back to sheet."""
+    if status == "Completed":
+        return "TRUE", "Completed"
+    if status == "In Progress":
+        return "FALSE", "In Progress"
+    return "FALSE", "Not Started"
 
 
 # ── Database ──────────────────────────────────────────────────────────────────
@@ -38,15 +96,18 @@ def init_db():
     with get_db() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                sheet_row   INTEGER,
-                task_name   TEXT NOT NULL,
-                due_date    TEXT,
-                status      TEXT DEFAULT 'Pending',
-                client      TEXT,
-                notes       TEXT,
-                created_at  TEXT DEFAULT (datetime('now')),
-                updated_at  TEXT DEFAULT (datetime('now'))
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                sheet_row      INTEGER,
+                task_name      TEXT NOT NULL,
+                category       TEXT,
+                frequency      TEXT,
+                day_spec       TEXT,
+                due_date       TEXT,
+                status         TEXT DEFAULT 'Pending',
+                completed_date TEXT,
+                client         TEXT,
+                created_at     TEXT DEFAULT (datetime('now')),
+                updated_at     TEXT DEFAULT (datetime('now'))
             )
         """)
         conn.commit()
@@ -76,75 +137,94 @@ def get_sheet():
         return None, "GOOGLE_SHEET_ID env var not set"
     try:
         sh = gc.open_by_key(sheet_id)
-        ws = sh.sheet1
-        return ws, None
+        # Use 'Bookkeeping Tasks' if present, else first sheet
+        titles = [ws.title for ws in sh.worksheets()]
+        ws_name = "Bookkeeping Tasks" if "Bookkeeping Tasks" in titles else titles[0]
+        return sh.worksheet(ws_name), None
     except Exception as e:
         return None, str(e)
 
 
-def rows_to_tasks(rows):
-    """Convert sheet rows (list of lists) to task dicts.
-    Expected columns: Task Name | Due Date | Status | Assigned Client | Notes
-    Row index 1 = header, data starts at 2.
-    """
-    tasks = []
-    for i, row in enumerate(rows[1:], start=2):  # skip header
-        def cell(idx):
-            return row[idx].strip() if idx < len(row) and row[idx] else ""
-        tasks.append({
-            "sheet_row": i,
-            "task_name": cell(0),
-            "due_date":  cell(1),
-            "status":    cell(2) or "Pending",
-            "client":    cell(3),
-            "notes":     cell(4),
-        })
-    return [t for t in tasks if t["task_name"]]
+def row_to_task(row: list, sheet_row_num: int) -> dict | None:
+    def cell(i):
+        return row[i].strip() if i < len(row) else ""
+
+    task_name = cell(COL_TASK_DESC)
+    if not task_name:
+        return None
+
+    status = resolve_status(cell(COL_COMPLETED), cell(COL_STATUS))
+    return {
+        "sheet_row":      sheet_row_num,
+        "task_name":      task_name,
+        "category":       cell(COL_CATEGORY),
+        "frequency":      cell(COL_FREQUENCY),
+        "day_spec":       cell(COL_DAY_SPEC),
+        "due_date":       sheet_date_to_iso(cell(COL_DUE_DATE)),
+        "status":         status,
+        "completed_date": sheet_date_to_iso(cell(COL_COMP_DATE)),
+        "client":         cell(COL_CLIENT),
+    }
 
 
 # ── Sync logic ────────────────────────────────────────────────────────────────
 
 def pull_from_sheet():
-    """Overwrite local DB with sheet contents."""
     ws, err = get_sheet()
     if err:
         return err
     try:
-        rows = ws.get_all_values()
+        all_rows = ws.get_all_values()
     except Exception as e:
         return str(e)
 
-    sheet_tasks = rows_to_tasks(rows)
+    tasks = []
+    for idx, row in enumerate(all_rows):
+        actual_row_num = idx + 1
+        if actual_row_num < DATA_START:
+            continue
+        t = row_to_task(row, actual_row_num)
+        if t:
+            tasks.append(t)
+
     with get_db() as conn:
         conn.execute("DELETE FROM tasks")
         conn.executemany(
-            """INSERT INTO tasks (sheet_row, task_name, due_date, status, client, notes)
-               VALUES (:sheet_row, :task_name, :due_date, :status, :client, :notes)""",
-            sheet_tasks,
+            """INSERT INTO tasks
+               (sheet_row, task_name, category, frequency, day_spec,
+                due_date, status, completed_date, client)
+               VALUES (:sheet_row,:task_name,:category,:frequency,:day_spec,
+                       :due_date,:status,:completed_date,:client)""",
+            tasks,
         )
         conn.commit()
     return None
 
 
 def push_task_to_sheet(task_id):
-    """Write a single task back to its sheet row."""
     ws, err = get_sheet()
     if err:
         return err
     with get_db() as conn:
         row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
-    if not row:
-        return "Task not found"
-    if not row["sheet_row"]:
+    if not row or not row["sheet_row"]:
         return "No sheet row linked"
+    comp_bool, text_status = status_to_sheet(row["status"])
+    comp_date = iso_to_sheet_date(row["completed_date"]) if row["completed_date"] else (
+        datetime.now().strftime("%-m/%-d/%Y") if row["status"] == "Completed" else ""
+    )
     try:
         sheet_row = int(row["sheet_row"])
-        ws.update(f"A{sheet_row}:E{sheet_row}", [[
-            row["task_name"],
-            row["due_date"] or "",
-            row["status"],
+        ws.update(f"A{sheet_row}:I{sheet_row}", [[
             row["client"] or "",
-            row["notes"] or "",
+            row["category"] or "",
+            row["frequency"] or "",
+            row["day_spec"] or "",
+            row["task_name"],
+            iso_to_sheet_date(row["due_date"]) if row["due_date"] else "",
+            comp_bool,
+            comp_date,
+            text_status,
         ]])
     except Exception as e:
         return str(e)
@@ -152,7 +232,6 @@ def push_task_to_sheet(task_id):
 
 
 def append_task_to_sheet(task_id):
-    """Append a newly created task to the sheet and update its sheet_row."""
     ws, err = get_sheet()
     if err:
         return err
@@ -160,15 +239,19 @@ def append_task_to_sheet(task_id):
         row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
     if not row:
         return "Task not found"
+    comp_bool, text_status = status_to_sheet(row["status"])
     try:
         result = ws.append_row([
-            row["task_name"],
-            row["due_date"] or "",
-            row["status"],
             row["client"] or "",
-            row["notes"] or "",
+            row["category"] or "",
+            row["frequency"] or "",
+            row["day_spec"] or "",
+            row["task_name"],
+            iso_to_sheet_date(row["due_date"]) if row["due_date"] else "",
+            comp_bool,
+            "",
+            text_status,
         ], value_input_option="USER_ENTERED")
-        # Try to figure out the row number that was appended
         updated_range = result.get("updates", {}).get("updatedRange", "")
         if updated_range:
             import re
@@ -184,7 +267,6 @@ def append_task_to_sheet(task_id):
 
 
 def delete_task_from_sheet(sheet_row):
-    """Delete a row from the sheet."""
     ws, err = get_sheet()
     if err:
         return err
@@ -213,18 +295,16 @@ def do_sync():
 @app.route("/api/tasks", methods=["GET"])
 def list_tasks():
     client = request.args.get("client")
+    category = request.args.get("category")
     with get_db() as conn:
+        q = "SELECT * FROM tasks WHERE 1=1"
+        params = []
         if client:
-            rows = conn.execute(
-                "SELECT * FROM tasks WHERE client=? ORDER BY "
-                "CASE WHEN status='Completed' THEN 1 ELSE 0 END, due_date ASC",
-                (client,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM tasks ORDER BY "
-                "CASE WHEN status='Completed' THEN 1 ELSE 0 END, due_date ASC"
-            ).fetchall()
+            q += " AND client=?"; params.append(client)
+        if category:
+            q += " AND category=?"; params.append(category)
+        q += " ORDER BY CASE WHEN status='Completed' THEN 1 ELSE 0 END, due_date ASC NULLS LAST"
+        rows = conn.execute(q, params).fetchall()
     return jsonify([dict(r) for r in rows])
 
 
@@ -236,10 +316,12 @@ def create_task():
         return jsonify({"error": "task_name is required"}), 400
     with get_db() as conn:
         cur = conn.execute(
-            """INSERT INTO tasks (task_name, due_date, status, client, notes)
-               VALUES (?,?,?,?,?)""",
-            (task_name, data.get("due_date") or None, data.get("status") or "Pending",
-             data.get("client") or None, data.get("notes") or None),
+            """INSERT INTO tasks (task_name, category, frequency, day_spec,
+               due_date, status, client)
+               VALUES (?,?,?,?,?,?,?)""",
+            (task_name, data.get("category") or None, data.get("frequency") or None,
+             data.get("day_spec") or None, data.get("due_date") or None,
+             data.get("status") or "Pending", data.get("client") or None),
         )
         conn.commit()
         task_id = cur.lastrowid
@@ -253,18 +335,28 @@ def create_task():
 def update_task(task_id):
     data = request.get_json(force=True)
     with get_db() as conn:
-        existing = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
-        if not existing:
+        ex = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if not ex:
             abort(404)
+        new_status = data.get("status", ex["status"])
+        comp_date = ex["completed_date"]
+        if new_status == "Completed" and not comp_date:
+            comp_date = date.today().isoformat()
+        elif new_status != "Completed":
+            comp_date = None
         conn.execute(
-            """UPDATE tasks SET task_name=?, due_date=?, status=?, client=?, notes=?,
-               updated_at=datetime('now') WHERE id=?""",
+            """UPDATE tasks SET task_name=?,category=?,frequency=?,day_spec=?,
+               due_date=?,status=?,completed_date=?,client=?,updated_at=datetime('now')
+               WHERE id=?""",
             (
-                data.get("task_name", existing["task_name"]),
-                data.get("due_date", existing["due_date"]),
-                data.get("status", existing["status"]),
-                data.get("client", existing["client"]),
-                data.get("notes", existing["notes"]),
+                data.get("task_name", ex["task_name"]),
+                data.get("category", ex["category"]),
+                data.get("frequency", ex["frequency"]),
+                data.get("day_spec", ex["day_spec"]),
+                data.get("due_date", ex["due_date"]),
+                new_status,
+                comp_date,
+                data.get("client", ex["client"]),
                 task_id,
             ),
         )
@@ -277,10 +369,10 @@ def update_task(task_id):
 @app.route("/api/tasks/<int:task_id>", methods=["DELETE"])
 def delete_task(task_id):
     with get_db() as conn:
-        existing = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
-        if not existing:
+        ex = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if not ex:
             abort(404)
-        sheet_row = existing["sheet_row"]
+        sheet_row = ex["sheet_row"]
         conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
         conn.commit()
     if sheet_row:
@@ -303,9 +395,18 @@ def sync_status_route():
 def list_clients():
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT DISTINCT client FROM tasks WHERE client IS NOT NULL AND client != '' ORDER BY client"
+            "SELECT DISTINCT client FROM tasks WHERE client IS NOT NULL AND client!='' ORDER BY client"
         ).fetchall()
     return jsonify([r["client"] for r in rows])
+
+
+@app.route("/api/categories")
+def list_categories():
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT category FROM tasks WHERE category IS NOT NULL AND category!='' ORDER BY category"
+        ).fetchall()
+    return jsonify([r["category"] for r in rows])
 
 
 # ── Page routes ───────────────────────────────────────────────────────────────
@@ -331,7 +432,6 @@ def start_scheduler():
 if __name__ == "__main__":
     init_db()
     start_scheduler()
-    # Do an initial pull if credentials are available
     cred_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     sheet_id = os.environ.get("GOOGLE_SHEET_ID")
     if cred_json and sheet_id:

@@ -2,21 +2,27 @@
 {% block title %}All Tasks{% endblock %}
 
 {% block content %}
-<!-- Config alert if no credentials -->
 <div id="configAlert" class="alert warn" style="display:none">
   ⚠ <div>
-    <strong>Google Sheets not configured.</strong> To enable sync, add two secrets in your environment:<br>
-    <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> — your service account key (full JSON string)<br>
-    <code>GOOGLE_SHEET_ID</code> — the ID from your sheet URL (the long string between <code>/d/</code> and <code>/edit</code>)<br>
-    Then share the sheet with your service account email. Tasks added here will be saved locally until credentials are set.
+    <strong>Google Sheets not configured.</strong>
+    Set <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> and <code>GOOGLE_SHEET_ID</code> secrets,
+    then share the sheet with your service account's <code>client_email</code>.
   </div>
 </div>
 
-<!-- Toolbar -->
 <div class="toolbar">
-  <h1>All Tasks</h1>
-  <select id="filterClient" class="btn" style="padding:5px 10px;" onchange="applyClientFilter()">
+  <h1>Bookkeeping Tasks</h1>
+  <select id="filterClient" class="filter-select" onchange="applyFilters()">
     <option value="">All Clients</option>
+  </select>
+  <select id="filterCategory" class="filter-select" onchange="applyFilters()">
+    <option value="">All Categories</option>
+  </select>
+  <select id="filterStatus" class="filter-select" onchange="applyFilters()">
+    <option value="">All Statuses</option>
+    <option value="Pending">Pending</option>
+    <option value="In Progress">In Progress</option>
+    <option value="Completed">Completed</option>
   </select>
   <button class="btn primary" onclick="toggleAddForm()">+ New Task</button>
 </div>
@@ -24,8 +30,30 @@
 <!-- Add form -->
 <div class="add-form hidden" id="addForm">
   <div class="form-group">
-    <label>Task Name *</label>
-    <input type="text" id="newName" placeholder="e.g. Prepare report">
+    <label>Task Description *</label>
+    <input type="text" id="newName" placeholder="e.g. Import Transactions">
+  </div>
+  <div class="form-group">
+    <label>Client</label>
+    <input type="text" id="newClient" placeholder="e.g. HM Virtual Services">
+  </div>
+  <div class="form-group">
+    <label>Category</label>
+    <input type="text" id="newCategory" placeholder="e.g. Transaction Management">
+  </div>
+  <div class="form-group">
+    <label>Frequency</label>
+    <select id="newFrequency">
+      <option value="">—</option>
+      <option>Daily</option>
+      <option>Weekly</option>
+      <option>Monthly</option>
+      <option>One-Time</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <label>Day / Detail</label>
+    <input type="text" id="newDaySpec" placeholder="e.g. Tuesday, Thursday">
   </div>
   <div class="form-group">
     <label>Due Date</label>
@@ -39,30 +67,22 @@
       <option>Completed</option>
     </select>
   </div>
-  <div class="form-group">
-    <label>Client</label>
-    <input type="text" id="newClient" placeholder="Client name">
-  </div>
-  <div class="form-group">
-    <label>Notes</label>
-    <input type="text" id="newNotes" placeholder="Optional notes">
-  </div>
   <div class="form-actions">
     <button class="btn" onclick="toggleAddForm()">Cancel</button>
     <button class="btn primary" onclick="addTask()">Add Task</button>
   </div>
 </div>
 
-<!-- Table -->
 <div class="table-wrap">
   <table id="taskTable" class="dataTable" style="width:100%">
     <thead>
       <tr>
-        <th>Task Name</th>
+        <th>Task Description</th>
+        <th>Client</th>
+        <th>Category</th>
+        <th>Frequency</th>
         <th>Due Date</th>
         <th>Status</th>
-        <th>Client</th>
-        <th>Notes</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -72,93 +92,104 @@
 
 {% block scripts %}
 <script>
-let clientFilter = '';
+let _clientFilter = '';
+let _categoryFilter = '';
+let _statusFilter = '';
 
-function applyClientFilter() {
-  clientFilter = document.getElementById('filterClient').value;
-  window._taskTable.ajax.url('/api/tasks' + (clientFilter ? '?client=' + encodeURIComponent(clientFilter) : '')).load();
+function applyFilters() {
+  _clientFilter   = document.getElementById('filterClient').value;
+  _categoryFilter = document.getElementById('filterCategory').value;
+  _statusFilter   = document.getElementById('filterStatus').value;
+
+  let url = '/api/tasks?';
+  if (_clientFilter)   url += 'client='   + encodeURIComponent(_clientFilter)   + '&';
+  if (_categoryFilter) url += 'category=' + encodeURIComponent(_categoryFilter) + '&';
+
+  window._taskTable.ajax.url(url).load(null, false);
+
+  // Apply client-side status filter via DataTables search
+  if (_statusFilter) {
+    window._taskTable.column(5).search(_statusFilter, false, false).draw();
+  } else {
+    window._taskTable.column(5).search('').draw();
+  }
 }
 
 function toggleAddForm() {
-  const f = document.getElementById('addForm');
-  f.classList.toggle('hidden');
+  document.getElementById('addForm').classList.toggle('hidden');
 }
 
 async function addTask() {
   const name = document.getElementById('newName').value.trim();
-  if (!name) { alert('Task Name is required.'); return; }
+  if (!name) { alert('Task Description is required.'); return; }
   await fetch('/api/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      task_name: name,
-      due_date:  document.getElementById('newDue').value || null,
-      status:    document.getElementById('newStatus').value,
-      client:    document.getElementById('newClient').value || null,
-      notes:     document.getElementById('newNotes').value || null,
+      task_name:  name,
+      client:     document.getElementById('newClient').value || null,
+      category:   document.getElementById('newCategory').value || null,
+      frequency:  document.getElementById('newFrequency').value || null,
+      day_spec:   document.getElementById('newDaySpec').value || null,
+      due_date:   document.getElementById('newDue').value || null,
+      status:     document.getElementById('newStatus').value,
     }),
   });
   document.getElementById('newName').value = '';
+  document.getElementById('newDaySpec').value = '';
   document.getElementById('newDue').value = '';
-  document.getElementById('newNotes').value = '';
   window._taskTable.ajax.reload(null, false);
 }
 
-function rowClass(d) {
-  if (d.status === 'Completed') return 'completed';
-  if (d.due_date && d.due_date < new Date().toISOString().slice(0,10) && d.status !== 'Completed') return 'overdue';
-  return '';
-}
-
-function badgeHtml(status) {
-  const map = { Pending:'pending', 'In Progress':'progress', Completed:'completed' };
-  const cls = map[status] || 'pending';
-  return `<span class="badge ${cls}">${status}</span>`;
+function fmtFreq(freq, day) {
+  if (!freq) return '';
+  return day ? `${freq} · <span style="color:#666;font-size:11px">${day}</span>` : freq;
 }
 
 $(function() {
-  // Populate client filter
-  fetch('/api/clients').then(r=>r.json()).then(clients => {
+  // Populate dropdowns
+  fetch('/api/clients').then(r=>r.json()).then(list => {
     const sel = document.getElementById('filterClient');
-    clients.forEach(c => {
-      const o = document.createElement('option');
-      o.value = c; o.textContent = c;
-      sel.appendChild(o);
-    });
+    list.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
+  });
+  fetch('/api/categories').then(r=>r.json()).then(list => {
+    const sel = document.getElementById('filterCategory');
+    list.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
   });
 
-  // Check config status
   fetch('/api/sync/status').then(r=>r.json()).then(d => {
-    if (d.error && d.error.includes('not set')) {
-      document.getElementById('configAlert').style.display = '';
-    }
+    if (d.error && d.error.includes('not set')) document.getElementById('configAlert').style.display='';
   });
 
   window._taskTable = $('#taskTable').DataTable({
     ajax: { url: '/api/tasks', dataSrc: '' },
-    order: [[1, 'asc']],
+    order: [[4,'asc']],
     pageLength: 25,
     dom: '<"dt-top"lf>t<"dt-bottom"ip>',
     columns: [
       {
         data: 'task_name',
-        render: (d, t, row) => t === 'display'
-          ? `<span style="cursor:pointer;font-weight:500" onclick="startTimer('${d.replace(/'/g,"\\'")}')">▶ ${d}</span>`
+        render: (d, t, row) => t==='display'
+          ? `<span class="task-link" onclick="startTimer('${d.replace(/'/g,"\\'")}')">▶ ${d}</span>`
           : d
       },
-      { data: 'due_date', defaultContent: '' },
-      { data: 'status',   render: (d, t) => t === 'display' ? badgeHtml(d) : d },
       {
         data: 'client', defaultContent: '',
-        render: (d, t) => t === 'display' && d
-          ? `<a href="/client/${encodeURIComponent(d)}" style="color:#1a73e8;text-decoration:none">${d}</a>`
-          : (d || '')
+        render: (d, t) => t==='display' && d
+          ? `<a href="/client/${encodeURIComponent(d)}" class="client-link">${d}</a>`
+          : (d||'')
       },
-      { data: 'notes', defaultContent: '' },
+      { data: 'category', defaultContent: '' },
+      {
+        data: null, defaultContent: '',
+        render: (d, t) => t==='display' ? fmtFreq(d.frequency, d.day_spec) : (d.frequency||'')
+      },
+      { data: 'due_date', defaultContent: '', render: (d,t) => t==='display' ? (d||'—') : (d||'') },
+      { data: 'status',   render: (d, t) => t==='display' ? badgeHtml(d) : d },
       {
         data: null, orderable: false, searchable: false,
-        render: (d) => `
-          <button class="action-btn complete" title="Mark completed" onclick="completeTask(${d.id})">✓</button>
+        render: d => `
+          <button class="action-btn complete" title="Mark Completed" onclick="completeTask(${d.id})">✓</button>
           <button class="action-btn" title="Edit" onclick='openEditModal(${JSON.stringify(d)})'>✎</button>
           <button class="action-btn del" title="Delete" onclick="deleteTask(${d.id})">✕</button>
         `
