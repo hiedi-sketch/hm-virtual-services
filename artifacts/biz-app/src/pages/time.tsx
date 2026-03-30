@@ -180,6 +180,8 @@ const manualSchema = z.object({
   ),
   duration_minutes: z.coerce.number().min(1, "Must be at least 1 minute"),
   date: z.string().min(1, "Date is required"),
+  start_time: z.string().optional(),
+  end_time: z.string().optional(),
   service_type: serviceTypeSchema,
   notes: z.string().optional(),
 });
@@ -532,16 +534,32 @@ export default function TimeTracking() {
     },
   });
 
-  const { register, handleSubmit, watch, reset, formState: { errors, isSubmitting } } = useForm<ManualValues>({
+  const { register, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm<ManualValues>({
     resolver: zodResolver(manualSchema),
     defaultValues: { date: getTodayLocal(), duration_minutes: 30 },
   });
 
   const selectedClientId = watch("client_id");
   const selectedClientIdNum = Number(selectedClientId);
+  const manualStartTime = watch("start_time");
+  const manualEndTime = watch("end_time");
+  const manualDate = watch("date");
   const manualTasks = tasks?.filter(
     t => t.client_id === selectedClientIdNum && t.status === "pending"
   ) || [];
+
+  const timesAutoCalc = !!(manualStartTime && manualEndTime && manualDate && manualEndTime > manualStartTime);
+
+  useEffect(() => {
+    if (manualStartTime && manualEndTime && manualDate) {
+      const start = new Date(`${manualDate}T${manualStartTime}`);
+      const end = new Date(`${manualDate}T${manualEndTime}`);
+      if (end > start) {
+        const mins = Math.max(1, Math.round((end.getTime() - start.getTime()) / 60000));
+        setValue("duration_minutes", mins);
+      }
+    }
+  }, [manualStartTime, manualEndTime, manualDate, setValue]);
 
   const startTimer = () => {
     if (!timerClientId) {
@@ -594,8 +612,17 @@ export default function TimeTracking() {
   };
 
   const onManualSubmit = (data: ManualValues) => {
+    const { start_time, end_time, ...rest } = data;
+    let started_at: string | undefined;
+    let ended_at: string | undefined;
+    if (start_time && data.date) {
+      started_at = new Date(`${data.date}T${start_time}`).toISOString();
+    }
+    if (end_time && data.date) {
+      ended_at = new Date(`${data.date}T${end_time}`).toISOString();
+    }
     pendingClientIdRef.current = data.client_id;
-    createMutation.mutate({ data }, {
+    createMutation.mutate({ data: { ...rest, started_at, ended_at } }, {
       onSuccess: () => {
         toast({ title: "Time entry logged" });
         reset({ date: getTodayLocal(), duration_minutes: 30, client_id: selectedClientId });
@@ -813,26 +840,52 @@ export default function TimeTracking() {
                   )}
                 </div>
 
+                <div>
+                  <label className="label-text">Date</label>
+                  <input type="date" {...register("date")} className="input-field bg-slate-50" />
+                  {errors.date && (
+                    <p className="text-destructive text-xs mt-1">{errors.date.message}</p>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="label-text">Duration (mins)</label>
+                    <label className="label-text">Start Time <span className="text-slate-400 font-normal">(optional)</span></label>
                     <input
-                      type="number"
-                      {...register("duration_minutes")}
+                      type="time"
+                      {...register("start_time")}
                       className="input-field bg-slate-50"
-                      placeholder="60"
                     />
-                    {errors.duration_minutes && (
-                      <p className="text-destructive text-xs mt-1">{errors.duration_minutes.message}</p>
-                    )}
                   </div>
                   <div>
-                    <label className="label-text">Date</label>
-                    <input type="date" {...register("date")} className="input-field bg-slate-50" />
-                    {errors.date && (
-                      <p className="text-destructive text-xs mt-1">{errors.date.message}</p>
-                    )}
+                    <label className="label-text">End Time <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <input
+                      type="time"
+                      {...register("end_time")}
+                      className="input-field bg-slate-50"
+                    />
                   </div>
+                </div>
+
+                {manualStartTime && manualEndTime && !timesAutoCalc && (
+                  <p className="text-xs text-red-500 -mt-2">End time must be after start time</p>
+                )}
+
+                <div>
+                  <label className="label-text">Duration (mins)</label>
+                  <input
+                    type="number"
+                    {...register("duration_minutes")}
+                    className={cn("input-field bg-slate-50", timesAutoCalc && "text-slate-500")}
+                    placeholder="60"
+                    readOnly={timesAutoCalc}
+                  />
+                  {errors.duration_minutes && (
+                    <p className="text-destructive text-xs mt-1">{errors.duration_minutes.message}</p>
+                  )}
+                  {timesAutoCalc && (
+                    <p className="text-xs text-[#266b75] mt-1">Auto-calculated from start & end time</p>
+                  )}
                 </div>
 
                 <div>
