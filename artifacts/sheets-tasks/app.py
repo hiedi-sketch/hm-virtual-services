@@ -20,28 +20,38 @@ log = logging.getLogger(__name__)
 WEBHOOK_URL = (
     "https://script.google.com/macros/s/"
     "AKfycbypfsBkNWTnNoUhLy_nDahx6je7kPNatXbCRv0Qujyd2AfRyfk7EB-29EbZrb7DX31lKw"
-    "/exec?token=mySecret123"
+    "/exec"
 )
 
-def trigger_completion_webhook(task_id: int, task_name: str) -> None:
-    """POST to the Google Apps Script webhook (up to 3 attempts)."""
-    payload = {"task_id": task_id, "task_name": task_name}
+def trigger_completion_webhook(sheet_row: int) -> None:
+    """POST to the Google Apps Script webhook with row + sheet (up to 3 attempts)."""
+    payload = {"row": sheet_row, "sheet": "Sheet1"}
+    log.info("Triggering completion webhook for sheet row %s — payload: %s", sheet_row, payload)
     for attempt in range(1, 4):
         try:
-            resp = http_requests.post(WEBHOOK_URL, json=payload, timeout=15)
+            resp = http_requests.post(
+                WEBHOOK_URL,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=15,
+            )
+            try:
+                result = resp.json()
+            except Exception:
+                result = resp.text
             log.info(
-                "Completion webhook triggered for task %s (%r): HTTP %s",
-                task_id, task_name, resp.status_code,
+                "Webhook response for row %s (HTTP %s): %s",
+                sheet_row, resp.status_code, result,
             )
             return
         except Exception as exc:
             log.warning(
-                "Completion webhook attempt %d/%d failed for task %s: %s",
-                attempt, 3, task_id, exc,
+                "Completion webhook attempt %d/3 failed for row %s: %s",
+                attempt, sheet_row, exc,
             )
             if attempt < 3:
                 time.sleep(2 ** (attempt - 1))
-    log.error("Completion webhook failed after 3 attempts for task %s", task_id)
+    log.error("Completion webhook failed after 3 attempts for sheet row %s", sheet_row)
 
 app = Flask(__name__)
 
@@ -420,9 +430,11 @@ def update_task(task_id):
     threading.Thread(target=push_task_to_sheet, args=(task_id,), daemon=True).start()
 
     if just_completed:
+        sheet_row = row["sheet_row"]
+        log.info("Task %s marked Completed — sheet_row=%s, firing webhook", task_id, sheet_row)
         threading.Thread(
             target=trigger_completion_webhook,
-            args=(task_id, new_task_name),
+            args=(sheet_row,),
             daemon=True,
         ).start()
 
