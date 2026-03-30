@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 WEBHOOK_URL = (
     "https://script.google.com/macros/s/"
     "AKfycbypfsBkNWTnNoUhLy_nDahx6je7kPNatXbCRv0Qujyd2AfRyfk7EB-29EbZrb7DX31lKw"
-    "/exec"
+    "/exec?token=mySecret123"
 )
 
 def trigger_completion_webhook(sheet_row: int) -> None:
