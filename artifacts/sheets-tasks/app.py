@@ -25,7 +25,7 @@ WEBHOOK_URL = (
 
 def trigger_completion_webhook(sheet_row: int) -> None:
     """POST to the Google Apps Script webhook with row + sheet (up to 3 attempts)."""
-    payload = {"row": sheet_row, "sheet": "Sheet1"}
+    payload = {"row": sheet_row, "sheet": "Current Tasks"}
     log.info("Triggering completion webhook for sheet row %s — payload: %s", sheet_row, payload)
     for attempt in range(1, 4):
         try:
