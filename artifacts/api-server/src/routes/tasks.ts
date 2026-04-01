@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasksTable, clientsTable, subtasksTable, taskCommentsTable, usersTable } from "@workspace/db";
-import { eq, isNotNull, and, desc } from "drizzle-orm";
+import { eq, isNotNull, and, desc, sql } from "drizzle-orm";
 import { notifyAdmins, notifyClientUser, createNotification } from "../lib/notify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../middleware/auth";
@@ -43,6 +43,10 @@ const taskSelectFields = {
   recurrence: tasksTable.recurrence,
   last_generated_at: tasksTable.last_generated_at,
   service_type: tasksTable.service_type,
+  incomplete_subtask_count: sql<number>`(
+    SELECT COUNT(*) FROM subtasks
+    WHERE subtasks.task_id = ${tasksTable.id} AND subtasks.done = false
+  )`.mapWith(Number),
 };
 
 // --- Task CRUD ---

@@ -23,6 +23,13 @@ interface ApiTask {
   recurrence: string | null;
   last_generated_at: string | null;
   service_type: string | null;
+  incomplete_subtask_count: number;
+}
+
+interface ApiTeamMember {
+  id: number;
+  name: string;
+  role: string;
 }
 
 interface ApiSubtask {
@@ -499,9 +506,10 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
 // ── New Task inline row ───────────────────────────────────────────────────────
 
 function NewTaskRow({
-  clients, onSave, onCancel, saving,
+  clients, assigneeOptions, onSave, onCancel, saving,
 }: {
   clients: ApiClient[];
+  assigneeOptions: string[];
   onSave: (data: Partial<ApiTask>) => Promise<void>;
   onCancel: () => void;
   saving: boolean;
@@ -610,9 +618,16 @@ function NewTaskRow({
       </td>
       {/* Assigned */}
       <td className="px-4 py-2">
-        <input value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
-          placeholder="Assignee"
-          className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75] w-24" />
+        <select
+          value={assignedTo}
+          onChange={e => setAssignedTo(e.target.value)}
+          className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75] w-32"
+        >
+          <option value="">— Unassigned —</option>
+          {assigneeOptions.map(name => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
       </td>
       {/* Completed date placeholder */}
       <td className="px-4 py-2" />
@@ -676,6 +691,22 @@ export default function Tasks() {
       return res.json();
     },
   });
+
+  const { data: teamMembers = [] } = useQuery<ApiTeamMember[]>({
+    queryKey: ["team-members"],
+    queryFn: async () => {
+      const res = await fetch("/api/users/team-members", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch team members");
+      return res.json();
+    },
+  });
+
+  // Combined assignee options: team members first, then clients
+  const assigneeOptions = useMemo(() => {
+    const members = teamMembers.map(m => m.name).filter(Boolean);
+    const clientNames = clients.map(c => c.name).filter(Boolean);
+    return [...new Set([...members, ...clientNames])].sort();
+  }, [teamMembers, clients]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
 
@@ -854,6 +885,7 @@ export default function Tasks() {
                 {showNewRow && (
                   <NewTaskRow
                     clients={clients}
+                    assigneeOptions={assigneeOptions}
                     onSave={createTask}
                     onCancel={() => setShowNewRow(false)}
                     saving={creatingTask}
@@ -873,6 +905,7 @@ export default function Tasks() {
                   const isSaving   = saving.has(task.id);
                   const isExpanded = expanded.has(task.id);
                   const { freq, days, monthDay } = parseRecurrence(task.recurrence);
+                  const pendingSubtasks = task.incomplete_subtask_count ?? 0;
 
                   return (
                     <React.Fragment key={task.id}>
@@ -883,24 +916,31 @@ export default function Tasks() {
                       )}>
                         {/* Expand toggle */}
                         <td className="px-2 py-2">
-                          <button
-                            onClick={() => setExpanded(prev => {
-                              const n = new Set(prev);
-                              n.has(task.id) ? n.delete(task.id) : n.add(task.id);
-                              return n;
-                            })}
-                            className={cn(
-                              "w-6 h-6 flex items-center justify-center rounded transition-all",
-                              isExpanded
-                                ? "bg-[#266b75] text-white"
-                                : "text-slate-300 hover:text-[#266b75] hover:bg-[#266b75]/10"
+                          <div className="relative inline-flex">
+                            <button
+                              onClick={() => setExpanded(prev => {
+                                const n = new Set(prev);
+                                n.has(task.id) ? n.delete(task.id) : n.add(task.id);
+                                return n;
+                              })}
+                              className={cn(
+                                "w-6 h-6 flex items-center justify-center rounded transition-all",
+                                isExpanded
+                                  ? "bg-[#266b75] text-white"
+                                  : "text-slate-300 hover:text-[#266b75] hover:bg-[#266b75]/10"
+                              )}
+                              title={isExpanded ? "Collapse subtasks" : `${pendingSubtasks} subtask${pendingSubtasks !== 1 ? "s" : ""} pending`}
+                            >
+                              {isExpanded
+                                ? <ChevronDown className="w-3.5 h-3.5" />
+                                : <ChevronRight className="w-3.5 h-3.5" />}
+                            </button>
+                            {pendingSubtasks > 0 && !isExpanded && (
+                              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center rounded-full bg-amber-400 text-white text-[9px] font-bold leading-none shadow-sm">
+                                {pendingSubtasks > 9 ? "9+" : pendingSubtasks}
+                              </span>
                             )}
-                            title={isExpanded ? "Collapse subtasks" : "Expand subtasks"}
-                          >
-                            {isExpanded
-                              ? <ChevronDown className="w-3.5 h-3.5" />
-                              : <ChevronRight className="w-3.5 h-3.5" />}
-                          </button>
+                          </div>
                         </td>
 
                         {/* Timer */}
@@ -1052,12 +1092,15 @@ export default function Tasks() {
 
                         {/* Assigned to */}
                         <td className="px-4 py-3">
-                          <EditableText
-                            value={task.assigned_to ?? ""}
+                          <EditableSelect
+                            value={task.assigned_to}
+                            options={assigneeOptions}
                             saving={isSaving}
                             placeholder="Unassigned"
                             onSave={v => patchTask(task.id, { assigned_to: v || null })}
-                            className="text-xs text-slate-600"
+                            renderValue={v => v
+                              ? <span className="text-slate-700 text-xs">{v}</span>
+                              : <span className="text-slate-300 italic text-xs">Unassigned</span>}
                           />
                         </td>
 

@@ -172,6 +172,7 @@ export const ListTasksResponseItem = zod.object({
   recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  incomplete_subtask_count: zod.number().optional().default(0),
 });
 export const ListTasksResponse = zod.array(ListTasksResponseItem);
 
