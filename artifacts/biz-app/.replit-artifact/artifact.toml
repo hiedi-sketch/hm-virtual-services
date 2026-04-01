@@ -18,13 +18,7 @@ localPort = 21931
 run = "pnpm --filter @workspace/biz-app run dev"
 
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/biz-app", "run", "build" ]
-publicDir = "artifacts/biz-app/dist/public"
-serve = "static"
-
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+build = ["pnpm", "--filter", "@workspace/biz-app", "run", "build"]
 
 [services.env]
 PORT = "21931"
