@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Filter, Plus, Play, Pause, Square, Loader2,
   ChevronRight, ChevronDown, Check, X, Trash2, ClipboardList,
+  ArrowUpDown, ArrowUp, ArrowDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -685,6 +686,17 @@ export default function Tasks() {
   const [clientFilter, setClientFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortField, setSortField] = useState<"due_date" | "status" | "client_name" | null>("due_date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  function handleSort(field: typeof sortField) {
+    if (sortField === field) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  }
   const [saving, setSaving] = useState<Set<number>>(new Set());
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [showNewRow, setShowNewRow] = useState(false);
@@ -816,13 +828,39 @@ export default function Tasks() {
     [tasks]
   );
 
-  const displayed = useMemo(() => tasks.filter(t => {
-    if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
-    if (serviceFilter !== "all" && t.service_type !== serviceFilter) return false;
-    if (statusFilter === "incomplete" && t.status === "Completed") return false;
-    if (statusFilter !== "all" && statusFilter !== "incomplete" && t.status !== statusFilter) return false;
-    return true;
-  }), [tasks, clientFilter, serviceFilter, statusFilter]);
+  const displayed = useMemo(() => {
+    const filtered = tasks.filter(t => {
+      if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
+      if (serviceFilter !== "all" && t.service_type !== serviceFilter) return false;
+      if (statusFilter === "incomplete" && t.status === "Completed") return false;
+      if (statusFilter !== "all" && statusFilter !== "incomplete" && t.status !== statusFilter) return false;
+      return true;
+    });
+
+    if (!sortField) return filtered;
+
+    const STATUS_ORDER: Record<string, number> = {
+      "Not Started": 0, "Pending": 1, "In Progress": 2, "Completed": 3,
+    };
+
+    return [...filtered].sort((a, b) => {
+      let cmp = 0;
+      if (sortField === "due_date") {
+        // Tasks without a due date always sort to the end
+        const aVal = a.due_date ?? "";
+        const bVal = b.due_date ?? "";
+        if (!aVal && !bVal) cmp = 0;
+        else if (!aVal) cmp = 1;
+        else if (!bVal) cmp = -1;
+        else cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
+      } else if (sortField === "status") {
+        cmp = (STATUS_ORDER[a.status] ?? 99) - (STATUS_ORDER[b.status] ?? 99);
+      } else if (sortField === "client_name") {
+        cmp = (a.client_name ?? "").localeCompare(b.client_name ?? "");
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [tasks, clientFilter, serviceFilter, statusFilter, sortField, sortDir]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -891,15 +929,29 @@ export default function Tasks() {
                 <tr className="border-b border-slate-100 bg-slate-50">
                   <th className="px-2 py-3 w-8" />
                   <th className="px-3 py-3 w-14" />
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Client</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Service Type</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Frequency</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Day</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Task Description</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Due Date</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Assigned</th>
-                  <th className="text-left px-4 py-3 font-medium text-slate-500 text-xs">Completed</th>
+                  {(["status", "client_name", null, null, null, null, "due_date", null, null] as const).map((field, i) => {
+                    const labels = ["Status", "Client", "Service Type", "Frequency", "Day", "Task Description", "Due Date", "Assigned", "Completed"];
+                    const label = labels[i]!;
+                    if (!field) return (
+                      <th key={label} className="text-left px-4 py-3 font-medium text-slate-500 text-xs">{label}</th>
+                    );
+                    const isActive = sortField === field;
+                    const Icon = isActive ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+                    return (
+                      <th key={label} className="text-left px-4 py-3 font-medium text-slate-500 text-xs">
+                        <button
+                          onClick={() => handleSort(field)}
+                          className={cn(
+                            "inline-flex items-center gap-1 hover:text-[#266b75] transition-colors",
+                            isActive && "text-[#266b75]",
+                          )}
+                        >
+                          {label}
+                          <Icon className="w-3 h-3" />
+                        </button>
+                      </th>
+                    );
+                  })}
                   <th className="px-4 py-3 w-10" />
                 </tr>
               </thead>
