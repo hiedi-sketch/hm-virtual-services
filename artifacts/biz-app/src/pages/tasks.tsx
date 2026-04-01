@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Filter, Plus, Play, Pause, Square, Loader2,
@@ -42,7 +43,7 @@ interface ApiSubtask {
 interface ApiClient {
   id: number;
   name: string;
-  company: string | null;
+  contact_name: string | null;
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -279,9 +280,11 @@ function WeekdayMultiSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string[]>(selectedDays);
-  const ref = useRef<HTMLDivElement>(null);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0 });
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Sync draft when selectedDays changes externally
+  // Sync draft when selectedDays changes externally (only when closed)
   useEffect(() => {
     if (!open) setDraft(selectedDays);
   }, [selectedDays, open]);
@@ -290,7 +293,10 @@ function WeekdayMultiSelect({
   useEffect(() => {
     if (!open) return;
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
+      if (
+        dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
         const changed = JSON.stringify([...draft].sort()) !== JSON.stringify([...selectedDays].sort());
         if (changed) onSave(draft);
@@ -299,6 +305,15 @@ function WeekdayMultiSelect({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [open, draft, selectedDays, onSave]);
+
+  const handleOpen = () => {
+    setDraft(selectedDays);
+    if (btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOpen(v => !v);
+  };
 
   const toggle = (day: string) => {
     setDraft(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
@@ -311,7 +326,7 @@ function WeekdayMultiSelect({
   };
 
   const displayLabel = selectedDays.length === 0
-    ? <span className="text-slate-300 italic text-xs">Any</span>
+    ? <span className="text-slate-300 italic text-xs">Any day</span>
     : <span className="text-slate-600 text-xs">
         {selectedDays
           .map(d => WEEKDAY_OPTIONS.find(w => w.value === d)?.short ?? d)
@@ -319,9 +334,10 @@ function WeekdayMultiSelect({
       </span>;
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
-        onClick={() => { setDraft(selectedDays); setOpen(v => !v); }}
+        ref={btnRef}
+        onClick={handleOpen}
         disabled={saving}
         className={cn(
           "text-left rounded px-1 py-0.5 hover:bg-slate-100 transition-colors whitespace-nowrap",
@@ -332,8 +348,12 @@ function WeekdayMultiSelect({
         {displayLabel}
       </button>
 
-      {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 min-w-[150px]">
+      {open && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{ position: "fixed", top: dropdownPos.top, left: dropdownPos.left, zIndex: 9999 }}
+          className="bg-white border border-slate-200 rounded-lg shadow-xl p-2 min-w-[160px]"
+        >
           <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-1.5 px-1">Select days</p>
           {WEEKDAY_OPTIONS.map(day => (
             <label
@@ -355,9 +375,10 @@ function WeekdayMultiSelect({
           >
             Done
           </button>
-        </div>
+        </div>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -701,11 +722,12 @@ export default function Tasks() {
     },
   });
 
-  // Combined assignee options: team members first, then clients
+  // Combined assignee options: team members first, then client contact names
   const assigneeOptions = useMemo(() => {
     const members = teamMembers.map(m => m.name).filter(Boolean);
-    const clientNames = clients.map(c => c.name).filter(Boolean);
-    return [...new Set([...members, ...clientNames])].sort();
+    // Use contact_name when set, fall back to business name
+    const clientContacts = clients.map(c => c.contact_name || c.name).filter(Boolean);
+    return [...new Set([...members, ...clientContacts])].sort();
   }, [teamMembers, clients]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
