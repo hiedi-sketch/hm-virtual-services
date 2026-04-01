@@ -9,6 +9,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTimer } from "@/contexts/TimerContext";
+import { TaskCommentPanel } from "@/components/TaskCommentPanel";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -463,63 +464,73 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
 
   return (
     <tr className="bg-[#266b75]/5 border-b border-[#266b75]/10">
-      <td colSpan={12} className="px-12 py-4">
-        <p className="text-[10px] text-[#266b75] font-semibold uppercase tracking-wider mb-2">Subtasks</p>
-        {isLoading ? (
-          <div className="flex items-center gap-2 text-slate-400 text-xs">
-            <Loader2 className="w-3 h-3 animate-spin" /> Loading…
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {subtasks.length === 0 && (
-              <p className="text-xs text-slate-400 italic">No subtasks yet — add one below.</p>
-            )}
-            {subtasks.map(sub => (
-              <div key={sub.id} className="flex items-center gap-2 group">
-                <button
-                  onClick={() => toggleDone(sub)}
-                  disabled={busy.has(sub.id)}
-                  className={cn(
-                    "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all",
-                    sub.done
-                      ? "bg-emerald-500 border-emerald-500 text-white"
-                      : "border-slate-300 hover:border-[#266b75]",
-                    busy.has(sub.id) && "opacity-50"
-                  )}
-                >
-                  {sub.done && <Check className="w-2.5 h-2.5" />}
-                </button>
-                <span className={cn("text-sm flex-1", sub.done && "line-through text-slate-400 text-xs")}>
-                  {sub.title}
-                </span>
-                <button
-                  onClick={() => deleteSubtask(sub.id)}
-                  disabled={busy.has(sub.id)}
-                  className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+      <td colSpan={12} className="px-8 py-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* ── Subtasks ── */}
+          <div>
+            <p className="text-[10px] text-[#266b75] font-semibold uppercase tracking-wider mb-2">Subtasks</p>
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-slate-400 text-xs">
+                <Loader2 className="w-3 h-3 animate-spin" /> Loading…
               </div>
-            ))}
-            <div className="flex items-center gap-2 mt-3">
-              <input
-                value={newTitle}
-                onChange={e => setNewTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter") addSubtask(); }}
-                placeholder="Add a subtask…"
-                className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-[#266b75] transition-colors"
-              />
-              <button
-                onClick={addSubtask}
-                disabled={adding || !newTitle.trim()}
-                className="text-xs text-white bg-[#266b75] hover:bg-[#1f5560] rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1"
-              >
-                {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
-                Add
-              </button>
-            </div>
+            ) : (
+              <div className="space-y-1.5">
+                {subtasks.length === 0 && (
+                  <p className="text-xs text-slate-400 italic">No subtasks yet — add one below.</p>
+                )}
+                {subtasks.map(sub => (
+                  <div key={sub.id} className="flex items-center gap-2 group">
+                    <button
+                      onClick={() => toggleDone(sub)}
+                      disabled={busy.has(sub.id)}
+                      className={cn(
+                        "w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all",
+                        sub.done
+                          ? "bg-emerald-500 border-emerald-500 text-white"
+                          : "border-slate-300 hover:border-[#266b75]",
+                        busy.has(sub.id) && "opacity-50"
+                      )}
+                    >
+                      {sub.done && <Check className="w-2.5 h-2.5" />}
+                    </button>
+                    <span className={cn("text-sm flex-1", sub.done && "line-through text-slate-400 text-xs")}>
+                      {sub.title}
+                    </span>
+                    <button
+                      onClick={() => deleteSubtask(sub.id)}
+                      disabled={busy.has(sub.id)}
+                      className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 mt-3">
+                  <input
+                    value={newTitle}
+                    onChange={e => setNewTitle(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") addSubtask(); }}
+                    placeholder="Add a subtask…"
+                    className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-[#266b75] transition-colors"
+                  />
+                  <button
+                    onClick={addSubtask}
+                    disabled={adding || !newTitle.trim()}
+                    className="text-xs text-white bg-[#266b75] hover:bg-[#1f5560] rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1"
+                  >
+                    {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+
+          {/* ── Comments ── */}
+          <TaskCommentPanel taskId={taskId} />
+
+        </div>
       </td>
     </tr>
   );
@@ -808,11 +819,21 @@ export default function Tasks() {
 
   const handleTimerClick = (task: ApiTask) => {
     const isThisTask = timerState.taskId === task.id;
+    const willStart = !isThisTask || timerState.status !== "running";
+
     if (isThisTask) {
-      if (timerState.status === "running") pause();
-      else startForTask(task.id, task.title, null, task.client_name ?? null, (task.service_type as any) ?? null);
+      if (timerState.status === "running") {
+        pause();
+        return;
+      }
+      startForTask(task.id, task.title, null, task.client_name ?? null, (task.service_type as any) ?? null);
     } else {
       startForTask(task.id, task.title, null, task.client_name ?? null, (task.service_type as any) ?? null);
+    }
+
+    // Auto-set status to "In Progress" when timer starts (not when pausing, not if already In Progress or Completed)
+    if (willStart && task.status !== "In Progress" && task.status !== "Completed") {
+      patchTask(task.id, { status: "In Progress" });
     }
   };
 
