@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import cron from "node-cron";
 import pinoHttp from "pino-http";
 import path from "path";
+import fs from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { db } from "@workspace/db";
@@ -107,10 +108,12 @@ app.use((req, _res, next) => {
 
 app.use("/api", router);
 
-// In production, serve the compiled biz-app React frontend for all non-API routes.
-// The api-server is the single deployable process; it serves both the API and the SPA.
-if (process.env.NODE_ENV === "production") {
-  const frontendPath = path.resolve(process.cwd(), "artifacts/biz-app/dist/public");
+// Serve the compiled biz-app React frontend for all non-API routes whenever the
+// built dist exists. This works in both production deployments and local builds,
+// without depending on NODE_ENV being explicitly set.
+const frontendPath = path.resolve(process.cwd(), "artifacts/biz-app/dist/public");
+if (fs.existsSync(frontendPath)) {
+  logger.info({ frontendPath }, "Serving frontend static files");
   app.use(express.static(frontendPath));
   // Express 5 requires a named wildcard or regex — bare "*" is no longer valid.
   app.get(/(.*)/, (_req, res) => {
