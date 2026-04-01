@@ -18,7 +18,8 @@ localPort = 21931
 run = "pnpm --filter @workspace/biz-app run dev"
 
 [services.production]
-build = ["pnpm", "--filter", "@workspace/biz-app", "run", "build"]
+build = "pnpm --filter @workspace/biz-app --filter @workspace/api-server run build"
+run = "node --enable-source-maps artifacts/api-server/dist/index.mjs"
 
 [services.env]
 PORT = "21931"

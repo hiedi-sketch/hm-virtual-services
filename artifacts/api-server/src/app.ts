@@ -112,7 +112,8 @@ app.use("/api", router);
 if (process.env.NODE_ENV === "production") {
   const frontendPath = path.resolve(process.cwd(), "artifacts/biz-app/dist/public");
   app.use(express.static(frontendPath));
-  app.get("*", (_req, res) => {
+  // Express 5 requires a named wildcard or regex — bare "*" is no longer valid.
+  app.get(/(.*)/, (_req, res) => {
     res.sendFile(path.join(frontendPath, "index.html"));
   });
 }
