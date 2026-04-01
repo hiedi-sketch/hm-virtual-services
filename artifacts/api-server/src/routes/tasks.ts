@@ -5,7 +5,7 @@ import { eq, isNotNull, and, desc, sql } from "drizzle-orm";
 import { notifyAdmins, notifyClientUser, createNotification } from "../lib/notify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { spawnRecurringTasks } from "../lib/spawn-recurring";
+import { spawnRecurringTasks, spawnOnCompletion } from "../lib/spawn-recurring";
 import { sendMail, template } from "../lib/mailer";
 import { logAudit } from "../lib/audit";
 import {
@@ -239,12 +239,21 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
 
   const parsed = UpdateTaskResponse.parse(updated);
   res.json(parsed);
+
   const actor = req.session.user;
   const action = body.status === "Completed" ? "completed" : "updated";
   const summary = body.status === "Completed"
     ? `Task "${updated.title}" completed`
     : `Task "${updated.title}" updated`;
   logAudit("task", id, action, summary, { id: actor?.id, name: actor?.name });
+
+  // Immediately spawn the next recurring instance when a recurring task is completed,
+  // so it appears right away rather than waiting for the midnight cron run.
+  if (body.status === "Completed" && updated.recurrence) {
+    spawnOnCompletion(updated).catch((err) =>
+      logger.error({ err, taskId: updated.id }, "spawnOnCompletion failed"),
+    );
+  }
 });
 
 // --- Subtask routes ---

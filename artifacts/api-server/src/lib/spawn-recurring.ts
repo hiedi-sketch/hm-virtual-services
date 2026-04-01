@@ -94,6 +94,58 @@ function nextDueDate(recurrence: string): string {
 }
 
 /**
+ * Immediately spawn the next pending instance for a single task that was just
+ * marked complete. Called from the PATCH /tasks/:id handler so the new task
+ * appears right away instead of waiting for the midnight cron.
+ *
+ * Skips creation if a pending/not-started instance with the same
+ * title + client + recurrence already exists (idempotent).
+ */
+export async function spawnOnCompletion(
+  task: typeof tasksTable.$inferSelect,
+): Promise<typeof tasksTable.$inferSelect | null> {
+  if (!task.recurrence) return null;
+
+  const today = todayUTCStr();
+
+  // Dedup: don't create a second pending copy
+  const existing = await db
+    .select({ id: tasksTable.id })
+    .from(tasksTable)
+    .where(
+      and(
+        eq(tasksTable.title, task.title),
+        eq(tasksTable.client_id, task.client_id!),
+        eq(tasksTable.recurrence, task.recurrence),
+        or(eq(tasksTable.status, "Not Started"), eq(tasksTable.status, "Pending")),
+      ),
+    )
+    .limit(1);
+
+  if (existing.length > 0) return null;
+
+  const [newTask] = await db
+    .insert(tasksTable)
+    .values({
+      title: task.title,
+      description: task.description,
+      client_id: task.client_id,
+      assigned_to: task.assigned_to,
+      status: "Not Started",
+      due_date: nextDueDate(task.recurrence),
+      recurrence: task.recurrence,
+      last_generated_at: today,
+    })
+    .returning();
+
+  if (newTask) {
+    logger.info({ taskId: newTask.id, title: newTask.title }, "Spawned next recurring task on completion");
+  }
+
+  return newTask ?? null;
+}
+
+/**
  * Spawn new pending instances for all completed recurring tasks that are due.
  * Safe to call multiple times per day — deduplication is enforced by:
  *   1. last_generated_at tracking on the completed source task
