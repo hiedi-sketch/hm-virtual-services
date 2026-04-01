@@ -64,6 +64,7 @@
   <table id="taskTable" class="dataTable" style="width:100%">
     <thead>
       <tr>
+        <th>#</th>
         <th>Task Description</th>
         <th>Service Type</th>
         <th>Frequency</th>
@@ -118,6 +119,10 @@ $(function() {
     pageLength: 25,
     dom: '<"dt-top"lf>t<"dt-bottom"ip>',
     columns: [
+      {
+        data: null, orderable: false, searchable: false,
+        render: (d, t, r, m) => m.settings._iDisplayStart + m.row + 1
+      },
       {
         data: 'task_name',
         render: (d, t, row) => t==='display'

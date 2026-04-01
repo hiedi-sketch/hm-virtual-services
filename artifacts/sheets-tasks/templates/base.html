@@ -74,24 +74,69 @@
     .form-group input:focus, .form-group select:focus { outline: 2px solid #188038; border-color: #188038; }
     .form-actions { grid-column: 1/-1; display: flex; gap: 8px; justify-content: flex-end; }
 
-    /* Table */
-    .table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
-    table.dataTable { border-collapse: collapse; width: 100% !important; font-size: 13px; }
+    /* Google Sheets-style table */
+    .table-wrap { background: #fff; border: 1px solid #c0c0c0; border-radius: 0; overflow: hidden; }
+    table.dataTable { border-collapse: collapse; width: 100% !important; font-size: 13px; font-family: Arial, sans-serif; }
+
+    /* Column headers — grey bar like Sheets */
     table.dataTable thead th {
-      background: #f9fafb; color: #374151; font-weight: 600; font-size: 12px;
-      border: 1px solid #e5e7eb; padding: 8px 12px; white-space: nowrap;
-      text-align: left; user-select: none;
+      background: #f3f3f3;
+      color: #333;
+      font-weight: 600;
+      font-size: 12px;
+      border: 1px solid #d0d0d0;
+      border-bottom: 2px solid #c0c0c0;
+      padding: 5px 8px;
+      white-space: nowrap;
+      text-align: left;
+      user-select: none;
     }
-    table.dataTable thead th:hover { background: #f3f4f6; }
+    table.dataTable thead th:hover { background: #e8e8e8; }
+
+    /* Row number header cell */
+    table.dataTable thead th:first-child {
+      background: #f3f3f3; color: #888; text-align: center;
+      width: 42px; min-width: 42px; font-size: 11px; font-weight: 400;
+    }
+
+    /* Data cells */
     table.dataTable tbody td {
-      border: 1px solid #e5e7eb; padding: 7px 12px; vertical-align: middle;
-      color: #111827; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      border: 1px solid #e0e0e0;
+      padding: 4px 8px;
+      vertical-align: middle;
+      color: #1f1f1f;
+      max-width: 260px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      background: #fff;
     }
-    table.dataTable tbody tr:hover td { background: #f9fafb; }
-    table.dataTable tbody tr.completed td { background: #f0fdf4 !important; color: #166534; }
-    table.dataTable tbody tr.completed td .task-link { text-decoration: line-through; opacity: .7; }
-    table.dataTable tbody tr.overdue td { background: #fef2f2 !important; }
-    table.dataTable tbody tr.overdue td .task-link { color: #dc2626; }
+
+    /* Row number cells */
+    table.dataTable tbody td:first-child {
+      background: #f8f8f8 !important;
+      color: #999;
+      text-align: center;
+      font-size: 11px;
+      border-right: 1px solid #c0c0c0;
+      width: 42px;
+      min-width: 42px;
+      user-select: none;
+    }
+
+    /* Hover — Google Sheets light blue selection */
+    table.dataTable tbody tr:hover td { background: #e8f0fe !important; }
+    table.dataTable tbody tr:hover td:first-child { background: #d2e3fc !important; }
+
+    /* Completed rows */
+    table.dataTable tbody tr.completed td { background: #e6f4ea !important; }
+    table.dataTable tbody tr.completed td:first-child { background: #d4edda !important; }
+    table.dataTable tbody tr.completed td .task-link { text-decoration: line-through; color: #5f6368; }
+
+    /* Overdue rows */
+    table.dataTable tbody tr.overdue td { background: #fce8e6 !important; }
+    table.dataTable tbody tr.overdue td:first-child { background: #f5c6c2 !important; }
+    table.dataTable tbody tr.overdue td .task-link { color: #c5221f; }
 
     /* Badges */
     .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
@@ -188,10 +233,9 @@ const BASE_PATH = '{{ base_path }}';
   </div>
   <div class="spacer"></div>
   <div class="sync-status">
-    <span class="sync-dot" id="syncDot"></span>
-    <span id="syncText">Checking…</span>
+    <span class="sync-dot" style="background:#9ca3af"></span>
+    <span style="color:#6b7280">Sheets: Offline</span>
   </div>
-  <button class="btn" onclick="triggerSync()">↻ Sync Now</button>
 </div>
 
 <div class="container">
@@ -268,40 +312,6 @@ const BASE_PATH = '{{ base_path }}';
 <script>
 let editingId = null;
 
-function updateSyncUI(d) {
-  const dot = document.getElementById('syncDot');
-  const txt = document.getElementById('syncText');
-  dot.className = 'sync-dot';
-  if (d.syncing) {
-    dot.classList.add('syncing'); txt.textContent = 'Syncing…';
-  } else if (d.error) {
-    dot.classList.add('error'); txt.textContent = 'Sync error'; txt.title = d.error;
-  } else if (d.last_sync) {
-    dot.classList.add('ok'); txt.textContent = 'Synced ' + d.last_sync;
-  } else {
-    txt.textContent = 'Not synced yet';
-  }
-}
-
-async function checkSyncStatus() {
-  try {
-    const r = await fetch(BASE_PATH + 'api/sync/status');
-    const d = await r.json();
-    updateSyncUI(d);
-    if (d.syncing) setTimeout(checkSyncStatus, 1000);
-    else if (window._taskTable) window._taskTable.ajax.reload(null, false);
-  } catch {}
-}
-
-async function triggerSync() {
-  document.getElementById('syncDot').className = 'sync-dot syncing';
-  document.getElementById('syncText').textContent = 'Syncing…';
-  await fetch(BASE_PATH + 'api/sync', { method: 'POST' });
-  setTimeout(checkSyncStatus, 2000);
-}
-
-setInterval(checkSyncStatus, 8000);
-checkSyncStatus();
 
 function rowClass(d) {
   if (d.status === 'Completed') return 'completed';
@@ -346,7 +356,7 @@ async function completeTask(id) {
 }
 
 async function deleteTask(id) {
-  if (!confirm('Delete this task? It will also be removed from Google Sheets.')) return;
+  if (!confirm('Delete this task?')) return;
   await fetch(BASE_PATH + 'api/tasks/' + id, { method:'DELETE' });
   if (window._taskTable) window._taskTable.ajax.reload(null, false);
 }

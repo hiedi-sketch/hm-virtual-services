@@ -17,6 +17,8 @@ log = logging.getLogger(__name__)
 
 # ── Completion webhook ─────────────────────────────────────────────────────────
 
+SHEETS_ENABLED = False  # Set to True to re-enable Google Sheets integration
+
 WEBHOOK_URL = (
     "https://script.google.com/macros/s/"
     "AKfycbypfsBkNWTnNoUhLy_nDahx6je7kPNatXbCRv0Qujyd2AfRyfk7EB-29EbZrb7DX31lKw"
@@ -339,6 +341,8 @@ def delete_task_from_sheet(sheet_row):
 
 
 def do_sync():
+    if not SHEETS_ENABLED:
+        return
     with _sync_lock:
         if sync_status["syncing"]:
             return
@@ -386,7 +390,8 @@ def create_task():
         )
         conn.commit()
         task_id = cur.lastrowid
-    threading.Thread(target=append_task_to_sheet, args=(task_id,), daemon=True).start()
+    if SHEETS_ENABLED:
+        threading.Thread(target=append_task_to_sheet, args=(task_id,), daemon=True).start()
     with get_db() as conn:
         row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
     return jsonify(dict(row)), 201
@@ -427,15 +432,15 @@ def update_task(task_id):
         row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         just_completed = prev_status != "Completed" and new_status == "Completed"
 
-    threading.Thread(target=push_task_to_sheet, args=(task_id,), daemon=True).start()
-
-    if just_completed:
-        log.info("Task %s marked Completed — firing webhook", task_id)
-        threading.Thread(
-            target=trigger_completion_webhook,
-            args=(task_id,),
-            daemon=True,
-        ).start()
+    if SHEETS_ENABLED:
+        threading.Thread(target=push_task_to_sheet, args=(task_id,), daemon=True).start()
+        if just_completed:
+            log.info("Task %s marked Completed — firing webhook", task_id)
+            threading.Thread(
+                target=trigger_completion_webhook,
+                args=(task_id,),
+                daemon=True,
+            ).start()
 
     return jsonify(dict(row))
 
@@ -449,7 +454,7 @@ def delete_task(task_id):
         sheet_row = ex["sheet_row"]
         conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
         conn.commit()
-    if sheet_row:
+    if SHEETS_ENABLED and sheet_row:
         threading.Thread(target=delete_task_from_sheet, args=(sheet_row,), daemon=True).start()
     return "", 204
 
