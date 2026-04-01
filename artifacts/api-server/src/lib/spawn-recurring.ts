@@ -18,6 +18,22 @@ function isWeekdayUTC(ms: number): boolean {
   return day >= 1 && day <= 5;
 }
 
+const DAY_MAP: Record<string, number> = {
+  sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6,
+};
+
+/**
+ * Parse the day list out of a weekly_ recurrence string.
+ * Handles both single-day ("weekly_mon") and multi-day ("weekly_mon,wed,fri").
+ */
+function parseWeeklyDays(recurrence: string): number[] {
+  const part = recurrence.replace("weekly_", "");
+  return part
+    .split(",")
+    .map((s) => DAY_MAP[s.trim()])
+    .filter((d): d is number => d !== undefined);
+}
+
 function isDue(recurrence: string, lastGeneratedAt: string | null): boolean {
   const todayStr = todayUTCStr();
   const todayMs = parseDateUTC(todayStr);
@@ -30,28 +46,36 @@ function isDue(recurrence: string, lastGeneratedAt: string | null): boolean {
 
   if (recurrence === "daily") return diffDays >= 1;
   if (recurrence === "weekdays") return diffDays >= 1;
+  // Multi-day weekly (e.g. weekly_mon,wed,fri): can recur multiple times per week
+  if (recurrence.startsWith("weekly_") && recurrence.includes(",")) return diffDays >= 1;
   if (recurrence === "weekly" || recurrence.startsWith("weekly_")) return diffDays >= 7;
   if (recurrence === "monthly" || recurrence.startsWith("monthly_")) return diffDays >= 28;
   if (recurrence === "annually") return diffDays >= 365;
   return false;
 }
 
-/** Compute the next due date (YYYY-MM-DD) using UTC arithmetic. */
-function nextDueDate(recurrence: string): string {
-  const todayStr = todayUTCStr();
-  const [y, m, d] = todayStr.split("-").map(Number) as [number, number, number];
+/**
+ * Compute the next due date (YYYY-MM-DD) based on the recurrence pattern,
+ * starting from `fromDateStr` (the completion date). Defaults to today if
+ * not provided so the cron path still works unchanged.
+ */
+function nextDueDate(recurrence: string, fromDateStr?: string): string {
+  const baseStr = fromDateStr ?? todayUTCStr();
+  const [y, m, d] = baseStr.split("-").map(Number) as [number, number, number];
 
   const toStr = (date: Date) => date.toISOString().split("T")[0]!;
   const MS = 86_400_000;
 
-  // Weekly with specific day of week
+  // Weekly with specific day(s) of week — handles both "weekly_mon" and "weekly_mon,wed,fri"
   if (recurrence.startsWith("weekly_")) {
-    const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-    const target = dayMap[recurrence.replace("weekly_", "")];
-    if (target !== undefined) {
+    const targets = parseWeeklyDays(recurrence);
+    if (targets.length > 0) {
+      // Search from the day after the completion date, up to 14 days out
       let next = new Date(Date.UTC(y, m - 1, d + 1));
-      while (next.getUTCDay() !== target) next = new Date(next.getTime() + MS);
-      return toStr(next);
+      for (let i = 0; i < 14; i++) {
+        if (targets.includes(next.getUTCDay())) return toStr(next);
+        next = new Date(next.getTime() + MS);
+      }
     }
   }
 
@@ -59,13 +83,11 @@ function nextDueDate(recurrence: string): string {
   if (recurrence.startsWith("monthly_")) {
     const part = recurrence.replace("monthly_", "");
     if (part === "last") {
-      // Last day of next month (UTC)
       return toStr(new Date(Date.UTC(y, m + 1, 0)));
     }
     const dom = parseInt(part);
-    // Next occurrence: this month if not yet passed, otherwise next month
     const thisMonthTarget = new Date(Date.UTC(y, m - 1, dom));
-    if (thisMonthTarget.getTime() > parseDateUTC(todayStr)) {
+    if (thisMonthTarget.getTime() > parseDateUTC(baseStr)) {
       return toStr(thisMonthTarget);
     }
     return toStr(new Date(Date.UTC(y, m, dom)));
@@ -90,13 +112,16 @@ function nextDueDate(recurrence: string): string {
   if (recurrence === "annually") {
     return toStr(new Date(Date.UTC(y + 1, m - 1, d)));
   }
-  return todayStr;
+  return baseStr;
 }
 
 /**
  * Immediately spawn the next pending instance for a single task that was just
  * marked complete. Called from the PATCH /tasks/:id handler so the new task
  * appears right away instead of waiting for the midnight cron.
+ *
+ * Uses the task's completed_date as the base for next-due calculation so the
+ * schedule stays anchored to the actual completion day, not the server clock.
  *
  * Skips creation if a pending/not-started instance with the same
  * title + client + recurrence already exists (idempotent).
@@ -107,6 +132,8 @@ export async function spawnOnCompletion(
   if (!task.recurrence) return null;
 
   const today = todayUTCStr();
+  // Anchor next due date to the actual completion date (falls back to today)
+  const fromDate = task.completed_date ?? today;
 
   // Dedup: don't create a second pending copy
   const existing = await db
@@ -132,14 +159,17 @@ export async function spawnOnCompletion(
       client_id: task.client_id,
       assigned_to: task.assigned_to,
       status: "Not Started",
-      due_date: nextDueDate(task.recurrence),
+      due_date: nextDueDate(task.recurrence, fromDate),
       recurrence: task.recurrence,
       last_generated_at: today,
     })
     .returning();
 
   if (newTask) {
-    logger.info({ taskId: newTask.id, title: newTask.title }, "Spawned next recurring task on completion");
+    logger.info(
+      { taskId: newTask.id, title: newTask.title, due_date: newTask.due_date },
+      "Spawned next recurring task on completion",
+    );
   }
 
   return newTask ?? null;
@@ -180,7 +210,7 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
       .where(
         and(
           eq(tasksTable.title, task.title),
-          eq(tasksTable.client_id, task.client_id),
+          eq(tasksTable.client_id, task.client_id!),
           eq(tasksTable.recurrence, task.recurrence),
           or(eq(tasksTable.status, "Not Started"), eq(tasksTable.status, "Pending")),
         ),
@@ -188,6 +218,9 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
       .limit(1);
 
     if (existing.length > 0) continue;
+
+    // Use the task's actual completion date as the base for scheduling
+    const fromDate = task.completed_date ?? today;
 
     const [newTask] = await db
       .insert(tasksTable)
@@ -197,7 +230,7 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
         client_id: task.client_id,
         assigned_to: task.assigned_to,
         status: "Not Started",
-        due_date: nextDueDate(task.recurrence),
+        due_date: nextDueDate(task.recurrence, fromDate),
         recurrence: task.recurrence,
         last_generated_at: today,
       })
