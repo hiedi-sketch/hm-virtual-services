@@ -157,7 +157,7 @@ const RECURRENCE_VALUES = [
   "monthly_last",
   "annually",
 ] as const;
-const recurrenceZod = zod.enum(RECURRENCE_VALUES).nullish();
+const recurrenceZod = zod.string().nullish();
 
 export const ListTasksResponseItem = zod.object({
   id: zod.number(),
@@ -270,6 +270,7 @@ export const UpdateTaskParams = zod.object({
 export const UpdateTaskBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().nullish(),
+  client_id: zod.number().optional(),
   assigned_to: zod.string().nullish(),
   status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"]).optional(),
   due_date: zod.string().nullish(),

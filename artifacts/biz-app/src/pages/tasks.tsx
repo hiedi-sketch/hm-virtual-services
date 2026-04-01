@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Filter, Plus, Play, Pause, Square, Loader2,
@@ -44,13 +44,13 @@ const STATUS_OPTIONS = ["Not Started", "Pending", "In Progress", "Confirmed", "C
 const SERVICE_OPTIONS = ["Bookkeeping", "Virtual Assistant"];
 const FREQ_OPTIONS = ["Daily", "Weekdays", "Weekly", "Monthly", "Annually"];
 const WEEKDAY_OPTIONS = [
-  { value: "sun", label: "Sunday" },
-  { value: "mon", label: "Monday" },
-  { value: "tue", label: "Tuesday" },
-  { value: "wed", label: "Wednesday" },
-  { value: "thu", label: "Thursday" },
-  { value: "fri", label: "Friday" },
-  { value: "sat", label: "Saturday" },
+  { value: "sun", label: "Sunday",  short: "Sun" },
+  { value: "mon", label: "Monday",  short: "Mon" },
+  { value: "tue", label: "Tuesday", short: "Tue" },
+  { value: "wed", label: "Wednesday", short: "Wed" },
+  { value: "thu", label: "Thursday",  short: "Thu" },
+  { value: "fri", label: "Friday",  short: "Fri" },
+  { value: "sat", label: "Saturday", short: "Sat" },
 ];
 const MONTHLY_DAY_OPTIONS = [
   ...Array.from({ length: 28 }, (_, i) => ({ value: String(i + 1), label: `Day ${i + 1}` })),
@@ -59,24 +59,32 @@ const MONTHLY_DAY_OPTIONS = [
 
 // ── Recurrence helpers ───────────────────────────────────────────────────────
 
-function parseRecurrence(rec: string | null | undefined): { freq: string; day: string } {
-  if (!rec) return { freq: "", day: "" };
-  if (rec === "daily") return { freq: "Daily", day: "" };
-  if (rec === "weekdays") return { freq: "Weekdays", day: "" };
-  if (rec === "weekly") return { freq: "Weekly", day: "" };
-  if (rec.startsWith("weekly_")) return { freq: "Weekly", day: rec.replace("weekly_", "") };
-  if (rec === "monthly") return { freq: "Monthly", day: "" };
-  if (rec.startsWith("monthly_")) return { freq: "Monthly", day: rec.replace("monthly_", "") };
-  if (rec === "annually") return { freq: "Annually", day: "" };
-  return { freq: "", day: "" };
+function parseRecurrence(rec: string | null | undefined): { freq: string; days: string[]; monthDay: string } {
+  if (!rec) return { freq: "", days: [], monthDay: "" };
+  if (rec === "daily")    return { freq: "Daily",    days: [], monthDay: "" };
+  if (rec === "weekdays") return { freq: "Weekdays", days: [], monthDay: "" };
+  if (rec === "weekly")   return { freq: "Weekly",   days: [], monthDay: "" };
+  if (rec.startsWith("weekly_")) {
+    const part = rec.replace("weekly_", "");
+    return { freq: "Weekly", days: part.split(",").filter(Boolean), monthDay: "" };
+  }
+  if (rec === "monthly") return { freq: "Monthly", days: [], monthDay: "" };
+  if (rec.startsWith("monthly_")) {
+    return { freq: "Monthly", days: [], monthDay: rec.replace("monthly_", "") };
+  }
+  if (rec === "annually") return { freq: "Annually", days: [], monthDay: "" };
+  return { freq: "", days: [], monthDay: "" };
 }
 
-function buildRecurrence(freq: string, day: string): string | null {
+function buildRecurrence(freq: string, days: string[], monthDay: string): string | null {
   if (!freq) return null;
-  if (freq === "Daily") return "daily";
+  if (freq === "Daily")    return "daily";
   if (freq === "Weekdays") return "weekdays";
-  if (freq === "Weekly") return day ? `weekly_${day}` : "weekly";
-  if (freq === "Monthly") return day ? `monthly_${day}` : "monthly";
+  if (freq === "Weekly") {
+    if (days.length === 0) return "weekly";
+    return `weekly_${days.join(",")}`;
+  }
+  if (freq === "Monthly")  return monthDay ? `monthly_${monthDay}` : "monthly";
   if (freq === "Annually") return "annually";
   return null;
 }
@@ -251,6 +259,101 @@ function EditableSelect({
   );
 }
 
+// ── Weekday multi-select ────────────────────────────────────────────────────
+
+function WeekdayMultiSelect({
+  selectedDays,
+  onSave,
+  saving,
+}: {
+  selectedDays: string[];
+  onSave: (days: string[]) => void;
+  saving: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<string[]>(selectedDays);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Sync draft when selectedDays changes externally
+  useEffect(() => {
+    if (!open) setDraft(selectedDays);
+  }, [selectedDays, open]);
+
+  // Close on outside click and save
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        const changed = JSON.stringify([...draft].sort()) !== JSON.stringify([...selectedDays].sort());
+        if (changed) onSave(draft);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open, draft, selectedDays, onSave]);
+
+  const toggle = (day: string) => {
+    setDraft(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
+  };
+
+  const saveAndClose = () => {
+    setOpen(false);
+    const changed = JSON.stringify([...draft].sort()) !== JSON.stringify([...selectedDays].sort());
+    if (changed) onSave(draft);
+  };
+
+  const displayLabel = selectedDays.length === 0
+    ? <span className="text-slate-300 italic text-xs">Any</span>
+    : <span className="text-slate-600 text-xs">
+        {selectedDays
+          .map(d => WEEKDAY_OPTIONS.find(w => w.value === d)?.short ?? d)
+          .join(", ")}
+      </span>;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => { setDraft(selectedDays); setOpen(v => !v); }}
+        disabled={saving}
+        className={cn(
+          "text-left rounded px-1 py-0.5 hover:bg-slate-100 transition-colors whitespace-nowrap",
+          saving && "opacity-50 cursor-not-allowed",
+        )}
+        title="Click to select weekdays"
+      >
+        {displayLabel}
+      </button>
+
+      {open && (
+        <div className="absolute z-50 top-full left-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl p-2 min-w-[150px]">
+          <p className="text-[10px] text-slate-400 uppercase tracking-wide font-medium mb-1.5 px-1">Select days</p>
+          {WEEKDAY_OPTIONS.map(day => (
+            <label
+              key={day.value}
+              className="flex items-center gap-2 py-1 px-1.5 hover:bg-slate-50 rounded cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={draft.includes(day.value)}
+                onChange={() => toggle(day.value)}
+                className="w-3.5 h-3.5 rounded border-slate-300 accent-[#266b75]"
+              />
+              <span className="text-xs text-slate-700">{day.label}</span>
+            </label>
+          ))}
+          <button
+            onClick={saveAndClose}
+            className="mt-2 w-full text-xs text-white bg-[#266b75] hover:bg-[#1f5560] rounded px-2 py-1 transition-colors"
+          >
+            Done
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Subtask expand panel ─────────────────────────────────────────────────────
 
 function SubtaskPanel({ taskId }: { taskId: number }) {
@@ -264,9 +367,10 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
     queryKey: ["subtasks", taskId],
     queryFn: async () => {
       const res = await fetch(`/api/tasks/${taskId}/subtasks`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load subtasks");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res.json();
     },
+    retry: 1,
   });
 
   const toggleDone = async (sub: ApiSubtask) => {
@@ -296,7 +400,8 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
       queryClient.setQueryData<ApiSubtask[]>(["subtasks", taskId], old =>
         (old ?? []).filter(s => s.id !== id)
       );
-      await fetch(`/api/subtasks/${id}`, { method: "DELETE", credentials: "include" });
+      const res = await fetch(`/api/subtasks/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Failed");
     } catch {
       toast({ title: "Failed to delete subtask", variant: "destructive" });
       queryClient.invalidateQueries({ queryKey: ["subtasks", taskId] });
@@ -328,16 +433,17 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
   };
 
   return (
-    <tr className="bg-slate-50/60 border-b border-slate-100">
-      <td colSpan={12} className="px-12 py-3">
+    <tr className="bg-[#266b75]/5 border-b border-[#266b75]/10">
+      <td colSpan={12} className="px-12 py-4">
+        <p className="text-[10px] text-[#266b75] font-semibold uppercase tracking-wider mb-2">Subtasks</p>
         {isLoading ? (
           <div className="flex items-center gap-2 text-slate-400 text-xs">
-            <Loader2 className="w-3 h-3 animate-spin" /> Loading subtasks…
+            <Loader2 className="w-3 h-3 animate-spin" /> Loading…
           </div>
         ) : (
           <div className="space-y-1.5">
             {subtasks.length === 0 && (
-              <p className="text-xs text-slate-300 italic">No subtasks yet.</p>
+              <p className="text-xs text-slate-400 italic">No subtasks yet — add one below.</p>
             )}
             {subtasks.map(sub => (
               <div key={sub.id} className="flex items-center gap-2 group">
@@ -366,20 +472,21 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
                 </button>
               </div>
             ))}
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-3">
               <input
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 onKeyDown={e => { if (e.key === "Enter") addSubtask(); }}
-                placeholder="Add subtask…"
-                className="flex-1 text-xs border border-slate-200 rounded px-2 py-1 bg-white outline-none focus:border-[#266b75] transition-colors"
+                placeholder="Add a subtask…"
+                className="flex-1 text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white outline-none focus:border-[#266b75] transition-colors"
               />
               <button
                 onClick={addSubtask}
                 disabled={adding || !newTitle.trim()}
-                className="text-xs text-white bg-[#266b75] hover:bg-[#1f5560] rounded px-2 py-1 transition-colors disabled:opacity-50"
+                className="text-xs text-white bg-[#266b75] hover:bg-[#1f5560] rounded-lg px-3 py-1.5 transition-colors disabled:opacity-50 flex items-center gap-1"
               >
-                {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : "Add"}
+                {adding ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                Add
               </button>
             </div>
           </div>
@@ -399,31 +506,35 @@ function NewTaskRow({
   onCancel: () => void;
   saving: boolean;
 }) {
-  const [form, setForm] = useState({
-    title: "", client_id: "", service_type: "",
-    status: "Not Started", due_date: "", assigned_to: "",
-    freq: "", day: "",
-  });
+  const [title, setTitle]         = useState("");
+  const [clientId, setClientId]   = useState("");
+  const [serviceType, setServiceType] = useState("");
+  const [status, setStatus]       = useState("Not Started");
+  const [dueDate, setDueDate]     = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
+  const [freq, setFreq]           = useState("");
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [monthDay, setMonthDay]   = useState("");
 
-  const set = (k: string, v: string) => setForm(prev => ({ ...prev, [k]: v }));
-
-  const dayOptions = form.freq === "Weekly"
-    ? WEEKDAY_OPTIONS
-    : form.freq === "Monthly"
-    ? MONTHLY_DAY_OPTIONS
-    : [];
+  const recurrence = buildRecurrence(freq, selectedDays, monthDay);
 
   const handleSubmit = async () => {
-    if (!form.title.trim() || !form.client_id) return;
+    if (!title.trim() || !clientId) return;
     await onSave({
-      title: form.title.trim(),
-      client_id: Number(form.client_id),
-      service_type: form.service_type || null,
-      status: form.status,
-      due_date: form.due_date || null,
-      assigned_to: form.assigned_to.trim() || null,
-      recurrence: buildRecurrence(form.freq, form.day),
+      title: title.trim(),
+      client_id: Number(clientId),
+      service_type: serviceType || null,
+      status,
+      due_date: dueDate || null,
+      assigned_to: assignedTo.trim() || null,
+      recurrence,
     });
+  };
+
+  const handleFreqChange = (v: string) => {
+    setFreq(v);
+    setSelectedDays([]);
+    setMonthDay("");
   };
 
   return (
@@ -432,14 +543,14 @@ function NewTaskRow({
       <td className="px-3 py-2" />
       {/* Status */}
       <td className="px-4 py-2">
-        <select value={form.status} onChange={e => set("status", e.target.value)}
+        <select value={status} onChange={e => setStatus(e.target.value)}
           className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75]">
           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </td>
-      {/* Client */}
+      {/* Client dropdown */}
       <td className="px-4 py-2">
-        <select value={form.client_id} onChange={e => set("client_id", e.target.value)} required
+        <select value={clientId} onChange={e => setClientId(e.target.value)} required
           className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75] w-36">
           <option value="">— Client —</option>
           {clients.map(c => (
@@ -449,7 +560,7 @@ function NewTaskRow({
       </td>
       {/* Service type */}
       <td className="px-4 py-2">
-        <select value={form.service_type} onChange={e => set("service_type", e.target.value)}
+        <select value={serviceType} onChange={e => setServiceType(e.target.value)}
           className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75]">
           <option value="">— None —</option>
           {SERVICE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
@@ -457,28 +568,36 @@ function NewTaskRow({
       </td>
       {/* Frequency */}
       <td className="px-4 py-2">
-        <select value={form.freq} onChange={e => { set("freq", e.target.value); set("day", ""); }}
+        <select value={freq} onChange={e => handleFreqChange(e.target.value)}
           className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75]">
           <option value="">One-Time</option>
           {FREQ_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
       </td>
-      {/* Day */}
+      {/* Day — multi-select for weekly, single for monthly */}
       <td className="px-4 py-2">
-        {dayOptions.length > 0 ? (
-          <select value={form.day} onChange={e => set("day", e.target.value)}
+        {freq === "Weekly" ? (
+          <WeekdayMultiSelect
+            selectedDays={selectedDays}
+            onSave={setSelectedDays}
+            saving={false}
+          />
+        ) : freq === "Monthly" ? (
+          <select value={monthDay} onChange={e => setMonthDay(e.target.value)}
             className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75]">
-            <option value="">Any</option>
-            {dayOptions.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            <option value="">Any day</option>
+            {MONTHLY_DAY_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
           </select>
-        ) : <span className="text-slate-300 text-xs">—</span>}
+        ) : (
+          <span className="text-slate-300 text-xs">—</span>
+        )}
       </td>
       {/* Title */}
       <td className="px-4 py-2">
         <input
           autoFocus
-          value={form.title}
-          onChange={e => set("title", e.target.value)}
+          value={title}
+          onChange={e => setTitle(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") handleSubmit(); if (e.key === "Escape") onCancel(); }}
           placeholder="Task description…"
           className="w-full min-w-[160px] text-xs border border-[#266b75] rounded px-1.5 py-1 bg-white outline-none shadow-sm"
@@ -486,12 +605,12 @@ function NewTaskRow({
       </td>
       {/* Due date */}
       <td className="px-4 py-2">
-        <input type="date" value={form.due_date} onChange={e => set("due_date", e.target.value)}
+        <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
           className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75]" />
       </td>
       {/* Assigned */}
       <td className="px-4 py-2">
-        <input value={form.assigned_to} onChange={e => set("assigned_to", e.target.value)}
+        <input value={assignedTo} onChange={e => setAssignedTo(e.target.value)}
           placeholder="Assignee"
           className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75] w-24" />
       </td>
@@ -502,7 +621,7 @@ function NewTaskRow({
         <div className="flex items-center gap-1">
           <button
             onClick={handleSubmit}
-            disabled={saving || !form.title.trim() || !form.client_id}
+            disabled={saving || !title.trim() || !clientId}
             className="w-6 h-6 rounded flex items-center justify-center bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-40 transition-colors"
             title="Save task"
           >
@@ -590,8 +709,7 @@ export default function Tasks() {
     setSaving(prev => new Set(prev).add(id));
     try {
       queryClient.setQueryData<ApiTask[]>(["api-tasks"], old => (old ?? []).filter(t => t.id !== id));
-      const res = await fetch(`/api/tasks/${id}`, { method: "DELETE", credentials: "include" });
-      if (!res.ok) throw new Error("Delete failed");
+      await fetch(`/api/tasks/${id}`, { method: "DELETE", credentials: "include" });
     } catch {
       toast({ title: "Failed to delete task", variant: "destructive" });
       refetch();
@@ -679,31 +797,31 @@ export default function Tasks() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        {[
-          {
-            value: clientFilter, onChange: setClientFilter,
-            opts: clientNames, allLabel: "All Clients",
-          },
-          {
-            value: serviceFilter, onChange: setServiceFilter,
-            opts: SERVICE_OPTIONS, allLabel: "All Service Types",
-          },
-          {
-            value: statusFilter, onChange: setStatusFilter,
-            opts: [...STATUS_OPTIONS], allLabel: "All Statuses",
-            extra: [{ value: "incomplete", label: "Incomplete" }],
-          },
-        ].map(({ value, onChange, opts, allLabel, extra }, fi) => (
-          <div key={fi} className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-sm">
-            <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <select value={value} onChange={e => onChange(e.target.value)}
-              className="text-slate-700 bg-transparent border-none outline-none cursor-pointer text-sm">
-              <option value="all">{allLabel}</option>
-              {extra?.map(e => <option key={e.value} value={e.value}>{e.label}</option>)}
-              {opts.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </div>
-        ))}
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-sm">
+          <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <select value={clientFilter} onChange={e => setClientFilter(e.target.value)}
+            className="text-slate-700 bg-transparent border-none outline-none cursor-pointer text-sm">
+            <option value="all">All Clients</option>
+            {clientNames.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-sm">
+          <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <select value={serviceFilter} onChange={e => setServiceFilter(e.target.value)}
+            className="text-slate-700 bg-transparent border-none outline-none cursor-pointer text-sm">
+            <option value="all">All Service Types</option>
+            {SERVICE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-sm">
+          <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+            className="text-slate-700 bg-transparent border-none outline-none cursor-pointer text-sm">
+            <option value="all">All Statuses</option>
+            <option value="incomplete">Incomplete</option>
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
         {displayed.length !== tasks.length && (
           <span className="text-xs text-slate-400">Showing {displayed.length} of {tasks.length}</span>
         )}
@@ -748,20 +866,20 @@ export default function Tasks() {
                     </td>
                   </tr>
                 ) : displayed.map((task, i) => {
-                  const isOverdue = task.status !== "Completed" && !!task.due_date && task.due_date < today;
+                  const isOverdue  = task.status !== "Completed" && !!task.due_date && task.due_date < today;
                   const isThisTask = timerState.taskId === task.id;
                   const isRunning  = isThisTask && timerState.status === "running";
                   const isPaused   = isThisTask && timerState.status === "paused";
                   const isSaving   = saving.has(task.id);
                   const isExpanded = expanded.has(task.id);
-                  const { freq, day } = parseRecurrence(task.recurrence);
+                  const { freq, days, monthDay } = parseRecurrence(task.recurrence);
 
                   return (
                     <React.Fragment key={task.id}>
                       <tr className={cn(
-                        "border-b border-slate-50 transition-colors",
-                        i === displayed.length - 1 && !isExpanded && "border-b-0",
-                        isThisTask ? "bg-[#266b75]/5" : "hover:bg-slate-50/30"
+                        "border-b border-slate-100 transition-colors",
+                        isThisTask ? "bg-[#266b75]/5" : "hover:bg-slate-50/50",
+                        isExpanded && "border-b-0",
                       )}>
                         {/* Expand toggle */}
                         <td className="px-2 py-2">
@@ -771,7 +889,12 @@ export default function Tasks() {
                               n.has(task.id) ? n.delete(task.id) : n.add(task.id);
                               return n;
                             })}
-                            className="w-5 h-5 flex items-center justify-center text-slate-300 hover:text-[#266b75] transition-colors rounded"
+                            className={cn(
+                              "w-6 h-6 flex items-center justify-center rounded transition-all",
+                              isExpanded
+                                ? "bg-[#266b75] text-white"
+                                : "text-slate-300 hover:text-[#266b75] hover:bg-[#266b75]/10"
+                            )}
                             title={isExpanded ? "Collapse subtasks" : "Expand subtasks"}
                           >
                             {isExpanded
@@ -830,9 +953,21 @@ export default function Tasks() {
                           />
                         </td>
 
-                        {/* Client (read-only display) */}
-                        <td className="px-4 py-3 text-xs text-slate-600 whitespace-nowrap">
-                          {task.client_name ?? <span className="text-slate-300 italic">—</span>}
+                        {/* Client — editable dropdown */}
+                        <td className="px-4 py-3 text-xs whitespace-nowrap">
+                          <EditableSelect
+                            value={task.client_name}
+                            options={clients.map(c => c.name)}
+                            saving={isSaving}
+                            placeholder="— Client —"
+                            onSave={v => {
+                              const client = clients.find(c => c.name === v);
+                              if (client) patchTask(task.id, { client_id: client.id });
+                            }}
+                            renderValue={v => v
+                              ? <span className="text-slate-700 text-xs">{v}</span>
+                              : <span className="text-slate-300 italic text-xs">—</span>}
+                          />
                         </td>
 
                         {/* Service type */}
@@ -863,35 +998,30 @@ export default function Tasks() {
                             options={FREQ_OPTIONS}
                             saving={isSaving}
                             placeholder="One-Time"
-                            onSave={v => patchTask(task.id, { recurrence: buildRecurrence(v ?? "", "") })}
+                            onSave={v => patchTask(task.id, { recurrence: buildRecurrence(v ?? "", [], "") })}
                             renderValue={v => v
                               ? <span className="text-slate-600 text-xs">{v}</span>
                               : <span className="text-slate-300 italic text-xs">One-Time</span>}
                           />
                         </td>
 
-                        {/* Day */}
+                        {/* Day — multi for Weekly, single for Monthly */}
                         <td className="px-4 py-3 whitespace-nowrap">
                           {freq === "Weekly" ? (
-                            <EditableSelect
-                              value={day || null}
-                              options={WEEKDAY_OPTIONS.map(d => d.value)}
+                            <WeekdayMultiSelect
+                              selectedDays={days}
                               saving={isSaving}
-                              placeholder="Any"
-                              onSave={v => patchTask(task.id, { recurrence: buildRecurrence("Weekly", v ?? "") })}
-                              renderValue={v => v
-                                ? <span className="text-slate-600 text-xs">{WEEKDAY_OPTIONS.find(d => d.value === v)?.label.slice(0, 3) ?? v}</span>
-                                : <span className="text-slate-300 italic text-xs">Any</span>}
+                              onSave={newDays => patchTask(task.id, { recurrence: buildRecurrence("Weekly", newDays, "") })}
                             />
                           ) : freq === "Monthly" ? (
                             <EditableSelect
-                              value={day || null}
+                              value={monthDay || null}
                               options={MONTHLY_DAY_OPTIONS.map(d => d.value)}
                               saving={isSaving}
                               placeholder="Any"
-                              onSave={v => patchTask(task.id, { recurrence: buildRecurrence("Monthly", v ?? "") })}
+                              onSave={v => patchTask(task.id, { recurrence: buildRecurrence("Monthly", [], v ?? "") })}
                               renderValue={v => v
-                                ? <span className="text-slate-600 text-xs">{v === "last" ? "Last" : `Day ${v}`}</span>
+                                ? <span className="text-slate-600 text-xs">{v === "last" ? "Last day" : `Day ${v}`}</span>
                                 : <span className="text-slate-300 italic text-xs">Any</span>}
                             />
                           ) : (
@@ -954,7 +1084,7 @@ export default function Tasks() {
                         </td>
                       </tr>
 
-                      {/* Subtask panel */}
+                      {/* Subtask expand panel */}
                       {isExpanded && <SubtaskPanel taskId={task.id} />}
                     </React.Fragment>
                   );
