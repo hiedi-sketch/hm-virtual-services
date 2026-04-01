@@ -436,6 +436,7 @@ export default function TimeTracking() {
   const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null } | null>(null);
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [todayOnly, setTodayOnly] = useState(false);
 
   const today = getTodayLocal();
   const currentMonth = today.slice(0, 7); // "YYYY-MM"
@@ -452,6 +453,11 @@ export default function TimeTracking() {
   const sortedEntries = useMemo(
     () => sortEntries(entries ?? [], sortField, sortDir),
     [entries, sortField, sortDir]
+  );
+
+  const displayedEntries = useMemo(
+    () => todayOnly ? sortedEntries.filter(e => e.date === today) : sortedEntries,
+    [sortedEntries, todayOnly, today]
   );
 
   const handleSort = (field: SortField) => {
@@ -927,11 +933,24 @@ export default function TimeTracking() {
                 <h2 className="font-semibold text-slate-900">Recent Entries</h2>
                 {entries && entries.length > 0 && (
                   <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                    {entries.length}
+                    {todayOnly ? `${displayedEntries.length} of ${entries.length}` : entries.length}
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setTodayOnly(v => !v)}
+                  className={cn(
+                    "flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors",
+                    todayOnly
+                      ? "bg-[#266b75] text-white"
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  )}
+                >
+                  <Sun className="w-3 h-3" />
+                  Today
+                </button>
+                <span className="text-xs text-slate-300">|</span>
                 <span className="text-xs text-slate-400 font-medium">Sort:</span>
                 <SortButton
                   label="Date"
@@ -953,15 +972,19 @@ export default function TimeTracking() {
             <div className="divide-y divide-slate-100">
               {entriesLoading ? (
                 <div className="p-8 text-center text-slate-400">Loading entries…</div>
-              ) : !sortedEntries.length ? (
+              ) : !displayedEntries.length ? (
                 <div className="p-12 text-center">
                   <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-700 font-medium">You're all caught up.</p>
-                  <p className="text-sm text-slate-400 mt-1">Nothing needs your attention right now.</p>
+                  <p className="text-slate-700 font-medium">
+                    {todayOnly ? "No entries logged today." : "You're all caught up."}
+                  </p>
+                  <p className="text-sm text-slate-400 mt-1">
+                    {todayOnly ? "Start the timer or log time manually above." : "Nothing needs your attention right now."}
+                  </p>
                 </div>
               ) : (() => {
                 let cumulativeMinutes = 0;
-                return sortedEntries.map(entry => {
+                return displayedEntries.map(entry => {
                   cumulativeMinutes += entry.duration_minutes;
                   const ch = Math.floor(cumulativeMinutes / 60);
                   const cm = cumulativeMinutes % 60;
