@@ -315,17 +315,16 @@ function badgeHtml(status) {
   return `<span class="badge ${map[status]||'pending'}">${status||'Not Started'}</span>`;
 }
 
-async function triggerTaskProcessing(rowNumber) {
+async function triggerTaskProcessing(taskId) {
   try {
-    console.log("Triggering webhook for row:", rowNumber);
+    console.log("Triggering webhook for taskId:", taskId);
     const response = await fetch("https://script.google.com/macros/s/AKfycbypfsBkNWTnNoUhLy_nDahx6je7kPNatXbCRv0Qujyd2AfRyfk7EB-29EbZrb7DX31lKw/exec", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        row: Number(rowNumber),
-        sheet: "Current Tasks"
+        taskId: taskId
       })
     });
     const result = await response.json();
@@ -342,11 +341,7 @@ async function completeTask(id) {
   });
   const task = await resp.json();
   console.log("Task marked Completed:", task);
-  if (task.sheet_row) {
-    await triggerTaskProcessing(task.sheet_row);
-  } else {
-    console.warn("No sheet_row found for task", id);
-  }
+  await triggerTaskProcessing(task.id);
   if (window._taskTable) window._taskTable.ajax.reload(null, false);
 }
 

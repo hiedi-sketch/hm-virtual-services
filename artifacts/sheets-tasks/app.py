@@ -23,10 +23,10 @@ WEBHOOK_URL = (
     "/exec?token=mySecret123"
 )
 
-def trigger_completion_webhook(sheet_row: int) -> None:
-    """POST to the Google Apps Script webhook with row + sheet (up to 3 attempts)."""
-    payload = {"row": sheet_row, "sheet": "Current Tasks"}
-    log.info("Triggering completion webhook for sheet row %s — payload: %s", sheet_row, payload)
+def trigger_completion_webhook(task_id: int) -> None:
+    """POST to the Google Apps Script webhook with taskId (up to 3 attempts)."""
+    payload = {"taskId": task_id}
+    log.info("Triggering completion webhook for task_id %s — payload: %s", task_id, payload)
     for attempt in range(1, 4):
         try:
             resp = http_requests.post(
@@ -430,11 +430,10 @@ def update_task(task_id):
     threading.Thread(target=push_task_to_sheet, args=(task_id,), daemon=True).start()
 
     if just_completed:
-        sheet_row = row["sheet_row"]
-        log.info("Task %s marked Completed — sheet_row=%s, firing webhook", task_id, sheet_row)
+        log.info("Task %s marked Completed — firing webhook", task_id)
         threading.Thread(
             target=trigger_completion_webhook,
-            args=(sheet_row,),
+            args=(task_id,),
             daemon=True,
         ).start()
 
