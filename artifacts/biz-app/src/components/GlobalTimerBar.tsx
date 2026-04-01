@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Play, Pause, Square, Timer, X, CheckCircle2, ChevronDown } from "lucide-react";
+import { Play, Pause, Square, Timer, X, CheckCircle2, ChevronDown, StickyNote } from "lucide-react";
 import { useTimer, formatElapsed, type ServiceType } from "@/contexts/TimerContext";
 import {
   useListClients,
@@ -48,6 +48,7 @@ export function GlobalTimerBar() {
   const [promptClientId, setPromptClientId] = useState<number | "">("");
   const [promptTaskId, setPromptTaskId] = useState<number | "">("");
   const [promptServiceType, setPromptServiceType] = useState<ServiceType>(null);
+  const [promptNotes, setPromptNotes] = useState("");
   const promptRef = useRef<HTMLDivElement>(null);
 
   const isIdle = state.status === "idle";
@@ -57,6 +58,7 @@ export function GlobalTimerBar() {
     setPromptClientId(state.clientId ?? "");
     setPromptTaskId(state.taskId ?? "");
     setPromptServiceType(state.serviceType ?? null);
+    setPromptNotes(state.notes ?? "");
     setShowSavePrompt(true);
   }
 
@@ -111,6 +113,7 @@ export function GlobalTimerBar() {
         started_at: state.firstStartedAt ? new Date(state.firstStartedAt).toISOString() : null,
         ended_at: new Date().toISOString(),
         service_type: promptServiceType,
+        notes: promptNotes.trim() || undefined,
       } as any);
       stop();
       qc.invalidateQueries({ queryKey: getListTimeEntriesQueryKey() });
@@ -282,6 +285,21 @@ export function GlobalTimerBar() {
                     {promptServiceType === "Bookkeeping" && (
                       <p className="text-xs text-slate-400 mt-1">↳ Tracked for reporting only (no budget deduction)</p>
                     )}
+                  </div>
+
+                  {/* Notes */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1 mb-1.5">
+                      <StickyNote className="w-3 h-3" />
+                      Notes <span className="font-normal normal-case text-slate-400">(optional)</span>
+                    </label>
+                    <textarea
+                      value={promptNotes}
+                      onChange={(e) => setPromptNotes(e.target.value)}
+                      rows={2}
+                      placeholder="What was worked on?"
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] resize-none"
+                    />
                   </div>
                 </div>
 
