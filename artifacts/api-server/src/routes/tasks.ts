@@ -151,14 +151,15 @@ router.post("/tasks", requireAuth, async (req, res) => {
             entityId: task.id,
           });
         } else {
-          // Admin/team created task: notify the assigned team member (if any)
+          // Admin/team created task: notify the assigned team member (if any),
+          // but skip the notification when the creator assigned the task to themselves.
           if (task.assigned_to) {
             const [assignedUser] = await db
               .select({ id: usersTable.id })
               .from(usersTable)
               .where(eq(usersTable.name, task.assigned_to))
               .limit(1);
-            if (assignedUser) {
+            if (assignedUser && assignedUser.id !== user.id) {
               await createNotification({
                 userId: assignedUser.id,
                 type: "task_assigned",
