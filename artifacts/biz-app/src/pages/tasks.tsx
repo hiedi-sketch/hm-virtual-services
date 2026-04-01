@@ -696,7 +696,7 @@ export default function Tasks() {
 
   const [clientFilter, setClientFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("incomplete");
   const [sortField, setSortField] = useState<"due_date" | "status" | "client_name" | null>("due_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
