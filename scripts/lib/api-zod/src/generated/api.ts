@@ -138,6 +138,7 @@ export const ListTasksQueryParams = zod.object({
 const normalizeTaskStatus = (v: unknown) => {
   if (typeof v !== "string") return v;
   const map: Record<string, string> = {
+    "not started": "Not Started", not_started: "Not Started",
     pending: "Pending", confirmed: "Confirmed",
     "in progress": "In Progress", in_progress: "In Progress",
     completed: "Completed",
@@ -164,8 +165,9 @@ export const ListTasksResponseItem = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
-  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])),
+  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"])),
   due_date: zod.string().nullish(),
+  completed_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
   recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
@@ -182,7 +184,7 @@ export const CreateTaskBody = zod.object({
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
   due_date: zod.string().nullish(),
-  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])).optional(),
+  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"])).optional(),
   recurrence: recurrenceZod,
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
@@ -269,8 +271,9 @@ export const UpdateTaskBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().nullish(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]).optional(),
+  status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"]).optional(),
   due_date: zod.string().nullish(),
+  completed_date: zod.string().nullish(),
   recurrence: recurrenceZod,
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
@@ -281,8 +284,9 @@ export const UpdateTaskResponse = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["Pending", "Confirmed", "In Progress", "Completed"]),
+  status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"]),
   due_date: zod.string().nullish(),
+  completed_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
   recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),

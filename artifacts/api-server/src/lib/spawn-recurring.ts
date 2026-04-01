@@ -121,7 +121,7 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
       .set({ last_generated_at: today })
       .where(eq(tasksTable.id, task.id));
 
-    // Skip if a pending instance with the same title/client/recurrence already exists
+    // Skip if a not-started or pending instance with same title/client/recurrence already exists
     const existing = await db
       .select({ id: tasksTable.id })
       .from(tasksTable)
@@ -130,7 +130,7 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
           eq(tasksTable.title, task.title),
           eq(tasksTable.client_id, task.client_id),
           eq(tasksTable.recurrence, task.recurrence),
-          eq(tasksTable.status, "Pending"),
+          or(eq(tasksTable.status, "Not Started"), eq(tasksTable.status, "Pending")),
         ),
       )
       .limit(1);
@@ -144,7 +144,7 @@ export async function spawnRecurringTasks(): Promise<(typeof tasksTable.$inferSe
         description: task.description,
         client_id: task.client_id,
         assigned_to: task.assigned_to,
-        status: "Pending",
+        status: "Not Started",
         due_date: nextDueDate(task.recurrence),
         recurrence: task.recurrence,
         last_generated_at: today,

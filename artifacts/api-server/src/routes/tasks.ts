@@ -38,6 +38,7 @@ const taskSelectFields = {
   assigned_to: tasksTable.assigned_to,
   status: tasksTable.status,
   due_date: tasksTable.due_date,
+  completed_date: tasksTable.completed_date,
   client_name: clientsTable.name,
   recurrence: tasksTable.recurrence,
   last_generated_at: tasksTable.last_generated_at,
@@ -204,17 +205,21 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
     return;
   }
 
-  // When completing a recurring task, stamp last_generated_at = today so the daily
-  // scheduler won't count this task as a new spawn source for the current cycle.
+  // Auto-set completed_date and last_generated_at when completing.
   const extraFields: Record<string, unknown> = {};
   if (body.status === "Completed") {
     const [existing] = await db
-      .select({ recurrence: tasksTable.recurrence })
+      .select({ recurrence: tasksTable.recurrence, completed_date: tasksTable.completed_date })
       .from(tasksTable)
       .where(eq(tasksTable.id, id));
+    if (!body.completed_date && !existing?.completed_date) {
+      extraFields["completed_date"] = todayStr();
+    }
     if (existing?.recurrence) {
       extraFields["last_generated_at"] = todayStr();
     }
+  } else if (body.status && body.status !== "Completed" && !("completed_date" in body)) {
+    extraFields["completed_date"] = null;
   }
 
   const [updated] = await db
