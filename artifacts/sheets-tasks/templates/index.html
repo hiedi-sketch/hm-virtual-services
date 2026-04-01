@@ -1,75 +1,69 @@
 {% extends "base.html" %}
-{% block title %}All Tasks{% endblock %}
+{% block title %}Task Manager{% endblock %}
 
 {% block content %}
+<datalist id="clientList"></datalist>
+<datalist id="assigneeList"></datalist>
+
 <div id="configAlert" class="alert warn" style="display:none">
   ⚠ <div>
     <strong>Google Sheets not configured.</strong>
-    Set <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> and <code>GOOGLE_SHEET_ID</code> secrets,
-    then share the sheet with your service account's <code>client_email</code>.
+    Set <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> and <code>GOOGLE_SHEET_ID</code> secrets.
   </div>
 </div>
 
 <div class="toolbar">
-  <h1>Bookkeeping Tasks</h1>
-  <select id="filterClient" class="filter-select" onchange="applyFilters()">
+  <h1>Task Manager</h1>
+  <select id="filterClient" class="filter-select" onchange="renderTable()">
     <option value="">All Clients</option>
   </select>
-  <select id="filterService" class="filter-select" onchange="applyFilters()">
+  <select id="filterService" class="filter-select" onchange="renderTable()">
     <option value="">All Service Types</option>
+    <option>Virtual Assistant</option>
+    <option>Bookkeeping</option>
   </select>
-  <select id="filterStatus" class="filter-select" onchange="applyFilters()">
+  <select id="filterStatus" class="filter-select" onchange="renderTable()">
     <option value="">All Statuses</option>
-    <option value="Not Started">Not Started</option>
-    <option value="In Progress">In Progress</option>
-    <option value="Completed">Completed</option>
+    <option>Not Started</option>
+    <option>In Progress</option>
+    <option>Completed</option>
   </select>
   <button class="btn primary" onclick="toggleAddForm()">+ New Task</button>
 </div>
 
-<!-- Add form -->
 <div class="add-form hidden" id="addForm">
   <div class="form-group">
     <label>Task Description *</label>
-    <input type="text" id="newName" placeholder="e.g. Import Transactions">
+    <input type="text" id="newName" placeholder="What needs to be done?">
   </div>
   <div class="form-group">
     <label>Client</label>
-    <input type="text" id="newClient" placeholder="e.g. HM Virtual Services">
+    <input type="text" id="newClient" list="clientList" placeholder="Select or type client">
   </div>
   <div class="form-group">
     <label>Service Type</label>
     <select id="newService">
       <option value="">—</option>
-      <option>Bookkeeping</option>
       <option>Virtual Assistant</option>
+      <option>Bookkeeping</option>
     </select>
   </div>
   <div class="form-group">
     <label>Frequency</label>
     <select id="newFrequency">
-      <option value="">—</option>
+      <option value="">One-Time</option>
       <option>Daily</option>
       <option>Weekly</option>
       <option>Monthly</option>
-      <option>One-Time</option>
     </select>
-  </div>
-  <div class="form-group">
-    <label>Day / Detail</label>
-    <input type="text" id="newDaySpec" placeholder="e.g. Tuesday, Thursday">
   </div>
   <div class="form-group">
     <label>Due Date</label>
     <input type="date" id="newDue">
   </div>
   <div class="form-group">
-    <label>Status</label>
-    <select id="newStatus">
-      <option>Not Started</option>
-      <option>In Progress</option>
-      <option>Completed</option>
-    </select>
+    <label>Assigned To</label>
+    <input type="text" id="newAssigned" list="assigneeList" placeholder="Select or type name">
   </div>
   <div class="form-actions">
     <button class="btn" onclick="toggleAddForm()">Cancel</button>
@@ -78,45 +72,308 @@
 </div>
 
 <div class="table-wrap">
-  <table id="taskTable" class="dataTable" style="width:100%">
+  <table class="task-table" id="taskTable">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Task Description</th>
-        <th>Client</th>
-        <th>Service Type</th>
-        <th>Frequency</th>
-        <th>Due Date</th>
-        <th>Status</th>
-        <th>Actions</th>
+        <th class="col-x" title="Expand"></th>
+        <th class="col-t" title="Timer"></th>
+        <th class="col-status">Status</th>
+        <th class="col-client">Client</th>
+        <th class="col-service">Service Type</th>
+        <th class="col-freq">Frequency</th>
+        <th class="col-day">Day</th>
+        <th class="col-desc">Task Description</th>
+        <th class="col-due">Due Date</th>
+        <th class="col-assigned">Assigned</th>
+        <th class="col-comp">Completed</th>
+        <th class="col-del"></th>
       </tr>
     </thead>
+    <tbody id="taskBody">
+      <tr><td colspan="12" class="empty-msg">Loading…</td></tr>
+    </tbody>
   </table>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-let _clientFilter  = '';
-let _serviceFilter = '';
-let _statusFilter  = '';
+let _tasks    = [];
+let _clients  = [];
+let _expanded = new Set();
 
-function applyFilters() {
-  _clientFilter  = document.getElementById('filterClient').value;
-  _serviceFilter = document.getElementById('filterService').value;
-  _statusFilter  = document.getElementById('filterStatus').value;
+function esc(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 
-  let url = BASE_PATH + 'api/tasks?';
-  if (_clientFilter)  url += 'client='       + encodeURIComponent(_clientFilter)  + '&';
-  if (_serviceFilter) url += 'service_type=' + encodeURIComponent(_serviceFilter) + '&';
+function rowCls(t) {
+  if (t.status === 'Completed') return 'completed';
+  const today = new Date().toISOString().slice(0,10);
+  if (t.due_date && t.due_date < today) return 'overdue';
+  return '';
+}
 
-  window._taskTable.ajax.url(url).load(null, false);
+function statusCls(s) {
+  return s === 'Completed' ? 'st-done' : s === 'In Progress' ? 'st-prog' : 'st-new';
+}
 
-  if (_statusFilter) {
-    window._taskTable.column(5).search(_statusFilter, false, false).draw();
-  } else {
-    window._taskTable.column(5).search('').draw();
+function dayCell(task) {
+  const freq = task.frequency || '';
+  if (freq === 'Weekly') {
+    const shorts = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const fulls  = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+    const sel    = (task.day_spec||'').split(',').map(s=>s.trim()).filter(Boolean);
+    return shorts.map((d,i) =>
+      `<label class="day-label"><input type="checkbox" value="${fulls[i]}"
+        ${sel.includes(fulls[i])?'checked':''} onchange="saveDays(${task.id})">${d}</label>`
+    ).join('');
   }
+  if (freq === 'Monthly') {
+    const cur = parseInt(task.day_spec)||'';
+    const opts = Array.from({length:31},(_,i)=>
+      `<option value="${i+1}" ${cur===i+1?'selected':''}>${i+1}</option>`).join('');
+    return `<select class="ci" onchange="saveField(${task.id},'day_spec',this.value)">
+      <option value="">—</option>${opts}</select>`;
+  }
+  return '<span class="muted">—</span>';
+}
+
+function renderRow(task) {
+  const exp = _expanded.has(task.id);
+  return `
+  <tr id="row-${task.id}" class="${rowCls(task)}">
+    <td class="col-x">
+      <button class="xbtn" onclick="toggleExpand(${task.id})" title="Expand">${exp?'▼':'▶'}</button>
+    </td>
+    <td class="col-t">
+      <button class="tbtn" onclick="startTimer('${esc(task.task_name)}')" title="Start timer">▶</button>
+    </td>
+    <td class="col-status">
+      <select class="ci ${statusCls(task.status)}" onchange="saveField(${task.id},'status',this.value)">
+        <option ${task.status==='Not Started'?'selected':''}>Not Started</option>
+        <option ${task.status==='In Progress'?'selected':''}>In Progress</option>
+        <option ${task.status==='Completed'?'selected':''}>Completed</option>
+      </select>
+    </td>
+    <td class="col-client">
+      <input class="ci" list="clientList" value="${esc(task.client||'')}"
+        onblur="saveField(${task.id},'client',this.value)" placeholder="—">
+    </td>
+    <td class="col-service">
+      <select class="ci" onchange="saveField(${task.id},'service_type',this.value)">
+        <option value="" ${!task.service_type?'selected':''}>—</option>
+        <option ${task.service_type==='Virtual Assistant'?'selected':''}>Virtual Assistant</option>
+        <option ${task.service_type==='Bookkeeping'?'selected':''}>Bookkeeping</option>
+      </select>
+    </td>
+    <td class="col-freq">
+      <select class="ci" onchange="saveFreq(${task.id},this.value)">
+        <option value="" ${!task.frequency?'selected':''}>One-Time</option>
+        <option ${task.frequency==='Daily'?'selected':''}>Daily</option>
+        <option ${task.frequency==='Weekly'?'selected':''}>Weekly</option>
+        <option ${task.frequency==='Monthly'?'selected':''}>Monthly</option>
+      </select>
+    </td>
+    <td class="col-day" id="day-${task.id}">${dayCell(task)}</td>
+    <td class="col-desc">
+      <input class="ci desc-in" value="${esc(task.task_name||'')}"
+        onblur="saveField(${task.id},'task_name',this.value)" title="${esc(task.task_name||'')}">
+    </td>
+    <td class="col-due">
+      <input type="date" class="ci" value="${task.due_date||''}"
+        onchange="saveField(${task.id},'due_date',this.value)">
+    </td>
+    <td class="col-assigned">
+      <input class="ci" list="assigneeList" value="${esc(task.assigned||'')}"
+        onblur="saveField(${task.id},'assigned',this.value)" placeholder="—">
+    </td>
+    <td class="col-comp">${task.completed_date||''}</td>
+    <td class="col-del">
+      <button class="dbtn" onclick="deleteTask(${task.id})" title="Delete">✕</button>
+    </td>
+  </tr>
+  <tr id="exp-${task.id}" class="exp-row" style="display:${exp?'':'none'}">
+    <td colspan="12" class="exp-cell" id="exp-cell-${task.id}">
+      ${exp ? expandContent(task) : ''}
+    </td>
+  </tr>`;
+}
+
+function expandContent(task) {
+  return `
+  <div class="exp-inner">
+    <div class="exp-col">
+      <div class="exp-label">Full Description / Notes</div>
+      <textarea class="exp-textarea" rows="3"
+        onblur="saveField(${task.id},'task_name',this.value)"
+        placeholder="Add notes or a full task description…">${esc(task.task_name||'')}</textarea>
+    </div>
+    <div class="exp-col">
+      <div class="exp-label">Subtasks</div>
+      <div id="subs-${task.id}"><span class="muted" style="font-size:12px">Loading…</span></div>
+      <div class="sub-add">
+        <input type="text" id="nsub-${task.id}" class="sub-input" placeholder="Add subtask…"
+          onkeydown="if(event.key==='Enter')addSubtask(${task.id})">
+        <button class="btn small" onclick="addSubtask(${task.id})">+ Add</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function toggleExpand(id) {
+  const expRow  = document.getElementById('exp-'+id);
+  const expCell = document.getElementById('exp-cell-'+id);
+  const xbtn    = document.querySelector('#row-'+id+' .xbtn');
+  const task    = _tasks.find(t=>t.id===id);
+  if (_expanded.has(id)) {
+    _expanded.delete(id);
+    expRow.style.display = 'none';
+    if (xbtn) xbtn.textContent = '▶';
+  } else {
+    _expanded.add(id);
+    expRow.style.display = '';
+    expCell.innerHTML = expandContent(task);
+    if (xbtn) xbtn.textContent = '▼';
+    loadSubtasks(id);
+  }
+}
+
+async function loadSubtasks(taskId) {
+  const r    = await fetch(BASE_PATH+'api/tasks/'+taskId+'/subtasks');
+  const subs = await r.json();
+  const el   = document.getElementById('subs-'+taskId);
+  if (!el) return;
+  if (!subs.length) {
+    el.innerHTML = '<span class="muted" style="font-size:12px">No subtasks yet.</span>';
+    return;
+  }
+  el.innerHTML = subs.map(s=>`
+    <div class="sub-row" id="sub-${s.id}">
+      <input type="checkbox" ${s.completed?'checked':''} onchange="toggleSubtask(${s.id},this.checked,${taskId})">
+      <span class="sub-text ${s.completed?'sub-done':''}">${esc(s.description)}</span>
+      <button class="dbtn small" onclick="delSubtask(${s.id},${taskId})">✕</button>
+    </div>`).join('');
+}
+
+async function addSubtask(taskId) {
+  const inp  = document.getElementById('nsub-'+taskId);
+  const desc = (inp.value||'').trim();
+  if (!desc) return;
+  await fetch(BASE_PATH+'api/tasks/'+taskId+'/subtasks', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({description: desc})
+  });
+  inp.value = '';
+  await loadSubtasks(taskId);
+}
+
+async function toggleSubtask(subId, completed, taskId) {
+  await fetch(BASE_PATH+'api/subtasks/'+subId, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({completed})
+  });
+  await loadSubtasks(taskId);
+}
+
+async function delSubtask(subId, taskId) {
+  await fetch(BASE_PATH+'api/subtasks/'+subId, {method:'DELETE'});
+  await loadSubtasks(taskId);
+}
+
+async function saveField(id, field, value) {
+  const resp    = await fetch(BASE_PATH+'api/tasks/'+id, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({[field]: value||null})
+  });
+  const updated = await resp.json();
+  const idx     = _tasks.findIndex(t=>t.id===id);
+  if (idx>=0) _tasks[idx] = updated;
+
+  if (field === 'status' && value === 'Completed') {
+    await loadTasks();
+  } else {
+    const row = document.getElementById('row-'+id);
+    if (row) {
+      row.className = rowCls(updated);
+      const compEl = row.querySelector('.col-comp');
+      if (compEl) compEl.textContent = updated.completed_date||'';
+      const sel = row.querySelector('.col-status select');
+      if (sel) {
+        sel.className = 'ci ' + statusCls(updated.status);
+      }
+    }
+  }
+}
+
+async function saveFreq(id, value) {
+  const resp    = await fetch(BASE_PATH+'api/tasks/'+id, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({frequency: value||null, day_spec: null})
+  });
+  const updated = await resp.json();
+  const idx     = _tasks.findIndex(t=>t.id===id);
+  if (idx>=0) _tasks[idx] = updated;
+  const dayEl = document.getElementById('day-'+id);
+  if (dayEl) dayEl.innerHTML = dayCell(updated);
+}
+
+function saveDays(taskId) {
+  const dayEl = document.getElementById('day-'+taskId);
+  if (!dayEl) return;
+  const cbs  = dayEl.querySelectorAll('input[type=checkbox]');
+  const vals = Array.from(cbs).filter(c=>c.checked).map(c=>c.value);
+  saveField(taskId, 'day_spec', vals.join(','));
+}
+
+async function deleteTask(id) {
+  if (!confirm('Delete this task?')) return;
+  await fetch(BASE_PATH+'api/tasks/'+id, {method:'DELETE'});
+  _tasks = _tasks.filter(t=>t.id!==id);
+  _expanded.delete(id);
+  renderTable();
+}
+
+function renderTable() {
+  const body    = document.getElementById('taskBody');
+  const clientF = document.getElementById('filterClient').value;
+  const serviceF= document.getElementById('filterService').value;
+  const statusF = document.getElementById('filterStatus').value;
+
+  let filtered = _tasks;
+  if (clientF)  filtered = filtered.filter(t=>t.client===clientF);
+  if (serviceF) filtered = filtered.filter(t=>t.service_type===serviceF);
+  if (statusF)  filtered = filtered.filter(t=>t.status===statusF);
+
+  if (!filtered.length) {
+    body.innerHTML = '<tr><td colspan="12" class="empty-msg">No tasks found.</td></tr>';
+    return;
+  }
+  body.innerHTML = filtered.map(renderRow).join('');
+}
+
+async function loadTasks() {
+  const r  = await fetch(BASE_PATH+'api/tasks');
+  _tasks   = await r.json();
+  renderTable();
+}
+
+async function loadClients() {
+  const r  = await fetch(BASE_PATH+'api/clients');
+  _clients = await r.json();
+  const dl = document.getElementById('clientList');
+  dl.innerHTML = _clients.map(c=>`<option value="${esc(c)}">`).join('');
+  const sel = document.getElementById('filterClient');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">All Clients</option>' +
+    _clients.map(c=>`<option ${c===cur?'selected':''}>${esc(c)}</option>`).join('');
+}
+
+async function loadAssignees() {
+  const r  = await fetch(BASE_PATH+'api/assignees');
+  const as = await r.json();
+  const dl = document.getElementById('assigneeList');
+  dl.innerHTML = as.map(a=>`<option value="${esc(a)}">`).join('');
 }
 
 function toggleAddForm() {
@@ -126,87 +383,29 @@ function toggleAddForm() {
 async function addTask() {
   const name = document.getElementById('newName').value.trim();
   if (!name) { alert('Task Description is required.'); return; }
-  await fetch(BASE_PATH + 'api/tasks', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+  await fetch(BASE_PATH+'api/tasks', {
+    method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({
       task_name:    name,
-      client:       document.getElementById('newClient').value || null,
-      service_type: document.getElementById('newService').value || null,
-      frequency:    document.getElementById('newFrequency').value || null,
-      day_spec:     document.getElementById('newDaySpec').value || null,
-      due_date:     document.getElementById('newDue').value || null,
-      status:       document.getElementById('newStatus').value,
-    }),
+      client:       document.getElementById('newClient').value||null,
+      service_type: document.getElementById('newService').value||null,
+      frequency:    document.getElementById('newFrequency').value||null,
+      due_date:     document.getElementById('newDue').value||null,
+      assigned:     document.getElementById('newAssigned').value||null,
+      status:       'Not Started',
+    })
   });
-  document.getElementById('newName').value = '';
-  document.getElementById('newDaySpec').value = '';
-  document.getElementById('newDue').value = '';
-  window._taskTable.ajax.reload(null, false);
+  ['newName','newClient','newDue','newAssigned'].forEach(id=>{document.getElementById(id).value='';});
+  document.getElementById('newService').value='';
+  document.getElementById('newFrequency').value='';
+  document.getElementById('addForm').classList.add('hidden');
+  await loadTasks();
+  await Promise.all([loadClients(), loadAssignees()]);
 }
 
-function fmtFreq(freq, day) {
-  if (!freq) return '';
-  return day ? `${freq} · <span style="color:#666;font-size:11px">${day}</span>` : freq;
-}
-
-$(function() {
-  fetch(BASE_PATH + 'api/clients').then(r=>r.json()).then(list => {
-    const sel = document.getElementById('filterClient');
-    list.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
-  });
-  fetch(BASE_PATH + 'api/service_types').then(r=>r.json()).then(list => {
-    const sel = document.getElementById('filterService');
-    list.forEach(c => { const o = document.createElement('option'); o.value=c; o.textContent=c; sel.appendChild(o); });
-  });
-
-  fetch(BASE_PATH + 'api/sync/status').then(r=>r.json()).then(d => {
-    if (d.error && d.error.includes('not set')) document.getElementById('configAlert').style.display='';
-  });
-
-  window._taskTable = $('#taskTable').DataTable({
-    ajax: { url: BASE_PATH + 'api/tasks', dataSrc: '' },
-    order: [[4,'asc']],
-    pageLength: 25,
-    dom: '<"dt-top"lf>t<"dt-bottom"ip>',
-    columns: [
-      {
-        data: null, orderable: false, searchable: false,
-        render: (d, t, r, m) => m.settings._iDisplayStart + m.row + 1
-      },
-      {
-        data: 'task_name',
-        render: (d, t, row) => t==='display'
-          ? `<span class="task-link" onclick="startTimer('${d.replace(/'/g,"\\'")}')">▶ ${d}</span>`
-          : d
-      },
-      {
-        data: 'client', defaultContent: '',
-        render: (d, t) => t==='display' && d
-          ? `<a href="${BASE_PATH}client/${encodeURIComponent(d)}" class="client-link">${d}</a>`
-          : (d||'')
-      },
-      { data: 'service_type', defaultContent: '' },
-      {
-        data: null, defaultContent: '',
-        render: (d, t) => t==='display' ? fmtFreq(d.frequency, d.day_spec) : (d.frequency||'')
-      },
-      { data: 'due_date', defaultContent: '', render: (d,t) => t==='display' ? (d||'—') : (d||'') },
-      { data: 'status',   render: (d, t) => t==='display' ? badgeHtml(d) : d },
-      {
-        data: null, orderable: false, searchable: false,
-        render: d => `
-          <button class="action-btn complete" title="Mark Completed" onclick="completeTask(${d.id})">✓</button>
-          <button class="action-btn" title="Edit" onclick='openEditModal(${JSON.stringify(d)})'>✎</button>
-          <button class="action-btn del" title="Delete" onclick="deleteTask(${d.id})">✕</button>
-        `
-      },
-    ],
-    createdRow: (row, data) => {
-      const cls = rowClass(data);
-      if (cls) $(row).addClass(cls);
-    },
-  });
-});
+(async () => {
+  await Promise.all([loadClients(), loadAssignees()]);
+  await loadTasks();
+})();
 </script>
 {% endblock %}

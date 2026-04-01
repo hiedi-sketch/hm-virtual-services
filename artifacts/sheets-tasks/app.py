@@ -4,7 +4,8 @@ import sqlite3
 import threading
 import logging
 import time
-from datetime import datetime, date
+import calendar
+from datetime import datetime, date, timedelta
 
 import requests as http_requests
 from flask import Flask, jsonify, request, render_template, abort
@@ -177,8 +178,22 @@ def init_db():
                 status         TEXT DEFAULT 'Not Started',
                 completed_date TEXT,
                 client         TEXT,
+                assigned       TEXT,
                 created_at     TEXT DEFAULT (datetime('now')),
                 updated_at     TEXT DEFAULT (datetime('now'))
+            )
+        """)
+        try:
+            conn.execute("ALTER TABLE tasks ADD COLUMN assigned TEXT")
+        except Exception:
+            pass
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS subtasks (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id     INTEGER NOT NULL,
+                description TEXT NOT NULL,
+                completed   INTEGER DEFAULT 0,
+                created_at  TEXT DEFAULT (datetime('now'))
             )
         """)
         conn.commit()
@@ -355,6 +370,70 @@ def do_sync():
         sync_status["syncing"] = False
 
 
+# ── Recurring task helpers ────────────────────────────────────────────────────
+
+_WEEKDAY_MAP = {
+    'Monday': 0, 'Tuesday': 1, 'Wednesday': 2, 'Thursday': 3,
+    'Friday': 4, 'Saturday': 5, 'Sunday': 6,
+}
+
+def _next_business_day(d: date) -> date:
+    d = d + timedelta(days=1)
+    while d.weekday() >= 5:
+        d = d + timedelta(days=1)
+    return d
+
+def _next_weekly(d: date, day_spec: str) -> date:
+    days = [_WEEKDAY_MAP[s.strip()] for s in day_spec.split(',') if s.strip() in _WEEKDAY_MAP]
+    if not days:
+        return _next_business_day(d)
+    for offset in range(1, 8):
+        candidate = d + timedelta(days=offset)
+        if candidate.weekday() in days:
+            return candidate
+    return d + timedelta(days=7)
+
+def _next_monthly(d: date, day_spec: str) -> date:
+    try:
+        day_num = int((day_spec or '').strip())
+    except (ValueError, AttributeError):
+        day_num = d.day
+    nm_year, nm_month = (d.year + 1, 1) if d.month == 12 else (d.year, d.month + 1)
+    max_day = calendar.monthrange(nm_year, nm_month)[1]
+    return date(nm_year, nm_month, min(day_num, max_day))
+
+def _calculate_next_due(task: dict):
+    freq = (task.get('frequency') or '').strip()
+    day_spec = (task.get('day_spec') or '').strip()
+    try:
+        d = date.fromisoformat(task.get('due_date') or date.today().isoformat())
+    except Exception:
+        d = date.today()
+    if freq == 'Daily':
+        return _next_business_day(d)
+    if freq == 'Weekly' and day_spec:
+        return _next_weekly(d, day_spec)
+    if freq == 'Monthly':
+        return _next_monthly(d, day_spec)
+    return None
+
+def _spawn_next_task(task: dict) -> None:
+    next_due = _calculate_next_due(task)
+    if not next_due:
+        return
+    with get_db() as conn:
+        conn.execute(
+            """INSERT INTO tasks (task_name, service_type, frequency, day_spec,
+               due_date, status, client, assigned)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (task['task_name'], task.get('service_type'), task.get('frequency'),
+             task.get('day_spec'), next_due.isoformat(), 'Not Started',
+             task.get('client'), task.get('assigned')),
+        )
+        conn.commit()
+    log.info("Created next recurring task — due %s", next_due)
+
+
 # ── API routes ────────────────────────────────────────────────────────────────
 
 @app.route("/api/tasks", methods=["GET"])
@@ -382,11 +461,12 @@ def create_task():
     with get_db() as conn:
         cur = conn.execute(
             """INSERT INTO tasks (task_name, service_type, frequency, day_spec,
-               due_date, status, client)
-               VALUES (?,?,?,?,?,?,?)""",
+               due_date, status, client, assigned)
+               VALUES (?,?,?,?,?,?,?,?)""",
             (task_name, data.get("service_type") or None, data.get("frequency") or None,
              data.get("day_spec") or None, data.get("due_date") or None,
-             data.get("status") or "Not Started", data.get("client") or None),
+             data.get("status") or "Not Started", data.get("client") or None,
+             data.get("assigned") or None),
         )
         conn.commit()
         task_id = cur.lastrowid
@@ -414,8 +494,8 @@ def update_task(task_id):
         new_task_name = data.get("task_name", ex["task_name"])
         conn.execute(
             """UPDATE tasks SET task_name=?,service_type=?,frequency=?,day_spec=?,
-               due_date=?,status=?,completed_date=?,client=?,updated_at=datetime('now')
-               WHERE id=?""",
+               due_date=?,status=?,completed_date=?,client=?,assigned=?,
+               updated_at=datetime('now') WHERE id=?""",
             (
                 new_task_name,
                 data.get("service_type", ex["service_type"]),
@@ -425,6 +505,7 @@ def update_task(task_id):
                 new_status,
                 comp_date,
                 data.get("client", ex["client"]),
+                data.get("assigned", ex["assigned"]),
                 task_id,
             ),
         )
@@ -442,6 +523,9 @@ def update_task(task_id):
                 daemon=True,
             ).start()
 
+    if just_completed:
+        threading.Thread(target=_spawn_next_task, args=(dict(row),), daemon=True).start()
+
     return jsonify(dict(row))
 
 
@@ -457,6 +541,65 @@ def delete_task(task_id):
     if SHEETS_ENABLED and sheet_row:
         threading.Thread(target=delete_task_from_sheet, args=(sheet_row,), daemon=True).start()
     return "", 204
+
+
+@app.route("/api/tasks/<int:task_id>/subtasks", methods=["GET"])
+def list_subtasks(task_id):
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT * FROM subtasks WHERE task_id=? ORDER BY id", (task_id,)
+        ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/tasks/<int:task_id>/subtasks", methods=["POST"])
+def create_subtask(task_id):
+    data = request.get_json(force=True)
+    description = (data.get("description") or "").strip()
+    if not description:
+        return jsonify({"error": "description required"}), 400
+    with get_db() as conn:
+        cur = conn.execute(
+            "INSERT INTO subtasks (task_id, description) VALUES (?,?)",
+            (task_id, description),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM subtasks WHERE id=?", (cur.lastrowid,)).fetchone()
+    return jsonify(dict(row)), 201
+
+
+@app.route("/api/subtasks/<int:subtask_id>", methods=["PUT"])
+def update_subtask(subtask_id):
+    data = request.get_json(force=True)
+    with get_db() as conn:
+        ex = conn.execute("SELECT * FROM subtasks WHERE id=?", (subtask_id,)).fetchone()
+        if not ex:
+            abort(404)
+        conn.execute(
+            "UPDATE subtasks SET description=?, completed=? WHERE id=?",
+            (data.get("description", ex["description"]),
+             1 if data.get("completed") else 0, subtask_id),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM subtasks WHERE id=?", (subtask_id,)).fetchone()
+    return jsonify(dict(row))
+
+
+@app.route("/api/subtasks/<int:subtask_id>", methods=["DELETE"])
+def delete_subtask(subtask_id):
+    with get_db() as conn:
+        conn.execute("DELETE FROM subtasks WHERE id=?", (subtask_id,))
+        conn.commit()
+    return "", 204
+
+
+@app.route("/api/assignees")
+def list_assignees():
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT assigned FROM tasks WHERE assigned IS NOT NULL AND assigned!='' ORDER BY assigned"
+        ).fetchall()
+    return jsonify([r["assigned"] for r in rows])
 
 
 @app.route("/api/sync", methods=["POST"])
