@@ -13,9 +13,6 @@ localPort = 5000
 [services.development]
 run = "cd artifacts/sheets-tasks && python app.py"
 
-[services.production]
-run = "cd artifacts/sheets-tasks && python app.py"
-
 [services.env]
 PORT = "5000"
 BASE_PATH = "/sheets-tasks/"
