@@ -772,13 +772,17 @@ export default function Tasks() {
       queryClient.setQueryData<ApiTask[]>(["api-tasks"], old =>
         (old ?? []).map(t => t.id === id ? { ...t, ...updated } : t)
       );
+      // Stop the timer if this task was just marked Completed and the timer is running for it
+      if (fields.status === "Completed" && timerState.taskId === id) {
+        stop();
+      }
     } catch {
       toast({ title: "Failed to save — change reverted", variant: "destructive" });
       refetch();
     } finally {
       setSaving(prev => { const s = new Set(prev); s.delete(id); return s; });
     }
-  }, [queryClient, toast, refetch]);
+  }, [queryClient, toast, refetch, timerState, stop]);
 
   const deleteTask = useCallback(async (id: number) => {
     if (!confirm("Delete this task?")) return;
@@ -816,6 +820,16 @@ export default function Tasks() {
   }, [queryClient, toast]);
 
   // ── Timer ─────────────────────────────────────────────────────────────────
+
+  // Stop the timer reactively whenever the active task becomes Completed
+  useEffect(() => {
+    if (timerState.taskId && timerState.status !== "idle") {
+      const activeTask = tasks.find(t => t.id === timerState.taskId);
+      if (activeTask?.status === "Completed") {
+        stop();
+      }
+    }
+  }, [tasks, timerState.taskId, timerState.status, stop]);
 
   const handleTimerClick = (task: ApiTask) => {
     const isThisTask = timerState.taskId === task.id;
