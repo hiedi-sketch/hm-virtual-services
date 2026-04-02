@@ -33,6 +33,8 @@ import {
   ChevronUp,
   ChevronDown as ChevronDownIcon,
   TrendingUp,
+  Filter,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn, fmtHours } from "@/lib/utils";
@@ -436,7 +438,10 @@ export default function TimeTracking() {
   const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null } | null>(null);
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [todayOnly, setTodayOnly] = useState(false);
+  const [filterDate, setFilterDate] = useState("");
+  const [filterClientId, setFilterClientId] = useState<number | "">("");
+  const [filterServiceType, setFilterServiceType] = useState<"" | "Bookkeeping" | "Virtual Assistant">("");
+  const [showFilters, setShowFilters] = useState(false);
 
   const today = getTodayLocal();
   const currentMonth = today.slice(0, 7); // "YYYY-MM"
@@ -450,14 +455,31 @@ export default function TimeTracking() {
     [entries, currentMonth]
   );
 
+  const activeFilterCount = [filterDate, filterClientId, filterServiceType].filter(Boolean).length;
+  const hasFilters = activeFilterCount > 0;
+
+  const clearFilters = () => {
+    setFilterDate("");
+    setFilterClientId("");
+    setFilterServiceType("");
+  };
+
   const sortedEntries = useMemo(
     () => sortEntries(entries ?? [], sortField, sortDir),
     [entries, sortField, sortDir]
   );
 
-  const displayedEntries = useMemo(
-    () => todayOnly ? sortedEntries.filter(e => e.date === today) : sortedEntries,
-    [sortedEntries, todayOnly, today]
+  const displayedEntries = useMemo(() => {
+    let result = sortedEntries;
+    if (filterDate) result = result.filter(e => e.date === filterDate);
+    if (filterClientId) result = result.filter(e => e.client_id === Number(filterClientId));
+    if (filterServiceType) result = result.filter(e => e.service_type === filterServiceType);
+    return result;
+  }, [sortedEntries, filterDate, filterClientId, filterServiceType]);
+
+  const filteredMinutes = useMemo(
+    () => displayedEntries.reduce((s, e) => s + e.duration_minutes, 0),
+    [displayedEntries]
   );
 
   const handleSort = (field: SortField) => {
@@ -928,27 +950,53 @@ export default function TimeTracking() {
         {/* Right: Recent Entries */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            {/* Panel header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
               <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-slate-900">Recent Entries</h2>
+                <h2 className="font-semibold text-slate-900">Time Entries</h2>
                 {entries && entries.length > 0 && (
                   <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                    {todayOnly ? `${displayedEntries.length} of ${entries.length}` : entries.length}
+                    {hasFilters ? `${displayedEntries.length} of ${entries.length}` : entries.length}
+                  </span>
+                )}
+                {hasFilters && filteredMinutes > 0 && (
+                  <span className="text-xs font-semibold text-[#266b75] bg-[#266b75]/10 px-2 py-0.5 rounded-full">
+                    {Math.floor(filteredMinutes / 60) > 0 ? `${Math.floor(filteredMinutes / 60)}h ` : ""}
+                    {filteredMinutes % 60 > 0 ? `${filteredMinutes % 60}m` : ""}
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
+                {/* Today quick-fill */}
                 <button
-                  onClick={() => setTodayOnly(v => !v)}
+                  onClick={() => setFilterDate(d => d === today ? "" : today)}
                   className={cn(
                     "flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors",
-                    todayOnly
+                    filterDate === today
                       ? "bg-[#266b75] text-white"
                       : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                   )}
                 >
                   <Sun className="w-3 h-3" />
                   Today
+                </button>
+                {/* Filter toggle */}
+                <button
+                  onClick={() => setShowFilters(v => !v)}
+                  className={cn(
+                    "flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors",
+                    showFilters || hasFilters
+                      ? "bg-slate-700 text-white"
+                      : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                  )}
+                >
+                  <SlidersHorizontal className="w-3 h-3" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="ml-0.5 flex items-center justify-center w-4 h-4 rounded-full bg-white text-slate-700 text-[10px] font-bold">
+                      {activeFilterCount}
+                    </span>
+                  )}
                 </button>
                 <span className="text-xs text-slate-300">|</span>
                 <span className="text-xs text-slate-400 font-medium">Sort:</span>
@@ -969,6 +1017,64 @@ export default function TimeTracking() {
               </div>
             </div>
 
+            {/* Filter bar */}
+            {(showFilters || hasFilters) && (
+              <div className="px-6 py-3 border-b border-slate-100 bg-slate-50 flex flex-wrap items-end gap-3">
+                {/* Date picker */}
+                <div className="flex flex-col gap-1 min-w-[160px]">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Date</label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={filterDate}
+                      onChange={e => setFilterDate(e.target.value)}
+                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Client picker */}
+                <div className="flex flex-col gap-1 min-w-[180px]">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Client</label>
+                  <select
+                    value={filterClientId}
+                    onChange={e => setFilterClientId(e.target.value === "" ? "" : Number(e.target.value))}
+                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none"
+                  >
+                    <option value="">All clients</option>
+                    {(clients ?? []).map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Service type picker */}
+                <div className="flex flex-col gap-1 min-w-[160px]">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Service Type</label>
+                  <select
+                    value={filterServiceType}
+                    onChange={e => setFilterServiceType(e.target.value as "" | "Bookkeeping" | "Virtual Assistant")}
+                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none"
+                  >
+                    <option value="">All types</option>
+                    <option value="Bookkeeping">Bookkeeping</option>
+                    <option value="Virtual Assistant">Virtual Assistant</option>
+                  </select>
+                </div>
+
+                {/* Clear filters */}
+                {hasFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg text-red-500 bg-red-50 hover:bg-red-100 transition-colors self-end"
+                  >
+                    <X className="w-3 h-3" />
+                    Clear all
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="divide-y divide-slate-100">
               {entriesLoading ? (
                 <div className="p-8 text-center text-slate-400">Loading entries…</div>
@@ -976,10 +1082,12 @@ export default function TimeTracking() {
                 <div className="p-12 text-center">
                   <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                   <p className="text-slate-700 font-medium">
-                    {todayOnly ? "No entries logged today." : "You're all caught up."}
+                    {hasFilters ? "No entries match your filters." : "No time entries yet."}
                   </p>
                   <p className="text-sm text-slate-400 mt-1">
-                    {todayOnly ? "Start the timer or log time manually above." : "Nothing needs your attention right now."}
+                    {hasFilters
+                      ? <button onClick={clearFilters} className="text-[#266b75] hover:underline">Clear filters</button>
+                      : "Start the timer or log time manually."}
                   </p>
                 </div>
               ) : (() => {
