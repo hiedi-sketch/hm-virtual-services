@@ -409,7 +409,7 @@ export default function Dashboard() {
 
   const overdueTasks = allTasks.filter(
     (t) =>
-      t.status !== "complete" && t.due_date != null && t.due_date < todayStr,
+      t.status !== "Completed" && t.due_date != null && t.due_date < todayStr,
   );
 
   const tomorrowStr = (() => {
@@ -419,11 +419,11 @@ export default function Dashboard() {
   })();
 
   const tasksDueToday = allTasks.filter(
-    (t) => t.status !== "complete" && t.due_date === todayStr,
+    (t) => t.status !== "Completed" && t.due_date === todayStr,
   );
 
   const tasksDueTomorrow = allTasks.filter(
-    (t) => t.status !== "complete" && t.due_date === tomorrowStr,
+    (t) => t.status !== "Completed" && t.due_date === tomorrowStr,
   );
 
   // Follow-up reminders: leads (non-closed) with follow_up_date today or within 7 days
@@ -485,8 +485,8 @@ export default function Dashboard() {
   ];
 
   // ── Analytics computed values ─────────────────────────────────────────────
-  const completedTasks = allTasks.filter((t) => t.status === "complete").length;
-  const pendingTasks = allTasks.filter((t) => t.status !== "complete").length;
+  const completedTasks = allTasks.filter((t) => t.status === "Completed").length;
+  const pendingTasks = allTasks.filter((t) => t.status !== "Completed").length;
   const totalTaskCount = allTasks.length;
   const completedPct =
     totalTaskCount > 0

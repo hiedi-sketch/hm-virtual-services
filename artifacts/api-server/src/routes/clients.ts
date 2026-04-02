@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable } from "@workspace/db";
-import { eq, and, gte, lt, sql, inArray, or } from "drizzle-orm";
+import { eq, and, gte, lt, sql, inArray, or, isNull } from "drizzle-orm";
 import {
   CreateClientBody,
   GetClientParams,
@@ -110,7 +110,9 @@ router.patch("/clients/:id", requireAdmin, async (req, res) => {
 });
 
 router.get("/dashboard", requireAdmin, async (req, res) => {
-  const clients = await db.select().from(clientsTable).orderBy(clientsTable.name);
+  const clients = await db.select().from(clientsTable)
+    .where(isNull(clientsTable.parent_id))
+    .orderBy(clientsTable.name);
 
   const now = new Date();
   const y = now.getUTCFullYear();
