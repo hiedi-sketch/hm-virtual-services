@@ -464,7 +464,7 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
 
   return (
     <tr className="bg-[#266b75]/5 border-b border-[#266b75]/10">
-      <td colSpan={12} className="px-8 py-4">
+      <td colSpan={12} className="px-4 py-3">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* ── Subtasks ── */}
@@ -962,18 +962,18 @@ export default function Tasks() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
-                  <th className="px-2 py-3 w-8" />
-                  <th className="px-3 py-3 w-14" />
+                  <th className="px-1 py-2 w-8" />
+                  <th className="px-2 py-2 w-12" />
                   {(["status", "client_name", null, null, null, null, "due_date", null, null] as const).map((field, i) => {
                     const labels = ["Status", "Client", "Service Type", "Frequency", "Day", "Task Description", "Due Date", "Assigned", "Completed"];
                     const label = labels[i]!;
                     if (!field) return (
-                      <th key={label} className="text-left px-4 py-3 font-medium text-slate-500 text-xs">{label}</th>
+                      <th key={label} className="text-left px-2 py-2 font-medium text-slate-500 text-xs">{label}</th>
                     );
                     const isActive = sortField === field;
                     const Icon = isActive ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
                     return (
-                      <th key={label} className="text-left px-4 py-3 font-medium text-slate-500 text-xs">
+                      <th key={label} className="text-left px-2 py-2 font-medium text-slate-500 text-xs">
                         <button
                           onClick={() => handleSort(field)}
                           className={cn(
@@ -987,7 +987,7 @@ export default function Tasks() {
                       </th>
                     );
                   })}
-                  <th className="px-4 py-3 w-10" />
+                  <th className="px-2 py-2 w-10" />
                 </tr>
               </thead>
               <tbody>
@@ -1088,7 +1088,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Status */}
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2">
                           <EditableSelect
                             value={task.status}
                             options={STATUS_OPTIONS}
@@ -1103,7 +1103,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Client — editable dropdown */}
-                        <td className="px-4 py-3 text-xs whitespace-nowrap">
+                        <td className="px-2 py-2 text-xs whitespace-nowrap">
                           <EditableSelect
                             value={task.client_name}
                             options={clients.map(c => c.name)}
@@ -1120,7 +1120,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Service type */}
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2">
                           <EditableSelect
                             value={task.service_type}
                             options={SERVICE_OPTIONS}
@@ -1141,7 +1141,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Frequency */}
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-2 py-2 whitespace-nowrap">
                           <EditableSelect
                             value={freq || null}
                             options={FREQ_OPTIONS}
@@ -1155,7 +1155,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Day — multi for Weekly, single for Monthly */}
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        <td className="px-2 py-2 whitespace-nowrap">
                           {freq === "Weekly" ? (
                             <WeekdayMultiSelect
                               selectedDays={days}
@@ -1179,7 +1179,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Task description */}
-                        <td className="px-4 py-3 min-w-[180px]">
+                        <td className="px-2 py-2 min-w-[180px]">
                           <EditableText
                             value={task.title}
                             saving={isSaving}
@@ -1190,7 +1190,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Due date */}
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2">
                           <EditableDate
                             value={task.due_date}
                             saving={isSaving}
@@ -1200,7 +1200,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Assigned to */}
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2">
                           <EditableSelect
                             value={task.assigned_to}
                             options={assigneeOptions}
@@ -1214,7 +1214,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Completed date */}
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2">
                           <EditableDate
                             value={task.completed_date}
                             saving={isSaving}
@@ -1224,7 +1224,7 @@ export default function Tasks() {
                         </td>
 
                         {/* Delete */}
-                        <td className="px-4 py-3">
+                        <td className="px-2 py-2">
                           <button
                             onClick={() => deleteTask(task.id)}
                             disabled={isSaving}
