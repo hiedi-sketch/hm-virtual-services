@@ -38,11 +38,11 @@ router.get("/clients", requireAdmin, async (req, res) => {
         .where(inArray(clientServicesTable.client_id, clientIds))
     : [];
 
-  // Build per-client monthly fee map using the same logic as the detail page
-  const feeByClient = new Map<number, { monthly_fee: number; bk_fee: number | null }>();
+  // Build per-client fee + service_type map from assigned services
+  const feeByClient = new Map<number, { monthly_fee: number; bk_fee: number | null; hasBK: boolean; hasVA: boolean }>();
   for (const svc of assignedServices) {
     const clientId = svc.client_id;
-    const cur = feeByClient.get(clientId) ?? { monthly_fee: 0, bk_fee: null };
+    const cur = feeByClient.get(clientId) ?? { monthly_fee: 0, bk_fee: null, hasBK: false, hasVA: false };
 
     const effPrice = svc.custom_price ?? svc.price ?? 0;
     const effRate = svc.custom_hourly_rate ?? svc.hourly_rate;
@@ -58,16 +58,30 @@ router.get("/clients", requireAdmin, async (req, res) => {
     cur.monthly_fee += svcValue;
     if (svc.service_type === "Bookkeeping") {
       cur.bk_fee = (cur.bk_fee ?? 0) + svcValue;
+      cur.hasBK = true;
     }
+    if (svc.service_type === "Virtual Assistant") cur.hasVA = true;
     feeByClient.set(clientId, cur);
   }
 
-  // Merge computed fees into client records
-  const enriched = clients.map(c => ({
-    ...c,
-    monthly_fee: feeByClient.get(c.id)?.monthly_fee ?? c.monthly_fee,
-    bk_fee: feeByClient.has(c.id) ? (feeByClient.get(c.id)!.bk_fee ?? null) : c.bk_fee,
-  }));
+  function deriveServiceType(data: { hasBK: boolean; hasVA: boolean } | undefined): "bookkeeping" | "va" | "hybrid" | null {
+    if (!data) return null;
+    if (data.hasBK && data.hasVA) return "hybrid";
+    if (data.hasBK) return "bookkeeping";
+    if (data.hasVA) return "va";
+    return null;
+  }
+
+  // Merge computed fees + service_type into client records
+  const enriched = clients.map(c => {
+    const svcData = feeByClient.get(c.id);
+    return {
+      ...c,
+      monthly_fee: svcData ? svcData.monthly_fee : c.monthly_fee,
+      bk_fee: svcData ? (svcData.bk_fee ?? null) : c.bk_fee,
+      service_type: svcData ? deriveServiceType(svcData) : c.service_type,
+    };
+  });
 
   const parsed = ListClientsResponse.parse(enriched);
   res.json(parsed);
@@ -91,7 +105,50 @@ router.get("/clients/:id", requireAuth, async (req, res) => {
     res.status(404).json({ error: "Client not found" });
     return;
   }
-  res.json(client);
+
+  // Compute monthly fee from assigned services (same logic as /clients list)
+  const svcs = await db
+    .select({
+      service_type: servicesTable.service_type,
+      billing_type: servicesTable.billing_type,
+      price: servicesTable.price,
+      hourly_rate: servicesTable.hourly_rate,
+      budgeted_hours: servicesTable.budgeted_hours,
+      custom_price: clientServicesTable.custom_price,
+      custom_hourly_rate: clientServicesTable.custom_hourly_rate,
+      custom_budgeted_hours: clientServicesTable.custom_budgeted_hours,
+    })
+    .from(clientServicesTable)
+    .leftJoin(servicesTable, eq(clientServicesTable.service_id, servicesTable.id))
+    .where(eq(clientServicesTable.client_id, id));
+
+  let computedFee = 0;
+  let computedBkFee: number | null = null;
+  let hasBK = false;
+  let hasVA = false;
+  for (const s of svcs) {
+    const effPrice = s.custom_price ?? s.price ?? 0;
+    const effRate = s.custom_hourly_rate ?? s.hourly_rate;
+    const effHours = s.custom_budgeted_hours ?? s.budgeted_hours;
+    const isFlat = s.billing_type === "Flat Rate";
+    const isHourly = s.billing_type === "Hourly";
+    const hourlyComputed = isHourly && effRate != null && effHours != null && effHours > 0 ? effRate * effHours : 0;
+    const svcValue = isFlat ? effPrice : hourlyComputed > 0 ? hourlyComputed : effPrice;
+    computedFee += svcValue;
+    if (s.service_type === "Bookkeeping") { computedBkFee = (computedBkFee ?? 0) + svcValue; hasBK = true; }
+    if (s.service_type === "Virtual Assistant") hasVA = true;
+  }
+
+  const derivedServiceType = svcs.length > 0
+    ? (hasBK && hasVA ? "hybrid" : hasBK ? "bookkeeping" : hasVA ? "va" : null)
+    : client.service_type;
+
+  res.json({
+    ...client,
+    monthly_fee: svcs.length > 0 ? computedFee : client.monthly_fee,
+    bk_fee: svcs.length > 0 ? computedBkFee : client.bk_fee,
+    service_type: derivedServiceType,
+  });
 });
 
 router.patch("/clients/:id", requireAdmin, async (req, res) => {
@@ -110,9 +167,17 @@ router.patch("/clients/:id", requireAdmin, async (req, res) => {
 });
 
 router.get("/dashboard", requireAdmin, async (req, res) => {
-  const clients = await db.select().from(clientsTable)
-    .where(isNull(clientsTable.parent_id))
-    .orderBy(clientsTable.name);
+  // Only count clients that have at least one service assigned (i.e. "active" clients)
+  const clientsWithServices = await db
+    .selectDistinct({ client_id: clientServicesTable.client_id })
+    .from(clientServicesTable);
+  const activeClientIds = clientsWithServices.map(r => r.client_id);
+
+  const clients = activeClientIds.length > 0
+    ? await db.select().from(clientsTable)
+        .where(and(isNull(clientsTable.parent_id), inArray(clientsTable.id, activeClientIds)))
+        .orderBy(clientsTable.name)
+    : [];
 
   const now = new Date();
   const y = now.getUTCFullYear();

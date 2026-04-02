@@ -184,9 +184,9 @@ export default function Clients() {
         contact_name: data.contact_name?.trim() || null,
         phone: data.phone?.trim() || null,
         website: data.website?.trim() || null,
-        service_type: serviceType as any,
+        service_type: serviceType ?? null,
         monthly_fee: monthlyFee,
-        monthly_hour_budget: monthlyHourBudget || null,
+        monthly_hour_budget: monthlyHourBudget || 0,
         bk_fee: firstBK ? effectivePrice(firstBK) : null,
         va_hourly_rate: firstVA
           ? (firstVA.customHourlyRate !== "" ? Number(firstVA.customHourlyRate) : firstVA.baseHourlyRate)
@@ -318,6 +318,11 @@ export default function Clients() {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1.5">
+                        {!client.service_type && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
+                            No package yet
+                          </span>
+                        )}
                         {(client.service_type === "bookkeeping" || client.service_type === "hybrid") && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
                             <DollarSign className="w-3 h-3" />

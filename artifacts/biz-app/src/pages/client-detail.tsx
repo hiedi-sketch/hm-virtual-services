@@ -462,6 +462,11 @@ export default function ClientDetail() {
                 </div>
                 {/* Service package badges */}
                 <div className="flex flex-wrap gap-2 mt-2">
+                  {!hasBK && !hasVA && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
+                      No package assigned
+                    </span>
+                  )}
                   {hasBK && (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
                       <DollarSign className="w-3 h-3" />

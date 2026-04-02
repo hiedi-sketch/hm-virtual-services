@@ -11,7 +11,7 @@ export const clientsTable = pgTable("clients", {
   website: text("website"),
   monthly_hour_budget: real("monthly_hour_budget").notNull(),
   monthly_fee: real("monthly_fee").notNull(),
-  service_type: text("service_type", { enum: ["bookkeeping", "va", "hybrid"] }).notNull(),
+  service_type: text("service_type", { enum: ["bookkeeping", "va", "hybrid"] }),
   /** Bookkeeping flat monthly fee component (null = not enrolled in bookkeeping) */
   bk_fee: real("bk_fee"),
   /** VA hourly billing rate in $/hr (null = not enrolled in VA) */
