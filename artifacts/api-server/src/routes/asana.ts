@@ -10,7 +10,7 @@
 
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { appSettingsTable } from "@workspace/db";
+import { appSettingsTable, tasksTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import {
@@ -176,6 +176,85 @@ router.post("/asana/tasks", requireAuth, async (req, res) => {
       (err.message ?? "Failed to create task in Asana");
     res.status(statusCode < 500 ? statusCode : 502).json({ error: message });
   }
+});
+
+/** GET /api/asana/import/preview — return Asana tasks formatted for import preview */
+router.get("/asana/import/preview", requireAuth, requireRole("admin"), async (req, res) => {
+  const creds = await getCredentials();
+  if (!creds) {
+    res.status(400).json({ error: "Asana is not configured. Please add your PAT and Project ID in Asana Sync settings." });
+    return;
+  }
+  try {
+    const tasks = await getProjectTasks(creds.pat, creds.projectId);
+    res.json({
+      tasks: tasks.map(t => ({
+        gid: t.gid,
+        name: t.name,
+        completed: t.completed,
+        due_on: t.due_on,
+        assignee_name: t.assignee?.name ?? null,
+      })),
+    });
+  } catch (err: any) {
+    const statusCode = err.statusCode ?? 500;
+    const message =
+      statusCode === 401 ? "Invalid Asana token — please update your PAT in Asana Sync settings." :
+      statusCode === 404 ? "Asana project not found — please check your Project ID in Asana Sync settings." :
+      (err.message ?? "Failed to fetch tasks from Asana");
+    res.status(statusCode < 500 ? statusCode : 502).json({ error: message });
+  }
+});
+
+/** POST /api/asana/import — create selected Asana tasks in the local tasks table */
+router.post("/asana/import", requireAuth, requireRole("admin"), async (req, res) => {
+  const schema = z.object({
+    client_id: z.number().int().positive(),
+    tasks: z.array(z.object({
+      gid: z.string(),
+      name: z.string(),
+      completed: z.boolean(),
+      due_on: z.string().nullable().optional(),
+      assignee_name: z.string().nullable().optional(),
+    })),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+    return;
+  }
+
+  const { client_id, tasks } = parsed.data;
+  const created: number[] = [];
+  const skipped: number[] = [];
+
+  for (const t of tasks) {
+    // Skip if a task with the same title already exists for this client
+    const existing = await db
+      .select({ id: tasksTable.id })
+      .from(tasksTable)
+      .where(eq(tasksTable.title, t.name))
+      .limit(1);
+
+    if (existing.length > 0) {
+      skipped.push(existing[0]!.id);
+      continue;
+    }
+
+    const [row] = await db.insert(tasksTable).values({
+      title: t.name,
+      client_id,
+      status: t.completed ? "Completed" : "Not Started",
+      due_date: t.due_on ?? null,
+      assigned_to: t.assignee_name ?? null,
+      completed_date: t.completed ? (t.due_on ?? null) : null,
+    }).returning({ id: tasksTable.id });
+
+    if (row) created.push(row.id);
+  }
+
+  res.json({ created: created.length, skipped: skipped.length });
 });
 
 /** PUT /api/asana/tasks/:taskId — toggle completion status */

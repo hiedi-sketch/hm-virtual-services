@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Filter, Plus, Play, Pause, Square, Loader2,
   ChevronRight, ChevronDown, Check, X, Trash2, ClipboardList,
-  ArrowUpDown, ArrowUp, ArrowDown,
+  ArrowUpDown, ArrowUp, ArrowDown, Download,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -536,6 +536,227 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
   );
 }
 
+// ── Import from Asana modal ───────────────────────────────────────────────────
+
+interface AsanaPreviewTask {
+  gid: string;
+  name: string;
+  completed: boolean;
+  due_on: string | null;
+  assignee_name: string | null;
+}
+
+function ImportAsanaModal({
+  clients,
+  onClose,
+  onImported,
+}: {
+  clients: ApiClient[];
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const { toast } = useToast();
+  const [clientId, setClientId] = useState("");
+  const [preview, setPreview] = useState<AsanaPreviewTask[] | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(true);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/asana/import/preview", { credentials: "include" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load Asana tasks");
+        setPreview(data.tasks);
+        setSelected(new Set(data.tasks.map((t: AsanaPreviewTask) => t.gid)));
+      } catch (e: any) {
+        setPreviewError(e.message ?? "Could not connect to Asana");
+      } finally {
+        setLoadingPreview(false);
+      }
+    })();
+  }, []);
+
+  const toggleTask = (gid: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(gid) ? next.delete(gid) : next.add(gid);
+      return next;
+    });
+  };
+
+  const handleImport = async () => {
+    if (!clientId || !preview) return;
+    const tasksToImport = preview.filter(t => selected.has(t.gid));
+    if (tasksToImport.length === 0) return;
+    setImporting(true);
+    try {
+      const res = await fetch("/api/asana/import", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: Number(clientId), tasks: tasksToImport }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Import failed");
+      const msg = data.skipped > 0
+        ? `${data.created} task${data.created !== 1 ? "s" : ""} imported · ${data.skipped} already existed`
+        : `${data.created} task${data.created !== 1 ? "s" : ""} imported from Asana`;
+      toast({ title: "Import complete", description: msg });
+      onImported();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Import failed", description: e.message, variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const allSelected = preview ? preview.length > 0 && selected.size === preview.length : false;
+  const toggleAll = () => {
+    if (!preview) return;
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(preview.map(t => t.gid)));
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#f06a35]/10 flex items-center justify-center">
+              <Download className="w-4 h-4 text-[#f06a35]" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 text-sm">Import from Asana</h2>
+              <p className="text-xs text-slate-400">Choose tasks to bring into Task Manager</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {loadingPreview && (
+            <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading tasks from Asana…
+            </div>
+          )}
+
+          {previewError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {previewError}
+            </div>
+          )}
+
+          {!loadingPreview && !previewError && preview && (
+            <>
+              {/* Client selector */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Assign to Client <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={clientId}
+                  onChange={e => setClientId(e.target.value)}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white outline-none focus:border-[#266b75] transition-colors"
+                >
+                  <option value="">— Select a client —</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Task list */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Tasks ({selected.size} of {preview.length} selected)
+                  </label>
+                  <button
+                    onClick={toggleAll}
+                    className="text-xs text-[#266b75] hover:underline"
+                  >
+                    {allSelected ? "Deselect all" : "Select all"}
+                  </button>
+                </div>
+                {preview.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic text-center py-6">
+                    No tasks found in your Asana project.
+                  </p>
+                ) : (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                    {preview.map(task => (
+                      <label
+                        key={task.gid}
+                        className={cn(
+                          "flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors",
+                          selected.has(task.gid) ? "bg-[#266b75]/5" : "hover:bg-slate-50"
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.has(task.gid)}
+                          onChange={() => toggleTask(task.gid)}
+                          className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300 accent-[#266b75] shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className={cn(
+                            "text-sm text-slate-700 truncate",
+                            task.completed && "line-through text-slate-400"
+                          )}>
+                            {task.name}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+                            {task.due_on && <span>Due {task.due_on}</span>}
+                            {task.assignee_name && <span>· {task.assignee_name}</span>}
+                            {task.completed && <span className="text-emerald-500">· Completed</span>}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!loadingPreview && !previewError && preview && (
+          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+            <button
+              onClick={onClose}
+              className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={importing || !clientId || selected.size === 0}
+              className="flex items-center gap-2 text-sm font-medium text-white bg-[#266b75] hover:bg-[#1f5560] rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+            >
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              {importing ? "Importing…" : `Import ${selected.size} Task${selected.size !== 1 ? "s" : ""}`}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── New Task inline row ───────────────────────────────────────────────────────
 
 function NewTaskRow({
@@ -712,6 +933,7 @@ export default function Tasks() {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [showNewRow, setShowNewRow] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   const today = new Date().toLocaleDateString("sv-SE");
 
@@ -911,15 +1133,32 @@ export default function Tasks() {
             {isLoading ? "Loading…" : `${tasks.length} tasks · click any cell to edit`}
           </p>
         </div>
-        <button
-          onClick={() => setShowNewRow(true)}
-          disabled={showNewRow}
-          className="flex items-center gap-1.5 text-xs font-medium text-white bg-[#266b75] hover:bg-[#1f5560] rounded-lg px-3 py-2 transition-colors disabled:opacity-60 self-start sm:self-auto"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          New Task
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-[#266b75] border border-[#266b75]/40 bg-[#266b75]/5 hover:bg-[#266b75]/10 rounded-lg px-3 py-2 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Import from Asana
+          </button>
+          <button
+            onClick={() => setShowNewRow(true)}
+            disabled={showNewRow}
+            className="flex items-center gap-1.5 text-xs font-medium text-white bg-[#266b75] hover:bg-[#1f5560] rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            New Task
+          </button>
+        </div>
       </div>
+
+      {showImportModal && (
+        <ImportAsanaModal
+          clients={clients}
+          onClose={() => setShowImportModal(false)}
+          onImported={() => refetch()}
+        />
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
