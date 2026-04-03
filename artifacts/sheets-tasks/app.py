@@ -1,5 +1,4 @@
 import os
-import json
 import sqlite3
 import datetime
 from flask import Flask, jsonify, request, render_template, g
@@ -56,66 +55,13 @@ def init_db():
         """)
         conn.commit()
 
-# ── Google Sheets sync ────────────────────────────────────────────────
-
-_sync_status = {'state': 'idle', 'last': None, 'error': None}
-
-SHEET_HEADERS = [
-    'id', 'task_name', 'client', 'service_type', 'frequency',
-    'day_spec', 'due_date', 'status', 'completed_date', 'assigned',
-]
-
-def get_worksheet():
-    try:
-        import gspread
-        from google.oauth2.service_account import Credentials
-        creds_json = os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON', '')
-        sheet_id   = os.environ.get('GOOGLE_SHEET_ID', '')
-        if not creds_json or not sheet_id:
-            return None
-        info   = json.loads(creds_json)
-        scopes = [
-            'https://www.googleapis.com/auth/spreadsheets',
-            'https://www.googleapis.com/auth/drive',
-        ]
-        creds = Credentials.from_service_account_info(info, scopes=scopes)
-        gc    = gspread.authorize(creds)
-        return gc.open_by_key(sheet_id).sheet1
-    except Exception as exc:
-        _sync_status['error'] = str(exc)
-        return None
-
-def do_sync():
-    global _sync_status
-    _sync_status['state'] = 'syncing'
-    try:
-        ws = get_worksheet()
-        if ws is None:
-            _sync_status.update({'state': 'offline', 'error': 'Google Sheets not configured'})
-            return
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.row_factory = sqlite3.Row
-            rows = conn.execute('SELECT * FROM tasks ORDER BY id').fetchall()
-        data = [SHEET_HEADERS]
-        for r in rows:
-            data.append([r[h] if h in r.keys() else '' for h in SHEET_HEADERS])
-        ws.clear()
-        ws.update('A1', data)
-        _sync_status.update({
-            'state': 'ok',
-            'last':  datetime.datetime.now().strftime('%Y-%m-%d %H:%M'),
-            'error': None,
-        })
-    except Exception as exc:
-        _sync_status.update({'state': 'error', 'error': str(exc)})
-
 # ── Page routes ───────────────────────────────────────────────────────
 
 @app.route('/')
 @app.route('/sheets-tasks')
 @app.route('/sheets-tasks/')
 def index():
-    return render_template('index.html', base_path=BASE_PATH, sync_status=_sync_status)
+    return render_template('index.html', base_path=BASE_PATH)
 
 @app.route('/clients/<path:client_name>')
 @app.route('/sheets-tasks/clients/<path:client_name>')
@@ -249,28 +195,8 @@ def api_assignees():
     ).fetchall()
     return jsonify([r[0] for r in rows])
 
-# ── API: sync ─────────────────────────────────────────────────────────
-
-@app.route('/api/sync',              methods=['GET'])
-@app.route('/sheets-tasks/api/sync', methods=['GET'])
-def api_sync_status():
-    return jsonify(_sync_status)
-
-@app.route('/api/sync',              methods=['POST'])
-@app.route('/sheets-tasks/api/sync', methods=['POST'])
-def api_manual_sync():
-    do_sync()
-    return jsonify(_sync_status)
-
 # ── Startup ───────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
     init_db()
-    try:
-        from apscheduler.schedulers.background import BackgroundScheduler
-        scheduler = BackgroundScheduler()
-        scheduler.add_job(do_sync, 'interval', minutes=5)
-        scheduler.start()
-    except Exception:
-        pass
     app.run(host='0.0.0.0', port=PORT, debug=False)
