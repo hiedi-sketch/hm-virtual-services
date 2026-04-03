@@ -11,7 +11,7 @@ paths = ["/sheets-tasks/", "/sheets-tasks"]
 localPort = 5000
 
 [services.development]
-run = "cd artifacts/sheets-tasks && python app.py"
+run = "cd /home/runner/workspace/artifacts/sheets-tasks && python app.py"
 
 [services.env]
 PORT = "5000"
