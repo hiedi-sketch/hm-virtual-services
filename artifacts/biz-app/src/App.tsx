@@ -26,6 +26,7 @@ import NotificationsPage from "@/pages/notifications";
 import Backup from "@/pages/backup";
 import Services from "@/pages/services";
 import TimerPopout from "@/pages/timer-popout";
+import AsanaPage from "@/pages/asana";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,6 +84,7 @@ function Router() {
         {user.role === "admin" && <Route path="/api-keys" component={ApiKeys} />}
         {user.role === "admin" && <Route path="/backup" component={Backup} />}
         {user.role === "admin" && <Route path="/services" component={Services} />}
+        {user.role === "admin" && <Route path="/asana" component={AsanaPage} />}
         <Route path="/notifications" component={NotificationsPage} />
         <Route component={NotFound} />
       </Switch>

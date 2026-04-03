@@ -15,3 +15,4 @@ export * from "./app_notifications";
 export * from "./file_uploads";
 export * from "./task_comments";
 export * from "./messages";
+export * from "./app_settings";

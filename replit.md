@@ -64,6 +64,7 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 - **Team** (`/team`) — User management (create/edit/delete users, assign roles & client links); admin only
 - **Client Portal** — Dedicated portal for client-role users: open tasks, hours used this month (reset-date-aware for VA), unpaid balance, invoice list; shows VA hours reset countdown
 - **Monthly VA Hours Reset** — Per-client-service `monthly_hours_reset_day` (1–31) field on VA services; `computeResetWindow()` helper computes last/next reset date; services-hours endpoint filters VA time entries from last reset forward; admin sees "Resets in X days" on VA service cards and client detail; dashboard cards show VA reset countdown; client portal displays reset-window-aware hours + countdown
+- **Asana Sync** (`/asana`) — Admin-only page. Connects to a single Asana project via Personal Access Token. Settings (PAT + Project ID) stored in `app_settings` DB table. View tasks (name, due date, assignee), create new tasks, toggle complete/incomplete — all synced to Asana in real time. Filter tabs: All / Active / Completed. Auto-refreshes every 5 minutes. Backend service in `artifacts/api-server/src/services/asana.ts`; routes in `artifacts/api-server/src/routes/asana.ts`.
 
 ## Data Models
 

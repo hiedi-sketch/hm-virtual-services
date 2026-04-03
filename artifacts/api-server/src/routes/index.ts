@@ -22,6 +22,7 @@ import uploadsRouter from "./uploads";
 import backupRouter from "./backup";
 import servicesRouter from "./services";
 import messagesRouter from "./messages";
+import asanaRouter from "./asana";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(uploadsRouter);
 router.use(backupRouter);
 router.use(servicesRouter);
 router.use(messagesRouter);
+router.use(asanaRouter);
 
 export default router;
