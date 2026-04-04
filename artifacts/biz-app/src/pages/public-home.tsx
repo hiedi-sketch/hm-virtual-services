@@ -56,15 +56,6 @@ export default function PublicHome() {
         />
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20 md:py-28 relative">
           <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16">
-            {/* Left: logo */}
-            <div className="shrink-0 flex items-center justify-center">
-              <img
-                src="/hm-logo-full.png"
-                alt="HM Virtual Services"
-                className="h-150 md:h-125 w-auto object-contain"
-                style={{ filter: "brightness(0) invert(1)" }}
-              />
-            </div>
             {/* Right: text */}
             <div className="flex-1">
               <p className="text-[#7dbdc6] text-sm font-semibold uppercase tracking-widest mb-4">
@@ -94,6 +85,15 @@ export default function PublicHome() {
                 </Link>
               </div>
             </div>
+            {/* Left: logo */}
+            <div className="shrink-0 flex items-center justify-center">
+              <img
+                src="/hm-logo-full.png"
+                alt="HM Virtual Services"
+                className="h-150 md:h-125 w-auto object-contain"
+                style={{ filter: "brightness(0) invert(1)" }}
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -102,10 +102,10 @@ export default function PublicHome() {
       <section className="bg-stone-50 border-b border-stone-100">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
           <div className="text-center max-w-2xl mx-auto">
-            <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-3">
+            <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black mb-3">
               Big Help, Clear Books, Real Impact.
             </h2>
-            <p className="text-lg text-stone-900 leading-relaxed">
+            <p className="text-lg text-stone-700 leading-relaxed">
               Running a small business is hard enough without worrying about
               messy books or unfinished admin tasks. If you're feeling behind,
               overwhelmed, or unsure of your numbers — you're not alone. I help
@@ -119,10 +119,10 @@ export default function PublicHome() {
       {/* Services */}
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-2 text-center">
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black mb-2 text-center">
             My Services
           </h2>
-          <p className="text-lg text-stone-900 text-center mb-10">
+          <p className="text-lg text-stone-700 text-center mb-10">
             Everything your business needs — under one roof.
           </p>
 
@@ -132,7 +132,7 @@ export default function PublicHome() {
               <div className="w-11 h-11 bg-[#266b75]/10 rounded-xl flex items-center justify-center mb-4">
                 <Calculator className="w-5 h-5 text-[#266b75]" />
               </div>
-              <h3 className="text-[1.1rem] md:text-[2.0rem] font-bold text-stone-900 mb-2">
+              <h3 className="text-[1.1rem] md:text-[2.0rem] font-bold text-black mb-2">
                 Bookkeeping Services
               </h3>
               <p className="text-m  text-stone-700 mb-4">
@@ -168,7 +168,7 @@ export default function PublicHome() {
               <div className="w-11 h-11 bg-[#266b75]/10 rounded-xl flex items-center justify-center mb-4">
                 <ClipboardList className="w-5 h-5 text-[#266b75]" />
               </div>
-              <h3 className="text-[1.1rem] md:text-[2.0rem] font-bold text-stone-900 mb-2">
+              <h3 className="text-[1.1rem] md:text-[2.0rem] font-bold text-black mb-2">
                 Virtual Assistant Services
               </h3>
               <p className="text-m text-stone-700 mb-4">
@@ -207,10 +207,10 @@ export default function PublicHome() {
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center max-w-4xl mx-auto">
             <div>
-              <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-2">
+              <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black mb-2">
                 Why Work With HM Virtual Services?
               </h2>
-              <p className="text-stone-900 text-m mb-6">
+              <p className="text-stone-700 text-m mb-6">
                 Dependable, detail-driven support built for small business
                 owners like you.
               </p>
@@ -271,7 +271,7 @@ export default function PublicHome() {
       {/* How It Works */}
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-2 text-center">
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black mb-2 text-center">
             How It Works
           </h2>
           <p className="text-stone-700 text-center text-m mb-10">
@@ -283,7 +283,7 @@ export default function PublicHome() {
                 <div className="w-12 h-12 bg-[#266b75] rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold text-m">
                   {step}
                 </div>
-                <h3 className="text-[1.1rem] md:text-[1.5rem] font-bold text-stone-900 mb-2">
+                <h3 className="text-[1.1rem] md:text-[1.5rem] font-bold text-black mb-2">
                   {title}
                 </h3>
                 <p className="text-m text-stone-700 leading-relaxed">{desc}</p>
@@ -308,9 +308,9 @@ export default function PublicHome() {
       </section>
 
       {/* Tools */}
-      <section className="py-12 bg-stone-50 border-t border-stone-100">
+      <section className="py-12 border-t border-stone-100">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <h2 className="text-[1.1rem] md:text-[2.0rem] font-bold text-stone-900 mb-2 text-center">
+          <h2 className="text-[1.1rem] md:text-[2.0rem] font-bold text-black mb-2 text-center">
             Tools I Work With
           </h2>
           <div className="flex flex-wrap justify-center gap-3">
@@ -333,7 +333,7 @@ export default function PublicHome() {
           <h2 className="text-[1.1rem] md:text-[2.0rem] font-bold text-white mb-2">
             Ready for reliable bookkeeping support you can count on?
           </h2>
-          <p className="text-black mb-7 text-m">
+          <p className="text- mb-7 text-m">
             Let's talk. No pressure — just a friendly conversation about your
             business.
           </p>

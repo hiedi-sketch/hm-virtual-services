@@ -83,7 +83,7 @@ export default function PublicBookkeeping() {
               <h1 className="text-[2.7rem] md:text-[3.4rem] font-bold mb-5 leading-tight">
                 Clear Books. Confident Business.
               </h1>
-              <p className="text-white/75 text-lg leading-relaxed mb-8">
+              <p className="text-white text-lg leading-relaxed mb-8">
                 I take the stress of bookkeeping off your plate so you can run
                 your business without worrying about messy numbers or missed
                 filings.
@@ -110,10 +110,10 @@ export default function PublicBookkeeping() {
       {/* Services */}
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 text-center mb-2">
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
             What's Included
           </h2>
-          <p className="text-stone-700 text-center text-sm mb-10">
+          <p className="text-stone-700 text-center text-m mb-10">
             Comprehensive bookkeeping support for small business owners.
           </p>
 
@@ -126,17 +126,17 @@ export default function PublicBookkeeping() {
                 <div className="w-11 h-11 bg-[#266b75]/10 rounded-xl flex items-center justify-center mb-4">
                   <Icon className="w-5 h-5 text-[#266b75]" />
                 </div>
-                <h3 className="text-[1.1rem] md:text-[2.0rem] font-bold text-stone-900 mb-2">
+                <h3 className="text-[1.1rem] md:text-[2.0rem] font-bold text-black mb-2">
                   {title}
                 </h3>
-                <p className="text-m text-stone-900 mb-4 leading-relaxed">
+                <p className="text-m text-stone-700 mb-4 leading-relaxed">
                   {desc}
                 </p>
                 <ul className="space-y-1.5">
                   {items.map((item) => (
                     <li
                       key={item}
-                      className="flex items-center gap-2 text-sm text-stone-900"
+                      className="flex items-center gap-2 text-m text-stone-700"
                     >
                       <CheckCircle className="w-3 h-3 text-[#266b75] shrink-0" />
                       {item}
@@ -152,15 +152,15 @@ export default function PublicBookkeeping() {
       {/* Who this is for */}
       <section className="py-14 bg-stone-50 border-y border-stone-100">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <h2 className="text-[1.9rem] font-bold text-stone-900 mb-4">
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
             Who This Is For
           </h2>
-          <p className="text-stone-900 leading-relaxed mb-6 text-m">
+          <p className="text-stone-700 leading-relaxed mb-6 text-m">
             I work with solopreneurs, freelancers, and small business owners who
             are too busy to keep up with their books — or who've tried to do it
             themselves and know it's time to hand it off.
           </p>
-          <p className="text-stone-900 leading-relaxed text-sm">
+          <p className="text-stone-700 leading-relaxed text-m">
             Whether you're just getting started or you've been in business for
             years with a backlog to tackle, I'm here to help.
           </p>
@@ -184,16 +184,16 @@ export default function PublicBookkeeping() {
       {/* QuickBooks callout */}
       <section className="py-12 bg-white">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <p className="text-xs uppercase tracking-widest text-stone-700 font-semibold mb-3">
+          <p className="text-m uppercase tracking-widest text-stone-700 font-semibold mb-3">
             Shopify Partner · QuickBooks Certified
           </p>
-          <h2 className="text-xl font-bold text-stone-900 mb-3">
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
             The tools you're already using — done right.
           </h2>
-          <p className="text-sm text-stone-900">
-            I work in QuickBooks Online, and I'm a certified Shopify Partner —
-            so if you're running e-commerce alongside your bookkeeping, I've got
-            you covered end to end.
+          <p className="text-m text-stone-700">
+            I am a certifed Quickbooks Expert, Shopify Partner and Gusto Payroll
+            Pro — so if you're running e-commerce alongside your bookkeeping,
+            I've got you covered end to end.
           </p>
         </div>
       </section>

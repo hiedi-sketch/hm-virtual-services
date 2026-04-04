@@ -10,7 +10,13 @@ interface FormState {
   message: string;
 }
 
-const INITIAL: FormState = { name: "", email: "", business_name: "", phone: "", message: "" };
+const INITIAL: FormState = {
+  name: "",
+  email: "",
+  business_name: "",
+  phone: "",
+  message: "",
+};
 
 export default function PublicContact() {
   const [form, setForm] = useState<FormState>(INITIAL);
@@ -18,8 +24,10 @@ export default function PublicContact() {
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const set = (field: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(prev => ({ ...prev, [field]: e.target.value }));
+  const set =
+    (field: keyof FormState) =>
+    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,12 +56,15 @@ export default function PublicContact() {
       <section className="bg-gradient-to-br from-[#266b75] to-[#1a4a52] py-16 md:py-20 text-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="max-w-xl">
-            <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">Contact</p>
-            <h1 className="text-[2.7rem] md:text-[3.4rem] font-bold mb-4 leading-tight">
+            <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">
+              Contact
+            </p>
+            <h1 className="text-[2.7rem] md:text-[3.4rem] font-bold mb-5 leading-tight">
               Let's Talk.
             </h1>
-            <p className="text-white/75 text-lg">
-              Schedule a discovery call, send me an email, or fill out the form below — I'd love to hear from you.
+            <p className="text-white text-lg">
+              Schedule a discovery call, send me an email, or fill out the form
+              below — I'd love to hear from you.
             </p>
           </div>
         </div>
@@ -66,29 +77,46 @@ export default function PublicContact() {
             {/* Info sidebar */}
             <div className="lg:col-span-2 space-y-8">
               <div>
-                <h2 className="text-lg font-bold text-stone-900 mb-3">Get In Touch</h2>
+                <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-2">
+                  Get In Touch
+                </h2>
                 <p className="text-sm text-stone-900 leading-relaxed">
-                  Whether you're ready to get started or just have questions — reach out. I respond to all inquiries within one business day.
+                  Whether you're ready to get started or just have questions —
+                  reach out. I respond to all inquiries within one business day.
                 </p>
               </div>
 
               <div className="space-y-4">
-                <a href="mailto:Hiedi@HMVirtualServices.com" className="flex items-start gap-3 group">
+                <a
+                  href="mailto:Hiedi@HMVirtualServices.com"
+                  className="flex items-start gap-3 group"
+                >
                   <div className="w-9 h-9 bg-[#266b75]/10 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-[#266b75]/15 transition-colors">
                     <Mail className="w-4 h-4 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">Email</p>
-                    <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">Hiedi@HMVirtualServices.com</p>
+                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
+                      Email
+                    </p>
+                    <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">
+                      Hiedi@HMVirtualServices.com
+                    </p>
                   </div>
                 </a>
-                <a href="tel:5152070340" className="flex items-start gap-3 group">
+                <a
+                  href="tel:5152070340"
+                  className="flex items-start gap-3 group"
+                >
                   <div className="w-9 h-9 bg-[#266b75]/10 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-[#266b75]/15 transition-colors">
                     <Phone className="w-4 h-4 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">Phone</p>
-                    <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">515.207.0340</p>
+                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
+                      Phone
+                    </p>
+                    <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">
+                      515.207.0340
+                    </p>
                   </div>
                 </a>
                 <div className="flex items-start gap-3">
@@ -96,17 +124,28 @@ export default function PublicContact() {
                     <MapPin className="w-4 h-4 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">Location</p>
-                    <p className="text-sm text-stone-700 font-medium">Reasnor, IA</p>
+                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
+                      Location
+                    </p>
+                    <p className="text-sm text-stone-700 font-medium">
+                      Reasnor, IA
+                    </p>
                   </div>
                 </div>
               </div>
 
               <div className="bg-[#266b75]/5 border border-[#266b75]/15 rounded-xl p-5">
-                <p className="text-sm text-[#266b75] font-semibold mb-1">Already a client?</p>
+                <p className="text-sm text-[#266b75] font-semibold mb-1">
+                  Already a client?
+                </p>
                 <p className="text-sm text-stone-900">
                   Log in to your{" "}
-                  <a href="/portal" className="text-[#266b75] hover:underline font-medium">client portal</a>{" "}
+                  <a
+                    href="/portal"
+                    className="text-[#266b75] hover:underline font-medium"
+                  >
+                    client portal
+                  </a>{" "}
                   to message me directly.
                 </p>
               </div>
@@ -117,9 +156,12 @@ export default function PublicContact() {
               {submitted ? (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-10 text-center">
                   <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-stone-900 mb-2">Message Sent!</h3>
+                  <h3 className="text-xl font-bold text-stone-900 mb-2">
+                    Message Sent!
+                  </h3>
                   <p className="text-stone-900 text-sm">
-                    Thanks for reaching out, I'll be in touch within one business day.
+                    Thanks for reaching out, I'll be in touch within one
+                    business day.
                   </p>
                   <button
                     onClick={() => setSubmitted(false)}
@@ -212,7 +254,9 @@ export default function PublicContact() {
                     className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#266b75] text-white font-bold rounded-xl hover:bg-[#1f5560] transition-colors disabled:opacity-60 shadow-sm text-sm"
                   >
                     {submitting ? (
-                      <><Loader2 className="w-4 h-4 animate-spin" /> Sending…</>
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" /> Sending…
+                      </>
                     ) : (
                       "Send Message"
                     )}
