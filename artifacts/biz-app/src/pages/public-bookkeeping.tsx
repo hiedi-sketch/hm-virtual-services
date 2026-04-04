@@ -45,7 +45,7 @@ export default function PublicBookkeeping() {
             {/* Left: text */}
             <div className="flex-1">
               <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">Bookkeeping Services</p>
-              <h1 className="text-4xl md:text-5xl font-bold mb-5 leading-tight">
+              <h1 className="text-[2.7rem] md:text-[3.4rem] font-bold mb-5 leading-tight">
                 Clear Books. Confident Business.
               </h1>
               <p className="text-white/75 text-lg leading-relaxed mb-8">
@@ -73,7 +73,7 @@ export default function PublicBookkeeping() {
       {/* Services */}
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-stone-900 text-center mb-2">What's Included</h2>
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 text-center mb-2">What's Included</h2>
           <p className="text-stone-700 text-center text-sm mb-10">Comprehensive bookkeeping support for small business owners.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -101,7 +101,7 @@ export default function PublicBookkeeping() {
       {/* Who this is for */}
       <section className="py-14 bg-stone-50 border-y border-stone-100">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <h2 className="text-2xl font-bold text-stone-900 mb-4">Who This Is For</h2>
+          <h2 className="text-[1.9rem] font-bold text-stone-900 mb-4">Who This Is For</h2>
           <p className="text-stone-900 leading-relaxed mb-6 text-sm">
             I work with solopreneurs, freelancers, and small business owners who are too busy to keep up with their books — or who've tried to do it themselves and know it's time to hand it off.
           </p>

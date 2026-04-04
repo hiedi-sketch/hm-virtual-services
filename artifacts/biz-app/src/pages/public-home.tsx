@@ -51,7 +51,7 @@ export default function PublicHome() {
               <p className="text-[#7dbdc6] text-sm font-semibold uppercase tracking-widest mb-4">
                 Virtual Bookkeeping & Admin Services
               </p>
-              <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-black leading-tight mb-6">
+              <h1 className="text-[2.7rem] md:text-[3.4rem] lg:text-[3.7rem] font-bold text-black leading-tight mb-6">
                 Taking the Stress Out of Business & Bookkeeping—So You Can Focus on What Matters Most.
               </h1>
               <p className="text-lg text-white/75 mb-8 leading-relaxed">
@@ -89,7 +89,7 @@ export default function PublicHome() {
       <section className="bg-stone-50 border-b border-stone-100">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
           <div className="text-center max-w-2xl mx-auto">
-            <h2 className="text-2xl md:text-3xl font-bold text-stone-900 mb-3">
+            <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-3">
               Big Help, Clear Books, Real Impact.
             </h2>
             <p className="text-stone-900 leading-relaxed">
@@ -102,7 +102,7 @@ export default function PublicHome() {
       {/* Services */}
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-stone-900 mb-2 text-center">My Services</h2>
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-2 text-center">My Services</h2>
           <p className="text-stone-700 text-center mb-10 text-sm">Everything your business needs — under one roof.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
@@ -154,7 +154,7 @@ export default function PublicHome() {
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center max-w-4xl mx-auto">
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold text-stone-900 mb-2">
+              <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-2">
                 Why Work With HM Virtual Services?
               </h2>
               <p className="text-stone-900 text-sm mb-6">Dependable, detail-driven support built for small business owners like you.</p>
@@ -172,19 +172,19 @@ export default function PublicHome() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-[#266b75] rounded-2xl p-7 text-center text-white">
-                <p className="text-4xl font-bold mb-1">6+</p>
+                <p className="text-[2.7rem] font-bold mb-1">6+</p>
                 <p className="text-white/70 text-xs font-medium uppercase tracking-wide">Years Experience</p>
               </div>
               <div className="bg-white border border-stone-200 rounded-2xl p-7 text-center shadow-sm">
-                <p className="text-4xl font-bold text-[#266b75] mb-1">50+</p>
+                <p className="text-[2.7rem] font-bold text-[#266b75] mb-1">50+</p>
                 <p className="text-stone-700 text-xs font-medium uppercase tracking-wide">Clients Served</p>
               </div>
               <div className="bg-white border border-stone-200 rounded-2xl p-7 text-center shadow-sm">
-                <p className="text-4xl font-bold text-[#266b75] mb-1">100%</p>
+                <p className="text-[2.7rem] font-bold text-[#266b75] mb-1">100%</p>
                 <p className="text-stone-700 text-xs font-medium uppercase tracking-wide">Mom-Owned & Operated</p>
               </div>
               <div className="bg-[#7dbdc6]/20 border border-[#7dbdc6]/30 rounded-2xl p-7 text-center">
-                <p className="text-4xl font-bold text-[#266b75] mb-1">24h</p>
+                <p className="text-[2.7rem] font-bold text-[#266b75] mb-1">24h</p>
                 <p className="text-stone-900 text-xs font-medium uppercase tracking-wide">Response Time</p>
               </div>
             </div>
@@ -195,7 +195,7 @@ export default function PublicHome() {
       {/* How It Works */}
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-stone-900 text-center mb-2">How It Works</h2>
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 text-center mb-2">How It Works</h2>
           <p className="text-stone-700 text-center text-sm mb-10">Getting started is simple.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
             {HOW_IT_WORKS.map(({ step, title, desc }) => (
@@ -237,7 +237,7 @@ export default function PublicHome() {
       {/* CTA */}
       <section className="py-16 bg-[#266b75]">
         <div className="max-w-2xl mx-auto px-5 sm:px-8 text-center">
-          <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-white mb-3">
             Ready for reliable bookkeeping support you can count on?
           </h2>
           <p className="text-white/70 mb-7 text-sm">Let's talk. No pressure — just a friendly conversation about your business.</p>

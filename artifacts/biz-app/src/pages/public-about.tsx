@@ -20,7 +20,7 @@ export default function PublicAbout() {
             {/* Left: text */}
             <div className="flex-1">
               <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">About</p>
-              <h1 className="text-4xl md:text-5xl font-bold mb-5 leading-tight">
+              <h1 className="text-[2.7rem] md:text-[3.4rem] font-bold mb-5 leading-tight">
                 Hi, I'm Hiedi.
               </h1>
               <p className="text-white/75 text-lg leading-relaxed">
@@ -45,7 +45,7 @@ export default function PublicAbout() {
           <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-start">
             {/* Left: story text */}
             <div className="flex-1 min-w-0">
-              <h2 className="text-2xl font-bold text-stone-900 mb-5">My Story</h2>
+              <h2 className="text-[1.9rem] font-bold text-stone-900 mb-5">My Story</h2>
               <div className="space-y-4 text-stone-900 leading-relaxed text-base">
                 <p>
                   Running a small business is hard enough without worrying about messy books or a pile of admin tasks you never get to. I started HM Virtual Services because I've seen firsthand how much time and energy entrepreneurs lose to the behind-the-scenes work — and I knew I could help.
@@ -94,7 +94,7 @@ export default function PublicAbout() {
       {/* Why Work With Me */}
       <section className="py-14 bg-stone-50 border-y border-stone-100">
         <div className="max-w-3xl mx-auto px-5 sm:px-8">
-          <h2 className="text-2xl font-bold text-stone-900 mb-6 text-center">Why Work With HM Virtual Services?</h2>
+          <h2 className="text-[1.9rem] font-bold text-stone-900 mb-6 text-center">Why Work With HM Virtual Services?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               { icon: "✔️", text: "6+ years as a freelance professional" },
@@ -116,15 +116,15 @@ export default function PublicAbout() {
         <div className="max-w-3xl mx-auto px-5 sm:px-8">
           <div className="grid grid-cols-3 gap-6 text-center">
             <div>
-              <p className="text-4xl font-bold text-[#266b75] mb-1">6+</p>
+              <p className="text-[2.7rem] font-bold text-[#266b75] mb-1">6+</p>
               <p className="text-xs text-stone-700 uppercase tracking-wider font-medium">Years Experience</p>
             </div>
             <div>
-              <p className="text-4xl font-bold text-[#266b75] mb-1">50+</p>
+              <p className="text-[2.7rem] font-bold text-[#266b75] mb-1">50+</p>
               <p className="text-xs text-stone-700 uppercase tracking-wider font-medium">Clients Served</p>
             </div>
             <div>
-              <p className="text-4xl font-bold text-[#266b75] mb-1">100%</p>
+              <p className="text-[2.7rem] font-bold text-[#266b75] mb-1">100%</p>
               <p className="text-xs text-stone-700 uppercase tracking-wider font-medium">Mom-Owned & Operated</p>
             </div>
           </div>
@@ -153,7 +153,7 @@ export default function PublicAbout() {
       {/* CTA */}
       <section className="py-14 bg-[#266b75]">
         <div className="max-w-2xl mx-auto px-5 sm:px-8 text-center">
-          <h2 className="text-2xl font-bold text-white mb-3">
+          <h2 className="text-[1.9rem] font-bold text-white mb-3">
             Ready to work together?
           </h2>
           <p className="text-white/70 text-sm mb-7">Let's schedule a quick call and talk about your business.</p>

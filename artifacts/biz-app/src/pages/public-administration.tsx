@@ -51,7 +51,7 @@ export default function PublicAdministration() {
             {/* Left: text */}
             <div className="flex-1">
               <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">Administration Services</p>
-              <h1 className="text-4xl md:text-5xl font-bold mb-5 leading-tight">
+              <h1 className="text-[2.7rem] md:text-[3.4rem] font-bold mb-5 leading-tight">
                 Admin Off Your Plate. More Time for What Matters.
               </h1>
               <p className="text-white/75 text-lg leading-relaxed mb-8">
@@ -79,7 +79,7 @@ export default function PublicAdministration() {
       {/* Services grid */}
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <h2 className="text-2xl md:text-3xl font-bold text-stone-900 text-center mb-2">What I Handle For You</h2>
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 text-center mb-2">What I Handle For You</h2>
           <p className="text-stone-700 text-center text-sm mb-10">Reliable virtual assistant support across every area of your business.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -107,7 +107,7 @@ export default function PublicAdministration() {
       {/* CTA */}
       <section className="py-14 bg-stone-50 border-t border-stone-100">
         <div className="max-w-2xl mx-auto px-5 sm:px-8 text-center">
-          <h2 className="text-2xl font-bold text-stone-900 mb-3">
+          <h2 className="text-[1.9rem] font-bold text-stone-900 mb-3">
             Ready to hand off the tasks that are slowing you down?
           </h2>
           <p className="text-stone-900 text-sm mb-7 leading-relaxed">

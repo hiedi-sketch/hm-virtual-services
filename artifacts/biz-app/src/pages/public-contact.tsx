@@ -49,7 +49,7 @@ export default function PublicContact() {
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="max-w-xl">
             <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">Contact</p>
-            <h1 className="text-4xl md:text-5xl font-bold mb-4 leading-tight">
+            <h1 className="text-[2.7rem] md:text-[3.4rem] font-bold mb-4 leading-tight">
               Let's Talk.
             </h1>
             <p className="text-white/75 text-lg">
