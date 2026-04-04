@@ -14,16 +14,27 @@ export default function PublicAbout() {
   return (
     <PublicLayout>
       {/* Hero */}
-      <section className="bg-gradient-to-br from-[#266b75] to-[#1a4a52] py-16 md:py-20 text-white">
+      <section className="bg-gradient-to-br from-[#266b75] to-[#1a4a52] py-16 md:py-20 text-white overflow-hidden">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="max-w-2xl">
-            <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">About</p>
-            <h1 className="text-4xl md:text-5xl font-bold mb-5 leading-tight">
-              Hi, I'm Hiedi.
-            </h1>
-            <p className="text-white/75 text-lg leading-relaxed">
-              I'm a mom-owned, detail-driven virtual assistant and bookkeeper helping small business owners stay organized, confident, and stress-free.
-            </p>
+          <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
+            {/* Left: text */}
+            <div className="flex-1">
+              <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">About</p>
+              <h1 className="text-4xl md:text-5xl font-bold mb-5 leading-tight">
+                Hi, I'm Hiedi.
+              </h1>
+              <p className="text-white/75 text-lg leading-relaxed">
+                I'm a mom-owned, detail-driven virtual assistant and bookkeeper helping small business owners stay organized, confident, and stress-free.
+              </p>
+            </div>
+            {/* Right: photo */}
+            <div className="shrink-0 flex items-center justify-center">
+              <img
+                src="/hiedi-photo.png"
+                alt="Hiedi — HM Virtual Services"
+                className="h-64 md:h-80 w-auto object-contain drop-shadow-2xl"
+              />
+            </div>
           </div>
         </div>
       </section>
