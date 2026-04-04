@@ -23,6 +23,7 @@ import backupRouter from "./backup";
 import servicesRouter from "./services";
 import messagesRouter from "./messages";
 import asanaRouter from "./asana";
+import contactRouter from "./contact";
 
 const router: IRouter = Router();
 
@@ -50,5 +51,6 @@ router.use(backupRouter);
 router.use(servicesRouter);
 router.use(messagesRouter);
 router.use(asanaRouter);
+router.use(contactRouter);
 
 export default router;

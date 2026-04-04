@@ -409,11 +409,19 @@ export default function Leads() {
                           <h3 className="font-semibold text-slate-900 text-sm leading-snug truncate">
                             {lead.name}
                           </h3>
+                          {(lead as any).business_name && (
+                            <p className="text-xs text-slate-600 font-medium mt-0.5 truncate">
+                              {(lead as any).business_name}
+                            </p>
+                          )}
                           {lead.email && (
                             <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5 truncate">
                               <Mail className="w-3 h-3 shrink-0" />
                               {lead.email}
                             </p>
+                          )}
+                          {(lead as any).phone && (
+                            <p className="text-xs text-slate-400 mt-0.5">{(lead as any).phone}</p>
                           )}
                           {lead.lead_source && (
                             <p className="text-xs text-slate-400 mt-0.5">via {lead.lead_source}</p>

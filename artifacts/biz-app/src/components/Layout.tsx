@@ -14,7 +14,6 @@ import {
   KeyRound,
   HardDriveDownload,
   Package,
-  TableProperties,
   Link2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -98,17 +97,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
-            {user?.role === "admin" && (
-              <a
-                href="/sheets-tasks/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors text-slate-500 hover:bg-slate-50 hover:text-slate-800"
-              >
-                <TableProperties className="w-3.5 h-3.5 shrink-0" />
-                Sheet Tasks
-              </a>
-            )}
           </nav>
 
           {/* Notification bell + user info */}

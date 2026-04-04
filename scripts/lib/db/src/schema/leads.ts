@@ -6,6 +6,8 @@ export const leadsTable = pgTable("leads", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email"),
+  phone: text("phone"),
+  business_name: text("business_name"),
   estimated_value: real("estimated_value"),
   status: text("status", { enum: ["new", "contacted", "proposal", "closed"] }).notNull().default("new"),
   lead_source: text("lead_source"),

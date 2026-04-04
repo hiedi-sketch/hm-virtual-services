@@ -28,6 +28,12 @@ import Services from "@/pages/services";
 import TimerPopout from "@/pages/timer-popout";
 import AsanaPage from "@/pages/asana";
 
+// Public-facing marketing pages
+import PublicHome from "@/pages/public-home";
+import PublicServices from "@/pages/public-services";
+import PublicAbout from "@/pages/public-about";
+import PublicContact from "@/pages/public-contact";
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -37,6 +43,10 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// These paths are always public regardless of auth state
+const PUBLIC_PATHS = ["/", "/services", "/about", "/contact"];
+const AUTH_PATHS = ["/forgot-password", "/reset-password", "/portal"];
 
 function Router() {
   const { user, loading } = useAuth();
@@ -50,19 +60,38 @@ function Router() {
     );
   }
 
-  // Password reset pages accessible without auth
+  // Always-public password reset pages
   if (location === "/forgot-password") return <ForgotPassword />;
   if (location.startsWith("/reset-password")) return <ResetPassword />;
 
-  if (!user) return <Login />;
+  // Public marketing pages — accessible without login
+  if (location === "/" && !user) return <PublicHome />;
+  if (location === "/services" && !user) return <PublicServices />;
+  if (location === "/about" && !user) return <PublicAbout />;
+  if (location === "/contact" && !user) return <PublicContact />;
 
-  // Standalone timer popout — auth required (session cookie carries over to new window)
+  // /portal is the login page for returning clients/admins
+  if (location === "/portal" && !user) return <Login />;
+
+  // If still no user after checking public paths, show public home
+  if (!user) {
+    // For any other path that isn't public, redirect to login via /portal
+    return <Login />;
+  }
+
+  // Standalone timer popout — auth required
   if (location === "/timer-popout") return <TimerPopout />;
 
   // Client users get the client portal (standalone, no sidebar)
   if (user.role === "client") return <ClientPortal />;
 
-  // Team members get a dedicated dashboard (standalone, no sidebar)
+  // Logged-in users hitting public marketing pages get redirected to the app
+  if (PUBLIC_PATHS.includes(location) || location === "/portal") {
+    if (user.role === "admin") return <Redirect to="/dashboard" />;
+    if (user.role === "team_member") return <Redirect to="/tasks" />;
+  }
+
+  // Team members get a dedicated dashboard
   if (user.role === "team_member" && location === "/") return <TeamDashboard />;
   if (user.role === "team_member" && location === "/team-dashboard") return <TeamDashboard />;
 
