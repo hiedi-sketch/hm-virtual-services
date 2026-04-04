@@ -45,22 +45,33 @@ export default function PublicAdministration() {
   return (
     <PublicLayout>
       {/* Hero */}
-      <section className="bg-gradient-to-br from-[#266b75] to-[#1a4a52] py-16 md:py-20 text-white">
+      <section className="bg-gradient-to-br from-[#266b75] to-[#1a4a52] py-16 md:py-20 text-white overflow-hidden">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="max-w-2xl">
-            <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">Administration Services</p>
-            <h1 className="text-4xl md:text-5xl font-bold mb-5 leading-tight">
-              Admin Off Your Plate. More Time for What Matters.
-            </h1>
-            <p className="text-white/75 text-lg leading-relaxed mb-8">
-              Virtual assistant services that handle your day-to-day operations — so you can show up fully for the work only you can do.
-            </p>
-            <Link
-              href="/contact"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#266b75] font-bold rounded-xl hover:bg-[#f0f9fa] transition-colors shadow-lg text-sm"
-            >
-              Book A Call! <ArrowRight className="w-4 h-4" />
-            </Link>
+          <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
+            {/* Left: text */}
+            <div className="flex-1">
+              <p className="text-[#7dbdc6] text-xs font-semibold uppercase tracking-widest mb-3">Administration Services</p>
+              <h1 className="text-4xl md:text-5xl font-bold mb-5 leading-tight">
+                Admin Off Your Plate. More Time for What Matters.
+              </h1>
+              <p className="text-white/75 text-lg leading-relaxed mb-8">
+                Virtual assistant services that handle your day-to-day operations — so you can show up fully for the work only you can do.
+              </p>
+              <Link
+                href="/contact"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#266b75] font-bold rounded-xl hover:bg-[#f0f9fa] transition-colors shadow-lg text-sm"
+              >
+                Book A Call! <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+            {/* Right: photo */}
+            <div className="shrink-0 w-full md:w-[420px]">
+              <img
+                src="/administration-hero.jpg"
+                alt="Modern workspace with computer"
+                className="w-full h-64 md:h-80 object-cover rounded-2xl shadow-2xl"
+              />
+            </div>
           </div>
         </div>
       </section>
