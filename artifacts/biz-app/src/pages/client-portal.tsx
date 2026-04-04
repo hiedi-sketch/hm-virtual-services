@@ -167,7 +167,7 @@ export default function ClientPortal() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5">
-              <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-7 w-7 rounded-md object-cover shrink-0" />
+              <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-8 w-8 object-contain shrink-0" />
               <span className="text-sm font-semibold" style={{ color: "#266b75" }}>HM Virtual Services Business Suite</span>
             </div>
             <span className="text-slate-300 text-sm">·</span>

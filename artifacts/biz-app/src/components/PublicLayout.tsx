@@ -24,7 +24,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between gap-6">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 shrink-0">
-            <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-9 w-9 rounded-lg object-cover" />
+            <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-10 w-10 object-contain" />
             <span className="font-bold text-[#266b75] text-base hidden sm:inline tracking-tight leading-tight">
               HM Virtual Services
             </span>
@@ -118,7 +118,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 pb-8 border-b border-white/10">
             <div>
               <div className="flex items-center gap-2.5 mb-3">
-                <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-8 w-8 rounded-lg object-cover" />
+                <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-10 w-10 object-contain" />
                 <span className="font-bold text-white text-sm">HM Virtual Services</span>
               </div>
               <p className="text-sm leading-relaxed mb-3">

@@ -66,7 +66,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center h-14 gap-4">
           {/* Logo + Wordmark */}
           <div className="shrink-0 mr-3 flex items-center gap-2.5">
-            <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-8 w-8 rounded-lg object-cover shrink-0" />
+            <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-9 w-9 object-contain shrink-0" />
             <span
               className="text-sm font-semibold hidden lg:inline"
               style={{ color: "#266b75", letterSpacing: "-0.01em" }}

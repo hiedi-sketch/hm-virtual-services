@@ -71,7 +71,7 @@ export default function Login() {
 
         {/* Logo + Wordmark */}
         <div className="mb-16 flex items-center gap-3">
-          <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-14 w-14 rounded-xl object-cover shrink-0" />
+          <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-16 w-16 object-contain shrink-0" />
           <div>
             <div className="text-sm font-semibold leading-tight" style={{ color: "#266b75" }}>HM Virtual Services</div>
             <div className="text-xs font-medium" style={{ color: "#266b75" }}>Business Suite</div>
