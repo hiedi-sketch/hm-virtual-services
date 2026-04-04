@@ -78,7 +78,7 @@ export default function PublicBookkeeping() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {SERVICES.map(({ icon: Icon, title, desc, items }) => (
-              <div key={title} className="border border-stone-200 rounded-2xl p-6 hover:shadow-md hover:border-[#266b75]/30 transition-all">
+              <div key={title} className="bg-white border border-stone-200 rounded-2xl p-6 shadow-xl hover:shadow-2xl hover:border-[#266b75]/30 transition-all">
                 <div className="w-11 h-11 bg-[#266b75]/10 rounded-xl flex items-center justify-center mb-4">
                   <Icon className="w-5 h-5 text-[#266b75]" />
                 </div>

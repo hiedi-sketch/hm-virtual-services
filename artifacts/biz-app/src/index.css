@@ -90,7 +90,8 @@
 
 /* Public website — handwritten-style headings */
 .public-layout h1,
-.public-layout h2 {
+.public-layout h2,
+.public-layout h3 {
   font-family: 'Caveat', cursive;
   letter-spacing: 0.01em;
 }
