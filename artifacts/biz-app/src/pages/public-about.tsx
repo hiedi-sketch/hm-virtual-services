@@ -46,7 +46,7 @@ export default function PublicAbout() {
             {/* Left: story text */}
             <div className="flex-1 min-w-0">
               <h2 className="text-2xl font-bold text-stone-900 mb-5">My Story</h2>
-              <div className="space-y-4 text-stone-600 leading-relaxed text-sm">
+              <div className="space-y-4 text-stone-900 leading-relaxed text-base">
                 <p>
                   Running a small business is hard enough without worrying about messy books or a pile of admin tasks you never get to. I started HM Virtual Services because I've seen firsthand how much time and energy entrepreneurs lose to the behind-the-scenes work — and I knew I could help.
                 </p>
@@ -82,7 +82,7 @@ export default function PublicAbout() {
                 <img
                   src="/about-photo-3.jpg"
                   alt="Family together"
-                  className="col-span-2 h-52 w-full object-cover object-top rounded-2xl shadow-md"
+                  className="col-span-2 h-72 w-full object-cover object-center rounded-2xl shadow-md"
                 />
               </div>
             </div>
