@@ -46,6 +46,12 @@ export default function PublicHome() {
         />
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20 md:py-28 relative">
           <div className="max-w-2xl">
+            <img
+              src="/hm-logo-full.png"
+              alt="HM Virtual Services"
+              className="h-36 md:h-44 w-auto object-contain mb-8"
+              style={{ filter: "brightness(0) invert(1)" }}
+            />
             <p className="text-[#7dbdc6] text-sm font-semibold uppercase tracking-widest mb-4">
               Virtual Bookkeeping & Admin Services
             </p>

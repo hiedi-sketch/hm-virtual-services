@@ -24,8 +24,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between gap-6">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 shrink-0">
-            <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-10 w-10 object-contain" />
-            <span className="font-bold text-[#266b75] text-base hidden sm:inline tracking-tight leading-tight">
+            <span className="font-bold text-[#266b75] text-base tracking-tight leading-tight">
               HM Virtual Services
             </span>
           </Link>
