@@ -77,10 +77,10 @@ export default function PublicContact() {
             {/* Info sidebar */}
             <div className="lg:col-span-2 space-y-8">
               <div>
-                <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 mb-2">
+                <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black mb-2">
                   Get In Touch
                 </h2>
-                <p className="text-sm text-stone-900 leading-relaxed">
+                <p className="text-m text-stone-700 leading-relaxed">
                   Whether you're ready to get started or just have questions —
                   reach out. I respond to all inquiries within one business day.
                 </p>
@@ -91,14 +91,14 @@ export default function PublicContact() {
                   href="mailto:Hiedi@HMVirtualServices.com"
                   className="flex items-start gap-3 group"
                 >
-                  <div className="w-9 h-9 bg-[#266b75]/10 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-[#266b75]/15 transition-colors">
-                    <Mail className="w-4 h-4 text-[#266b75]" />
+                  <div className="w-12 h-12 bg-[#266b75]/30 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-[#266b75]/15 transition-colors">
+                    <Mail className="w-8 h-8 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
+                    <p className="text-m text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
                       Email
                     </p>
-                    <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">
+                    <p className="text-m text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">
                       Hiedi@HMVirtualServices.com
                     </p>
                   </div>
@@ -107,38 +107,38 @@ export default function PublicContact() {
                   href="tel:5152070340"
                   className="flex items-start gap-3 group"
                 >
-                  <div className="w-9 h-9 bg-[#266b75]/10 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-[#266b75]/15 transition-colors">
-                    <Phone className="w-4 h-4 text-[#266b75]" />
+                  <div className="w-12 h-12 bg-[#266b75]/30 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-[#266b75]/15 transition-colors">
+                    <Phone className="w-8 h-8 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
+                    <p className="text-m text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
                       Phone
                     </p>
-                    <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">
+                    <p className="text-m text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">
                       515.207.0340
                     </p>
                   </div>
                 </a>
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 bg-[#266b75]/10 rounded-lg flex items-center justify-center shrink-0">
-                    <MapPin className="w-4 h-4 text-[#266b75]" />
+                  <div className="w-12 h-12 bg-[#266b75]/30 rounded-lg flex items-center justify-center shrink-0">
+                    <MapPin className="w-8 h-8 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
+                    <p className="text-m text-stone-700 font-semibold uppercase tracking-wider mb-0.5">
                       Location
                     </p>
-                    <p className="text-sm text-stone-700 font-medium">
+                    <p className="text-m text-stone-700 font-medium">
                       Reasnor, IA
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-[#266b75]/5 border border-[#266b75]/15 rounded-xl p-5">
-                <p className="text-sm text-[#266b75] font-semibold mb-1">
+              <div className="bg-[#266b75]/30 border border-[#266b75]/30 rounded-xl p-5">
+                <p className="text-m text-[#266b75] font-semibold mb-1">
                   Already a client?
                 </p>
-                <p className="text-sm text-stone-900">
+                <p className="text-m text-stone-700">
                   Log in to your{" "}
                   <a
                     href="/portal"
@@ -156,16 +156,16 @@ export default function PublicContact() {
               {submitted ? (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-10 text-center">
                   <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-bold text-stone-900 mb-2">
+                  <h3 className="text-xl font-bold text-black mb-2">
                     Message Sent!
                   </h3>
-                  <p className="text-stone-900 text-sm">
+                  <p className="text-black text-m">
                     Thanks for reaching out, I'll be in touch within one
                     business day.
                   </p>
                   <button
                     onClick={() => setSubmitted(false)}
-                    className="mt-5 text-sm text-[#266b75] hover:underline font-medium"
+                    className="mt-5 text-m text-[#266b75] hover:underline font-medium"
                   >
                     Send another message
                   </button>
@@ -180,7 +180,7 @@ export default function PublicContact() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
+                      <label className="block text-m font-semibold text-black uppercase tracking-wider mb-1.5">
                         Your Name <span className="text-red-400">*</span>
                       </label>
                       <input
@@ -189,11 +189,11 @@ export default function PublicContact() {
                         value={form.name}
                         onChange={set("name")}
                         placeholder="Jane Smith"
-                        className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 placeholder-stone-300 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors"
+                        className="w-full border border-stone-400 rounded-xl px-4 py-3 text-m text-black placeholder-stone-350 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
+                      <label className="block text-m font-semibold text-black uppercase tracking-wider mb-1.5">
                         Email <span className="text-red-400">*</span>
                       </label>
                       <input
@@ -202,14 +202,14 @@ export default function PublicContact() {
                         value={form.email}
                         onChange={set("email")}
                         placeholder="jane@example.com"
-                        className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 placeholder-stone-300 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors"
+                        className="w-full border border-stone-400 rounded-xl px-4 py-3 text-m text-black placeholder-stone-350 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
+                      <label className="block text-m font-semibold text-black uppercase tracking-wider mb-1.5">
                         Business Name
                       </label>
                       <input
@@ -217,11 +217,11 @@ export default function PublicContact() {
                         value={form.business_name}
                         onChange={set("business_name")}
                         placeholder="Acme Co. (optional)"
-                        className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 placeholder-stone-300 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors"
+                        className="w-full border border-stone-400 rounded-xl px-4 py-3 text-m text-black placeholder-stone-350 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
+                      <label className="block text-m font-semibold text-black uppercase tracking-wider mb-1.5">
                         Phone Number
                       </label>
                       <input
@@ -229,13 +229,13 @@ export default function PublicContact() {
                         value={form.phone}
                         onChange={set("phone")}
                         placeholder="(555) 000-0000"
-                        className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 placeholder-stone-300 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors"
+                        className="w-full border border-stone-400 rounded-xl px-4 py-3 text-m text-black placeholder-stone-350 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
+                    <label className="block text-m font-semibold text-black uppercase tracking-wider mb-1.5">
                       How Can I Help? <span className="text-red-400">*</span>
                     </label>
                     <textarea
@@ -244,14 +244,14 @@ export default function PublicContact() {
                       value={form.message}
                       onChange={set("message")}
                       placeholder="Tell me about your business and what you need help with…"
-                      className="w-full border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 placeholder-stone-300 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors resize-none"
+                      className="w-full border border-stone-400 rounded-xl px-4 py-3 text-m text-black placeholder-stone-350 focus:outline-none focus:border-[#266b75] focus:ring-2 focus:ring-[#266b75]/10 transition-colors resize-none"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#266b75] text-white font-bold rounded-xl hover:bg-[#1f5560] transition-colors disabled:opacity-60 shadow-sm text-sm"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#266b75] text-white font-bold rounded-xl hover:bg-[#1f5560] transition-colors disabled:opacity-60 shadow-sm text-m"
                   >
                     {submitting ? (
                       <>
@@ -261,7 +261,7 @@ export default function PublicContact() {
                       "Send Message"
                     )}
                   </button>
-                  <p className="text-xs text-stone-700 text-center">
+                  <p className="text-m text-stone-700 text-center">
                     I'll get back to you within one business day. No spam, ever.
                   </p>
                 </form>

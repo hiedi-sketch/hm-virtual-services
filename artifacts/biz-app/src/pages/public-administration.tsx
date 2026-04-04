@@ -84,7 +84,7 @@ export default function PublicAdministration() {
     <PublicLayout>
       {/* Hero */}
       <section className="bg-gradient-to-br from-[#266b75] to-[#1a4a52] py-16 md:py-20 text-white overflow-hidden">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+        <div className="max-w-8xl mx-auto px-10 sm:px-20">
           <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
             {/* Left: text */}
             <div className="flex-1">
@@ -120,7 +120,7 @@ export default function PublicAdministration() {
 
       {/* Services grid */}
       <section className="py-16 bg-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+        <div className="max-w-8xl mx-auto px-10 sm:px-12 py-16">
           <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
             What I Handle For You
           </h2>
@@ -129,7 +129,7 @@ export default function PublicAdministration() {
             business.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
             {SERVICES.map(({ icon: Icon, title, desc, items }) => (
               <div
                 key={title}
@@ -141,16 +141,16 @@ export default function PublicAdministration() {
                 <h3 className="text-[1.1rem] md:text-[2.0rem] font-bold text-black mb-2">
                   {title}
                 </h3>
-                <p className="text-sm text-stone-900 mb-4 leading-relaxed">
+                <p className="text-m text-stone-700 mb-4 leading-relaxed">
                   {desc}
                 </p>
                 <ul className="space-y-1.5">
                   {items.map((item) => (
                     <li
                       key={item}
-                      className="flex items-center gap-2 text-xs text-stone-900"
+                      className="flex items-center gap-2 text-m text-stone-700"
                     >
-                      <CheckCircle className="w-3 h-3 text-[#266b75] shrink-0" />
+                      <CheckCircle className="w-5 h-5 text-[#266b75] shrink-0" />
                       {item}
                     </li>
                   ))}
@@ -163,11 +163,11 @@ export default function PublicAdministration() {
 
       {/* CTA */}
       <section className="py-14 bg-stone-50 border-t border-stone-100">
-        <div className="max-w-2xl mx-auto px-5 sm:px-8 text-center">
-          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 text-center mb-2">
+        <div className="max-w-8xl mx-auto px-1 sm:px-1 text-center">
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
             Ready to hand off the tasks that are slowing you down?
           </h2>
-          <p className="text-stone-900 text-sm mb-7 leading-relaxed">
+          <p className="text-stone-700 text-m mb-7 leading-relaxed">
             Let's talk about what's on your plate and figure out the best way to
             support your business.
           </p>

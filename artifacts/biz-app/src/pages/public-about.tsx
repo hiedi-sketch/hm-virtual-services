@@ -15,7 +15,7 @@ export default function PublicAbout() {
     <PublicLayout>
       {/* Hero */}
       <section className="bg-gradient-to-br from-[#266b75] to-[#1a4a52] py-16 md:py-20 text-white overflow-hidden">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+        <div className="max-w-8xl mx-auto px-10 sm:px-10">
           <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
             {/* Left: text */}
             <div className="flex-1">
@@ -49,10 +49,10 @@ export default function PublicAbout() {
           <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-start">
             {/* Left: story text */}
             <div className="flex-1 min-w-0">
-              <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 text-center mb-2">
+              <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
                 My Story
               </h2>
-              <div className="space-y-4 text-stone-900 leading-relaxed text-base">
+              <div className="space-y-4 text-stone-700 leading-relaxed text-lg">
                 <p>
                   Running a small business is hard enough without worrying about
                   messy books or a pile of admin tasks you never get to. I
@@ -84,24 +84,24 @@ export default function PublicAbout() {
                 <img
                   src="/about-photo-4.jpg"
                   alt="Family photo"
-                  className="col-span-2 h-52 w-full object-cover object-top rounded-2xl shadow-md"
+                  className="col-span-2 h-52 w-full object-cover object-top rounded-2xl shadow-2xl"
                 />
                 {/* Two side-by-side */}
                 <img
                   src="/about-photo-2.jpg"
                   alt="Fun outing"
-                  className="h-44 w-full object-cover rounded-xl shadow-md"
+                  className="h-44 w-full object-cover rounded-2xl shadow-2xl"
                 />
                 <img
                   src="/about-photo-1.jpg"
                   alt="Family fun"
-                  className="h-44 w-full object-cover rounded-xl shadow-md"
+                  className="h-44 w-full object-cover rounded-2xl shadow-2xl"
                 />
                 {/* Wide bottom photo */}
                 <img
                   src="/about-photo-3.jpg"
                   alt="Family together"
-                  className="col-span-2 h-72 w-full object-cover rounded-2xl shadow-md"
+                  className="col-span-2 h-72 w-full object-cover rounded-2xl shadow-2xl"
                   style={{ objectPosition: "center 25%" }}
                 />
               </div>
@@ -113,7 +113,7 @@ export default function PublicAbout() {
       {/* Why Work With Me */}
       <section className="py-14 bg-stone-50 border-y border-stone-100">
         <div className="max-w-3xl mx-auto px-5 sm:px-8">
-          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-stone-900 text-center mb-2">
+          <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
             Why Work With HM Virtual Services?
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -128,10 +128,10 @@ export default function PublicAbout() {
             ].map(({ icon, text }) => (
               <div
                 key={text}
-                className="flex items-start gap-3 bg-white border border-stone-200 rounded-xl px-5 py-4 shadow-sm"
+                className="flex items-start gap-3 bg-white border border-stone-200 rounded-xl px-5 py-4 shadow-2xl"
               >
                 <span className="text-lg mt-0.5">{icon}</span>
-                <span className="text-sm text-stone-700 font-medium">
+                <span className="text-m text-stone-700 font-medium">
                   {text}
                 </span>
               </div>
@@ -194,7 +194,7 @@ export default function PublicAbout() {
           <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-white text-center mb-2">
             Ready to work together?
           </h2>
-          <p className="text-white/70 text-sm mb-7">
+          <p className="text-white text-m mb-7">
             Let's schedule a quick call and talk about your business.
           </p>
           <div className="flex flex-wrap justify-center gap-3">

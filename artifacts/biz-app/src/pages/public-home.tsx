@@ -54,7 +54,7 @@ export default function PublicHome() {
               "radial-gradient(ellipse at 80% 50%, #7dbdc6 0%, transparent 60%)",
           }}
         />
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20 md:py-28 relative">
+        <div className="max-w-8xl mx-auto px-5 sm:px-20 py-5 md:py-5 relative">
           <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16">
             {/* Right: text */}
             <div className="flex-1">
@@ -100,8 +100,8 @@ export default function PublicHome() {
 
       {/* Impact callout */}
       <section className="bg-stone-50 border-b border-stone-100">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 py-10">
-          <div className="text-center max-w-2xl mx-auto">
+        <div className="max-w-8xl mx-auto px-10 sm:px-12 py-16">
+          <div className="text-center max-w-4xl mx-auto">
             <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black mb-3">
               Big Help, Clear Books, Real Impact.
             </h2>
@@ -118,7 +118,7 @@ export default function PublicHome() {
 
       {/* Services */}
       <section className="py-16 bg-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+        <div className="max-w-8xl mx-auto px-10 sm:px-12 py-16">
           <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black mb-2 text-center">
             My Services
           </h2>
@@ -126,7 +126,7 @@ export default function PublicHome() {
             Everything your business needs — under one roof.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-6xl mx-auto">
             {/* Bookkeeping */}
             <div className="border border-stone-200 rounded-2xl p-7 shadow-2xl hover:border-[#266b75]/30 transition-all">
               <div className="w-11 h-11 bg-[#266b75]/10 rounded-xl flex items-center justify-center mb-4">
@@ -150,7 +150,7 @@ export default function PublicHome() {
                     key={item}
                     className="flex items-center gap-2 text-m text-stone-700"
                   >
-                    <CheckCircle className="w-3.5 h-3.5 text-[#266b75] shrink-0" />
+                    <CheckCircle className="w-5 h-5 text-[#266b75] shrink-0" />
                     {item}
                   </li>
                 ))}
@@ -159,7 +159,7 @@ export default function PublicHome() {
                 href="/bookkeeping"
                 className="mt-5 inline-flex items-center gap-1.5 text-m font-semibold text-[#266b75] hover:underline"
               >
-                Learn more <ArrowRight className="w-3.5 h-3.5" />
+                Learn more <ArrowRight className="w-5 h-5" />
               </Link>
             </div>
 
@@ -186,7 +186,7 @@ export default function PublicHome() {
                     key={item}
                     className="flex items-center gap-2 text-m text-stone-700"
                   >
-                    <CheckCircle className="w-3.5 h-3.5 text-[#266b75] shrink-0" />
+                    <CheckCircle className="w-5 h-5 text-[#266b75] shrink-0" />
                     {item}
                   </li>
                 ))}
@@ -204,8 +204,8 @@ export default function PublicHome() {
 
       {/* Why Work With HM */}
       <section className="py-16 bg-stone-50 border-y border-stone-100">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center max-w-4xl mx-auto">
+        <div className="max-w-8xl mx-auto px-10 sm:px-12 py-16">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center max-w-6xl mx-auto">
             <div>
               <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black mb-2">
                 Why Work With HM Virtual Services?
@@ -277,7 +277,7 @@ export default function PublicHome() {
           <p className="text-stone-700 text-center text-m mb-10">
             Getting started is simple.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
             {HOW_IT_WORKS.map(({ step, title, desc }) => (
               <div key={step} className="text-center px-4">
                 <div className="w-12 h-12 bg-[#266b75] rounded-full flex items-center justify-center mx-auto mb-4 text-white font-bold text-m">

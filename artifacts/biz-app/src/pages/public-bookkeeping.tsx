@@ -73,7 +73,7 @@ export default function PublicBookkeeping() {
     <PublicLayout>
       {/* Hero */}
       <section className="bg-gradient-to-br from-[#266b75] to-[#1a4a52] py-16 md:py-20 text-white overflow-hidden">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+        <div className="max-w-8xl mx-auto px-10 sm:px-20">
           <div className="flex flex-col md:flex-row items-center gap-10 md:gap-16">
             {/* Left: text */}
             <div className="flex-1">
@@ -109,7 +109,7 @@ export default function PublicBookkeeping() {
 
       {/* Services */}
       <section className="py-16 bg-white">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+        <div className="max-w-8xl mx-auto px-10 sm:px-12 py-16">
           <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
             What's Included
           </h2>
@@ -117,7 +117,7 @@ export default function PublicBookkeeping() {
             Comprehensive bookkeeping support for small business owners.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">
             {SERVICES.map(({ icon: Icon, title, desc, items }) => (
               <div
                 key={title}
@@ -138,7 +138,7 @@ export default function PublicBookkeeping() {
                       key={item}
                       className="flex items-center gap-2 text-m text-stone-700"
                     >
-                      <CheckCircle className="w-3 h-3 text-[#266b75] shrink-0" />
+                      <CheckCircle className="w-5 h-5 text-[#266b75] shrink-0" />
                       {item}
                     </li>
                   ))}
@@ -151,7 +151,7 @@ export default function PublicBookkeeping() {
 
       {/* Who this is for */}
       <section className="py-14 bg-stone-50 border-y border-stone-100">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
+        <div className="max-w-8xl mx-auto px-5 sm:px-8 text-center">
           <h2 className="text-[1.9rem] md:text-[2.3rem] font-bold text-black text-center mb-2">
             Who This Is For
           </h2>
@@ -183,7 +183,7 @@ export default function PublicBookkeeping() {
 
       {/* QuickBooks callout */}
       <section className="py-12 bg-white">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
+        <div className="max-w-8xl mx-auto px-5 sm:px-8 text-center">
           <p className="text-m uppercase tracking-widest text-stone-700 font-semibold mb-3">
             Shopify Partner · QuickBooks Certified
           </p>
