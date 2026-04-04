@@ -18,7 +18,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
     location === href || (href !== "/" && location.startsWith(href));
 
   return (
-    <div className="min-h-screen flex flex-col bg-white font-sans">
+    <div className="min-h-screen flex flex-col bg-white font-sans public-layout">
       {/* Nav */}
       <header className="sticky top-0 z-40 bg-white border-b border-stone-200 shadow-sm">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between gap-6">
