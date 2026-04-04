@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Wamc4z2JCR4ZTofTrs2NF"
+uri = "file://attached_assets/stock_images/bookkeeping-hero.jpg"
+type = "image"
+title = "accountant bookkeeping financial spreadsheet laptop desk"
