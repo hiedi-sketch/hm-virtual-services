@@ -51,7 +51,7 @@ export default function PublicHome() {
               <p className="text-[#7dbdc6] text-sm font-semibold uppercase tracking-widest mb-4">
                 Virtual Bookkeeping & Admin Services
               </p>
-              <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-white leading-tight mb-6">
+              <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-black leading-tight mb-6">
                 Taking the Stress Out of Business & Bookkeeping—So You Can Focus on What Matters Most.
               </h1>
               <p className="text-lg text-white/75 mb-8 leading-relaxed">
@@ -78,6 +78,7 @@ export default function PublicHome() {
                 src="/hm-logo-full.png"
                 alt="HM Virtual Services"
                 className="h-72 md:h-96 w-auto object-contain"
+                style={{ filter: "brightness(0) invert(1)" }}
               />
             </div>
           </div>
