@@ -77,7 +77,7 @@ export default function PublicHome() {
               <img
                 src="/hm-logo-full.png"
                 alt="HM Virtual Services"
-                className="h-56 md:h-72 w-auto object-contain"
+                className="h-72 md:h-96 w-auto object-contain"
               />
             </div>
           </div>
