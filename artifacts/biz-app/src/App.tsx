@@ -30,9 +30,10 @@ import AsanaPage from "@/pages/asana";
 
 // Public-facing marketing pages
 import PublicHome from "@/pages/public-home";
-import PublicServices from "@/pages/public-services";
 import PublicAbout from "@/pages/public-about";
 import PublicContact from "@/pages/public-contact";
+import PublicBookkeeping from "@/pages/public-bookkeeping";
+import PublicAdministration from "@/pages/public-administration";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,7 +46,7 @@ const queryClient = new QueryClient({
 });
 
 // These paths are always public regardless of auth state
-const PUBLIC_PATHS = ["/", "/services", "/about", "/contact"];
+const PUBLIC_PATHS = ["/", "/bookkeeping", "/administration", "/about", "/contact"];
 const AUTH_PATHS = ["/forgot-password", "/reset-password", "/portal"];
 
 function Router() {
@@ -66,7 +67,8 @@ function Router() {
 
   // Public marketing pages — accessible without login
   if (location === "/" && !user) return <PublicHome />;
-  if (location === "/services" && !user) return <PublicServices />;
+  if (location === "/bookkeeping" && !user) return <PublicBookkeeping />;
+  if (location === "/administration" && !user) return <PublicAdministration />;
   if (location === "/about" && !user) return <PublicAbout />;
   if (location === "/contact" && !user) return <PublicContact />;
 
@@ -89,6 +91,7 @@ function Router() {
   if (PUBLIC_PATHS.includes(location) || location === "/portal") {
     if (user.role === "admin") return <Redirect to="/dashboard" />;
     if (user.role === "team_member") return <Redirect to="/tasks" />;
+    if (user.role === "client") return <ClientPortal />;
   }
 
   // Team members get a dedicated dashboard

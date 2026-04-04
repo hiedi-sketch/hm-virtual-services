@@ -1,0 +1,110 @@
+Build a full-stack web application that combines a public-facing marketing website and a private business dashboard in a single app using one domain.
+
+Tech stack:
+- Frontend: Next.js (React)
+- Backend: API routes inside Next.js
+- Database: Supabase (or simple JSON storage if needed to start)
+- Authentication: email/password login with session-based auth
+- Styling: Tailwind CSS
+
+CORE REQUIREMENTS:
+
+1. PUBLIC WEBSITE (not logged in users)
+Replicate and improve a service-based website similar to:
+https://hmvirtualservices.squarespace.com/
+
+Pages to include:
+- Home
+- Services
+- About
+- Contact
+- Client Portal (login page)
+
+Homepage sections:
+- Hero section with headline, subheadline, and CTA button
+- Services overview (3–5 service cards)
+- About/credibility section
+- Testimonials section (static for now)
+- Call-to-action section
+
+Contact page:
+- Form with fields: name, email, business name, message
+- On submit:
+  → store in database
+  → trigger backend function to create a "lead"
+
+2. AUTHENTICATION SYSTEM
+- Users can sign up and log in
+- Roles:
+  - Admin (me)
+  - Client
+- Protect routes:
+  - /dashboard (must be logged in)
+  - /admin (admin only)
+
+3. CLIENT DASHBOARD (/dashboard)
+After login, clients can:
+- View their tasks
+- View messages (simple thread UI)
+- Upload files (basic placeholder)
+- See onboarding steps
+
+4. ADMIN DASHBOARD (/admin)
+Admin can:
+- View all leads from contact form
+- Convert leads into clients
+- Create tasks assigned to clients
+- View all client activity
+- Send messages to clients
+
+5. AUTOMATION LOGIC
+When a contact form is submitted:
+- Create a lead in database
+- Automatically create:
+  - a default onboarding task list
+  - a placeholder client record
+
+6. API STRUCTURE
+Create API routes:
+- /api/leads (POST)
+- /api/clients
+- /api/tasks
+- /api/auth
+
+7. FILE STRUCTURE
+
+/frontend
+  /app
+    /page.tsx (home)
+    /services
+    /about
+    /contact
+    /login
+    /dashboard
+    /admin
+
+/backend
+  /lib (database + helpers)
+  /api
+
+8. UI/UX REQUIREMENTS
+- Clean, modern, service-based business design
+- Mobile responsive
+- Simple navigation:
+  Home | Services | About | Contact | Portal
+
+9. BONUS FEATURES (if possible)
+- Role-based redirects after login
+- Toast notifications for actions
+- Simple activity log
+
+GOAL:
+This app should function as:
+- A client-facing website
+- A CRM
+- A task manager
+- A client portal
+
+Everything should run inside one Replit app and one domain.
+
+Start by scaffolding the full project structure and building the homepage + authentication first.
