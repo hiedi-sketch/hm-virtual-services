@@ -41,18 +41,51 @@ export default function PublicAbout() {
 
       {/* Story */}
       <section className="py-16 bg-white">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8">
-          <h2 className="text-2xl font-bold text-stone-900 mb-5">My Story</h2>
-          <div className="space-y-4 text-stone-600 leading-relaxed text-sm">
-            <p>
-              Running a small business is hard enough without worrying about messy books or a pile of admin tasks you never get to. I started HM Virtual Services because I've seen firsthand how much time and energy entrepreneurs lose to the behind-the-scenes work — and I knew I could help.
-            </p>
-            <p>
-              With 6+ years of experience as a freelance professional, I've worked with small business owners across a variety of industries to take the operational burden off their shoulders. Whether it's keeping the books clean, managing the inbox, or handling the details of day-to-day admin — I'm the person in the background making sure everything runs smoothly.
-            </p>
-            <p>
-              Based in Reasnor, Iowa, I bring a small-town work ethic to everything I do: show up, do the work, and actually care about the outcome. My clients aren't just businesses — they're people trying to build something meaningful, and I take that seriously.
-            </p>
+        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+          <div className="flex flex-col lg:flex-row gap-12 lg:gap-16 items-start">
+            {/* Left: story text */}
+            <div className="flex-1 min-w-0">
+              <h2 className="text-2xl font-bold text-stone-900 mb-5">My Story</h2>
+              <div className="space-y-4 text-stone-600 leading-relaxed text-sm">
+                <p>
+                  Running a small business is hard enough without worrying about messy books or a pile of admin tasks you never get to. I started HM Virtual Services because I've seen firsthand how much time and energy entrepreneurs lose to the behind-the-scenes work — and I knew I could help.
+                </p>
+                <p>
+                  With 6+ years of experience as a freelance professional, I've worked with small business owners across a variety of industries to take the operational burden off their shoulders. Whether it's keeping the books clean, managing the inbox, or handling the details of day-to-day admin — I'm the person in the background making sure everything runs smoothly.
+                </p>
+                <p>
+                  Based in Reasnor, Iowa, I bring a small-town work ethic to everything I do: show up, do the work, and actually care about the outcome. My clients aren't just businesses — they're people trying to build something meaningful, and I take that seriously.
+                </p>
+              </div>
+            </div>
+            {/* Right: bento photo grid */}
+            <div className="w-full lg:w-[420px] shrink-0">
+              <div className="grid grid-cols-2 gap-3">
+                {/* Wide top photo */}
+                <img
+                  src="/about-photo-4.jpg"
+                  alt="Family photo"
+                  className="col-span-2 h-52 w-full object-cover object-top rounded-2xl shadow-md"
+                />
+                {/* Two side-by-side */}
+                <img
+                  src="/about-photo-2.jpg"
+                  alt="Fun outing"
+                  className="h-44 w-full object-cover rounded-xl shadow-md"
+                />
+                <img
+                  src="/about-photo-1.jpg"
+                  alt="Family fun"
+                  className="h-44 w-full object-cover rounded-xl shadow-md"
+                />
+                {/* Wide bottom photo */}
+                <img
+                  src="/about-photo-3.jpg"
+                  alt="Family together"
+                  className="col-span-2 h-52 w-full object-cover object-top rounded-2xl shadow-md"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
