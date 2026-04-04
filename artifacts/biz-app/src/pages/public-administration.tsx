@@ -80,7 +80,7 @@ export default function PublicAdministration() {
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <h2 className="text-2xl md:text-3xl font-bold text-stone-900 text-center mb-2">What I Handle For You</h2>
-          <p className="text-stone-400 text-center text-sm mb-10">Reliable virtual assistant support across every area of your business.</p>
+          <p className="text-stone-700 text-center text-sm mb-10">Reliable virtual assistant support across every area of your business.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {SERVICES.map(({ icon: Icon, title, desc, items }) => (
@@ -89,10 +89,10 @@ export default function PublicAdministration() {
                   <Icon className="w-5 h-5 text-[#266b75]" />
                 </div>
                 <h3 className="font-bold text-stone-900 mb-2">{title}</h3>
-                <p className="text-sm text-stone-500 mb-4 leading-relaxed">{desc}</p>
+                <p className="text-sm text-stone-900 mb-4 leading-relaxed">{desc}</p>
                 <ul className="space-y-1.5">
                   {items.map(item => (
-                    <li key={item} className="flex items-center gap-2 text-xs text-stone-600">
+                    <li key={item} className="flex items-center gap-2 text-xs text-stone-900">
                       <CheckCircle className="w-3 h-3 text-[#266b75] shrink-0" />
                       {item}
                     </li>
@@ -110,7 +110,7 @@ export default function PublicAdministration() {
           <h2 className="text-2xl font-bold text-stone-900 mb-3">
             Ready to hand off the tasks that are slowing you down?
           </h2>
-          <p className="text-stone-500 text-sm mb-7 leading-relaxed">
+          <p className="text-stone-900 text-sm mb-7 leading-relaxed">
             Let's talk about what's on your plate and figure out the best way to support your business.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">

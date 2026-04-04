@@ -39,7 +39,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
                   isActive(href)
                     ? "text-[#266b75] font-semibold"
-                    : "text-stone-600 hover:text-[#266b75] hover:bg-[#266b75]/5"
+                    : "text-stone-900 hover:text-[#266b75] hover:bg-[#266b75]/5"
                 )}
               >
                 {label}
@@ -50,7 +50,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           <div className="hidden md:flex items-center gap-2">
             <Link
               href="/portal"
-              className="text-sm text-stone-500 hover:text-[#266b75] px-3 py-2 rounded-lg hover:bg-stone-50 transition-colors font-medium"
+              className="text-sm text-stone-900 hover:text-[#266b75] px-3 py-2 rounded-lg hover:bg-stone-50 transition-colors font-medium"
             >
               Client Login
             </Link>
@@ -64,7 +64,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
 
           {/* Mobile hamburger */}
           <button
-            className="md:hidden p-2 rounded-lg text-stone-500 hover:bg-stone-100 transition-colors"
+            className="md:hidden p-2 rounded-lg text-stone-900 hover:bg-stone-100 transition-colors"
             onClick={() => setMobileOpen(v => !v)}
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -83,7 +83,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
                   "px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   isActive(href)
                     ? "bg-[#266b75]/10 text-[#266b75] font-semibold"
-                    : "text-stone-600 hover:text-[#266b75] hover:bg-[#266b75]/5"
+                    : "text-stone-900 hover:text-[#266b75] hover:bg-[#266b75]/5"
                 )}
               >
                 {label}
@@ -93,7 +93,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <Link
                 href="/portal"
                 onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2.5 rounded-lg text-sm font-medium text-stone-500 hover:bg-stone-50 transition-colors"
+                className="block px-3 py-2.5 rounded-lg text-sm font-medium text-stone-900 hover:bg-stone-50 transition-colors"
               >
                 Client Login
               </Link>

@@ -92,7 +92,7 @@ export default function PublicHome() {
             <h2 className="text-2xl md:text-3xl font-bold text-stone-900 mb-3">
               Big Help, Clear Books, Real Impact.
             </h2>
-            <p className="text-stone-500 leading-relaxed">
+            <p className="text-stone-900 leading-relaxed">
               Running a small business is hard enough without worrying about messy books or unfinished admin tasks. If you're feeling behind, overwhelmed, or unsure of your numbers — you're not alone. I help small business owners stay organized, compliant, and confident in their finances.
             </p>
           </div>
@@ -103,7 +103,7 @@ export default function PublicHome() {
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <h2 className="text-2xl md:text-3xl font-bold text-stone-900 mb-2 text-center">My Services</h2>
-          <p className="text-stone-400 text-center mb-10 text-sm">Everything your business needs — under one roof.</p>
+          <p className="text-stone-700 text-center mb-10 text-sm">Everything your business needs — under one roof.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
             {/* Bookkeeping */}
@@ -112,7 +112,7 @@ export default function PublicHome() {
                 <Calculator className="w-5 h-5 text-[#266b75]" />
               </div>
               <h3 className="text-lg font-bold text-stone-900 mb-1">Bookkeeping Services</h3>
-              <p className="text-sm text-stone-400 mb-4">Clean books, confident decisions.</p>
+              <p className="text-sm text-stone-700 mb-4">Clean books, confident decisions.</p>
               <ul className="space-y-2">
                 {["Monthly bookkeeping", "Catch-up & clean-up", "Reconciliations", "Financial reports", "Payroll Services"].map(item => (
                   <li key={item} className="flex items-center gap-2 text-sm text-stone-700">
@@ -132,7 +132,7 @@ export default function PublicHome() {
                 <ClipboardList className="w-5 h-5 text-[#266b75]" />
               </div>
               <h3 className="text-lg font-bold text-stone-900 mb-1">Virtual Assistant Services</h3>
-              <p className="text-sm text-stone-400 mb-4">Admin support that keeps you moving.</p>
+              <p className="text-sm text-stone-700 mb-4">Admin support that keeps you moving.</p>
               <ul className="space-y-2">
                 {["Administrative support", "Inbox & task management", "Ongoing project support", "Invoice Management", "General Customer Service"].map(item => (
                   <li key={item} className="flex items-center gap-2 text-sm text-stone-700">
@@ -157,7 +157,7 @@ export default function PublicHome() {
               <h2 className="text-2xl md:text-3xl font-bold text-stone-900 mb-2">
                 Why Work With HM Virtual Services?
               </h2>
-              <p className="text-stone-500 text-sm mb-6">Dependable, detail-driven support built for small business owners like you.</p>
+              <p className="text-stone-900 text-sm mb-6">Dependable, detail-driven support built for small business owners like you.</p>
               <ul className="space-y-3">
                 {WHY_US.map(item => (
                   <li key={item} className="flex items-center gap-3 text-stone-700">
@@ -177,15 +177,15 @@ export default function PublicHome() {
               </div>
               <div className="bg-white border border-stone-200 rounded-2xl p-7 text-center shadow-sm">
                 <p className="text-4xl font-bold text-[#266b75] mb-1">50+</p>
-                <p className="text-stone-400 text-xs font-medium uppercase tracking-wide">Clients Served</p>
+                <p className="text-stone-700 text-xs font-medium uppercase tracking-wide">Clients Served</p>
               </div>
               <div className="bg-white border border-stone-200 rounded-2xl p-7 text-center shadow-sm">
                 <p className="text-4xl font-bold text-[#266b75] mb-1">100%</p>
-                <p className="text-stone-400 text-xs font-medium uppercase tracking-wide">Mom-Owned & Operated</p>
+                <p className="text-stone-700 text-xs font-medium uppercase tracking-wide">Mom-Owned & Operated</p>
               </div>
               <div className="bg-[#7dbdc6]/20 border border-[#7dbdc6]/30 rounded-2xl p-7 text-center">
                 <p className="text-4xl font-bold text-[#266b75] mb-1">24h</p>
-                <p className="text-stone-500 text-xs font-medium uppercase tracking-wide">Response Time</p>
+                <p className="text-stone-900 text-xs font-medium uppercase tracking-wide">Response Time</p>
               </div>
             </div>
           </div>
@@ -196,7 +196,7 @@ export default function PublicHome() {
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <h2 className="text-2xl md:text-3xl font-bold text-stone-900 text-center mb-2">How It Works</h2>
-          <p className="text-stone-400 text-center text-sm mb-10">Getting started is simple.</p>
+          <p className="text-stone-700 text-center text-sm mb-10">Getting started is simple.</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-3xl mx-auto">
             {HOW_IT_WORKS.map(({ step, title, desc }) => (
               <div key={step} className="text-center px-4">
@@ -204,7 +204,7 @@ export default function PublicHome() {
                   {step}
                 </div>
                 <h3 className="font-semibold text-stone-900 mb-2 text-sm">{title}</h3>
-                <p className="text-xs text-stone-400 leading-relaxed">{desc}</p>
+                <p className="text-xs text-stone-700 leading-relaxed">{desc}</p>
               </div>
             ))}
           </div>

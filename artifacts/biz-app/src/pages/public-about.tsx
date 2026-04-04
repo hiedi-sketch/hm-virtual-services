@@ -82,7 +82,8 @@ export default function PublicAbout() {
                 <img
                   src="/about-photo-3.jpg"
                   alt="Family together"
-                  className="col-span-2 h-72 w-full object-cover object-center rounded-2xl shadow-md"
+                  className="col-span-2 h-72 w-full object-cover rounded-2xl shadow-md"
+                  style={{ objectPosition: "center 25%" }}
                 />
               </div>
             </div>
@@ -116,15 +117,15 @@ export default function PublicAbout() {
           <div className="grid grid-cols-3 gap-6 text-center">
             <div>
               <p className="text-4xl font-bold text-[#266b75] mb-1">6+</p>
-              <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Years Experience</p>
+              <p className="text-xs text-stone-700 uppercase tracking-wider font-medium">Years Experience</p>
             </div>
             <div>
               <p className="text-4xl font-bold text-[#266b75] mb-1">50+</p>
-              <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Clients Served</p>
+              <p className="text-xs text-stone-700 uppercase tracking-wider font-medium">Clients Served</p>
             </div>
             <div>
               <p className="text-4xl font-bold text-[#266b75] mb-1">100%</p>
-              <p className="text-xs text-stone-400 uppercase tracking-wider font-medium">Mom-Owned & Operated</p>
+              <p className="text-xs text-stone-700 uppercase tracking-wider font-medium">Mom-Owned & Operated</p>
             </div>
           </div>
         </div>
@@ -133,7 +134,7 @@ export default function PublicAbout() {
       {/* Tools */}
       <section className="py-12 bg-stone-50 border-t border-stone-100">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <p className="text-xs uppercase tracking-widest text-stone-400 font-semibold mb-5">Tools</p>
+          <p className="text-xs uppercase tracking-widest text-stone-700 font-semibold mb-5">Tools</p>
           <div className="flex flex-wrap justify-center gap-3 mb-3">
             {TOOLS.map(({ name, icon }) => (
               <div key={name} className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-medium text-stone-700 shadow-sm">
@@ -141,11 +142,11 @@ export default function PublicAbout() {
                 {name}
               </div>
             ))}
-            <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-medium text-stone-500 shadow-sm">
+            <div className="flex items-center gap-2 bg-white border border-stone-200 rounded-xl px-4 py-2.5 text-sm font-medium text-stone-900 shadow-sm">
               ✨ And Much More!
             </div>
           </div>
-          <p className="text-xs text-stone-400">Also a certified Shopify Partner</p>
+          <p className="text-xs text-stone-700">Also a certified Shopify Partner</p>
         </div>
       </section>
 

@@ -74,7 +74,7 @@ export default function PublicBookkeeping() {
       <section className="py-16 bg-white">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <h2 className="text-2xl md:text-3xl font-bold text-stone-900 text-center mb-2">What's Included</h2>
-          <p className="text-stone-400 text-center text-sm mb-10">Comprehensive bookkeeping support for small business owners.</p>
+          <p className="text-stone-700 text-center text-sm mb-10">Comprehensive bookkeeping support for small business owners.</p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {SERVICES.map(({ icon: Icon, title, desc, items }) => (
@@ -83,10 +83,10 @@ export default function PublicBookkeeping() {
                   <Icon className="w-5 h-5 text-[#266b75]" />
                 </div>
                 <h3 className="font-bold text-stone-900 mb-2">{title}</h3>
-                <p className="text-sm text-stone-500 mb-4 leading-relaxed">{desc}</p>
+                <p className="text-sm text-stone-900 mb-4 leading-relaxed">{desc}</p>
                 <ul className="space-y-1.5">
                   {items.map(item => (
-                    <li key={item} className="flex items-center gap-2 text-xs text-stone-600">
+                    <li key={item} className="flex items-center gap-2 text-xs text-stone-900">
                       <CheckCircle className="w-3 h-3 text-[#266b75] shrink-0" />
                       {item}
                     </li>
@@ -102,10 +102,10 @@ export default function PublicBookkeeping() {
       <section className="py-14 bg-stone-50 border-y border-stone-100">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
           <h2 className="text-2xl font-bold text-stone-900 mb-4">Who This Is For</h2>
-          <p className="text-stone-500 leading-relaxed mb-6 text-sm">
+          <p className="text-stone-900 leading-relaxed mb-6 text-sm">
             I work with solopreneurs, freelancers, and small business owners who are too busy to keep up with their books — or who've tried to do it themselves and know it's time to hand it off.
           </p>
-          <p className="text-stone-500 leading-relaxed text-sm">
+          <p className="text-stone-900 leading-relaxed text-sm">
             Whether you're just getting started or you've been in business for years with a backlog to tackle, I'm here to help.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -122,9 +122,9 @@ export default function PublicBookkeeping() {
       {/* QuickBooks callout */}
       <section className="py-12 bg-white">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <p className="text-xs uppercase tracking-widest text-stone-400 font-semibold mb-3">Shopify Partner · QuickBooks Certified</p>
+          <p className="text-xs uppercase tracking-widest text-stone-700 font-semibold mb-3">Shopify Partner · QuickBooks Certified</p>
           <h2 className="text-xl font-bold text-stone-900 mb-3">The tools you're already using — done right.</h2>
-          <p className="text-sm text-stone-500">
+          <p className="text-sm text-stone-900">
             I work in QuickBooks Online, and I'm a certified Shopify Partner — so if you're running e-commerce alongside your bookkeeping, I've got you covered end to end.
           </p>
         </div>

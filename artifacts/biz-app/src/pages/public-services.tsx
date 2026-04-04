@@ -125,7 +125,7 @@ export default function PublicServices() {
           <h1 className="text-4xl md:text-5xl font-bold text-slate-900 mb-4">
             Everything Your Business Needs
           </h1>
-          <p className="text-lg text-slate-500 max-w-xl mx-auto">
+          <p className="text-lg text-stone-900 max-w-xl mx-auto">
             Flexible, professional virtual support services designed to scale with your business — from admin to strategy.
           </p>
         </div>
@@ -141,10 +141,10 @@ export default function PublicServices() {
                   <Icon className="w-5 h-5" />
                 </div>
                 <h3 className="text-lg font-semibold text-slate-900 mb-2">{title}</h3>
-                <p className="text-sm text-slate-500 mb-5 leading-relaxed">{desc}</p>
+                <p className="text-sm text-stone-900 mb-5 leading-relaxed">{desc}</p>
                 <ul className="space-y-2 mt-auto">
                   {features.map(f => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-slate-600">
+                    <li key={f} className="flex items-start gap-2 text-sm text-stone-900">
                       <Check className="w-3.5 h-3.5 text-[#266b75] shrink-0 mt-0.5" />
                       {f}
                     </li>
@@ -161,7 +161,7 @@ export default function PublicServices() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">Simple, Flexible Pricing</h2>
-            <p className="text-slate-500">Choose the package that fits where you are right now. Scale up anytime.</p>
+            <p className="text-stone-900">Choose the package that fits where you are right now. Scale up anytime.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             {PACKAGES.map(({ name, hours, price, features, highlight }) => (
@@ -179,11 +179,11 @@ export default function PublicServices() {
                   </span>
                 )}
                 <h3 className={`text-xl font-bold mb-1 ${highlight ? "text-white" : "text-slate-900"}`}>{name}</h3>
-                <p className={`text-sm mb-1 ${highlight ? "text-white/70" : "text-slate-400"}`}>{hours}</p>
+                <p className={`text-sm mb-1 ${highlight ? "text-white/70" : "text-stone-700"}`}>{hours}</p>
                 <p className={`text-2xl font-bold mb-6 ${highlight ? "text-white" : "text-[#266b75]"}`}>{price}</p>
                 <ul className="space-y-2.5 flex-1">
                   {features.map(f => (
-                    <li key={f} className={`flex items-start gap-2 text-sm ${highlight ? "text-white/90" : "text-slate-600"}`}>
+                    <li key={f} className={`flex items-start gap-2 text-sm ${highlight ? "text-white/90" : "text-stone-900"}`}>
                       <Check className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${highlight ? "text-[#7dbdc6]" : "text-[#266b75]"}`} />
                       {f}
                     </li>
@@ -202,7 +202,7 @@ export default function PublicServices() {
               </div>
             ))}
           </div>
-          <p className="text-center text-sm text-slate-400 mt-8">
+          <p className="text-center text-sm text-stone-700 mt-8">
             Need something custom? <Link href="/contact" className="text-[#266b75] hover:underline font-medium">Let's talk.</Link>
           </p>
         </div>
@@ -214,7 +214,7 @@ export default function PublicServices() {
           <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-4">
             Not sure which package is right for you?
           </h2>
-          <p className="text-slate-500 mb-8">
+          <p className="text-stone-900 mb-8">
             Book a free 15-minute call and we'll help you figure out exactly what support your business needs.
           </p>
           <Link

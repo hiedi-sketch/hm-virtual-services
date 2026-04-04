@@ -67,7 +67,7 @@ export default function PublicContact() {
             <div className="lg:col-span-2 space-y-8">
               <div>
                 <h2 className="text-lg font-bold text-stone-900 mb-3">Get In Touch</h2>
-                <p className="text-sm text-stone-500 leading-relaxed">
+                <p className="text-sm text-stone-900 leading-relaxed">
                   Whether you're ready to get started or just have questions — reach out. I respond to all inquiries within one business day.
                 </p>
               </div>
@@ -78,7 +78,7 @@ export default function PublicContact() {
                     <Mail className="w-4 h-4 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-400 font-semibold uppercase tracking-wider mb-0.5">Email</p>
+                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">Email</p>
                     <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">Hiedi@HMVirtualServices.com</p>
                   </div>
                 </a>
@@ -87,7 +87,7 @@ export default function PublicContact() {
                     <Phone className="w-4 h-4 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-400 font-semibold uppercase tracking-wider mb-0.5">Phone</p>
+                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">Phone</p>
                     <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">515.207.0340</p>
                   </div>
                 </a>
@@ -96,7 +96,7 @@ export default function PublicContact() {
                     <MapPin className="w-4 h-4 text-[#266b75]" />
                   </div>
                   <div>
-                    <p className="text-xs text-stone-400 font-semibold uppercase tracking-wider mb-0.5">Location</p>
+                    <p className="text-xs text-stone-700 font-semibold uppercase tracking-wider mb-0.5">Location</p>
                     <p className="text-sm text-stone-700 font-medium">Reasnor, IA</p>
                   </div>
                 </div>
@@ -104,7 +104,7 @@ export default function PublicContact() {
 
               <div className="bg-[#266b75]/5 border border-[#266b75]/15 rounded-xl p-5">
                 <p className="text-sm text-[#266b75] font-semibold mb-1">Already a client?</p>
-                <p className="text-sm text-stone-500">
+                <p className="text-sm text-stone-900">
                   Log in to your{" "}
                   <a href="/portal" className="text-[#266b75] hover:underline font-medium">client portal</a>{" "}
                   to message me directly.
@@ -118,7 +118,7 @@ export default function PublicContact() {
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-10 text-center">
                   <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
                   <h3 className="text-xl font-bold text-stone-900 mb-2">Message Sent!</h3>
-                  <p className="text-stone-500 text-sm">
+                  <p className="text-stone-900 text-sm">
                     Thanks for reaching out, I'll be in touch within one business day.
                   </p>
                   <button
@@ -138,7 +138,7 @@ export default function PublicContact() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+                      <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
                         Your Name <span className="text-red-400">*</span>
                       </label>
                       <input
@@ -151,7 +151,7 @@ export default function PublicContact() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+                      <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
                         Email <span className="text-red-400">*</span>
                       </label>
                       <input
@@ -167,7 +167,7 @@ export default function PublicContact() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+                      <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
                         Business Name
                       </label>
                       <input
@@ -179,7 +179,7 @@ export default function PublicContact() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+                      <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
                         Phone Number
                       </label>
                       <input
@@ -193,7 +193,7 @@ export default function PublicContact() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1.5">
+                    <label className="block text-xs font-semibold text-stone-900 uppercase tracking-wider mb-1.5">
                       How Can I Help? <span className="text-red-400">*</span>
                     </label>
                     <textarea
@@ -217,7 +217,7 @@ export default function PublicContact() {
                       "Send Message"
                     )}
                   </button>
-                  <p className="text-xs text-stone-400 text-center">
+                  <p className="text-xs text-stone-700 text-center">
                     I'll get back to you within one business day. No spam, ever.
                   </p>
                 </form>
