@@ -45,35 +45,40 @@ export default function PublicHome() {
           style={{ backgroundImage: "radial-gradient(ellipse at 80% 50%, #7dbdc6 0%, transparent 60%)" }}
         />
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-20 md:py-28 relative">
-          <div className="max-w-2xl">
-            <img
-              src="/hm-logo-full.png"
-              alt="HM Virtual Services"
-              className="h-36 md:h-44 w-auto object-contain mb-8"
-              style={{ filter: "brightness(0) invert(1)" }}
-            />
-            <p className="text-[#7dbdc6] text-sm font-semibold uppercase tracking-widest mb-4">
-              Virtual Bookkeeping & Admin Services
-            </p>
-            <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-white leading-tight mb-6">
-              Taking the Stress Out of Business & Bookkeeping—So You Can Focus on What Matters Most.
-            </h1>
-            <p className="text-lg text-white/75 mb-8 leading-relaxed max-w-xl">
-              Mom-owned virtual bookkeeping and administrative services helping small business owners stay organized, confident, and stress-free.
-            </p>
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/contact"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#266b75] font-bold rounded-xl hover:bg-[#f0f9fa] transition-colors shadow-lg text-sm"
-              >
-                Book A Call!
-              </Link>
-              <Link
-                href="/bookkeeping"
-                className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 text-white font-semibold rounded-xl border border-white/25 hover:bg-white/20 transition-colors text-sm"
-              >
-                Get Started NOW! <ArrowRight className="w-4 h-4" />
-              </Link>
+          <div className="flex flex-col md:flex-row items-center gap-12 md:gap-16">
+            {/* Left: text */}
+            <div className="flex-1">
+              <p className="text-[#7dbdc6] text-sm font-semibold uppercase tracking-widest mb-4">
+                Virtual Bookkeeping & Admin Services
+              </p>
+              <h1 className="text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-white leading-tight mb-6">
+                Taking the Stress Out of Business & Bookkeeping—So You Can Focus on What Matters Most.
+              </h1>
+              <p className="text-lg text-white/75 mb-8 leading-relaxed">
+                Mom-owned virtual bookkeeping and administrative services helping small business owners stay organized, confident, and stress-free.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  href="/contact"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-white text-[#266b75] font-bold rounded-xl hover:bg-[#f0f9fa] transition-colors shadow-lg text-sm"
+                >
+                  Book A Call!
+                </Link>
+                <Link
+                  href="/bookkeeping"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 text-white font-semibold rounded-xl border border-white/25 hover:bg-white/20 transition-colors text-sm"
+                >
+                  Get Started NOW! <ArrowRight className="w-4 h-4" />
+                </Link>
+              </div>
+            </div>
+            {/* Right: logo */}
+            <div className="shrink-0 flex items-center justify-center">
+              <img
+                src="/hm-logo-full.png"
+                alt="HM Virtual Services"
+                className="h-56 md:h-72 w-auto object-contain"
+              />
             </div>
           </div>
         </div>
