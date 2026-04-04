@@ -139,7 +139,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <h4 className="text-white text-sm font-semibold mb-3">Get In Touch</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="mailto:Hiedi@HMVirtualServices.com" className="hover:text-[#7dbdc6] transition-colors">Hiedi@HMVirtualServices.com</a></li>
-                <li><a href="tel:6416316218" className="hover:text-[#7dbdc6] transition-colors">(641) 631-6218</a></li>
+                <li><a href="tel:5152070340" className="hover:text-[#7dbdc6] transition-colors">515.207.0340</a></li>
                 <li className="pt-1">
                   <Link href="/contact" className="inline-block px-3 py-1.5 bg-[#266b75] text-white text-xs font-semibold rounded-lg hover:bg-[#1f5560] transition-colors">
                     Book A Call!

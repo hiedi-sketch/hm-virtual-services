@@ -82,13 +82,13 @@ export default function PublicContact() {
                     <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">Hiedi@HMVirtualServices.com</p>
                   </div>
                 </a>
-                <a href="tel:6416316218" className="flex items-start gap-3 group">
+                <a href="tel:5152070340" className="flex items-start gap-3 group">
                   <div className="w-9 h-9 bg-[#266b75]/10 rounded-lg flex items-center justify-center shrink-0 group-hover:bg-[#266b75]/15 transition-colors">
                     <Phone className="w-4 h-4 text-[#266b75]" />
                   </div>
                   <div>
                     <p className="text-xs text-stone-400 font-semibold uppercase tracking-wider mb-0.5">Phone</p>
-                    <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">(641) 631-6218</p>
+                    <p className="text-sm text-stone-700 font-medium group-hover:text-[#266b75] transition-colors">515.207.0340</p>
                   </div>
                 </a>
                 <div className="flex items-start gap-3">
