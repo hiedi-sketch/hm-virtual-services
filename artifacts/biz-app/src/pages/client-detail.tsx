@@ -74,6 +74,10 @@ export default function ClientDetail() {
   const [editCustomHourlyRate, setEditCustomHourlyRate] = useState("");
   const [editCustomBudgetedHours, setEditCustomBudgetedHours] = useState("");
   const [editResetDay, setEditResetDay] = useState("");
+  const [editAllowRollover, setEditAllowRollover] = useState(false);
+  const [editRolloverCap, setEditRolloverCap] = useState("");
+  const [addAllowRollover, setAddAllowRollover] = useState(false);
+  const [addRolloverCap, setAddRolloverCap] = useState("");
   const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
   const [commentTaskTitle, setCommentTaskTitle] = useState<string>("");
 
@@ -104,6 +108,10 @@ export default function ClientDetail() {
     billing_type: string;
     hourly_rate: number | null;
     budgeted_hours: number | null;
+    base_budgeted_hours: number | null;
+    rollover_hours: number;
+    allow_rollover: boolean;
+    rollover_cap_hours: number | null;
     price: number | null;
     hours_used: number;
     monthly_hours_reset_day: number | null;
@@ -188,10 +196,13 @@ export default function ClientDetail() {
     const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
     const effHours = cs.custom_budgeted_hours ?? cs.budgeted_hours;
     const resetDay = (cs as any).monthly_hours_reset_day;
+    const hoursInfo = servicesHours.find(h => h.service_id === cs.service_id);
     setEditCustomPrice(effPrice != null ? String(effPrice) : "");
     setEditCustomHourlyRate(effRate != null ? String(effRate) : "");
     setEditCustomBudgetedHours(effHours != null ? String(effHours) : "");
     setEditResetDay(resetDay != null ? String(resetDay) : "");
+    setEditAllowRollover(hoursInfo?.allow_rollover ?? false);
+    setEditRolloverCap(hoursInfo?.rollover_cap_hours != null ? String(hoursInfo.rollover_cap_hours) : "");
     setEditingServiceId(cs.service_id);
   };
 
@@ -745,6 +756,30 @@ export default function ClientDetail() {
                 )}
               </div>
             )}
+            {selectedAddService?.service_type === "Virtual Assistant" && (
+              <div className="flex flex-col gap-2 pt-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={addAllowRollover}
+                    onChange={e => setAddAllowRollover(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-[#266b75]"
+                  />
+                  <span className="text-xs font-medium text-slate-600">Allow unused hours to roll over each period</span>
+                </label>
+                {addAllowRollover && (
+                  <div className="ml-5">
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Rollover Cap (hrs, optional)</label>
+                    <input type="number" min="0" step="0.5"
+                      className="w-32 border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                      placeholder="No cap"
+                      value={addRolloverCap}
+                      onChange={e => setAddRolloverCap(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-2">
               <button
@@ -758,7 +793,9 @@ export default function ClientDetail() {
                       custom_hourly_rate: addCustomHourlyRate !== "" ? Number(addCustomHourlyRate) : null,
                       custom_budgeted_hours: addCustomBudgetedHours !== "" ? Number(addCustomBudgetedHours) : null,
                       monthly_hours_reset_day: addResetDay !== "" ? Number(addResetDay) : null,
-                    },
+                      allow_rollover: addAllowRollover,
+                      rollover_cap_hours: addRolloverCap !== "" ? Number(addRolloverCap) : null,
+                    } as any,
                   });
                 }}
                 disabled={!addServiceId || assignServiceMutation.isPending}
@@ -768,7 +805,7 @@ export default function ClientDetail() {
                 {assignServiceMutation.isPending ? "Assigning…" : "Assign Service"}
               </button>
               <button
-                onClick={() => { setShowAddService(false); setAddServiceId(""); setAddCustomPrice(""); setAddCustomHourlyRate(""); setAddCustomBudgetedHours(""); setAddResetDay(""); }}
+                onClick={() => { setShowAddService(false); setAddServiceId(""); setAddCustomPrice(""); setAddCustomHourlyRate(""); setAddCustomBudgetedHours(""); setAddResetDay(""); setAddAllowRollover(false); setAddRolloverCap(""); }}
                 className="px-3 py-2 text-sm border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition-colors"
               >
                 Cancel
@@ -867,6 +904,11 @@ export default function ClientDetail() {
                           {isVA && budgeted > 0 ? (
                             <div>
                               <span className="font-medium text-slate-700">{budgeted}h</span>
+                              {hoursInfo?.rollover_hours != null && hoursInfo.rollover_hours > 0 && (
+                                <p className="text-[9px] font-semibold mt-0.5" style={{ color: "#266b75" }}>
+                                  +{hoursInfo.rollover_hours}h rolled over
+                                </p>
+                              )}
                               {budgeted > 0 && (
                                 <div className="mt-1 flex items-center gap-1.5 justify-end">
                                   <div className="w-16 h-1 bg-slate-100 rounded-full overflow-hidden">
@@ -973,6 +1015,30 @@ export default function ClientDetail() {
                                   </div>
                                 )}
                               </div>
+                              {isVA && (
+                                <div className="flex flex-col gap-2 pt-1">
+                                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={editAllowRollover}
+                                      onChange={e => setEditAllowRollover(e.target.checked)}
+                                      className="w-3.5 h-3.5 accent-[#266b75]"
+                                    />
+                                    <span className="text-xs font-medium text-slate-600">Allow unused hours to roll over each period</span>
+                                  </label>
+                                  {editAllowRollover && (
+                                    <div className="ml-5 flex items-center gap-2">
+                                      <label className="text-[11px] font-medium text-slate-500">Rollover Cap (hrs, optional):</label>
+                                      <input type="number" min="0" step="0.5"
+                                        className="w-24 border border-slate-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+                                        placeholder="No cap"
+                                        value={editRolloverCap}
+                                        onChange={e => setEditRolloverCap(e.target.value)}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                               <div className="flex gap-2 pt-1">
                                 <button
                                   onClick={() => {
@@ -984,7 +1050,9 @@ export default function ClientDetail() {
                                         custom_hourly_rate: editCustomHourlyRate !== "" ? Number(editCustomHourlyRate) : null,
                                         custom_budgeted_hours: editCustomBudgetedHours !== "" ? Number(editCustomBudgetedHours) : null,
                                         monthly_hours_reset_day: editResetDay !== "" ? Number(editResetDay) : null,
-                                      },
+                                        allow_rollover: editAllowRollover,
+                                        rollover_cap_hours: editRolloverCap !== "" ? Number(editRolloverCap) : null,
+                                      } as any,
                                     });
                                   }}
                                   disabled={updateServiceMutation.isPending}

@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, real, boolean } from "drizzle-orm/pg-core";
 import { clientsTable } from "./clients";
 import { servicesTable } from "./services";
 
@@ -14,6 +14,8 @@ export const clientServicesTable = pgTable("client_services", {
   custom_hourly_rate: real("custom_hourly_rate"),
   custom_budgeted_hours: real("custom_budgeted_hours"),
   monthly_hours_reset_day: integer("monthly_hours_reset_day"),
+  allow_rollover: boolean("allow_rollover").notNull().default(false),
+  rollover_cap_hours: real("rollover_cap_hours"),
   created_at: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),

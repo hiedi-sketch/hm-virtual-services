@@ -5,7 +5,8 @@ import { useLocation } from "wouter";
 
 function validateEmail(email: string): string | null {
   if (!email.trim()) return "Email is required";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Enter a valid email address";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return "Enter a valid email address";
   return null;
 }
 
@@ -55,7 +56,7 @@ export default function Login() {
       setServerError(
         msg.toLowerCase().includes("expired")
           ? "Your session expired. Please sign in again."
-          : msg
+          : msg,
       );
     } finally {
       setLoading(false);
@@ -64,34 +65,36 @@ export default function Login() {
 
   return (
     <div
-      className="min-h-screen flex flex-col justify-center items-center px-8"
+      className="min-h-screen flex flex-col justify-center items-center px-1"
       style={{ fontFamily: "'Inter', sans-serif", backgroundColor: "#f9f9f7" }}
     >
-      <div className="w-full max-w-xs">
-
+      <div className="max-w-xl mx-auto">
         {/* Logo + Wordmark */}
-        <div className="mb-16 flex items-center gap-3">
-          <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-16 w-16 object-contain shrink-0" />
-          <div>
-            <div className="text-sm font-semibold leading-tight" style={{ color: "#266b75" }}>HM Virtual Services</div>
-            <div className="text-xs font-medium" style={{ color: "#266b75" }}>Business Suite</div>
-          </div>
+        <div className="flex items-center">
+          <img
+            src="/hm-logo-full.png"
+            alt="HM Virtual Services"
+            className="h-130 w-130 object-contain shrink-0 text-center"
+          />
         </div>
 
         {/* Heading */}
         <h1
-          className="text-2xl font-semibold mb-1 leading-tight"
+          className="text-xl font-semibold mb-1 leading-tight"
           style={{ color: "#111", letterSpacing: "-0.02em" }}
         >
           Welcome back to HM Virtual Services Business Suite.
         </h1>
-        <p className="text-sm mb-12" style={{ color: "#266b75", fontWeight: 500 }}>
+        <p
+          className="text-lg mb-3"
+          style={{ color: "#266b75", fontWeight: 600 }}
+        >
           Let's Get Your Day Running Smoothly.
         </p>
 
         {/* Server error */}
         {serverError && (
-          <div className="mb-6 text-sm" style={{ color: "#b91c1c" }}>
+          <div className="mb-6 text-m" style={{ color: "#b91c1c" }}>
             {serverError}
           </div>
         )}
@@ -101,10 +104,14 @@ export default function Login() {
           <div className="space-y-1.5">
             <label
               htmlFor="email"
-              className="text-xs font-semibold uppercase"
+              className="text-m font-semibold uppercase"
               style={{
                 letterSpacing: "0.12em",
-                color: emailFocused ? "#266b75" : emailError ? "#b91c1c" : "#999",
+                color: emailFocused
+                  ? "#000000"
+                  : emailError
+                    ? "#000000"
+                    : "#000000",
                 transition: "color 0.15s",
               }}
             >
@@ -114,7 +121,7 @@ export default function Login() {
               id="email"
               type="email"
               value={email}
-              onChange={e => {
+              onChange={(e) => {
                 setEmail(e.target.value);
                 if (emailError) setEmailError("");
                 if (serverError) setServerError("");
@@ -123,15 +130,17 @@ export default function Login() {
               onBlur={handleEmailBlur}
               placeholder="you@example.com"
               autoComplete="email"
-              className="w-full pb-2.5 text-sm bg-transparent outline-none border-0 border-b placeholder:text-gray-300 text-gray-900 transition-all"
+              className="w-full pb-2.5 text-m bg-transparent outline-none border-0 border-b placeholder:text-black text-black transition-all"
               style={{
                 borderBottom: `1.5px solid ${
-                  emailError ? "#f87171" : emailFocused ? "#7dbdc6" : "#d4d4d0"
+                  emailError ? "#f87171" : emailFocused ? "#266b75" : "#266b75"
                 }`,
               }}
             />
             {emailError && (
-              <p className="text-xs" style={{ color: "#b91c1c" }}>{emailError}</p>
+              <p className="text-m" style={{ color: "#b91c1c" }}>
+                {emailError}
+              </p>
             )}
           </div>
 
@@ -140,10 +149,14 @@ export default function Login() {
             <div className="flex justify-between items-center">
               <label
                 htmlFor="password"
-                className="text-xs font-semibold uppercase"
+                className="text-m font-semibold uppercase"
                 style={{
                   letterSpacing: "0.12em",
-                  color: pwFocused ? "#266b75" : passwordError ? "#b91c1c" : "#999",
+                  color: pwFocused
+                    ? "#000000"
+                    : passwordError
+                      ? "#000000"
+                      : "#000000",
                   transition: "color 0.15s",
                 }}
               >
@@ -152,7 +165,7 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => navigate("/forgot-password")}
-                className="text-xs font-medium uppercase transition-opacity hover:opacity-70"
+                className="text-m font-medium uppercase transition-opacity hover:opacity-70"
                 style={{ color: "#266b75", letterSpacing: "0.1em" }}
               >
                 Forgot?
@@ -163,7 +176,7 @@ export default function Login() {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 value={password}
-                onChange={e => {
+                onChange={(e) => {
                   setPassword(e.target.value);
                   if (passwordError) setPasswordError("");
                   if (serverError) setServerError("");
@@ -172,26 +185,36 @@ export default function Login() {
                 onBlur={handlePasswordBlur}
                 placeholder="••••••••"
                 autoComplete="current-password"
-                className="w-full pb-2.5 pr-6 text-sm bg-transparent outline-none border-0 border-b placeholder:text-gray-300 text-gray-900 transition-all"
+                className="w-full pb-2.5 pr-6 text-m bg-transparent outline-none border-0 border-b placeholder:text-gray-300 text-gray-900 transition-all"
                 style={{
                   borderBottom: `1.5px solid ${
-                    passwordError ? "#f87171" : pwFocused ? "#7dbdc6" : "#d4d4d0"
+                    passwordError
+                      ? "#f87171"
+                      : pwFocused
+                        ? "#7dbdc6"
+                        : "#d4d4d0"
                   }`,
                 }}
               />
               <button
                 type="button"
-                onClick={() => setShowPassword(v => !v)}
-                className="absolute right-0 top-0 transition-colors"
-                style={{ color: pwFocused ? "#7dbdc6" : "#bbb" }}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2 top-2 transition-colors"
+                style={{ color: pwFocused ? "#266b75" : "#266b75" }}
                 tabIndex={-1}
                 aria-label={showPassword ? "Hide password" : "Show password"}
               >
-                {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                {showPassword ? (
+                  <EyeOff className="w-5 h-5" />
+                ) : (
+                  <Eye className="w-5 h-5" />
+                )}
               </button>
             </div>
             {passwordError && (
-              <p className="text-xs" style={{ color: "#b91c1c" }}>{passwordError}</p>
+              <p className="text-m" style={{ color: "#b91c1c" }}>
+                {passwordError}
+              </p>
             )}
           </div>
 
@@ -211,14 +234,6 @@ export default function Login() {
             </button>
           </div>
         </form>
-
-        {/* Footer */}
-        <div className="mt-16 pt-8" style={{ borderTop: "1px solid #e8e8e4" }}>
-          <p className="text-xs" style={{ color: "#bbb" }}>
-            Default admin: admin@flowstate.app / admin123 · HM Virtual Services Business Suite
-          </p>
-        </div>
-
       </div>
     </div>
   );

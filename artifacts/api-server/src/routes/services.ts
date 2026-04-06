@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { servicesTable, clientServicesTable, timeEntriesTable, tasksTable } from "@workspace/db";
-import { eq, and, gte, or, sql } from "drizzle-orm";
+import { eq, and, gte, lt, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
@@ -39,6 +39,8 @@ const AssignServiceBody = z.object({
   custom_hourly_rate: z.number().min(0).nullable().optional(),
   custom_budgeted_hours: z.number().min(0).nullable().optional(),
   monthly_hours_reset_day: z.number().int().min(1).max(31).nullable().optional(),
+  allow_rollover: z.boolean().optional(),
+  rollover_cap_hours: z.number().min(0).nullable().optional(),
 });
 
 const UpdateClientServiceBody = z.object({
@@ -46,6 +48,8 @@ const UpdateClientServiceBody = z.object({
   custom_hourly_rate: z.number().min(0).nullable().optional(),
   custom_budgeted_hours: z.number().min(0).nullable().optional(),
   monthly_hours_reset_day: z.number().int().min(1).max(31).nullable().optional(),
+  allow_rollover: z.boolean().optional(),
+  rollover_cap_hours: z.number().min(0).nullable().optional(),
 });
 
 // ── Helper: compute reset window from a day-of-month ──────────────────────
@@ -169,6 +173,8 @@ router.post("/clients/:clientId/services", requireAdmin, async (req, res) => {
     custom_hourly_rate: body.custom_hourly_rate ?? null,
     custom_budgeted_hours: body.custom_budgeted_hours ?? null,
     monthly_hours_reset_day: body.monthly_hours_reset_day ?? null,
+    allow_rollover: body.allow_rollover ?? false,
+    rollover_cap_hours: body.rollover_cap_hours ?? null,
   }).returning();
   res.status(201).json(row);
 });
@@ -216,6 +222,8 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
       custom_hourly_rate: clientServicesTable.custom_hourly_rate,
       custom_budgeted_hours: clientServicesTable.custom_budgeted_hours,
       monthly_hours_reset_day: clientServicesTable.monthly_hours_reset_day,
+      allow_rollover: clientServicesTable.allow_rollover,
+      rollover_cap_hours: clientServicesTable.rollover_cap_hours,
       name: servicesTable.name,
       service_type: servicesTable.service_type,
       billing_type: servicesTable.billing_type,
@@ -234,16 +242,22 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
   let vaLastReset: string | null = null;
   let vaNextReset: string | null = null;
   let vaDaysUntilReset: number | null = null;
+  let vaPrevLastReset: string | null = null;
 
   if (vaResetDay) {
     const window = computeResetWindow(vaResetDay);
     vaLastReset = window.lastResetDate;
     vaNextReset = window.nextResetDate;
     vaDaysUntilReset = window.daysUntilReset;
+    // Previous period: one day before the current period start
+    const prevRefDate = new Date(window.lastResetDate + "T00:00:00");
+    prevRefDate.setDate(prevRefDate.getDate() - 1);
+    const prevWindow = computeResetWindow(vaResetDay, prevRefDate);
+    vaPrevLastReset = prevWindow.lastResetDate;
   }
 
-  // Helper: sum minutes for a given service type with optional date filter
-  async function sumMinutes(serviceType: string, since: string | null): Promise<number> {
+  // Helper: sum minutes for a given service type within an optional date range
+  async function sumMinutes(serviceType: string, since: string | null, before: string | null = null): Promise<number> {
     const baseWhere = and(
       eq(timeEntriesTable.client_id, clientId),
       or(
@@ -251,7 +265,12 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
         eq(tasksTable.service_type, serviceType)
       )
     );
-    const whereClause = since ? and(baseWhere, gte(timeEntriesTable.date, since)) : baseWhere;
+    let whereClause = baseWhere;
+    if (since && before) {
+      whereClause = and(baseWhere, gte(timeEntriesTable.date, since), lt(timeEntriesTable.date, before));
+    } else if (since) {
+      whereClause = and(baseWhere, gte(timeEntriesTable.date, since));
+    }
 
     const [row] = await db
       .select({ total: sql<number>`coalesce(sum(${timeEntriesTable.duration_minutes}), 0)`.as("total") })
@@ -261,7 +280,7 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
     return Number(row?.total ?? 0);
   }
 
-  // Build minutes cache per service type
+  // Build minutes cache per service type for the current period
   const minutesByType: Record<string, number> = {};
   const serviceTypes = [...new Set(assignedServices.map(s => s.service_type).filter(Boolean))];
 
@@ -271,10 +290,29 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
     minutesByType[st] = await sumMinutes(st, since);
   }
 
+  // Compute rollover hours per service (VA only, previous period unused)
+  const rolloverByServiceId: Record<number, number> = {};
+  for (const svc of assignedServices) {
+    if (!svc.allow_rollover || svc.service_type !== "Virtual Assistant") continue;
+    if (!vaPrevLastReset || !vaLastReset) continue;
+
+    const budgeted = svc.custom_budgeted_hours ?? svc.budgeted_hours ?? 0;
+    if (budgeted <= 0) continue;
+
+    const prevMinutes = await sumMinutes("Virtual Assistant", vaPrevLastReset, vaLastReset);
+    const prevUsed = prevMinutes / 60;
+    const unused = Math.max(0, budgeted - prevUsed);
+    const capped = svc.rollover_cap_hours != null ? Math.min(unused, svc.rollover_cap_hours) : unused;
+    rolloverByServiceId[svc.service_id] = Math.round(capped * 100) / 100;
+  }
+
   const result = assignedServices.map(svc => {
     const svcResetDay = svc.service_type === "Virtual Assistant" ? vaResetDay : null;
     const nextReset = svc.service_type === "Virtual Assistant" ? vaNextReset : null;
     const daysUntilReset = svc.service_type === "Virtual Assistant" ? vaDaysUntilReset : null;
+    const rolloverHours = rolloverByServiceId[svc.service_id] ?? 0;
+    const baseBudget = svc.custom_budgeted_hours ?? svc.budgeted_hours ?? null;
+    const effectiveBudget = baseBudget != null ? baseBudget + rolloverHours : null;
 
     return {
       service_id: svc.service_id,
@@ -282,7 +320,11 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
       service_type: svc.service_type,
       billing_type: svc.billing_type,
       hourly_rate: svc.custom_hourly_rate ?? svc.hourly_rate,
-      budgeted_hours: svc.custom_budgeted_hours ?? svc.budgeted_hours,
+      budgeted_hours: effectiveBudget,
+      base_budgeted_hours: baseBudget,
+      rollover_hours: rolloverHours,
+      allow_rollover: svc.allow_rollover,
+      rollover_cap_hours: svc.rollover_cap_hours,
       price: svc.custom_price ?? svc.price,
       hours_used: svc.service_type ? (minutesByType[svc.service_type] ?? 0) / 60 : 0,
       monthly_hours_reset_day: svcResetDay,
