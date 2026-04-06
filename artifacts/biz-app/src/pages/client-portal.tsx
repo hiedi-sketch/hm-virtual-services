@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListTasks, useListInvoices, useListTimeEntries, useCreateTask, useListClientServices } from "@workspace/api-client-react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentsTab } from "@/components/DocumentsTab";
+import TaskTable from "@/components/TaskTable";
 
 // ---------- types ----------
 type ClientRecord = {
@@ -525,88 +526,6 @@ function OverviewTab({
 }
 
 // ================================================================
-// TASK COMMENTS PANEL
-// ================================================================
-function TaskCommentsPanel({ taskId, currentUserName }: { taskId: number; currentUserName: string }) {
-  const queryClient = useQueryClient();
-  const [commentText, setCommentText] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  const { data: comments = [], isLoading } = useQuery<any[]>({
-    queryKey: ["task-comments", taskId],
-    queryFn: () => fetch(`/api/tasks/${taskId}/comments`, { credentials: "include" }).then(r => r.json()),
-    staleTime: 30 * 1000,
-  });
-
-  const submitComment = async () => {
-    if (!commentText.trim()) return;
-    setSubmitting(true);
-    await fetch(`/api/tasks/${taskId}/comments`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ comment: commentText.trim() }),
-    });
-    setCommentText("");
-    queryClient.invalidateQueries({ queryKey: ["task-comments", taskId] });
-    setSubmitting(false);
-    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
-  };
-
-  function fmtTime(d: string) {
-    return new Date(d).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  }
-
-  return (
-    <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-4 space-y-3">
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Comments</p>
-      {isLoading ? (
-        <p className="text-xs text-slate-400">Loading…</p>
-      ) : comments.length === 0 ? (
-        <p className="text-xs text-slate-400 italic">No comments yet. Be the first to add one.</p>
-      ) : (
-        <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-          {comments.map((c: any) => (
-            <div key={c.id} className={`flex gap-2 ${c.author_role === "client" ? "flex-row-reverse" : ""}`}>
-              <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white ${c.author_role === "client" ? "bg-primary" : "bg-slate-500"}`}>
-                {c.author_name?.[0]?.toUpperCase() ?? "?"}
-              </div>
-              <div className={`flex-1 min-w-0 ${c.author_role === "client" ? "text-right" : ""}`}>
-                <p className="text-[10px] text-slate-400 mb-0.5">
-                  <span className="font-medium text-slate-600">{c.author_name}</span>
-                  {c.author_role !== "client" && <span className="ml-1 px-1 py-0.5 bg-slate-200 rounded text-[9px] uppercase">{c.author_role === "admin" ? "Admin" : "Team"}</span>}
-                  {" · "}{fmtTime(c.created_at)}
-                </p>
-                <p className={`text-xs text-slate-700 bg-white border border-slate-200 rounded-xl px-3 py-1.5 inline-block max-w-[90%] text-left`}>{c.comment}</p>
-              </div>
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      )}
-      <div className="flex gap-2 items-end">
-        <textarea
-          rows={2}
-          value={commentText}
-          onChange={e => setCommentText(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitComment(); } }}
-          placeholder="Add a comment… (Enter to send)"
-          className="flex-1 text-xs border border-slate-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        <button
-          onClick={submitComment}
-          disabled={submitting || !commentText.trim()}
-          className="shrink-0 bg-primary text-white px-3 py-2 rounded-xl text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-        >
-          <Send className="w-3.5 h-3.5" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ================================================================
 // TASKS TAB
 // ================================================================
 function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
@@ -615,8 +534,6 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
 }) {
   const [showForm, setShowForm] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
-  const { user } = useAuth();
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(taskSchema),
@@ -751,66 +668,13 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
         ))}
       </div>
 
-      {/* Task list */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <CheckCircle2 className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-700">You're all caught up.</p>
-            <p className="text-xs text-slate-400 mt-0.5">Nothing needs your attention right now.</p>
-          </div>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {filtered.map(task => {
-              const isOverdue = task.status !== "complete" && task.due_date && task.due_date < todayStr;
-              const isExpanded = expandedTaskId === task.id;
-              return (
-                <li key={task.id}>
-                  <button
-                    onClick={() => setExpandedTaskId(isExpanded ? null : task.id)}
-                    className="w-full text-left px-5 py-3.5 flex items-start gap-3 hover:bg-slate-50/50 transition-colors"
-                  >
-                    <div className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${task.status === "complete" ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
-                      {task.status === "complete" && <CheckCircle2 className="w-3 h-3 text-white" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-sm font-medium truncate ${task.status === "complete" ? "line-through text-slate-400" : "text-slate-800"}`}>
-                        {task.title}
-                      </p>
-                      {task.description && (
-                        <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">{task.description}</p>
-                      )}
-                      {task.due_date && (
-                        <p className={`text-xs mt-0.5 ${isOverdue ? "text-red-500 font-medium" : "text-slate-400"}`}>
-                          {isOverdue ? "⚠ Overdue · " : "Due "}{fmtDate(task.due_date)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-                      {task.service_type === "Bookkeeping" && (
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-[#c8c7cb] bg-[#c8c7cb]/40 text-slate-800 whitespace-nowrap">
-                          Bookkeeping
-                        </span>
-                      )}
-                      {task.service_type === "Virtual Assistant" && (
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-[#7dbdc6] bg-[#7dbdc6]/30 text-slate-800 whitespace-nowrap">
-                          Virtual Assistant
-                        </span>
-                      )}
-                      <StatusBadge status={task.status} />
-                      <MessageSquare className={`w-4 h-4 ${isExpanded ? "text-primary" : "text-slate-300"}`} />
-                    </div>
-                  </button>
-                  {isExpanded && (
-                    <TaskCommentsPanel taskId={task.id} currentUserName={user?.name ?? ""} />
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-      <p className="text-xs text-center text-slate-400">Click any task to view or add comments visible to your team.</p>
+      {/* Task list — matches admin Task Manager layout */}
+      <TaskTable
+        tasks={filtered}
+        readOnly={true}
+        showComments={true}
+      />
+      <p className="text-xs text-center text-slate-400">Click any task row to expand details and leave comments visible to your team.</p>
     </div>
   );
 }

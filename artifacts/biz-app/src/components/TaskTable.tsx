@@ -111,8 +111,8 @@ type SortKey = "title" | "due_date" | "assigned_to" | "service_type" | "client_n
 
 type TaskTableProps = {
   tasks: Task[];
-  onToggleStatus: (task: Task) => void;
-  onUpdateField: (id: string, field: string, value: any) => void;
+  onToggleStatus?: (task: Task) => void;
+  onUpdateField?: (id: string, field: string, value: any) => void;
   onStartTimer?: (
     taskId: number,
     taskTitle: string,
@@ -127,6 +127,7 @@ type TaskTableProps = {
   timerStatus?: "idle" | "running" | "paused";
   showComments?: boolean;
   serviceTypeFilter?: string;
+  readOnly?: boolean;
 };
 
 export default function TaskTable({
@@ -141,6 +142,7 @@ export default function TaskTable({
   timerStatus,
   showComments = true,
   serviceTypeFilter,
+  readOnly = false,
 }: TaskTableProps) {
   const today = new Date().toISOString().split("T")[0];
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -179,7 +181,7 @@ export default function TaskTable({
   const sortIcon = (key: SortKey) =>
     sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
 
-  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + (onDeleteTask ? 1 : 0) + 7 + 1;
+  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + (onDeleteTask ? 1 : 0) + (readOnly ? 6 : 7) + 1;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -191,9 +193,11 @@ export default function TaskTable({
               <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("title")}>
                 Task{sortIcon("title")}
               </th>
-              <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("client_name")}>
-                Client{sortIcon("client_name")}
-              </th>
+              {!readOnly && (
+                <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("client_name")}>
+                  Client{sortIcon("client_name")}
+                </th>
+              )}
               <th className="px-6 py-4 cursor-pointer select-none whitespace-nowrap" onClick={() => handleSort("service_type")}>
                 Service Type{sortIcon("service_type")}
               </th>
@@ -239,67 +243,101 @@ export default function TaskTable({
                     >
                       {/* Checkbox */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => onToggleStatus(task)} className="text-lg leading-none">
-                          {task.status === "Completed" ? "✅" : "⬜"}
-                        </button>
+                        {readOnly ? (
+                          <span className="text-lg leading-none">
+                            {task.status === "Completed" ? "✅" : "⬜"}
+                          </span>
+                        ) : (
+                          <button onClick={() => onToggleStatus?.(task)} className="text-lg leading-none">
+                            {task.status === "Completed" ? "✅" : "⬜"}
+                          </button>
+                        )}
                       </td>
 
                       {/* Title */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <input
-                          value={task.title}
-                          onChange={(e) => onUpdateField(task.id, "title", e.target.value)}
-                          onClick={e => e.stopPropagation()}
-                          className={`w-full bg-transparent outline-none font-semibold ${
-                            task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
-                          }`}
-                        />
+                        {readOnly ? (
+                          <span className={`font-semibold ${task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"}`}>
+                            {task.title}
+                          </span>
+                        ) : (
+                          <input
+                            value={task.title}
+                            onChange={(e) => onUpdateField?.(task.id, "title", e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            className={`w-full bg-transparent outline-none font-semibold ${
+                              task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
+                            }`}
+                          />
+                        )}
                       </td>
 
-                      {/* Client */}
-                      <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">
-                        {task.client_name ?? <span className="text-slate-300">—</span>}
-                      </td>
+                      {/* Client — hidden in readOnly (client only sees their own tasks) */}
+                      {!readOnly && (
+                        <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">
+                          {task.client_name ?? <span className="text-slate-300">—</span>}
+                        </td>
+                      )}
 
-                      {/* Service Type — inline editable */}
+                      {/* Service Type */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <InlineServiceTypeEditor
-                          value={task.service_type}
-                          onSave={(v) => onUpdateField(task.id, "service_type", v)}
-                        />
+                        {readOnly ? (
+                          <ServiceTypeBadge value={task.service_type} />
+                        ) : (
+                          <InlineServiceTypeEditor
+                            value={task.service_type}
+                            onSave={(v) => onUpdateField?.(task.id, "service_type", v)}
+                          />
+                        )}
                       </td>
 
                       {/* Due date */}
                       <td className={`px-6 py-4 ${isOverdue ? "text-red-600 font-semibold" : "text-slate-600"}`} onClick={e => e.stopPropagation()}>
-                        <input
-                          type="date"
-                          value={task.due_date || ""}
-                          onChange={(e) => onUpdateField(task.id, "due_date", e.target.value)}
-                          className={`bg-transparent border rounded px-2 py-1 text-xs ${isOverdue ? "border-red-300" : "border-slate-200"}`}
-                        />
+                        {readOnly ? (
+                          task.due_date ? (
+                            <span className={`text-xs px-2 py-1 rounded border ${isOverdue ? "bg-red-50 border-red-200 text-red-600 font-semibold" : "border-slate-200 text-slate-600"}`}>
+                              {isOverdue ? "⚠ " : ""}{new Date(task.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            </span>
+                          ) : <span className="text-slate-300 text-xs">—</span>
+                        ) : (
+                          <input
+                            type="date"
+                            value={task.due_date || ""}
+                            onChange={(e) => onUpdateField?.(task.id, "due_date", e.target.value)}
+                            className={`bg-transparent border rounded px-2 py-1 text-xs ${isOverdue ? "border-red-300" : "border-slate-200"}`}
+                          />
+                        )}
                       </td>
 
                       {/* Assigned */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <input
-                          value={task.assigned_to || ""}
-                          onChange={(e) => onUpdateField(task.id, "assigned_to", e.target.value)}
-                          className="bg-transparent border border-slate-200 rounded px-2 py-1 text-xs w-full"
-                          placeholder="—"
-                        />
+                        {readOnly ? (
+                          <span className="text-xs text-slate-600">{task.assigned_to || <span className="text-slate-300">—</span>}</span>
+                        ) : (
+                          <input
+                            value={task.assigned_to || ""}
+                            onChange={(e) => onUpdateField?.(task.id, "assigned_to", e.target.value)}
+                            className="bg-transparent border border-slate-200 rounded px-2 py-1 text-xs w-full"
+                            placeholder="—"
+                          />
+                        )}
                       </td>
 
                       {/* Status */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        <select
-                          value={task.status}
-                          onChange={(e) => onUpdateField(task.id, "status", e.target.value)}
-                          className={statusBadge(task.status)}
-                        >
-                          {TASK_STATUS_OPTIONS.map(o => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
+                        {readOnly ? (
+                          <span className={statusBadge(task.status)}>{task.status}</span>
+                        ) : (
+                          <select
+                            value={task.status}
+                            onChange={(e) => onUpdateField?.(task.id, "status", e.target.value)}
+                            className={statusBadge(task.status)}
+                          >
+                            {TASK_STATUS_OPTIONS.map(o => (
+                              <option key={o.value} value={o.value}>{o.label}</option>
+                            ))}
+                          </select>
+                        )}
                       </td>
 
                       {/* Timer */}
