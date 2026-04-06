@@ -26,6 +26,7 @@ interface ApiTask {
   recurrence: string | null;
   last_generated_at: string | null;
   service_type: string | null;
+  asana_gid: string | null;
   incomplete_subtask_count: number;
 }
 
@@ -1419,13 +1420,20 @@ export default function Tasks() {
 
                         {/* Task description */}
                         <td className="px-2 py-2 min-w-[180px]">
-                          <EditableText
-                            value={task.title}
-                            saving={isSaving}
-                            placeholder="Task description"
-                            strikethrough={task.status === "Completed"}
-                            onSave={v => patchTask(task.id, { title: v })}
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <EditableText
+                              value={task.title}
+                              saving={isSaving}
+                              placeholder="Task description"
+                              strikethrough={task.status === "Completed"}
+                              onSave={v => patchTask(task.id, { title: v })}
+                            />
+                            {task.asana_gid && (
+                              <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-50 text-orange-500 border border-orange-200 leading-none">
+                                Asana
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Due date */}

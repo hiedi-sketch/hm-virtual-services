@@ -43,6 +43,7 @@ const taskSelectFields = {
   recurrence: tasksTable.recurrence,
   last_generated_at: tasksTable.last_generated_at,
   service_type: tasksTable.service_type,
+  asana_gid: tasksTable.asana_gid,
   incomplete_subtask_count: sql<number>`(
     SELECT COUNT(*) FROM subtasks
     WHERE subtasks.task_id = ${tasksTable.id} AND subtasks.done = false

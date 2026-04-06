@@ -111,9 +111,37 @@ export async function updateTaskStatus(
 
 /**
  * Validate that a PAT is functional by hitting /users/me.
- * Returns the user's name on success.
+ * Returns the user's name and workspace gids on success.
  */
-export async function validatePat(pat: string): Promise<{ name: string; email: string }> {
-  const me = await fetchAsana<{ name: string; email: string }>("/users/me?opt_fields=name,email", pat);
+export async function validatePat(pat: string): Promise<{ name: string; email: string; gid?: string; workspaces?: { gid: string }[] }> {
+  const me = await fetchAsana<{ name: string; email: string; gid: string; workspaces: { gid: string }[] }>(
+    "/users/me?opt_fields=name,email,gid,workspaces",
+    pat
+  );
   return me;
+}
+
+export interface AsanaProject {
+  gid: string;
+  name: string;
+}
+
+/**
+ * Fetch all projects the authenticated user can access.
+ * Iterates over all of the user's workspaces.
+ */
+export async function getUserProjects(pat: string): Promise<AsanaProject[]> {
+  const me = await validatePat(pat);
+  const workspaces = me.workspaces ?? [];
+  const all: AsanaProject[] = [];
+  for (const ws of workspaces) {
+    try {
+      const params = new URLSearchParams({ workspace: ws.gid, opt_fields: "gid,name", limit: "100" });
+      const projects = await fetchAsana<AsanaProject[]>(`/projects?${params}`, pat);
+      all.push(...projects);
+    } catch {
+      // skip workspace if error
+    }
+  }
+  return all;
 }

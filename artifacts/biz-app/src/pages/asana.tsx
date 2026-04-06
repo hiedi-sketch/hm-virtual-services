@@ -158,6 +158,11 @@ function TaskRow({
 
 // ─── Settings panel ───────────────────────────────────────────────────────────
 
+interface AsanaProject {
+  gid: string;
+  name: string;
+}
+
 function SettingsPanel({
   settings,
   onSaved,
@@ -170,12 +175,40 @@ function SettingsPanel({
   const [showPat, setShowPat] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [projects, setProjects] = useState<AsanaProject[] | null>(null);
+  const [browsing, setBrowsing] = useState(false);
+  const [browseError, setBrowseError] = useState("");
   const { toast } = useToast();
 
   // Pre-fill project ID if already set
   useEffect(() => {
     if (settings?.project_id) setProjectId(settings.project_id);
   }, [settings?.project_id]);
+
+  const handleBrowse = async () => {
+    setBrowseError("");
+    setBrowsing(true);
+    try {
+      // If there's a new PAT in the input, save it first so we can browse with it
+      if (pat) {
+        await apiFetch("/api/asana/settings", {
+          method: "POST",
+          body: JSON.stringify({ pat, project_id: projectId || "__keep__" }),
+        });
+        setPat("");
+      }
+      const data = await apiFetch<{ projects: AsanaProject[] }>("/api/asana/projects");
+      if (data.projects.length === 0) {
+        setBrowseError("No projects found. Make sure your PAT has access to at least one project.");
+      } else {
+        setProjects(data.projects);
+      }
+    } catch (err: any) {
+      setBrowseError(err.message ?? "Failed to load projects");
+    } finally {
+      setBrowsing(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -184,7 +217,7 @@ function SettingsPanel({
       return;
     }
     if (!projectId) {
-      setError("Please enter your Asana Project ID.");
+      setError("Please enter or select an Asana Project ID.");
       return;
     }
     setError("");
@@ -196,6 +229,7 @@ function SettingsPanel({
       });
       toast({ title: "Asana settings saved", description: "Connection verified successfully." });
       setPat("");
+      setProjects(null);
       onSaved();
     } catch (err: any) {
       setError(err.message ?? "Failed to save settings");
@@ -215,12 +249,6 @@ function SettingsPanel({
           <li>Give it a name (e.g. "HM Business Suite") and click <strong>Create token</strong></li>
           <li>Copy the token — it is only shown once</li>
         </ol>
-        <p className="font-semibold text-slate-700 pt-1">How to find your Project ID</p>
-        <ol className="list-decimal list-inside space-y-1 text-[13px]">
-          <li>Open the project in Asana</li>
-          <li>Look at the URL: <code className="bg-white border border-slate-200 px-1 rounded">asana.com/0/<strong>PROJECT_ID</strong>/list</code></li>
-          <li>Copy the numeric ID from the URL</li>
-        </ol>
       </div>
 
       <form onSubmit={handleSave} className="space-y-4">
@@ -239,7 +267,7 @@ function SettingsPanel({
             <input
               type={showPat ? "text" : "password"}
               value={pat}
-              onChange={e => setPat(e.target.value)}
+              onChange={e => { setPat(e.target.value); setProjects(null); }}
               placeholder={settings?.configured ? "Enter new token to replace current" : "Paste your PAT here"}
               className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 pr-10 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none font-mono"
             />
@@ -253,18 +281,66 @@ function SettingsPanel({
           </div>
         </div>
 
-        {/* Project ID input */}
+        {/* Project picker */}
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-            Asana Project ID
-          </label>
-          <input
-            type="text"
-            value={projectId}
-            onChange={e => setProjectId(e.target.value)}
-            placeholder="e.g. 1234567890123456"
-            className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none font-mono"
-          />
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Asana Project
+            </label>
+            {(settings?.configured || pat) && (
+              <button
+                type="button"
+                onClick={handleBrowse}
+                disabled={browsing}
+                className="flex items-center gap-1 text-xs font-medium text-[#266b75] hover:text-[#1f5560] disabled:opacity-50 transition-colors"
+              >
+                {browsing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                {browsing ? "Loading…" : "Browse projects"}
+              </button>
+            )}
+          </div>
+
+          {/* Project dropdown (if we have a list) */}
+          {projects && projects.length > 0 ? (
+            <div className="space-y-1.5">
+              <p className="text-xs text-slate-500">{projects.length} project{projects.length !== 1 ? "s" : ""} found — click one to select it:</p>
+              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                {projects.map(p => (
+                  <button
+                    key={p.gid}
+                    type="button"
+                    onClick={() => { setProjectId(p.gid); setProjects(null); }}
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[#266b75]/5 transition-colors flex items-center justify-between group ${p.gid === projectId ? "bg-[#266b75]/5 text-[#266b75] font-medium" : "text-slate-700"}`}
+                  >
+                    <span>{p.name}</span>
+                    <span className={`text-[10px] font-mono ${p.gid === projectId ? "text-[#266b75]/70" : "text-slate-300 group-hover:text-slate-400"}`}>{p.gid}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <input
+                type="text"
+                value={projectId}
+                onChange={e => setProjectId(e.target.value)}
+                placeholder="e.g. 1234567890123456 — or use Browse projects above"
+                className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none font-mono"
+              />
+              {projectId && (
+                <p className="text-xs text-slate-400">
+                  Selected ID: <code className="bg-slate-100 px-1 py-0.5 rounded">{projectId}</code>
+                </p>
+              )}
+            </div>
+          )}
+
+          {browseError && (
+            <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-1.5">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+              {browseError}
+            </div>
+          )}
         </div>
 
         {error && (

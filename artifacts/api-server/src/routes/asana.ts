@@ -11,13 +11,14 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { appSettingsTable, tasksTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import {
   getProjectTasks,
   createProjectTask,
   updateTaskStatus,
   validatePat,
+  getUserProjects,
 } from "../services/asana";
 import { z } from "zod";
 
@@ -97,7 +98,7 @@ router.post("/asana/settings", requireAuth, requireRole("admin"), async (req, re
 
   const { pat, project_id } = parsed.data;
 
-  // "__keep__" is a sentinel sent by the UI when the user doesn't want to replace the stored PAT
+  // "__keep__" is a sentinel sent by the UI when the user doesn't want to replace the stored value
   let effectivePat = pat;
   if (pat === "__keep__") {
     const existing = await getSetting("asana_pat");
@@ -106,6 +107,12 @@ router.post("/asana/settings", requireAuth, requireRole("admin"), async (req, re
       return;
     }
     effectivePat = existing;
+  }
+
+  let effectiveProjectId = project_id;
+  if (project_id === "__keep__") {
+    const existing = await getSetting("asana_project_id");
+    effectiveProjectId = existing ?? "";
   }
 
   // Validate the PAT before saving
@@ -121,7 +128,7 @@ router.post("/asana/settings", requireAuth, requireRole("admin"), async (req, re
   }
 
   await setSetting("asana_pat", effectivePat);
-  await setSetting("asana_project_id", project_id);
+  if (effectiveProjectId) await setSetting("asana_project_id", effectiveProjectId);
 
   res.json({ ok: true, asana_user: asanaUser });
 });
@@ -178,6 +185,25 @@ router.post("/asana/tasks", requireAuth, async (req, res) => {
   }
 });
 
+/** GET /api/asana/projects — return projects accessible to the configured PAT */
+router.get("/asana/projects", requireAuth, requireRole("admin"), async (req, res) => {
+  const pat = await getSetting("asana_pat");
+  if (!pat) {
+    res.status(400).json({ error: "Asana PAT is not configured. Please add your PAT in Settings." });
+    return;
+  }
+  try {
+    const projects = await getUserProjects(pat);
+    res.json({ projects });
+  } catch (err: any) {
+    const statusCode = err.statusCode ?? 500;
+    const message =
+      statusCode === 401 ? "Invalid Asana token — please update your PAT in Settings." :
+      (err.message ?? "Failed to fetch projects from Asana");
+    res.status(statusCode < 500 ? statusCode : 502).json({ error: message });
+  }
+});
+
 /** GET /api/asana/import/preview — return Asana tasks formatted for import preview */
 router.get("/asana/import/preview", requireAuth, requireRole("admin"), async (req, res) => {
   const creds = await getCredentials();
@@ -230,11 +256,11 @@ router.post("/asana/import", requireAuth, requireRole("admin"), async (req, res)
   const skipped: number[] = [];
 
   for (const t of tasks) {
-    // Skip if a task with the same title already exists for this client
+    // Skip if already imported by asana_gid, or if a task with the same title exists for this client
     const existing = await db
       .select({ id: tasksTable.id })
       .from(tasksTable)
-      .where(eq(tasksTable.title, t.name))
+      .where(or(eq(tasksTable.asana_gid, t.gid), eq(tasksTable.title, t.name)))
       .limit(1);
 
     if (existing.length > 0) {
@@ -245,6 +271,7 @@ router.post("/asana/import", requireAuth, requireRole("admin"), async (req, res)
     const [row] = await db.insert(tasksTable).values({
       title: t.name,
       client_id,
+      asana_gid: t.gid,
       status: t.completed ? "Completed" : "Not Started",
       due_date: t.due_on ?? null,
       assigned_to: t.assignee_name ?? null,

@@ -14,6 +14,7 @@ export const tasksTable = pgTable("tasks", {
   recurrence: text("recurrence"),
   last_generated_at: text("last_generated_at"),
   service_type: text("service_type", { enum: ["Bookkeeping", "Virtual Assistant"] }),
+  asana_gid: text("asana_gid"),
 });
 
 export const insertTaskSchema = createInsertSchema(tasksTable).omit({ id: true });
