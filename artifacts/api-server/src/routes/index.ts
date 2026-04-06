@@ -24,6 +24,7 @@ import servicesRouter from "./services";
 import messagesRouter from "./messages";
 import asanaRouter from "./asana";
 import contactRouter from "./contact";
+import emailInboundRouter from "./email-inbound";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,6 @@ router.use(servicesRouter);
 router.use(messagesRouter);
 router.use(asanaRouter);
 router.use(contactRouter);
+router.use(emailInboundRouter);
 
 export default router;

@@ -27,6 +27,7 @@ import Backup from "@/pages/backup";
 import Services from "@/pages/services";
 import TimerPopout from "@/pages/timer-popout";
 import AsanaPage from "@/pages/asana";
+import EmailTasksPage from "@/pages/email-tasks";
 
 // Public-facing marketing pages
 import PublicHome from "@/pages/public-home";
@@ -117,6 +118,7 @@ function Router() {
         {user.role === "admin" && <Route path="/backup" component={Backup} />}
         {user.role === "admin" && <Route path="/services" component={Services} />}
         {user.role === "admin" && <Route path="/asana" component={AsanaPage} />}
+        {user.role === "admin" && <Route path="/email-tasks" component={EmailTasksPage} />}
         <Route path="/notifications" component={NotificationsPage} />
         <Route component={NotFound} />
       </Switch>
