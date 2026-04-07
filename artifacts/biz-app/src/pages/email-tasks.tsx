@@ -103,11 +103,11 @@ export default function EmailTasksPage() {
 
   useEffect(() => {
     Promise.all([
-      apiFetch<{ clients: Client[] }>("/api/clients"),
+      apiFetch<Client[]>("/api/clients"),
       apiFetch<EmailSettings>("/api/email/inbound/settings"),
     ])
       .then(([cl, st]) => {
-        setClients(cl.clients);
+        setClients(Array.isArray(cl) ? cl : []);
         setSettings(st);
         setDefaultClientId(st.default_client_id ?? "");
       })
