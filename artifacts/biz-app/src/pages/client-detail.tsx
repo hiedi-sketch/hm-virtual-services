@@ -337,15 +337,17 @@ export default function ClientDetail() {
   const hasVA = clientServices.some(cs => cs.service_type === "Virtual Assistant");
   const barColor = isOverBudget ? "bg-red-500" : isNearBudget ? "bg-amber-500" : "bg-primary";
 
-  // Compute monthly fee from assigned services
-  // For hourly services: use hourly_rate × budgeted_hours; fall back to base price if not set
-  const computedMonthlyFee = servicesHours.reduce((sum, s) => {
-    if (s.billing_type === "Flat Rate") return sum + (s.price ?? 0);
-    if (s.billing_type === "Hourly") {
-      const hourlyTotal = (s.hourly_rate ?? 0) * (s.budgeted_hours ?? 0);
-      return sum + (hourlyTotal > 0 ? hourlyTotal : (s.price ?? 0));
+  // Compute monthly fee from assigned services using effective (custom-overridden) prices
+  const computedMonthlyFee = clientServices.reduce((sum, cs) => {
+    const effPrice = cs.custom_price ?? cs.price ?? 0;
+    const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
+    const effBudget = cs.custom_budgeted_hours ?? cs.budgeted_hours ?? 0;
+    if (cs.billing_type === "Flat Rate") return sum + effPrice;
+    if (cs.billing_type === "Hourly") {
+      const hourlyTotal = effRate != null && effBudget > 0 ? effRate * effBudget : 0;
+      return sum + (hourlyTotal > 0 ? hourlyTotal : effPrice);
     }
-    return sum + (s.price ?? 0);
+    return sum + effPrice;
   }, 0);
 
   return (
