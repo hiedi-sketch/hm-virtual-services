@@ -508,7 +508,7 @@ export default function ClientDetail() {
               <div className="text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Monthly Fee</p>
                 <p className="text-2xl font-bold text-slate-900 mt-0.5">
-                  {formatCurrency(computedMonthlyFee || client.monthly_fee)}
+                  {formatCurrency(computedMonthlyFee)}
                 </p>
                 {clientServices.length > 0 && (
                   <p className="text-[10px] text-slate-400 mt-0.5">from {clientServices.length} service{clientServices.length !== 1 ? "s" : ""}</p>
