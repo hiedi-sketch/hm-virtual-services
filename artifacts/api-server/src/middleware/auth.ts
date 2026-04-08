@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 
 export type UserRole = "admin" | "team_member" | "client";
 
-const IDLE_TIMEOUT_MS = 2 * 60 * 60 * 1000; // 2 hours
+const IDLE_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   if (!req.session.user) {
