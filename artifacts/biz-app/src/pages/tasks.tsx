@@ -914,7 +914,7 @@ function NewTaskRow({
 export default function Tasks() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { startForTask, pause, stop, state: timerState, elapsedMs } = useTimer();
+  const { startForTask, pause, stop, saveAndStop, state: timerState, elapsedMs } = useTimer();
 
   const [clientFilter, setClientFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -979,6 +979,17 @@ export default function Tasks() {
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const patchTask = useCallback(async (id: number, fields: Record<string, unknown>) => {
+    // Save & stop the timer BEFORE the optimistic update so the reactive useEffect
+    // sees an idle timer (not running) when the task status flips to Completed.
+    if (fields.status === "Completed" && timerState.taskId === id && timerState.status !== "idle") {
+      try {
+        await saveAndStop();
+        toast({ title: "Timer saved", description: "Time entry recorded automatically." });
+      } catch {
+        toast({ title: "Could not save timer", description: "Time entry may not have been recorded.", variant: "destructive" });
+        stop(); // at least stop the timer so it doesn't keep running
+      }
+    }
     setSaving(prev => new Set(prev).add(id));
     try {
       queryClient.setQueryData<ApiTask[]>(["api-tasks"], old =>
@@ -995,17 +1006,13 @@ export default function Tasks() {
       queryClient.setQueryData<ApiTask[]>(["api-tasks"], old =>
         (old ?? []).map(t => t.id === id ? { ...t, ...updated } : t)
       );
-      // Stop the timer if this task was just marked Completed and the timer is running for it
-      if (fields.status === "Completed" && timerState.taskId === id) {
-        stop();
-      }
     } catch {
       toast({ title: "Failed to save — change reverted", variant: "destructive" });
       refetch();
     } finally {
       setSaving(prev => { const s = new Set(prev); s.delete(id); return s; });
     }
-  }, [queryClient, toast, refetch, timerState, stop]);
+  }, [queryClient, toast, refetch, timerState, saveAndStop, stop]);
 
   const deleteTask = useCallback(async (id: number) => {
     if (!confirm("Delete this task?")) return;
@@ -1044,15 +1051,18 @@ export default function Tasks() {
 
   // ── Timer ─────────────────────────────────────────────────────────────────
 
-  // Stop the timer reactively whenever the active task becomes Completed
+  // Save & stop the timer reactively whenever the active task becomes Completed
+  // (handles external status changes, e.g. from the client detail page).
+  // patchTask already calls saveAndStop() before its own optimistic update,
+  // so by the time this effect fires for a local change the timer is already idle.
   useEffect(() => {
     if (timerState.taskId && timerState.status !== "idle") {
       const activeTask = tasks.find(t => t.id === timerState.taskId);
       if (activeTask?.status === "Completed") {
-        stop();
+        saveAndStop().catch(() => stop());
       }
     }
-  }, [tasks, timerState.taskId, timerState.status, stop]);
+  }, [tasks, timerState.taskId, timerState.status, saveAndStop, stop]);
 
   const handleTimerClick = (task: ApiTask) => {
     const isThisTask = timerState.taskId === task.id;
