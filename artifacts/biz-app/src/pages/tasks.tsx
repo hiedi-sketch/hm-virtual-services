@@ -1063,9 +1063,9 @@ export default function Tasks() {
         pause();
         return;
       }
-      startForTask(task.id, task.title, null, task.client_name ?? null, (task.service_type as any) ?? null);
+      startForTask(task.id, task.title, task.client_id ?? null, task.client_name ?? null, (task.service_type as any) ?? null);
     } else {
-      startForTask(task.id, task.title, null, task.client_name ?? null, (task.service_type as any) ?? null);
+      startForTask(task.id, task.title, task.client_id ?? null, task.client_name ?? null, (task.service_type as any) ?? null);
     }
 
     // Auto-set status to "In Progress" when timer starts (not when pausing, not if already In Progress or Completed)
