@@ -37,11 +37,21 @@ function ServiceTypePill({ value }: { value: ServiceType }) {
 }
 
 export function GlobalTimerBar() {
-  const { state, elapsedMs, start, pause, stop } = useTimer();
+  const { state, elapsedMs, start, pause, stop, assignClient } = useTimer();
   const { data: clients } = useListClients();
   const { data: tasks } = useListTasks();
   const qc = useQueryClient();
   const { toast } = useToast();
+
+  // Self-heal: if the timer has a clientName but lost its clientId (e.g. old localStorage
+  // state stored before the bug was fixed), look it up and restore it automatically.
+  useEffect(() => {
+    if (state.status === "idle") return;
+    if (state.clientId != null) return;           // already fine
+    if (!state.clientName || !clients?.length) return;
+    const match = clients.find(c => c.name === state.clientName);
+    if (match) assignClient(match.id, match.name);
+  }, [state.status, state.clientId, state.clientName, clients, assignClient]);
 
   const [saving, setSaving] = useState(false);
   const [showSavePrompt, setShowSavePrompt] = useState(false);
@@ -55,7 +65,13 @@ export function GlobalTimerBar() {
   const isRunning = state.status === "running";
 
   function openSavePrompt() {
-    setPromptClientId(state.clientId ?? "");
+    // Resolve clientId — fall back to name lookup if ID was lost (e.g. old localStorage state)
+    let resolvedClientId: number | "" = state.clientId ?? "";
+    if (!resolvedClientId && state.clientName && clients) {
+      const match = clients.find(c => c.name === state.clientName);
+      if (match) resolvedClientId = match.id;
+    }
+    setPromptClientId(resolvedClientId);
     setPromptTaskId(state.taskId ?? "");
     setPromptServiceType(state.serviceType ?? null);
     setPromptNotes(state.notes ?? "");
