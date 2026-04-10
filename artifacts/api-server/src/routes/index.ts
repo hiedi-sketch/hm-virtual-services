@@ -25,6 +25,7 @@ import messagesRouter from "./messages";
 import asanaRouter from "./asana";
 import contactRouter from "./contact";
 import emailInboundRouter from "./email-inbound";
+import missiveWebhookRouter from "./missive-webhook";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(messagesRouter);
 router.use(asanaRouter);
 router.use(contactRouter);
 router.use(emailInboundRouter);
+router.use(missiveWebhookRouter);
 
 export default router;
