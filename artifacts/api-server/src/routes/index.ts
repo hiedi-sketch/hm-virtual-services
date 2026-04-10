@@ -26,6 +26,7 @@ import asanaRouter from "./asana";
 import contactRouter from "./contact";
 import emailInboundRouter from "./email-inbound";
 import missiveWebhookRouter from "./missive-webhook";
+import zapierWebhookRouter from "./zapier-webhook";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(asanaRouter);
 router.use(contactRouter);
 router.use(emailInboundRouter);
 router.use(missiveWebhookRouter);
+router.use(zapierWebhookRouter);
 
 export default router;
