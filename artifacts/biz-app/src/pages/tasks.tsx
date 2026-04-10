@@ -712,12 +712,24 @@ function ImportAsanaModal({
                           className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300 accent-[#266b75] shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <p className={cn(
-                            "text-sm text-slate-700 truncate",
-                            task.completed && "line-through text-slate-400"
-                          )}>
-                            {task.name}
-                          </p>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className={cn(
+                              "text-sm text-slate-700 truncate",
+                              task.completed && "line-through text-slate-400"
+                            )}>
+                              {task.name}
+                            </p>
+                            <a
+                              href={`https://app.asana.com/0/0/${task.gid}/f`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              title="Open in Asana"
+                              className="shrink-0 text-slate-300 hover:text-orange-400 transition-colors"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
                           <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
                             {task.due_on && <span>Due {task.due_on}</span>}
                             {task.assignee_name && <span>· {task.assignee_name}</span>}
@@ -1439,9 +1451,17 @@ export default function Tasks() {
                               onSave={v => patchTask(task.id, { title: v })}
                             />
                             {task.asana_gid && (
-                              <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-50 text-orange-500 border border-orange-200 leading-none">
+                              <a
+                                href={`https://app.asana.com/0/0/${task.asana_gid}/f`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                title="Open in Asana"
+                                className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-50 text-orange-500 border border-orange-200 leading-none hover:bg-orange-100 transition-colors"
+                              >
                                 Asana
-                              </span>
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
                             )}
                           </div>
                         </td>
