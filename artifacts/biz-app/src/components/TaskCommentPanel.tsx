@@ -23,6 +23,29 @@ function fmtTime(d: string) {
   });
 }
 
+const URL_SPLIT_REGEX = /(https?:\/\/[^\s<>"']+)/g;
+const URL_TEST_REGEX = /^https?:\/\//;
+
+function linkify(text: string, isTeam: boolean) {
+  const parts = text.split(URL_SPLIT_REGEX);
+  return parts.map((part, i) =>
+    URL_TEST_REGEX.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={isTeam ? "underline text-white/90 hover:text-white" : "underline text-[#266b75] hover:text-[#1e5560]"}
+        onClick={e => e.stopPropagation()}
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
+}
+
 export function TaskCommentPanel({ taskId }: { taskId: number }) {
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -87,12 +110,12 @@ export function TaskCommentPanel({ taskId }: { taskId: number }) {
                   {c.author_name} · {fmtTime(c.created_at)}
                 </span>
                 <div className={cn(
-                  "px-3 py-1.5 rounded-2xl text-xs leading-snug",
+                  "px-3 py-1.5 rounded-2xl text-xs leading-snug break-all",
                   isTeam
                     ? "bg-[#266b75] text-white rounded-tr-sm"
                     : "bg-slate-100 text-slate-800 rounded-tl-sm",
                 )}>
-                  {c.comment}
+                  {linkify(c.comment, isTeam)}
                 </div>
               </div>
             );
