@@ -155,11 +155,22 @@ async function findClientByName(name: string): Promise<{ id: number; name: strin
 router.post("/missive-webhook", async (req: Request, res: Response) => {
 
   // ── 1. Security: verify secret ────────────────────────────────────────
+  // Missive sends the secret in the Authorization header as: "Bearer <secret>"
+  // We also support x-webhook-secret for flexibility / manual testing.
   const secret = process.env.MISSIVE_WEBHOOK_SECRET;
   if (secret) {
-    const provided = req.headers["x-webhook-secret"];
+    const authHeader = req.headers["authorization"] ?? "";
+    const bearerToken = authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length).trim()
+      : null;
+    const xSecret = req.headers["x-webhook-secret"];
+    const provided = bearerToken ?? xSecret;
+
     if (!provided || provided !== secret) {
-      logger.warn({ ip: req.ip }, "Missive webhook: rejected — invalid or missing x-webhook-secret");
+      logger.warn(
+        { ip: req.ip, hasAuth: !!authHeader, hasXSecret: !!xSecret },
+        "Missive webhook: rejected — invalid or missing secret (expected Authorization: Bearer <secret>)"
+      );
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
