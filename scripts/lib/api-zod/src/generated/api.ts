@@ -173,6 +173,7 @@ export const ListTasksResponseItem = zod.object({
   last_generated_at: zod.string().nullish(),
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
   incomplete_subtask_count: zod.number().optional().default(0),
+  asana_gid: zod.string().nullish(),
 });
 export const ListTasksResponse = zod.array(ListTasksResponseItem);
 
