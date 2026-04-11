@@ -11,7 +11,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { appSettingsTable, tasksTable } from "@workspace/db";
-import { eq, or } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import {
   getProjectTasks,
@@ -256,18 +256,38 @@ router.post("/asana/import", requireAuth, requireRole("admin"), async (req, res)
   const skipped: number[] = [];
 
   for (const t of tasks) {
-    // Skip if already imported by asana_gid, or if a task with the same title exists for this client
-    const existing = await db
+    // 1. Already linked by asana_gid — fully skip
+    const byGid = await db
       .select({ id: tasksTable.id })
       .from(tasksTable)
-      .where(or(eq(tasksTable.asana_gid, t.gid), eq(tasksTable.title, t.name)))
+      .where(eq(tasksTable.asana_gid, t.gid))
       .limit(1);
 
-    if (existing.length > 0) {
-      skipped.push(existing[0]!.id);
+    if (byGid.length > 0) {
+      skipped.push(byGid[0]!.id);
       continue;
     }
 
+    // 2. Same title within this client — backfill asana_gid if missing, then skip
+    const byTitle = await db
+      .select({ id: tasksTable.id, asana_gid: tasksTable.asana_gid })
+      .from(tasksTable)
+      .where(and(eq(tasksTable.title, t.name), eq(tasksTable.client_id, client_id)))
+      .limit(1);
+
+    if (byTitle.length > 0) {
+      const match = byTitle[0]!;
+      if (!match.asana_gid) {
+        await db
+          .update(tasksTable)
+          .set({ asana_gid: t.gid })
+          .where(eq(tasksTable.id, match.id));
+      }
+      skipped.push(match.id);
+      continue;
+    }
+
+    // 3. Brand new — insert
     const [row] = await db.insert(tasksTable).values({
       title: t.name,
       client_id,
