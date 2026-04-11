@@ -52,11 +52,24 @@ async function setSetting(key: string, value: string): Promise<void> {
   }
 }
 
-async function getCredentials(): Promise<{ pat: string; projectId: string } | null> {
+async function getProjectIds(): Promise<string[]> {
+  const raw = await getSetting("asana_project_ids");
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed as string[];
+    } catch { /* fall through */ }
+  }
+  // Backward-compat: single project
+  const single = await getSetting("asana_project_id");
+  return single ? [single] : [];
+}
+
+async function getCredentials(): Promise<{ pat: string; projectIds: string[] } | null> {
   const pat = await getSetting("asana_pat");
-  const projectId = await getSetting("asana_project_id");
-  if (!pat || !projectId) return null;
-  return { pat, projectId };
+  const projectIds = await getProjectIds();
+  if (!pat || projectIds.length === 0) return null;
+  return { pat, projectIds };
 }
 
 // ─── routes ──────────────────────────────────────────────────────────────────
@@ -64,7 +77,7 @@ async function getCredentials(): Promise<{ pat: string; projectId: string } | nu
 /** GET /api/asana/settings — return current config (PAT is masked) */
 router.get("/asana/settings", requireAuth, requireRole("admin"), async (req, res) => {
   const pat = await getSetting("asana_pat");
-  const projectId = await getSetting("asana_project_id");
+  const projectIds = await getProjectIds();
 
   let asanaUser: { name: string; email: string } | null = null;
   if (pat) {
@@ -76,18 +89,18 @@ router.get("/asana/settings", requireAuth, requireRole("admin"), async (req, res
   }
 
   res.json({
-    configured: !!(pat && projectId),
+    configured: !!(pat && projectIds.length > 0),
     pat_masked: pat ? `${pat.slice(0, 6)}${"•".repeat(Math.max(0, pat.length - 6))}` : null,
-    project_id: projectId,
+    project_ids: projectIds,
     asana_user: asanaUser,
   });
 });
 
-/** POST /api/asana/settings — save PAT + project ID */
+/** POST /api/asana/settings — save PAT and optionally add a project to the list */
 router.post("/asana/settings", requireAuth, requireRole("admin"), async (req, res) => {
   const schema = z.object({
     pat: z.string().min(1, "PAT is required"),
-    project_id: z.string().min(1, "Project ID is required"),
+    project_id: z.string().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -98,7 +111,6 @@ router.post("/asana/settings", requireAuth, requireRole("admin"), async (req, re
 
   const { pat, project_id } = parsed.data;
 
-  // "__keep__" is a sentinel sent by the UI when the user doesn't want to replace the stored value
   let effectivePat = pat;
   if (pat === "__keep__") {
     const existing = await getSetting("asana_pat");
@@ -107,12 +119,6 @@ router.post("/asana/settings", requireAuth, requireRole("admin"), async (req, re
       return;
     }
     effectivePat = existing;
-  }
-
-  let effectiveProjectId = project_id;
-  if (project_id === "__keep__") {
-    const existing = await getSetting("asana_project_id");
-    effectiveProjectId = existing ?? "";
   }
 
   // Validate the PAT before saving
@@ -128,12 +134,32 @@ router.post("/asana/settings", requireAuth, requireRole("admin"), async (req, re
   }
 
   await setSetting("asana_pat", effectivePat);
-  if (effectiveProjectId) await setSetting("asana_project_id", effectiveProjectId);
 
-  res.json({ ok: true, asana_user: asanaUser });
+  // If a project_id is provided, ADD it to the list (do not replace)
+  if (project_id && project_id !== "__keep__") {
+    const currentIds = await getProjectIds();
+    if (!currentIds.includes(project_id)) {
+      const newIds = [...currentIds, project_id];
+      await setSetting("asana_project_ids", JSON.stringify(newIds));
+    }
+    // Keep legacy key in sync (set to latest added project for compat)
+    await setSetting("asana_project_id", project_id);
+  }
+
+  const projectIds = await getProjectIds();
+  res.json({ ok: true, asana_user: asanaUser, project_ids: projectIds });
 });
 
-/** GET /api/asana/tasks — fetch tasks from the configured Asana project */
+/** DELETE /api/asana/projects/:gid — remove a project from the configured list */
+router.delete("/asana/projects/:gid", requireAuth, requireRole("admin"), async (req, res) => {
+  const { gid } = req.params;
+  const currentIds = await getProjectIds();
+  const newIds = currentIds.filter(id => id !== gid);
+  await setSetting("asana_project_ids", JSON.stringify(newIds));
+  res.json({ ok: true, project_ids: newIds });
+});
+
+/** GET /api/asana/tasks — fetch tasks from all configured Asana projects */
 router.get("/asana/tasks", requireAuth, async (req, res) => {
   const creds = await getCredentials();
   if (!creds) {
@@ -142,7 +168,9 @@ router.get("/asana/tasks", requireAuth, async (req, res) => {
   }
 
   try {
-    const tasks = await getProjectTasks(creds.pat, creds.projectId);
+    const allArrays = await Promise.all(creds.projectIds.map(pid => getProjectTasks(creds.pat, pid)));
+    const seen = new Set<string>();
+    const tasks = allArrays.flat().filter(t => !seen.has(t.gid) && seen.add(t.gid));
     res.json({ tasks });
   } catch (err: any) {
     const statusCode = err.statusCode ?? 500;
@@ -174,7 +202,7 @@ router.post("/asana/tasks", requireAuth, async (req, res) => {
   }
 
   try {
-    const task = await createProjectTask(creds.pat, creds.projectId, parsed.data.name, parsed.data.due_on);
+    const task = await createProjectTask(creds.pat, creds.projectIds[0]!, parsed.data.name, parsed.data.due_on);
     res.status(201).json({ task });
   } catch (err: any) {
     const statusCode = err.statusCode ?? 500;
@@ -204,17 +232,19 @@ router.get("/asana/projects", requireAuth, requireRole("admin"), async (req, res
   }
 });
 
-/** GET /api/asana/import/preview — return Asana tasks formatted for import preview */
+/** GET /api/asana/import/preview — return Asana tasks from all configured projects */
 router.get("/asana/import/preview", requireAuth, requireRole("admin"), async (req, res) => {
   const creds = await getCredentials();
   if (!creds) {
-    res.status(400).json({ error: "Asana is not configured. Please add your PAT and Project ID in Asana Sync settings." });
+    res.status(400).json({ error: "Asana is not configured. Please add your PAT and at least one Project in Asana Sync settings." });
     return;
   }
   try {
-    const tasks = await getProjectTasks(creds.pat, creds.projectId);
+    const allArrays = await Promise.all(creds.projectIds.map(pid => getProjectTasks(creds.pat, pid)));
+    const seen = new Set<string>();
+    const flat = allArrays.flat().filter(t => !seen.has(t.gid) && seen.add(t.gid));
     res.json({
-      tasks: tasks.map(t => ({
+      tasks: flat.map(t => ({
         gid: t.gid,
         name: t.name,
         completed: t.completed,
@@ -226,7 +256,7 @@ router.get("/asana/import/preview", requireAuth, requireRole("admin"), async (re
     const statusCode = err.statusCode ?? 500;
     const message =
       statusCode === 401 ? "Invalid Asana token — please update your PAT in Asana Sync settings." :
-      statusCode === 404 ? "Asana project not found — please check your Project ID in Asana Sync settings." :
+      statusCode === 404 ? "Asana project not found — please check your Project IDs in Asana Sync settings." :
       (err.message ?? "Failed to fetch tasks from Asana");
     res.status(statusCode < 500 ? statusCode : 502).json({ error: message });
   }

@@ -33,7 +33,7 @@ interface AsanaTask {
 interface AsanaSettings {
   configured: boolean;
   pat_masked: string | null;
-  project_id: string | null;
+  project_ids: string[];
   asana_user: { name: string; email: string } | null;
 }
 
@@ -171,31 +171,54 @@ function SettingsPanel({
   onSaved: () => void;
 }) {
   const [pat, setPat] = useState("");
-  const [projectId, setProjectId] = useState(settings?.project_id ?? "");
   const [showPat, setShowPat] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [patSaving, setPatSaving] = useState(false);
+  const [patError, setPatError] = useState("");
+
   const [projects, setProjects] = useState<AsanaProject[] | null>(null);
   const [browsing, setBrowsing] = useState(false);
   const [browseError, setBrowseError] = useState("");
+  const [addingGid, setAddingGid] = useState<string | null>(null);
+  const [removingGid, setRemovingGid] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Pre-fill project ID if already set
-  useEffect(() => {
-    if (settings?.project_id) setProjectId(settings.project_id);
-  }, [settings?.project_id]);
+  const configuredIds = settings?.project_ids ?? [];
 
+  // ── Save / verify PAT ─────────────────────────────────────────────────────
+  const handleSavePat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pat && !settings?.configured) {
+      setPatError("Please enter your Asana PAT.");
+      return;
+    }
+    if (!pat) return; // nothing to save
+    setPatError("");
+    setPatSaving(true);
+    try {
+      await apiFetch("/api/asana/settings", {
+        method: "POST",
+        body: JSON.stringify({ pat }),
+      });
+      toast({ title: "PAT saved", description: "Connection verified successfully." });
+      setPat("");
+      onSaved();
+    } catch (err: any) {
+      setPatError(err.message ?? "Failed to save PAT");
+    } finally {
+      setPatSaving(false);
+    }
+  };
+
+  // ── Browse available projects ─────────────────────────────────────────────
   const handleBrowse = async () => {
     setBrowseError("");
     setBrowsing(true);
     try {
-      // If there's a new PAT in the input, save it first so we can browse with it
       if (pat) {
-        await apiFetch("/api/asana/settings", {
-          method: "POST",
-          body: JSON.stringify({ pat, project_id: projectId || "__keep__" }),
-        });
+        // Save PAT first so browse uses it
+        await apiFetch("/api/asana/settings", { method: "POST", body: JSON.stringify({ pat }) });
         setPat("");
+        onSaved();
       }
       const data = await apiFetch<{ projects: AsanaProject[] }>("/api/asana/projects");
       if (data.projects.length === 0) {
@@ -210,36 +233,40 @@ function SettingsPanel({
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!pat && !settings?.configured) {
-      setError("Please enter your Asana PAT.");
-      return;
-    }
-    if (!projectId) {
-      setError("Please enter or select an Asana Project ID.");
-      return;
-    }
-    setError("");
-    setSaving(true);
+  // ── Add a project ─────────────────────────────────────────────────────────
+  const handleAddProject = async (gid: string) => {
+    setAddingGid(gid);
     try {
       await apiFetch("/api/asana/settings", {
         method: "POST",
-        body: JSON.stringify({ pat: pat || "__keep__", project_id: projectId }),
+        body: JSON.stringify({ pat: "__keep__", project_id: gid }),
       });
-      toast({ title: "Asana settings saved", description: "Connection verified successfully." });
-      setPat("");
-      setProjects(null);
+      toast({ title: "Project added" });
       onSaved();
     } catch (err: any) {
-      setError(err.message ?? "Failed to save settings");
+      toast({ title: "Failed to add project", description: err.message, variant: "destructive" });
     } finally {
-      setSaving(false);
+      setAddingGid(null);
+    }
+  };
+
+  // ── Remove a project ──────────────────────────────────────────────────────
+  const handleRemoveProject = async (gid: string) => {
+    if (!confirm("Remove this project from the list?")) return;
+    setRemovingGid(gid);
+    try {
+      await apiFetch(`/api/asana/projects/${gid}`, { method: "DELETE" });
+      toast({ title: "Project removed" });
+      onSaved();
+    } catch (err: any) {
+      toast({ title: "Failed to remove project", description: err.message, variant: "destructive" });
+    } finally {
+      setRemovingGid(null);
     }
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* How to get a PAT */}
       <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm text-slate-600 space-y-2">
         <p className="font-semibold text-slate-700">How to get your Asana Personal Access Token</p>
@@ -251,114 +278,126 @@ function SettingsPanel({
         </ol>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-4">
-        {/* PAT input */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-            Personal Access Token (PAT)
-          </label>
-          {settings?.configured && !pat && (
-            <p className="text-xs text-slate-400 mb-1.5">
-              Current: <code className="bg-slate-100 px-1.5 py-0.5 rounded">{settings.pat_masked}</code>
-              {" · "}Leave blank to keep existing token.
-            </p>
-          )}
-          <div className="relative">
+      {/* PAT Section */}
+      <form onSubmit={handleSavePat} className="space-y-3">
+        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Personal Access Token (PAT)
+        </label>
+        {settings?.configured && !pat && (
+          <p className="text-xs text-slate-400">
+            Current: <code className="bg-slate-100 px-1.5 py-0.5 rounded">{settings.pat_masked}</code>
+            {" · "}Enter a new token below to replace it.
+          </p>
+        )}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
             <input
               type={showPat ? "text" : "password"}
               value={pat}
-              onChange={e => { setPat(e.target.value); setProjects(null); }}
+              onChange={e => { setPat(e.target.value); }}
               placeholder={settings?.configured ? "Enter new token to replace current" : "Paste your PAT here"}
               className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 pr-10 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none font-mono"
             />
-            <button
-              type="button"
-              onClick={() => setShowPat(v => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
+            <button type="button" onClick={() => setShowPat(v => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
               {showPat ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>
           </div>
+          <button type="submit" disabled={patSaving || !pat}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#266b75] text-white text-sm font-semibold disabled:opacity-40 hover:bg-[#266b75]/90 transition-colors whitespace-nowrap">
+            {patSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            {patSaving ? "Verifying…" : "Save PAT"}
+          </button>
         </div>
+        {patError && (
+          <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />{patError}
+          </div>
+        )}
+      </form>
 
-        {/* Project picker */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
+      {/* Projects Section — only shown once PAT is configured */}
+      {(settings?.configured || pat === "") && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Asana Project
+              Asana Projects ({configuredIds.length})
             </label>
             {(settings?.configured || pat) && (
-              <button
-                type="button"
-                onClick={handleBrowse}
-                disabled={browsing}
-                className="flex items-center gap-1 text-xs font-medium text-[#266b75] hover:text-[#1f5560] disabled:opacity-50 transition-colors"
-              >
+              <button type="button" onClick={handleBrowse} disabled={browsing}
+                className="flex items-center gap-1 text-xs font-medium text-[#266b75] hover:text-[#1f5560] disabled:opacity-50 transition-colors">
                 {browsing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-                {browsing ? "Loading…" : "Browse projects"}
+                {browsing ? "Loading…" : "Browse & Add Project"}
               </button>
             )}
           </div>
 
-          {/* Project dropdown (if we have a list) */}
-          {projects && projects.length > 0 ? (
-            <div className="space-y-1.5">
-              <p className="text-xs text-slate-500">{projects.length} project{projects.length !== 1 ? "s" : ""} found — click one to select it:</p>
-              <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
-                {projects.map(p => (
+          {/* Currently configured projects */}
+          {configuredIds.length > 0 ? (
+            <div className="border border-slate-200 rounded-xl divide-y divide-slate-100 overflow-hidden">
+              {configuredIds.map(gid => (
+                <div key={gid} className="flex items-center justify-between px-4 py-2.5 bg-white">
+                  <code className="text-xs text-slate-600 font-mono">{gid}</code>
                   <button
-                    key={p.gid}
-                    type="button"
-                    onClick={() => { setProjectId(p.gid); setProjects(null); }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-[#266b75]/5 transition-colors flex items-center justify-between group ${p.gid === projectId ? "bg-[#266b75]/5 text-[#266b75] font-medium" : "text-slate-700"}`}
+                    onClick={() => handleRemoveProject(gid)}
+                    disabled={removingGid === gid}
+                    className="p-1 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-40"
+                    title="Remove project"
                   >
-                    <span>{p.name}</span>
-                    <span className={`text-[10px] font-mono ${p.gid === projectId ? "text-[#266b75]/70" : "text-slate-300 group-hover:text-slate-400"}`}>{p.gid}</span>
+                    {removingGid === gid ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                   </button>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           ) : (
-            <div className="space-y-1">
-              <input
-                type="text"
-                value={projectId}
-                onChange={e => setProjectId(e.target.value)}
-                placeholder="e.g. 1234567890123456 — or use Browse projects above"
-                className="w-full text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none font-mono"
-              />
-              {projectId && (
-                <p className="text-xs text-slate-400">
-                  Selected ID: <code className="bg-slate-100 px-1 py-0.5 rounded">{projectId}</code>
-                </p>
-              )}
+            <p className="text-xs text-slate-400 italic">No projects configured yet. Use "Browse &amp; Add Project" above.</p>
+          )}
+
+          {/* Browse results with + buttons */}
+          {projects && projects.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-slate-500">{projects.length} project{projects.length !== 1 ? "s" : ""} found — click <strong>+</strong> to add:</p>
+              <div className="max-h-52 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100">
+                {projects.map(p => {
+                  const isAdded = configuredIds.includes(p.gid);
+                  return (
+                    <div key={p.gid} className="flex items-center justify-between px-4 py-2.5 bg-white hover:bg-slate-50/60">
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-sm text-slate-700 font-medium truncate">{p.name}</span>
+                        <span className="text-[10px] font-mono text-slate-400">{p.gid}</span>
+                      </div>
+                      {isAdded ? (
+                        <span className="flex items-center gap-1 text-[11px] text-emerald-600 font-medium shrink-0 ml-2">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> Added
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleAddProject(p.gid)}
+                          disabled={addingGid === p.gid}
+                          className="flex items-center gap-1 text-[11px] font-semibold text-[#266b75] hover:text-[#1f5560] disabled:opacity-40 transition-colors shrink-0 ml-2"
+                        >
+                          {addingGid === p.gid ? <Loader2 className="w-3 h-3 animate-spin" /> : <Plus className="w-3 h-3" />}
+                          Add
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <button type="button" onClick={() => setProjects(null)}
+                className="text-xs text-slate-400 hover:text-slate-600 transition-colors">
+                Hide list
+              </button>
             </div>
           )}
 
           {browseError && (
-            <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mt-1.5">
-              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-              {browseError}
+            <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0" />{browseError}
             </div>
           )}
         </div>
-
-        {error && (
-          <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            {error}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          disabled={saving}
-          className="w-full flex items-center justify-center gap-2 bg-[#266b75] hover:bg-[#266b75]/90 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-          {saving ? "Verifying & saving…" : "Save & Verify Connection"}
-        </button>
-      </form>
+      )}
     </div>
   );
 }
