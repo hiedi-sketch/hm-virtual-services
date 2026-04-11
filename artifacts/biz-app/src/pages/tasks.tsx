@@ -949,6 +949,12 @@ export default function Tasks() {
   const [creatingTask, setCreatingTask] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
 
+  // ── Bulk selection state ───────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBulkActing, setIsBulkActing] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState("Not Started");
+  const [bulkClientId, setBulkClientId] = useState("");
+
   const today = new Date().toLocaleDateString("sv-SE");
 
   // ── Data ──────────────────────────────────────────────────────────────────
