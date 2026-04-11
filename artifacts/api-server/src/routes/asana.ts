@@ -11,7 +11,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { appSettingsTable, tasksTable } from "@workspace/db";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import {
   getProjectTasks,
@@ -298,11 +298,14 @@ router.post("/asana/import", requireAuth, requireRole("admin"), async (req, res)
       continue;
     }
 
-    // 2. Same title within this client — backfill asana_gid if missing, then skip
+    // 2. Same title within this client (case-insensitive, trimmed) — backfill asana_gid, then skip
     const byTitle = await db
       .select({ id: tasksTable.id, asana_gid: tasksTable.asana_gid })
       .from(tasksTable)
-      .where(and(eq(tasksTable.title, t.name), eq(tasksTable.client_id, client_id)))
+      .where(and(
+        sql`LOWER(TRIM(${tasksTable.title})) = LOWER(TRIM(${t.name}))`,
+        eq(tasksTable.client_id, client_id),
+      ))
       .limit(1);
 
     if (byTitle.length > 0) {
