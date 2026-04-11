@@ -2,7 +2,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from "react"
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Filter, Plus, Play, Pause, Square, Loader2,
+  Filter, Plus, Play, Pause, Square, Loader2, Pencil,
   ChevronRight, ChevronDown, Check, X, Trash2, ClipboardList,
   ArrowUpDown, ArrowUp, ArrowDown, Download, ExternalLink,
 } from "lucide-react";
@@ -129,13 +129,22 @@ function fmtElapsed(ms: number) {
 // ── Inline cell editors ───────────────────────────────────────────────────────
 
 function EditableText({
-  value, onSave, saving, className, placeholder, strikethrough,
+  value, onSave, saving, className, placeholder, strikethrough, forceEdit, onForceEditConsumed,
 }: {
   value: string; onSave: (v: string) => void; saving: boolean;
   className?: string; placeholder?: string; strikethrough?: boolean;
+  forceEdit?: boolean; onForceEditConsumed?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (forceEdit) {
+      setDraft(value);
+      setEditing(true);
+      onForceEditConsumed?.();
+    }
+  }, [forceEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const commit = () => {
     setEditing(false);
@@ -899,6 +908,8 @@ function NewTaskRow({
       </td>
       {/* Completed date placeholder */}
       <td className="px-4 py-2" />
+      {/* Pencil placeholder */}
+      <td className="px-1 py-2" />
       {/* Actions */}
       <td className="px-4 py-2">
         <div className="flex items-center gap-1">
@@ -948,6 +959,9 @@ export default function Tasks() {
   const [showNewRow, setShowNewRow] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+
+  // ── Inline edit trigger ────────────────────────────────────────────────────
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
 
   // ── Bulk selection state ───────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -1385,6 +1399,7 @@ export default function Tasks() {
                       </th>
                     );
                   })}
+                  <th className="px-1 py-2 w-8" />
                   <th className="px-2 py-2 w-10" />
                 </tr>
               </thead>
@@ -1594,6 +1609,8 @@ export default function Tasks() {
                               placeholder="Task description"
                               strikethrough={task.status === "Completed"}
                               onSave={v => patchTask(task.id, { title: v })}
+                              forceEdit={editingTaskId === task.id}
+                              onForceEditConsumed={() => setEditingTaskId(null)}
                             />
                             {task.asana_gid && (
                               <a
@@ -1643,6 +1660,17 @@ export default function Tasks() {
                             isOverdue={false}
                             onSave={v => patchTask(task.id, { completed_date: v })}
                           />
+                        </td>
+
+                        {/* Pencil — edit task title inline */}
+                        <td className="px-1 py-2">
+                          <button
+                            onClick={() => setEditingTaskId(task.id)}
+                            className="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-[#266b75] hover:bg-[#266b75]/10 transition-colors"
+                            title="Edit task"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
                         </td>
 
                         {/* Delete */}
