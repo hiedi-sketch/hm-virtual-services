@@ -317,18 +317,25 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
     extraFields["completed_date"] = null;
   }
 
-  const [updated] = await db
+  const [rawUpdated] = await db
     .update(tasksTable)
     .set({ ...body, ...extraFields })
     .where(eq(tasksTable.id, id))
     .returning();
 
-  if (!updated) {
+  if (!rawUpdated) {
     res.status(404).json({ error: "Task not found" });
     return;
   }
 
-  const parsed = UpdateTaskResponse.parse(updated);
+  // Re-fetch with client JOIN so the response always includes client_name
+  const [updated] = await db
+    .select(taskSelectFields)
+    .from(tasksTable)
+    .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
+    .where(eq(tasksTable.id, id));
+
+  const parsed = UpdateTaskResponse.parse(updated ?? rawUpdated);
   res.json(parsed);
 
   const actor = req.session.user;

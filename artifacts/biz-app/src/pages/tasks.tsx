@@ -556,6 +556,8 @@ interface AsanaPreviewTask {
   assignee_name: string | null;
 }
 
+const IMPORT_CLIENT_KEY = "hm_asana_last_import_client_id";
+
 function ImportAsanaModal({
   clients,
   onClose,
@@ -566,7 +568,7 @@ function ImportAsanaModal({
   onImported: () => void;
 }) {
   const { toast } = useToast();
-  const [clientId, setClientId] = useState("");
+  const [clientId, setClientId] = useState(() => localStorage.getItem(IMPORT_CLIENT_KEY) ?? "");
   const [preview, setPreview] = useState<AsanaPreviewTask[] | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -611,6 +613,7 @@ function ImportAsanaModal({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Import failed");
+      localStorage.setItem(IMPORT_CLIENT_KEY, clientId);
       const msg = data.skipped > 0
         ? `${data.created} task${data.created !== 1 ? "s" : ""} imported · ${data.skipped} already existed`
         : `${data.created} task${data.created !== 1 ? "s" : ""} imported from Asana`;
@@ -677,7 +680,7 @@ function ImportAsanaModal({
                 </label>
                 <select
                   value={clientId}
-                  onChange={e => setClientId(e.target.value)}
+                  onChange={e => { setClientId(e.target.value); localStorage.setItem(IMPORT_CLIENT_KEY, e.target.value); }}
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white outline-none focus:border-[#266b75] transition-colors"
                 >
                   <option value="">— Select a client —</option>
@@ -1533,7 +1536,7 @@ export default function Tasks() {
                             placeholder="— Client —"
                             onSave={v => {
                               const client = clients.find(c => c.name === v);
-                              if (client) patchTask(task.id, { client_id: client.id });
+                              if (client) patchTask(task.id, { client_id: client.id, client_name: client.name });
                             }}
                             renderValue={v => v
                               ? <span className="text-slate-700 text-xs">{v}</span>
