@@ -93,7 +93,12 @@ router.post("/tasks", requireAuth, async (req, res) => {
   }
 
   const body = CreateTaskBody.parse(req.body);
-  const [task] = await db.insert(tasksTable).values(body).returning();
+  const [inserted] = await db.insert(tasksTable).values(body).returning({ id: tasksTable.id });
+  const [task] = await db
+    .select(taskSelectFields)
+    .from(tasksTable)
+    .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
+    .where(eq(tasksTable.id, inserted.id));
   res.status(201).json(task);
   const actor = req.session.user;
   logAudit("task", task.id, "created", `Task "${task.title}" created`, { id: actor?.id, name: actor?.name });
