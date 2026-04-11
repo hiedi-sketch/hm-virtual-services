@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { tasksTable, clientsTable, subtasksTable, taskCommentsTable, usersTable } from "@workspace/db";
-import { eq, isNotNull, and, desc, sql } from "drizzle-orm";
+import { eq, isNotNull, and, desc, sql, inArray } from "drizzle-orm";
 import { notifyAdmins, notifyClientUser, createNotification } from "../lib/notify";
 import { z } from "zod";
 import { requireAuth, requireRole } from "../middleware/auth";
@@ -192,6 +192,70 @@ router.post("/tasks", requireAuth, async (req, res) => {
 router.post("/tasks/spawn-recurring", requireAuth, async (req, res) => {
   const spawned = await spawnRecurringTasks();
   res.json(spawned);
+});
+
+// ── POST /api/tasks/bulk ─────────────────────────────────────────────────────
+// Performs a bulk action on a list of task IDs.
+// Supported actions: "delete" | "update_status" | "update_client"
+router.post("/tasks/bulk", requireRole("admin"), async (req, res) => {
+  const schema = z.object({
+    action:    z.enum(["delete", "update_status", "update_client"]),
+    ids:       z.array(z.number().int().positive()).min(1).max(500),
+    status:    z.string().optional(),
+    client_id: z.number().int().positive().optional(),
+  });
+
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+    return;
+  }
+
+  const { action, ids, status, client_id } = parsed.data;
+  const actor = req.session.user;
+
+  if (action === "delete") {
+    // Cancel recurrence on parent completed tasks (same logic as single delete)
+    const targets = await db
+      .select({ title: tasksTable.title, client_id: tasksTable.client_id, recurrence: tasksTable.recurrence })
+      .from(tasksTable)
+      .where(inArray(tasksTable.id, ids));
+
+    for (const t of targets) {
+      if (t.recurrence && t.client_id) {
+        await db
+          .update(tasksTable)
+          .set({ recurrence: null })
+          .where(and(
+            eq(tasksTable.title, t.title),
+            eq(tasksTable.client_id, t.client_id),
+            eq(tasksTable.recurrence, t.recurrence),
+            eq(tasksTable.status, "Completed"),
+          ));
+      }
+    }
+
+    await db.delete(tasksTable).where(inArray(tasksTable.id, ids));
+    logAudit("task", 0, "bulk_deleted", `${ids.length} tasks bulk-deleted`, { id: actor?.id, name: actor?.name });
+    res.json({ affected: ids.length });
+    return;
+  }
+
+  if (action === "update_status") {
+    if (!status) { res.status(400).json({ error: "status is required" }); return; }
+    await db.update(tasksTable).set({ status }).where(inArray(tasksTable.id, ids));
+    logAudit("task", 0, "bulk_status", `${ids.length} tasks → status "${status}"`, { id: actor?.id, name: actor?.name });
+    res.json({ affected: ids.length });
+    return;
+  }
+
+  if (action === "update_client") {
+    if (!client_id) { res.status(400).json({ error: "client_id is required" }); return; }
+    await db.update(tasksTable).set({ client_id }).where(inArray(tasksTable.id, ids));
+    logAudit("task", 0, "bulk_client", `${ids.length} tasks → client ${client_id}`, { id: actor?.id, name: actor?.name });
+    res.json({ affected: ids.length });
+    return;
+  }
 });
 
 router.delete("/tasks/:id", requireRole("admin"), async (req, res) => {

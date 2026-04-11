@@ -171,8 +171,8 @@ function EditableText({
       )}
       title="Click to edit"
     >
-      {value || <span className="text-slate-300 italic text-xs">{placeholder ?? "Click to edit"}</span>}
-      {saving && <Loader2 className="w-3 h-3 animate-spin inline ml-1 text-slate-400" />}
+      {value || <span className="text-slate-600 italic text-xs">{placeholder ?? "Click to edit"}</span>}
+      {saving && <Loader2 className="w-3 h-3 animate-spin inline ml-1 text-stone-600" />}
     </button>
   );
 }
@@ -815,6 +815,7 @@ function NewTaskRow({
   return (
     <tr className="border-b border-[#266b75]/20 bg-[#266b75]/5">
       <td className="px-2 py-2" />
+      <td className="px-2 py-2" />
       <td className="px-3 py-2" />
       {/* Status */}
       <td className="px-4 py-2">
@@ -1061,6 +1062,50 @@ export default function Tasks() {
     }
   }, [queryClient, toast]);
 
+  // ── Bulk actions ─────────────────────────────────────────────────────────
+
+  const toggleSelect = useCallback((id: number) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleBulkAction = useCallback(async (
+    action: "delete" | "update_status" | "update_client",
+  ) => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+
+    if (action === "delete") {
+      if (!confirm(`Permanently delete ${ids.length} task${ids.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    }
+
+    setIsBulkActing(true);
+    try {
+      const body: Record<string, unknown> = { action, ids };
+      if (action === "update_status") body.status = bulkStatus;
+      if (action === "update_client") body.client_id = Number(bulkClientId);
+
+      const res = await fetch("/api/tasks/bulk", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error("Bulk action failed");
+
+      setSelectedIds(new Set());
+      await refetch();
+      toast({ title: `${ids.length} task${ids.length !== 1 ? "s" : ""} updated` });
+    } catch {
+      toast({ title: "Bulk action failed", variant: "destructive" });
+    } finally {
+      setIsBulkActing(false);
+    }
+  }, [selectedIds, bulkStatus, bulkClientId, refetch, toast]);
+
   // ── Timer ─────────────────────────────────────────────────────────────────
 
   // Save & stop the timer reactively whenever the active task becomes Completed
@@ -1215,6 +1260,81 @@ export default function Tasks() {
         )}
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (() => {
+        const allSel = displayed.every(t => selectedIds.has(t.id));
+        return (
+          <div className="flex flex-wrap items-center gap-3 bg-[#266b75] text-white rounded-xl px-4 py-3 shadow-md">
+            <div className="flex items-center gap-2 mr-2">
+              <span className="font-semibold text-sm">{selectedIds.size} selected</span>
+              <button
+                onClick={() => setSelectedIds(new Set())}
+                className="text-white/70 hover:text-white transition-colors text-xs underline"
+              >
+                Clear
+              </button>
+              {!allSel && (
+                <button
+                  onClick={() => setSelectedIds(new Set(displayed.map(t => t.id)))}
+                  className="text-white/70 hover:text-white transition-colors text-xs underline"
+                >
+                  Select all {displayed.length}
+                </button>
+              )}
+            </div>
+
+            {/* Status update */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-white/70 font-medium">Status:</span>
+              <select
+                value={bulkStatus}
+                onChange={e => setBulkStatus(e.target.value)}
+                className="text-xs text-slate-800 bg-white border-0 rounded px-2 py-1 outline-none"
+              >
+                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <button
+                onClick={() => handleBulkAction("update_status")}
+                disabled={isBulkActing}
+                className="text-xs font-medium bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </div>
+
+            {/* Client update */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-white/70 font-medium">Client:</span>
+              <select
+                value={bulkClientId}
+                onChange={e => setBulkClientId(e.target.value)}
+                className="text-xs text-slate-800 bg-white border-0 rounded px-2 py-1 outline-none"
+              >
+                <option value="">— pick —</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <button
+                onClick={() => { if (!bulkClientId) return; handleBulkAction("update_client"); }}
+                disabled={isBulkActing || !bulkClientId}
+                className="text-xs font-medium bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </div>
+
+            {/* Delete */}
+            <button
+              onClick={() => handleBulkAction("delete")}
+              disabled={isBulkActing}
+              className="ml-auto flex items-center gap-1.5 text-xs font-medium bg-red-500/80 hover:bg-red-500 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {isBulkActing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+              Delete {selectedIds.size}
+            </button>
+          </div>
+        );
+      })()}
+
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         {isLoading ? (
@@ -1224,6 +1344,16 @@ export default function Tasks() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
+                  {/* Select-all checkbox */}
+                  <th className="px-2 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={displayed.length > 0 && displayed.every(t => selectedIds.has(t.id))}
+                      ref={el => { if (el) el.indeterminate = displayed.some(t => selectedIds.has(t.id)) && !displayed.every(t => selectedIds.has(t.id)); }}
+                      onChange={e => setSelectedIds(e.target.checked ? new Set(displayed.map(t => t.id)) : new Set())}
+                      className="w-3.5 h-3.5 rounded border-slate-300 accent-[#266b75] cursor-pointer"
+                    />
+                  </th>
                   <th className="px-1 py-2 w-8" />
                   <th className="px-2 py-2 w-12" />
                   {(["status", "client_name", null, null, null, null, "due_date", null, null] as const).map((field, i) => {
@@ -1264,7 +1394,7 @@ export default function Tasks() {
                 )}
                 {displayed.length === 0 && !showNewRow ? (
                   <tr>
-                    <td colSpan={12} className="py-16 text-center text-slate-400 text-sm">
+                    <td colSpan={13} className="py-16 text-center text-slate-400 text-sm">
                       No tasks match your filters.
                     </td>
                   </tr>
@@ -1282,9 +1412,18 @@ export default function Tasks() {
                     <React.Fragment key={task.id}>
                       <tr className={cn(
                         "border-b border-slate-100 transition-colors",
-                        isThisTask ? "bg-[#266b75]/5" : "hover:bg-slate-50/50",
+                        selectedIds.has(task.id) ? "bg-[#266b75]/5" : isThisTask ? "bg-[#266b75]/5" : "hover:bg-slate-50/50",
                         isExpanded && "border-b-0",
                       )}>
+                        {/* Row checkbox */}
+                        <td className="px-2 py-2">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(task.id)}
+                            onChange={() => toggleSelect(task.id)}
+                            className="w-3.5 h-3.5 rounded border-slate-300 accent-[#266b75] cursor-pointer"
+                          />
+                        </td>
                         {/* Expand toggle */}
                         <td className="px-2 py-2">
                           <div className="relative inline-flex">
