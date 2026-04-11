@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Filter, Plus, Play, Pause, Square, Loader2,
   ChevronRight, ChevronDown, Check, X, Trash2, ClipboardList,
-  ArrowUpDown, ArrowUp, ArrowDown, Download,
+  ArrowUpDown, ArrowUp, ArrowDown, Download, ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
