@@ -209,7 +209,7 @@ function EditableDate({
       disabled={saving}
       className={cn(
         "text-left rounded px-1 py-0.5 -mx-1 hover:bg-slate-100 transition-colors whitespace-nowrap",
-        isOverdue ? "text-red-600 font-medium" : "text-slate-600",
+        isOverdue ? "text-red-600 font-medium" : "text-slate-700",
         saving && "opacity-50 cursor-not-allowed",
       )}
       title="Click to edit"
@@ -264,7 +264,7 @@ function EditableSelect({
       {renderValue ? renderValue(value) : (
         value
           ? <span className="text-slate-700">{value}</span>
-          : <span className="text-slate-300 italic text-xs">{placeholder ?? "—"}</span>
+          : <span className="text-slate-500 italic text-xs">{placeholder ?? "—"}</span>
       )}
     </button>
   );
@@ -329,7 +329,7 @@ function WeekdayMultiSelect({
   };
 
   const displayLabel = selectedDays.length === 0
-    ? <span className="text-slate-300 italic text-xs">Any day</span>
+    ? <span className="text-slate-500 italic text-xs">Any day</span>
     : <span className="text-slate-600 text-xs">
         {selectedDays
           .map(d => WEEKDAY_OPTIONS.find(w => w.value === d)?.short ?? d)
@@ -865,7 +865,7 @@ function NewTaskRow({
             {MONTHLY_DAY_OPTIONS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
           </select>
         ) : (
-          <span className="text-slate-300 text-xs">—</span>
+          <span className="text-slate-500 text-xs">—</span>
         )}
       </td>
       {/* Title */}
@@ -1443,7 +1443,7 @@ export default function Tasks() {
                                 "w-6 h-6 flex items-center justify-center rounded transition-all",
                                 isExpanded
                                   ? "bg-[#266b75] text-white"
-                                  : "text-slate-300 hover:text-[#266b75] hover:bg-[#266b75]/10"
+                                  : "text-slate-500 hover:text-[#266b75] hover:bg-[#266b75]/10"
                               )}
                               title={isExpanded ? "Collapse subtasks" : `${pendingSubtasks} subtask${pendingSubtasks !== 1 ? "s" : ""} pending`}
                             >
@@ -1522,7 +1522,7 @@ export default function Tasks() {
                             }}
                             renderValue={v => v
                               ? <span className="text-slate-700 text-xs">{v}</span>
-                              : <span className="text-slate-300 italic text-xs">—</span>}
+                              : <span className="text-slate-500 italic text-xs">—</span>}
                           />
                         </td>
 
@@ -1543,7 +1543,7 @@ export default function Tasks() {
                               )}>
                                 {v}
                               </span>
-                            ) : <span className="text-slate-300 italic text-xs">None</span>}
+                            ) : <span className="text-slate-500 italic text-xs">None</span>}
                           />
                         </td>
 
@@ -1557,7 +1557,7 @@ export default function Tasks() {
                             onSave={v => patchTask(task.id, { recurrence: buildRecurrence(v ?? "", [], "") })}
                             renderValue={v => v
                               ? <span className="text-slate-600 text-xs">{v}</span>
-                              : <span className="text-slate-300 italic text-xs">One-Time</span>}
+                              : <span className="text-slate-500 italic text-xs">One-Time</span>}
                           />
                         </td>
 
@@ -1578,10 +1578,10 @@ export default function Tasks() {
                               onSave={v => patchTask(task.id, { recurrence: buildRecurrence("Monthly", [], v ?? "") })}
                               renderValue={v => v
                                 ? <span className="text-slate-600 text-xs">{v === "last" ? "Last day" : `Day ${v}`}</span>
-                                : <span className="text-slate-300 italic text-xs">Any</span>}
+                                : <span className="text-slate-500 italic text-xs">Any</span>}
                             />
                           ) : (
-                            <span className="text-slate-300 italic text-xs">—</span>
+                            <span className="text-slate-500 italic text-xs">—</span>
                           )}
                         </td>
 
@@ -1631,7 +1631,7 @@ export default function Tasks() {
                             onSave={v => patchTask(task.id, { assigned_to: v || null })}
                             renderValue={v => v
                               ? <span className="text-slate-700 text-xs">{v}</span>
-                              : <span className="text-slate-300 italic text-xs">Unassigned</span>}
+                              : <span className="text-slate-500 italic text-xs">Unassigned</span>}
                           />
                         </td>
 
@@ -1650,7 +1650,7 @@ export default function Tasks() {
                           <button
                             onClick={() => deleteTask(task.id)}
                             disabled={isSaving}
-                            className="w-6 h-6 rounded flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
+                            className="w-6 h-6 rounded flex items-center justify-center text-slate-500 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-40"
                             title="Delete task"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
