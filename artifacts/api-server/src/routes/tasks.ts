@@ -197,6 +197,30 @@ router.post("/tasks/spawn-recurring", requireAuth, async (req, res) => {
 router.delete("/tasks/:id", requireRole("admin"), async (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid task id" }); return; }
+
+  // Before deleting, check if this is a recurring task. If so, cancel the
+  // recurrence on all completed tasks in the same series (same title + client +
+  // recurrence pattern) so the spawner never regenerates this task again.
+  const [target] = await db
+    .select({ title: tasksTable.title, client_id: tasksTable.client_id, recurrence: tasksTable.recurrence })
+    .from(tasksTable)
+    .where(eq(tasksTable.id, id))
+    .limit(1);
+
+  if (target?.recurrence && target.client_id) {
+    await db
+      .update(tasksTable)
+      .set({ recurrence: null })
+      .where(
+        and(
+          eq(tasksTable.title, target.title),
+          eq(tasksTable.client_id, target.client_id),
+          eq(tasksTable.recurrence, target.recurrence),
+          eq(tasksTable.status, "Completed"),
+        )
+      );
+  }
+
   await db.delete(tasksTable).where(eq(tasksTable.id, id));
   const actor = req.session.user;
   logAudit("task", id, "deleted", `Task ${id} deleted`, { id: actor?.id, name: actor?.name });
