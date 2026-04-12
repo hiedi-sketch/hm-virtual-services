@@ -1,5 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import cron from "node-cron";
+import { runPush } from "./routes/asana";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +24,16 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+});
+
+// ── Midnight Asana push ────────────────────────────────────────────────────
+// Runs at 00:00 every day (server local time / UTC).
+cron.schedule("0 0 * * *", async () => {
+  logger.info("Midnight Asana push: starting");
+  try {
+    const result = await runPush();
+    logger.info(result, "Midnight Asana push: complete");
+  } catch (err) {
+    logger.error({ err }, "Midnight Asana push: failed (Asana may not be configured)");
+  }
 });

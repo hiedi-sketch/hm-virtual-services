@@ -16,6 +16,9 @@ import {
   X,
   ChevronDown,
   Filter,
+  Upload,
+  Clock,
+  Link2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -422,6 +425,10 @@ export default function AsanaPage() {
   const [newTaskDue, setNewTaskDue] = useState("");
   const [creating, setCreating] = useState(false);
 
+  // Push state
+  const [pushStatus, setPushStatus] = useState<{ last_push_at: string | null; linked_count: number } | null>(null);
+  const [pushing, setPushing] = useState(false);
+
   // Auto-refresh interval ref
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -438,6 +445,35 @@ export default function AsanaPage() {
       setSettingsLoading(false);
     }
   }, []);
+
+  // ── load push status ──────────────────────────────────────────────────────
+  const loadPushStatus = useCallback(async () => {
+    try {
+      const data = await apiFetch<{ last_push_at: string | null; linked_count: number }>("/api/asana/push/status");
+      setPushStatus(data);
+    } catch {
+      // ignore — non-critical
+    }
+  }, []);
+
+  // ── handle push ───────────────────────────────────────────────────────────
+  const handlePush = async () => {
+    setPushing(true);
+    try {
+      const data = await apiFetch<{ pushed: number; errors: number; pushedAt: string }>("/api/asana/push", {
+        method: "POST",
+      });
+      setPushStatus(prev => ({ linked_count: prev?.linked_count ?? 0, last_push_at: data.pushedAt }));
+      const desc = data.errors > 0
+        ? `${data.pushed} task${data.pushed !== 1 ? "s" : ""} pushed · ${data.errors} error${data.errors !== 1 ? "s" : ""}`
+        : `${data.pushed} task${data.pushed !== 1 ? "s" : ""} pushed to Asana`;
+      toast({ title: "Push complete", description: desc });
+    } catch (err: any) {
+      toast({ title: "Push failed", description: err.message, variant: "destructive" });
+    } finally {
+      setPushing(false);
+    }
+  };
 
   // ── load tasks ────────────────────────────────────────────────────────────
   const loadTasks = useCallback(async (silent = false) => {
@@ -461,13 +497,14 @@ export default function AsanaPage() {
   useEffect(() => {
     if (settings?.configured) {
       loadTasks();
+      loadPushStatus();
       // Auto-refresh every 5 minutes
       refreshIntervalRef.current = setInterval(() => loadTasks(true), 5 * 60 * 1000);
     }
     return () => {
       if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
     };
-  }, [settings?.configured, loadTasks]);
+  }, [settings?.configured, loadTasks, loadPushStatus]);
 
   // ── toggle task ───────────────────────────────────────────────────────────
   const handleToggle = async (gid: string, completed: boolean) => {
@@ -597,6 +634,57 @@ export default function AsanaPage() {
               }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Push to Asana panel */}
+      {settings?.configured && (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[#266b75]/10 flex items-center justify-center shrink-0">
+                <Upload className="w-4 h-4 text-[#266b75]" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-slate-900 text-sm">Push to Asana</h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {pushStatus
+                    ? <>
+                        <Link2 className="w-3 h-3 inline mr-1 text-slate-400" />
+                        <span>{pushStatus.linked_count} task{pushStatus.linked_count !== 1 ? "s" : ""} linked to Asana</span>
+                        {pushStatus.last_push_at && (
+                          <span className="ml-2 text-slate-400">
+                            · Last pushed {new Date(pushStatus.last_push_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                          </span>
+                        )}
+                      </>
+                    : "Syncs title, completion status, due date, and notes back to Asana"
+                  }
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-slate-400 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                Also runs automatically at midnight daily
+              </p>
+              <button
+                onClick={handlePush}
+                disabled={pushing || (pushStatus?.linked_count === 0)}
+                className="flex items-center gap-2 bg-[#266b75] hover:bg-[#266b75]/90 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors disabled:opacity-50 shrink-0"
+              >
+                {pushing
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Pushing…</>
+                  : <><Upload className="w-4 h-4" /> Push to Asana</>
+                }
+              </button>
+            </div>
+          </div>
+          {pushStatus?.linked_count === 0 && (
+            <div className="px-6 pb-4 text-xs text-amber-600 bg-amber-50/50 border-t border-amber-100 py-2">
+              No tasks are linked to Asana yet — import tasks first to enable push sync.
+            </div>
+          )}
         </div>
       )}
 

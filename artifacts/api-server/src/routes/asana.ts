@@ -11,12 +11,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { appSettingsTable, tasksTable } from "@workspace/db";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import {
   getProjectTasks,
   createProjectTask,
   updateTaskStatus,
+  pushTaskToAsana,
   validatePat,
   getUserProjects,
 } from "../services/asana";
@@ -335,6 +336,69 @@ router.post("/asana/import", requireAuth, requireRole("admin"), async (req, res)
   }
 
   res.json({ created: created.length, skipped: skipped.length });
+});
+
+// ─── Push local → Asana ──────────────────────────────────────────────────────
+
+/** Core push logic — shared by the manual route and the midnight scheduler. */
+export async function runPush(): Promise<{ pushed: number; errors: number; pushedAt: string }> {
+  const creds = await getCredentials();
+  if (!creds) throw new Error("Asana is not configured.");
+
+  // Fetch all local tasks that have been linked to Asana
+  const linked = await db
+    .select({
+      id:         tasksTable.id,
+      asana_gid:  tasksTable.asana_gid,
+      title:      tasksTable.title,
+      status:     tasksTable.status,
+      due_date:   tasksTable.due_date,
+      description: tasksTable.description,
+    })
+    .from(tasksTable)
+    .where(isNotNull(tasksTable.asana_gid));
+
+  let pushed = 0;
+  let errors = 0;
+
+  await Promise.all(linked.map(async task => {
+    try {
+      await pushTaskToAsana(creds.pat, task.asana_gid!, {
+        name:      task.title,
+        due_on:    task.due_date ?? null,
+        completed: task.status === "Completed",
+        notes:     task.description ?? null,
+      });
+      pushed++;
+    } catch {
+      errors++;
+    }
+  }));
+
+  const pushedAt = new Date().toISOString();
+  await setSetting("asana_last_push_at", pushedAt);
+  return { pushed, errors, pushedAt };
+}
+
+/** GET /api/asana/push/status — return last push timestamp + linked-task count */
+router.get("/asana/push/status", requireAuth, requireRole("admin"), async (_req, res) => {
+  const lastPushAt = await getSetting("asana_last_push_at");
+  const [{ count }] = await db
+    .select({ count: sql<number>`COUNT(*)`.mapWith(Number) })
+    .from(tasksTable)
+    .where(isNotNull(tasksTable.asana_gid));
+
+  res.json({ last_push_at: lastPushAt, linked_count: count });
+});
+
+/** POST /api/asana/push — manually push all linked local tasks to Asana */
+router.post("/asana/push", requireAuth, requireRole("admin"), async (_req, res) => {
+  try {
+    const result = await runPush();
+    res.json(result);
+  } catch (err: any) {
+    res.status(502).json({ error: err.message ?? "Push failed" });
+  }
 });
 
 /** PUT /api/asana/tasks/:taskId — toggle completion status */

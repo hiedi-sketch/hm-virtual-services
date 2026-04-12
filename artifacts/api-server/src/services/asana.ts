@@ -110,6 +110,31 @@ export async function updateTaskStatus(
 }
 
 /**
+ * Push local task fields back to Asana.
+ * Syncs: name, due_on, completed, notes.
+ */
+export async function pushTaskToAsana(
+  pat: string,
+  taskGid: string,
+  fields: {
+    name?: string;
+    due_on?: string | null;
+    completed?: boolean;
+    notes?: string | null;
+  }
+): Promise<AsanaTask> {
+  const data: Record<string, unknown> = {};
+  if (fields.name !== undefined)     data["name"]      = fields.name;
+  if (fields.due_on !== undefined)   data["due_on"]    = fields.due_on ?? null;
+  if (fields.completed !== undefined) data["completed"] = fields.completed;
+  if (fields.notes !== undefined)    data["notes"]     = fields.notes ?? "";
+  return fetchAsana<AsanaTask>(`/tasks/${taskGid}`, pat, {
+    method: "PUT",
+    body: JSON.stringify({ data }),
+  });
+}
+
+/**
  * Validate that a PAT is functional by hitting /users/me.
  * Returns the user's name and workspace gids on success.
  */
