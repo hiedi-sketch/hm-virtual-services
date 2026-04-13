@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { timeEntriesTable, clientsTable, tasksTable, usersTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, isNull, and, isNotNull } from "drizzle-orm";
 import {
   CreateTimeEntryBody,
   ListTimeEntriesQueryParams,
@@ -66,9 +66,19 @@ router.post("/time", requireRole("admin", "team_member"), async (req, res) => {
   const body = CreateTimeEntryBody.parse(req.body);
   const user = req.session.user!;
 
+  // Inherit service_type from linked task when not explicitly set
+  let serviceType = body.service_type ?? null;
+  if (!serviceType && body.task_id) {
+    const [task] = await db
+      .select({ service_type: tasksTable.service_type })
+      .from(tasksTable)
+      .where(eq(tasksTable.id, body.task_id));
+    if (task?.service_type) serviceType = task.service_type as typeof serviceType;
+  }
+
   const [entry] = await db
     .insert(timeEntriesTable)
-    .values({ ...body, user_id: user.id })
+    .values({ ...body, user_id: user.id, service_type: serviceType ?? body.service_type })
     .returning();
 
   res.status(201).json(entry);
@@ -144,6 +154,34 @@ router.delete("/time/:id", requireRole("admin", "team_member"), async (req, res)
   await db.delete(timeEntriesTable).where(eq(timeEntriesTable.id, id));
   res.status(204).send();
   logAudit("time_entry", id, "deleted", `Time entry #${id} deleted`, { id: user.id, name: user.name });
+});
+
+// ── Admin backfill: set service_type on entries that have none but whose task does ────────────────
+router.post("/time/backfill-service-types", requireRole("admin"), async (_req, res) => {
+  // Find entries with no service_type that are linked to a task that has one
+  const orphans = await db
+    .select({
+      entry_id: timeEntriesTable.id,
+      task_service_type: tasksTable.service_type,
+    })
+    .from(timeEntriesTable)
+    .innerJoin(tasksTable, and(
+      eq(timeEntriesTable.task_id, tasksTable.id),
+      isNotNull(tasksTable.service_type),
+    ))
+    .where(isNull(timeEntriesTable.service_type));
+
+  let fixed = 0;
+  for (const row of orphans) {
+    if (!row.task_service_type) continue;
+    await db
+      .update(timeEntriesTable)
+      .set({ service_type: row.task_service_type as "Virtual Assistant" | "Bookkeeping" })
+      .where(eq(timeEntriesTable.id, row.entry_id));
+    fixed++;
+  }
+
+  res.json({ fixed, total_checked: orphans.length });
 });
 
 export default router;
