@@ -10,7 +10,7 @@ import {
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
   Plus, X, User, Sparkles, LayoutDashboard, Send,
   KeyRound, ShieldCheck, Paperclip, DollarSign,
-  MessageSquare, ChevronRight, Package,
+  MessageSquare, ChevronRight, Package, Eye, EyeOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentsTab } from "@/components/DocumentsTab";
@@ -70,16 +70,18 @@ const taskSchema = z.object({
   description: z.string().optional(),
   due_date: z.string().optional(),
 });
-const profileSchema = z.object({
+const profileDetailsSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email"),
-}).and(z.object({
-  current_password: z.string().optional(),
-  new_password: z.string().optional(),
-}).refine(d => !d.new_password || (d.current_password && d.new_password.length >= 8), {
-  message: "Current password required and new password must be ≥8 chars",
-  path: ["new_password"],
-}));
+});
+const passwordSchema = z.object({
+  current_password: z.string().min(1, "Current password is required"),
+  new_password: z.string().min(8, "New password must be at least 8 characters"),
+  confirm_password: z.string().min(1, "Please confirm your new password"),
+}).refine(d => d.new_password === d.confirm_password, {
+  message: "Passwords do not match",
+  path: ["confirm_password"],
+});
 const serviceSchema = z.object({
   type: z.enum(["new_service", "upgrade_package", "consultation", "other"]),
   subject: z.string().min(1, "Subject is required"),
@@ -1076,132 +1078,204 @@ function ServicesTab({ serviceRequests, queryClient, toast, clientId }: {
 // PROFILE TAB
 // ================================================================
 function ProfileTab({ user, refreshUser, toast }: { user: any; refreshUser: () => Promise<void>; toast: any }) {
-  const [saving, setSaving] = useState(false);
-
-  const { register, handleSubmit, reset, formState: { errors, isDirty } } = useForm({
-    resolver: zodResolver(profileSchema),
-    defaultValues: {
-      name: user?.name ?? "",
-      email: user?.email ?? "",
-      current_password: "",
-      new_password: "",
-    },
+  // ── Account details form ────────────────────────────────────────────────────
+  const [savingDetails, setSavingDetails] = useState(false);
+  const {
+    register: regDetails,
+    handleSubmit: handleDetails,
+    reset: resetDetails,
+    formState: { errors: detailErrors, isDirty: detailsDirty },
+  } = useForm({
+    resolver: zodResolver(profileDetailsSchema),
+    defaultValues: { name: user?.name ?? "", email: user?.email ?? "" },
   });
 
-  const onSubmit = async (data: any) => {
-    setSaving(true);
+  const onSaveDetails = async (data: any) => {
+    setSavingDetails(true);
     const payload: Record<string, string> = {};
     if (data.name !== user?.name) payload.name = data.name;
     if (data.email !== user?.email) payload.email = data.email;
-    if (data.new_password) {
-      payload.current_password = data.current_password;
-      payload.new_password = data.new_password;
-    }
-
     if (Object.keys(payload).length === 0) {
       toast({ title: "Nothing changed" });
-      setSaving(false);
+      setSavingDetails(false);
       return;
     }
-
     const res = await fetch("/api/users/me", {
       method: "PATCH",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       toast({ title: "Error", description: err.error ?? "Could not save changes", variant: "destructive" });
-      setSaving(false);
+      setSavingDetails(false);
       return;
     }
-
     await refreshUser();
-    reset({ ...data, current_password: "", new_password: "" });
+    resetDetails(data);
     toast({ title: "Profile updated" });
-    setSaving(false);
+    setSavingDetails(false);
   };
+
+  // ── Change password form ────────────────────────────────────────────────────
+  const [savingPwd, setSavingPwd] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const {
+    register: regPwd,
+    handleSubmit: handlePwd,
+    reset: resetPwd,
+    formState: { errors: pwdErrors },
+  } = useForm({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: { current_password: "", new_password: "", confirm_password: "" },
+  });
+
+  const onChangePassword = async (data: any) => {
+    setSavingPwd(true);
+    const res = await fetch("/api/users/me", {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_password: data.current_password, new_password: data.new_password }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Password not changed", description: err.error ?? "Could not update password", variant: "destructive" });
+      setSavingPwd(false);
+      return;
+    }
+    resetPwd();
+    setShowCurrent(false);
+    setShowNew(false);
+    setShowConfirm(false);
+    toast({ title: "Password changed", description: "Your new password is active right away." });
+    setSavingPwd(false);
+  };
+
+  // Helper to render password field with show/hide toggle
+  function PwdField({ id, label, reg, showState, setShowState, error, placeholder }: {
+    id: string; label: string; reg: any; showState: boolean; setShowState: (v: boolean) => void; error?: string; placeholder?: string;
+  }) {
+    return (
+      <div>
+        <label className="block text-xs font-semibold text-slate-700 mb-1">{label}</label>
+        <div className="relative">
+          <input
+            {...reg}
+            id={id}
+            type={showState ? "text" : "password"}
+            placeholder={placeholder}
+            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <button
+            type="button"
+            onClick={() => setShowState(!showState)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            tabIndex={-1}
+          >
+            {showState ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 max-w-lg">
       <div>
         <h2 className="text-xl font-bold text-slate-900">My Profile</h2>
-        <p className="text-slate-500 text-sm mt-0.5">Update your name, email, or password.</p>
+        <p className="text-slate-500 text-sm mt-0.5">Manage your account details and password.</p>
       </div>
 
+      {/* ── Account Details ───────────────────────────────────────── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
           <User className="w-4 h-4 text-slate-500" />
           <h3 className="font-semibold text-slate-900 text-sm">Account Details</h3>
         </div>
-        <form onSubmit={handleSubmit(onSubmit)} className="px-5 py-5 space-y-4">
+        <form onSubmit={handleDetails(onSaveDetails)} className="px-5 py-5 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name *</label>
             <input
-              {...register("name")}
+              {...regDetails("name")}
               className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
-            {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message as string}</p>}
+            {detailErrors.name && <p className="text-xs text-red-500 mt-1">{detailErrors.name.message as string}</p>}
           </div>
-
           <div>
             <label className="block text-xs font-semibold text-slate-700 mb-1">Email Address *</label>
             <input
-              {...register("email")}
+              {...regDetails("email")}
               type="email"
               className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
-            {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email.message as string}</p>}
+            {detailErrors.email && <p className="text-xs text-red-500 mt-1">{detailErrors.email.message as string}</p>}
           </div>
-
-          <div className="pt-2 border-t border-slate-100">
-            <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5 mb-3">
-              <KeyRound className="w-3.5 h-3.5" />
-              Change Password (optional)
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Current Password</label>
-                <input
-                  {...register("current_password")}
-                  type="password"
-                  placeholder="Required only if changing password"
-                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
-                <input
-                  {...register("new_password")}
-                  type="password"
-                  placeholder="Min. 8 characters"
-                  className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                {errors.new_password && <p className="text-xs text-red-500 mt-1">{errors.new_password.message as string}</p>}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex items-center gap-3 pt-1">
             <button
               type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
+              disabled={savingDetails || !detailsDirty}
+              className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
               <ShieldCheck className="w-4 h-4" />
-              {saving ? "Saving…" : "Save Changes"}
+              {savingDetails ? "Saving…" : "Save Details"}
             </button>
-            {isDirty && (
-              <button
-                type="button"
-                onClick={() => reset()}
-                className="text-sm font-medium text-slate-500 hover:text-slate-700"
-              >
+            {detailsDirty && (
+              <button type="button" onClick={() => resetDetails()} className="text-sm font-medium text-slate-500 hover:text-slate-700">
                 Discard
               </button>
             )}
+          </div>
+        </form>
+      </div>
+
+      {/* ── Change Password ───────────────────────────────────────── */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-2">
+          <KeyRound className="w-4 h-4 text-slate-500" />
+          <h3 className="font-semibold text-slate-900 text-sm">Change Password</h3>
+        </div>
+        <form onSubmit={handlePwd(onChangePassword)} className="px-5 py-5 space-y-4">
+          <PwdField
+            id="current_password"
+            label="Current Password *"
+            reg={regPwd("current_password")}
+            showState={showCurrent}
+            setShowState={setShowCurrent}
+            error={pwdErrors.current_password?.message as string | undefined}
+            placeholder="Enter your current password"
+          />
+          <PwdField
+            id="new_password"
+            label="New Password *"
+            reg={regPwd("new_password")}
+            showState={showNew}
+            setShowState={setShowNew}
+            error={pwdErrors.new_password?.message as string | undefined}
+            placeholder="At least 8 characters"
+          />
+          <PwdField
+            id="confirm_password"
+            label="Confirm New Password *"
+            reg={regPwd("confirm_password")}
+            showState={showConfirm}
+            setShowState={setShowConfirm}
+            error={pwdErrors.confirm_password?.message as string | undefined}
+            placeholder="Re-enter your new password"
+          />
+          <div className="pt-1">
+            <button
+              type="submit"
+              disabled={savingPwd}
+              className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              <KeyRound className="w-4 h-4" />
+              {savingPwd ? "Updating…" : "Update Password"}
+            </button>
           </div>
         </form>
       </div>
