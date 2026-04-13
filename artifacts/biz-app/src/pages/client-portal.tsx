@@ -117,7 +117,9 @@ export default function ClientPortal() {
     staleTime: 2 * 60 * 1000,
   });
   const { data: servicesHours = [] } = useQuery<Array<{
-    service_id: number; name: string; service_type: string; hours_used: number;
+    service_id: number; name: string; service_type: string; billing_type: string;
+    hours_used: number; budgeted_hours: number | null; base_budgeted_hours: number | null;
+    rollover_hours: number; allow_rollover: boolean; rollover_cap_hours: number | null;
     monthly_hours_reset_day: number | null; next_reset_date: string | null; days_until_reset: number | null;
   }>>({
     queryKey: ["services-hours-portal", clientId],
@@ -280,14 +282,20 @@ function OverviewTab({
 }: {
   user: any; clientRecord?: ClientRecord;
   hoursThisMonth: number; hoursBudget: number; hoursPct: number; hoursColor: string;
-  vaServiceHours?: { hours_used: number; days_until_reset: number | null; next_reset_date: string | null; monthly_hours_reset_day: number | null } | undefined;
+  vaServiceHours?: {
+    hours_used: number; budgeted_hours: number | null; base_budgeted_hours: number | null;
+    rollover_hours: number; allow_rollover: boolean;
+    days_until_reset: number | null; next_reset_date: string | null; monthly_hours_reset_day: number | null;
+  } | undefined;
   pendingTasks: any[]; completedTasks: any[]; overdueTasks: any[]; overdueInvoices: any[];
   totalOwed: number; totalPaid: number; unpaidInvoices: any[]; paidInvoices: any[];
   todayStr: string; goToTasks: () => void; goToInvoices: () => void; goToTime: () => void;
 }) {
   const hasBK = !!(clientRecord?.bk_fee || clientRecord?.service_type === "bookkeeping" || clientRecord?.service_type === "hybrid");
   const hasVA = !!(clientRecord?.va_hourly_rate || clientRecord?.service_type === "va" || clientRecord?.service_type === "hybrid");
-  const vaLimit = clientRecord?.va_hour_limit ?? clientRecord?.monthly_hour_budget ?? 0;
+  // Prefer the effective budget from services (includes rollover) over the legacy field
+  const vaLimit = vaServiceHours?.budgeted_hours ?? clientRecord?.va_hour_limit ?? clientRecord?.monthly_hour_budget ?? 0;
+  const vaRolloverHours = vaServiceHours?.rollover_hours ?? 0;
   const vaRate = clientRecord?.va_hourly_rate ?? 0;
   const bkFee = clientRecord?.bk_fee ?? (hasBK && !hasVA ? (clientRecord?.monthly_fee ?? 0) : 0);
   const vaHoursUsed = vaServiceHours?.monthly_hours_reset_day != null ? vaServiceHours.hours_used : hoursThisMonth;
@@ -435,6 +443,12 @@ function OverviewTab({
                 {/* Hours progress */}
                 {vaLimit > 0 && (
                   <div className="mt-3 space-y-1.5">
+                    {vaRolloverHours > 0 && (
+                      <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                        <span className="text-base leading-none">↩</span>
+                        <span>+{vaRolloverHours}h rolled over from last period — added to your budget</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-500">{vaHoursUsed}h used{vaServiceHours?.monthly_hours_reset_day != null ? " since last reset" : " this month"}</span>
                       <span className={vaHoursPct >= 100 ? "text-red-600 font-semibold" : vaHoursPct >= 85 ? "text-amber-600 font-semibold" : "text-slate-400"}>
@@ -444,7 +458,12 @@ function OverviewTab({
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-500 ${vaHoursColor}`} style={{ width: `${vaHoursPct}%` }} />
                     </div>
-                    <p className="text-xs text-slate-400">{vaHoursPct}% of {vaLimit}h monthly limit</p>
+                    <p className="text-xs text-slate-400">
+                      {vaHoursPct}% of {vaLimit}h budget
+                      {vaRolloverHours > 0 && vaServiceHours?.base_budgeted_hours != null && (
+                        <span className="text-emerald-600"> ({vaServiceHours.base_budgeted_hours}h base + {vaRolloverHours}h rollover)</span>
+                      )}
+                    </p>
                     {vaServiceHours?.days_until_reset != null && (
                       <p className="text-xs font-medium" style={{ color: "#266b75" }}>
                         Resets in {vaServiceHours.days_until_reset} day{vaServiceHours.days_until_reset !== 1 ? "s" : ""}
