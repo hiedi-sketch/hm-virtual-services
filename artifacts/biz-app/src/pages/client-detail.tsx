@@ -211,9 +211,13 @@ export default function ClientDetail() {
 
 
   const dashClient = dashboard?.find(c => c.id === clientId);
-  const hoursUsed = dashClient?.hours_used_this_month ?? 0;
-  const hoursRemaining = dashClient?.hours_remaining ?? (client?.monthly_hour_budget ?? 0);
-  const budget = client?.monthly_hour_budget ?? 0;
+  // Prefer server-calculated services-hours data (respects reset day + rollover) over legacy dashboard fields
+  const vaServiceHours = servicesHours.find(s => s.service_type === "Virtual Assistant");
+  const hoursUsed = vaServiceHours?.hours_used ?? dashClient?.hours_used_this_month ?? 0;
+  const budget = vaServiceHours?.budgeted_hours ?? client?.monthly_hour_budget ?? 0;
+  const baseBudget = vaServiceHours?.base_budgeted_hours ?? budget;
+  const rolloverHours = vaServiceHours?.rollover_hours ?? 0;
+  const hoursRemaining = Math.max(0, Math.round((budget - hoursUsed) * 10) / 10);
   const percentage = budget > 0 ? Math.min(100, Math.round((hoursUsed / budget) * 100)) : 0;
   const isOverBudget = hoursUsed >= budget && budget > 0;
   const isNearBudget = percentage >= 85 && !isOverBudget;
@@ -526,9 +530,14 @@ export default function ClientDetail() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Budget</p>
           <p className="text-2xl font-bold text-slate-900">{budget} <span className="text-base font-medium text-slate-400">hrs/mo</span></p>
+          {rolloverHours > 0 && (
+            <p className="text-xs font-medium text-emerald-600 mt-1">↩ +{rolloverHours}h rollover included ({baseBudget}h base)</p>
+          )}
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Used This Month</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            {vaServiceHours?.monthly_hours_reset_day != null ? "Used Since Reset" : "Used This Period"}
+          </p>
           <p className="text-2xl font-bold text-slate-900">{fmtHours(hoursUsed)} <span className="text-base font-medium text-slate-400">hrs</span></p>
         </div>
         <div className={`rounded-2xl border shadow-xl p-5 ${isOverBudget ? "bg-red-50 border-red-200" : "bg-white border-slate-200"}`}>
@@ -542,9 +551,15 @@ export default function ClientDetail() {
       {/* Progress Bar */}
       {hasVA && budget > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5">
+          {rolloverHours > 0 && (
+            <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg mb-3">
+              <span className="text-sm leading-none">↩</span>
+              <span>+{rolloverHours}h rolled over from last period — included in the {budget}h budget ({baseBudget}h base)</span>
+            </div>
+          )}
           <div className="flex justify-between text-sm mb-2">
             <span className="font-medium text-slate-700">
-              VA hours — {percentage}% of {budget}h monthly cap used
+              VA hours — {percentage}% of {budget}h budget used
             </span>
             <span className="text-slate-500">{fmtHours(hoursUsed)} / {budget} hrs</span>
           </div>
@@ -554,7 +569,7 @@ export default function ClientDetail() {
           {isOverBudget && (
             <div className="mt-3 flex items-center gap-2 text-xs font-medium text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-100">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              This client has exceeded their monthly VA hour cap.
+              This client has exceeded their VA hour budget.
             </div>
           )}
         </div>
@@ -851,9 +866,11 @@ export default function ClientDetail() {
                   const effRate = cs.custom_hourly_rate ?? cs.hourly_rate;
                   const effBudget = cs.custom_budgeted_hours ?? cs.budgeted_hours;
                   const budgeted = effBudget ?? 0;
+                  // Use effective budget (includes rollover) for progress calculation
+                  const effectiveBudgeted = isVA ? (hoursInfo?.budgeted_hours ?? budgeted) : budgeted;
                   const used = hoursInfo?.hours_used ?? 0;
-                  const pct = budgeted > 0 ? Math.min(100, Math.round((used / budgeted) * 100)) : 0;
-                  const overBudget = isVA && budgeted > 0 && used >= budgeted;
+                  const pct = effectiveBudgeted > 0 ? Math.min(100, Math.round((used / effectiveBudgeted) * 100)) : 0;
+                  const overBudget = isVA && effectiveBudgeted > 0 && used >= effectiveBudgeted;
                   const isEditing = editingServiceId === cs.service_id;
                   // For hourly services: use rate × budgeted hours; fall back to base price when not configured
                   const hourlyComputed = isHourly && effRate != null && budgeted > 0 ? effRate * budgeted : 0;
