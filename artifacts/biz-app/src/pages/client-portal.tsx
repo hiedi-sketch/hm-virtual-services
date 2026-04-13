@@ -298,7 +298,8 @@ function OverviewTab({
   const vaRolloverHours = vaServiceHours?.rollover_hours ?? 0;
   const vaRate = clientRecord?.va_hourly_rate ?? 0;
   const bkFee = clientRecord?.bk_fee ?? (hasBK && !hasVA ? (clientRecord?.monthly_fee ?? 0) : 0);
-  const vaHoursUsed = vaServiceHours?.monthly_hours_reset_day != null ? vaServiceHours.hours_used : hoursThisMonth;
+  // Always prefer the server-calculated hours_used (respects reset day) over raw calendar-month sum
+  const vaHoursUsed = vaServiceHours != null ? vaServiceHours.hours_used : hoursThisMonth;
   const vaHoursPct = vaLimit > 0 ? Math.min(100, Math.round((vaHoursUsed / vaLimit) * 100)) : 0;
   const vaHoursColor = vaHoursPct >= 100 ? "bg-red-500" : vaHoursPct >= 85 ? "bg-amber-500" : "bg-primary";
   const [showAllTasks, setShowAllTasks] = useState(false);
@@ -343,18 +344,18 @@ function OverviewTab({
             <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: "hsl(188 51% 30% / 0.1)" }}><Clock className="w-5 h-5" style={{ color: "#266b75" }} /></div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Hours Used</p>
-              <p className="text-2xl font-bold text-slate-900 leading-none mt-0.5">{hoursThisMonth}h</p>
+              <p className="text-2xl font-bold text-slate-900 leading-none mt-0.5">{vaHoursUsed}h</p>
             </div>
           </div>
-          {hoursBudget > 0 && (
+          {vaLimit > 0 && (
             <div className="space-y-1">
               <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-500 ${hoursColor}`} style={{ width: `${hoursPct}%` }} />
+                <div className={`h-full rounded-full transition-all duration-500 ${vaHoursColor}`} style={{ width: `${vaHoursPct}%` }} />
               </div>
-              <p className="text-xs text-slate-400">
-                {hoursPct}% of {hoursBudget}h monthly budget
-                {hoursPct >= 100 && <span className="text-red-500 font-semibold ml-1">— Over budget!</span>}
-                {hoursPct >= 85 && hoursPct < 100 && <span className="text-amber-500 font-semibold ml-1">— Nearing limit</span>}
+              <p className="text-xs text-slate-600">
+                {vaHoursPct}% of {vaLimit}h budget
+                {vaHoursPct >= 100 && <span className="text-red-500 font-semibold ml-1">— Over budget!</span>}
+                {vaHoursPct >= 85 && vaHoursPct < 100 && <span className="text-amber-500 font-semibold ml-1">— Nearing limit</span>}
               </p>
             </div>
           )}
@@ -426,18 +427,18 @@ function OverviewTab({
                     <Clock className="w-5 h-5 text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Virtual Assistant</p>
+                    <p className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Virtual Assistant</p>
                     <p className="text-sm font-bold text-slate-900">Hourly Package</p>
                   </div>
                 </div>
                 <div className="flex items-baseline gap-2">
                   {vaRate > 0 && (
                     <p className="text-3xl font-bold text-slate-900">
-                      {fmtCurrency(vaRate)}<span className="text-sm font-medium text-slate-400">/hr</span>
+                      {fmtCurrency(vaRate)}<span className="text-sm font-medium text-slate-700">/hr</span>
                     </p>
                   )}
                   {vaLimit > 0 && (
-                    <span className="text-sm font-medium text-slate-500">· {vaLimit}h limit</span>
+                    <span className="text-sm font-medium text-slate-900">· {vaLimit}h budget</span>
                   )}
                 </div>
                 {/* Hours progress */}
@@ -450,18 +451,18 @@ function OverviewTab({
                       </div>
                     )}
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-slate-500">{vaHoursUsed}h used{vaServiceHours?.monthly_hours_reset_day != null ? " since last reset" : " this month"}</span>
-                      <span className={vaHoursPct >= 100 ? "text-red-600 font-semibold" : vaHoursPct >= 85 ? "text-amber-600 font-semibold" : "text-slate-400"}>
+                      <span className="text-slate-900 font-medium">{vaHoursUsed}h used{vaServiceHours?.monthly_hours_reset_day != null ? " since last reset" : " this month"}</span>
+                      <span className={vaHoursPct >= 100 ? "text-red-600 font-semibold" : vaHoursPct >= 85 ? "text-amber-600 font-semibold" : "text-slate-900 font-medium"}>
                         {vaLimit - vaHoursUsed > 0 ? `${Math.round((vaLimit - vaHoursUsed) * 10) / 10}h left` : "Limit reached"}
                       </span>
                     </div>
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-500 ${vaHoursColor}`} style={{ width: `${vaHoursPct}%` }} />
                     </div>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-700">
                       {vaHoursPct}% of {vaLimit}h budget
                       {vaRolloverHours > 0 && vaServiceHours?.base_budgeted_hours != null && (
-                        <span className="text-emerald-600"> ({vaServiceHours.base_budgeted_hours}h base + {vaRolloverHours}h rollover)</span>
+                        <span className="text-emerald-700 font-medium"> ({vaServiceHours.base_budgeted_hours}h base + {vaRolloverHours}h rollover)</span>
                       )}
                     </p>
                     {vaServiceHours?.days_until_reset != null && (
@@ -473,8 +474,8 @@ function OverviewTab({
                   </div>
                 )}
                 {vaRate > 0 && vaLimit > 0 && (
-                  <p className="text-xs text-slate-500 mt-2 border-t border-slate-100 pt-2">
-                    Package value: <span className="font-semibold text-slate-700">{fmtCurrency(vaRate * vaLimit)}/month</span>
+                  <p className="text-xs text-slate-700 mt-2 border-t border-slate-100 pt-2">
+                    Package value: <span className="font-semibold text-slate-900">{fmtCurrency(vaRate * vaLimit)}/month</span>
                   </p>
                 )}
               </div>
