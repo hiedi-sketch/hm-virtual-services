@@ -13,5 +13,6 @@ export function formatCurrency(amount: number) {
 }
 
 export function fmtHours(hours: number): string {
-  return (Math.round(hours * 100) / 100).toFixed(2);
+  // Round to 2 decimal places and strip trailing zeros (e.g. 1.0666 → 1.07, 1.50 → 1.5, 2.00 → 2)
+  return parseFloat(hours.toFixed(2)).toString();
 }

@@ -299,7 +299,9 @@ function OverviewTab({
   const vaRate = clientRecord?.va_hourly_rate ?? 0;
   const bkFee = clientRecord?.bk_fee ?? (hasBK && !hasVA ? (clientRecord?.monthly_fee ?? 0) : 0);
   // Always prefer the server-calculated hours_used (respects reset day) over raw calendar-month sum
-  const vaHoursUsed = vaServiceHours != null ? vaServiceHours.hours_used : hoursThisMonth;
+  // Round to 2dp, drop trailing zeros (1.0666 → 1.07, 1.50 → 1.5)
+  const vaHoursUsedRaw = vaServiceHours != null ? vaServiceHours.hours_used : hoursThisMonth;
+  const vaHoursUsed = parseFloat(vaHoursUsedRaw.toFixed(2));
   const vaHoursPct = vaLimit > 0 ? Math.min(100, Math.round((vaHoursUsed / vaLimit) * 100)) : 0;
   const vaHoursColor = vaHoursPct >= 100 ? "bg-red-500" : vaHoursPct >= 85 ? "bg-amber-500" : "bg-primary";
   const [showAllTasks, setShowAllTasks] = useState(false);
@@ -453,7 +455,7 @@ function OverviewTab({
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-slate-900 font-medium">{vaHoursUsed}h used{vaServiceHours?.monthly_hours_reset_day != null ? " since last reset" : " this month"}</span>
                       <span className={vaHoursPct >= 100 ? "text-red-600 font-semibold" : vaHoursPct >= 85 ? "text-amber-600 font-semibold" : "text-slate-900 font-medium"}>
-                        {vaLimit - vaHoursUsed > 0 ? `${Math.round((vaLimit - vaHoursUsed) * 10) / 10}h left` : "Limit reached"}
+                        {vaLimit - vaHoursUsed > 0 ? `${parseFloat((vaLimit - vaHoursUsed).toFixed(2))}h left` : "Limit reached"}
                       </span>
                     </div>
                     <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">

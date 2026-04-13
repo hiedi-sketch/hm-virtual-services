@@ -326,7 +326,7 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
       allow_rollover: svc.allow_rollover,
       rollover_cap_hours: svc.rollover_cap_hours,
       price: svc.custom_price ?? svc.price,
-      hours_used: svc.service_type ? (minutesByType[svc.service_type] ?? 0) / 60 : 0,
+      hours_used: svc.service_type ? parseFloat(((minutesByType[svc.service_type] ?? 0) / 60).toFixed(2)) : 0,
       monthly_hours_reset_day: svcResetDay,
       next_reset_date: nextReset,
       days_until_reset: daysUntilReset,

@@ -213,11 +213,11 @@ export default function ClientDetail() {
   const dashClient = dashboard?.find(c => c.id === clientId);
   // Prefer server-calculated services-hours data (respects reset day + rollover) over legacy dashboard fields
   const vaServiceHours = servicesHours.find(s => s.service_type === "Virtual Assistant");
-  const hoursUsed = vaServiceHours?.hours_used ?? dashClient?.hours_used_this_month ?? 0;
+  const hoursUsed = parseFloat(((vaServiceHours?.hours_used ?? dashClient?.hours_used_this_month ?? 0)).toFixed(2));
   const budget = vaServiceHours?.budgeted_hours ?? client?.monthly_hour_budget ?? 0;
   const baseBudget = vaServiceHours?.base_budgeted_hours ?? budget;
   const rolloverHours = vaServiceHours?.rollover_hours ?? 0;
-  const hoursRemaining = Math.max(0, Math.round((budget - hoursUsed) * 10) / 10);
+  const hoursRemaining = Math.max(0, parseFloat((budget - hoursUsed).toFixed(2)));
   const percentage = budget > 0 ? Math.min(100, Math.round((hoursUsed / budget) * 100)) : 0;
   const isOverBudget = hoursUsed >= budget && budget > 0;
   const isNearBudget = percentage >= 85 && !isOverBudget;
