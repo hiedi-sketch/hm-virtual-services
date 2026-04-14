@@ -132,6 +132,37 @@ Database layer using Drizzle ORM with PostgreSQL. Schema tables: clients, tasks,
 
 OpenAPI 3.1 spec (`openapi.yaml`) and Orval config. Run codegen: `pnpm --filter @workspace/api-spec run codegen`
 
+## ClickUp Integration
+
+Two-way sync between local Task Manager and ClickUp (API v2).
+
+**Setup flow (admin only):**
+1. Click "Connect ClickUp" on the Tasks page → enter API token → pick workspace → space → list.
+2. Optionally register a webhook for real-time inbound sync.
+
+**Outbound (local → ClickUp):**
+- Every `PATCH /api/tasks/:id` auto-pushes title, status, due date, description, and tags to ClickUp if the task has a `clickup_task_id`.
+- Every `POST /api/tasks/:taskId/comments` auto-posts the comment to ClickUp.
+- Manual "Sync all" via `POST /api/clickup/sync`. Nightly cron at 00:05.
+
+**Inbound (ClickUp → local) via webhook:**
+- `POST /api/clickup/webhook` (public, HMAC-SHA256 signature verification when secret is stored).
+- Handles: `taskNameUpdated`, `taskStatusUpdated`, `taskDueDateUpdated`, `taskUpdated`, `taskTagUpdated`, `taskCommentPosted`.
+- Comments from ClickUp stored with `clickup_comment_id` to prevent echo-back.
+
+**Fields synced:** title, status (mapped bidirectionally), due date, tags (comma-separated), comments.
+
+**Status mapping:**
+- ClickUp "complete/closed/done" ↔ local "Completed"
+- ClickUp "in progress/active" ↔ local "In Progress"
+- ClickUp "pending/waiting" ↔ local "Pending"
+
+**DB columns added:** `tasks.clickup_task_id`, `tasks.tags`, `task_comments.clickup_comment_id`
+
+**Key files:**
+- `artifacts/api-server/src/services/clickup.ts` — API wrapper
+- `artifacts/api-server/src/routes/clickup.ts` — all ClickUp routes
+
 ## Parent Client / Subclients
 
 Clients support a self-referential parent/subclient hierarchy via `parent_id` (nullable FK on `clients`).

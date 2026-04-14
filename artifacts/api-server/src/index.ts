@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import cron from "node-cron";
 import { runPush } from "./routes/asana";
+import { runClickUpPush } from "./routes/clickup";
 
 const rawPort = process.env["PORT"];
 
@@ -35,5 +36,17 @@ cron.schedule("0 0 * * *", async () => {
     logger.info(result, "Midnight Asana push: complete");
   } catch (err) {
     logger.error({ err }, "Midnight Asana push: failed (Asana may not be configured)");
+  }
+});
+
+// ── Midnight ClickUp sync ─────────────────────────────────────────────────
+// Runs at 00:05 every day to keep ClickUp in sync with local changes.
+cron.schedule("5 0 * * *", async () => {
+  logger.info("Midnight ClickUp sync: starting");
+  try {
+    const result = await runClickUpPush();
+    logger.info(result, "Midnight ClickUp sync: complete");
+  } catch (err) {
+    logger.error({ err }, "Midnight ClickUp sync: failed (ClickUp may not be configured)");
   }
 });

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { tasksTable, clientsTable, subtasksTable, taskCommentsTable, usersTable } from "@workspace/db";
+import { tasksTable, clientsTable, subtasksTable, taskCommentsTable, usersTable, appSettingsTable } from "@workspace/db";
 import { eq, isNotNull, and, desc, sql, inArray } from "drizzle-orm";
 import { notifyAdmins, notifyClientUser, createNotification } from "../lib/notify";
 import { z } from "zod";
@@ -8,6 +8,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { spawnRecurringTasks, spawnOnCompletion } from "../lib/spawn-recurring";
 import { sendMail, template } from "../lib/mailer";
 import { logAudit } from "../lib/audit";
+import { updateTask as cuUpdateTask, createComment as cuCreateComment, localStatusToCU, dateToMs } from "../services/clickup";
 import {
   CreateTaskBody,
   UpdateTaskBody,
@@ -30,6 +31,65 @@ function todayStr(): string {
   return new Date().toISOString().split("T")[0]!;
 }
 
+// ── ClickUp auto-push helpers ─────────────────────────────────────────────────
+
+async function getClickUpToken(): Promise<string | null> {
+  const rows = await db
+    .select({ value: appSettingsTable.value })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.key, "clickup_token"))
+    .limit(1);
+  return rows[0]?.value ?? null;
+}
+
+/** Fire-and-forget: push a single task update to ClickUp if it is linked. */
+async function maybePushTaskToClickUp(task: {
+  clickup_task_id: string | null;
+  title: string;
+  status: string;
+  due_date: string | null;
+  description: string | null;
+  tags: string | null;
+}): Promise<void> {
+  if (!task.clickup_task_id) return;
+  const token = await getClickUpToken();
+  if (!token) return;
+  try {
+    await cuUpdateTask(token, task.clickup_task_id, {
+      name: task.title,
+      description: task.description ?? undefined,
+      due_date: dateToMs(task.due_date),
+      status: localStatusToCU(task.status),
+      tags: task.tags ? task.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+    });
+  } catch { /* best-effort */ }
+}
+
+/** Fire-and-forget: push a new local comment to ClickUp if the task is linked. */
+async function maybePushCommentToClickUp(
+  taskId: number,
+  commentText: string,
+  clickupCommentId: string | null,
+): Promise<void> {
+  // Don't echo back comments that originated from ClickUp
+  if (clickupCommentId) return;
+
+  const [task] = await db
+    .select({ clickup_task_id: tasksTable.clickup_task_id })
+    .from(tasksTable)
+    .where(eq(tasksTable.id, taskId))
+    .limit(1);
+  if (!task?.clickup_task_id) return;
+
+  const token = await getClickUpToken();
+  if (!token) return;
+  try {
+    await cuCreateComment(token, task.clickup_task_id, commentText);
+  } catch { /* best-effort */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 const taskSelectFields = {
   id: tasksTable.id,
   title: tasksTable.title,
@@ -44,6 +104,8 @@ const taskSelectFields = {
   last_generated_at: tasksTable.last_generated_at,
   service_type: tasksTable.service_type,
   asana_gid: tasksTable.asana_gid,
+  clickup_task_id: tasksTable.clickup_task_id,
+  tags: tasksTable.tags,
   incomplete_subtask_count: sql<number>`(
     SELECT COUNT(*) FROM subtasks
     WHERE subtasks.task_id = ${tasksTable.id} AND subtasks.done = false
@@ -343,6 +405,16 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
   const parsed = UpdateTaskResponse.parse(updated ?? rawUpdated);
   res.json(parsed);
 
+  // Fire-and-forget: push changes to ClickUp if this task is linked
+  maybePushTaskToClickUp({
+    clickup_task_id: updated.clickup_task_id ?? null,
+    title: updated.title,
+    status: updated.status,
+    due_date: updated.due_date ?? null,
+    description: updated.description ?? null,
+    tags: updated.tags ?? null,
+  }).catch(() => {});
+
   const actor = req.session.user;
   const action = body.status === "Completed" ? "completed" : "updated";
   const summary = body.status === "Completed"
@@ -472,6 +544,10 @@ router.post("/tasks/:taskId/comments", requireAuth, async (req, res) => {
     .returning();
 
   res.status(201).json(comment);
+
+  // Fire-and-forget: push comment to ClickUp if task is linked
+  // (clickup_comment_id is null here because this comment originated locally)
+  maybePushCommentToClickUp(taskId, body.data.comment, null).catch(() => {});
 
   // Fire-and-forget: in-app notification for new comment
   if (comment) {

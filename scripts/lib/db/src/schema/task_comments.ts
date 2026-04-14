@@ -9,6 +9,7 @@ export const taskCommentsTable = pgTable("task_comments", {
   author_role: text("author_role", { enum: ["admin", "team_member", "client"] }).notNull(),
   comment: text("comment").notNull(),
   created_at: timestamp("created_at").notNull().defaultNow(),
+  clickup_comment_id: text("clickup_comment_id"),
 });
 
 export type TaskComment = typeof taskCommentsTable.$inferSelect;

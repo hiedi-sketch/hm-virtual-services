@@ -27,6 +27,8 @@ interface ApiTask {
   last_generated_at: string | null;
   service_type: string | null;
   asana_gid: string | null;
+  clickup_task_id: string | null;
+  tags: string | null;
   incomplete_subtask_count: number;
 }
 
@@ -782,6 +784,468 @@ function ImportAsanaModal({
   );
 }
 
+// ── ClickUp Settings Modal ────────────────────────────────────────────────────
+
+interface CUTeam { id: string; name: string }
+interface CUSpace { id: string; name: string }
+interface CUList { id: string; name: string; folder?: { name: string } }
+
+function ClickUpSettingsModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [token, setToken] = useState("");
+  const [teams, setTeams] = useState<CUTeam[]>([]);
+  const [spaces, setSpaces] = useState<CUSpace[]>([]);
+  const [lists, setLists] = useState<CUList[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState("");
+  const [selectedSpace, setSelectedSpace] = useState("");
+  const [selectedList, setSelectedList] = useState("");
+  const [selectedListName, setSelectedListName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [step, setStep] = useState<"token" | "team" | "space" | "list" | "done">("token");
+  const [settings, setSettings] = useState<{ configured: boolean; token_masked: string | null; list_name: string | null; clickup_user?: { username: string } | null } | null>(null);
+  const [registering, setRegistering] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/clickup/settings", { credentials: "include" });
+        if (res.ok) { const d = await res.json(); setSettings(d); }
+      } catch { /* ignore */ }
+    })();
+  }, []);
+
+  const loadTeams = async (t: string) => {
+    setLoading(true);
+    try {
+      await fetch("/api/clickup/settings", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: t }),
+      });
+      const res = await fetch("/api/clickup/workspaces", { credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load workspaces");
+      setTeams(data.teams ?? []);
+      setStep("team");
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  };
+
+  const loadSpaces = async (teamId: string) => {
+    setSelectedTeam(teamId);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/clickup/spaces/${teamId}`, { credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load spaces");
+      setSpaces(data.spaces ?? []);
+      setStep("space");
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  };
+
+  const loadLists = async (spaceId: string) => {
+    setSelectedSpace(spaceId);
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/clickup/lists/${spaceId}`, { credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load lists");
+      setLists(data.lists ?? []);
+      setStep("list");
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  };
+
+  const saveListSelection = async (listId: string, listName: string) => {
+    setSelectedList(listId);
+    setSelectedListName(listName);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/clickup/settings", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: "__keep__", list_id: listId, list_name: listName, team_id: selectedTeam }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
+      toast({ title: "ClickUp connected!", description: `Syncing with list "${listName}"` });
+      setStep("done");
+      onSaved();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  const registerWebhook = async () => {
+    setRegistering(true);
+    try {
+      const endpoint = `${window.location.origin}/api/clickup/webhook`;
+      const res = await fetch("/api/clickup/webhook/register", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to register webhook");
+      toast({ title: "Webhook registered", description: "ClickUp will now push changes in real time." });
+    } catch (e: any) {
+      toast({ title: "Webhook registration failed", description: e.message, variant: "destructive" });
+    } finally { setRegistering(false); }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
+              <span className="text-purple-600 font-bold text-xs">CU</span>
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 text-sm">ClickUp Integration</h2>
+              <p className="text-xs text-slate-400">Connect your ClickUp workspace</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="px-6 py-5 space-y-4">
+          {settings?.configured && step === "token" && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-start gap-2">
+              <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-emerald-800">Connected as {settings.clickup_user?.username}</p>
+                <p className="text-xs text-emerald-600 mt-0.5">Active list: {settings.list_name ?? "—"}</p>
+              </div>
+            </div>
+          )}
+
+          {step === "token" && (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  ClickUp API Token
+                </label>
+                <input
+                  type="password"
+                  value={token}
+                  onChange={e => setToken(e.target.value)}
+                  placeholder="pk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-purple-400 transition-colors"
+                />
+                <p className="text-xs text-slate-400 mt-1">
+                  Find your token in ClickUp → Settings → Apps → API Token
+                </p>
+              </div>
+              <button
+                onClick={() => token.trim() && loadTeams(token.trim())}
+                disabled={!token.trim() || loading}
+                className="w-full flex items-center justify-center gap-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                {settings?.configured ? "Reconnect / Change List" : "Connect to ClickUp"}
+              </button>
+            </div>
+          )}
+
+          {step === "team" && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Workspace</p>
+              {loading ? (
+                <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                  {teams.map(t => (
+                    <button key={t.id} onClick={() => loadSpaces(t.id)}
+                      className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition-colors">
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === "space" && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Space</p>
+              {loading ? (
+                <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden">
+                  {spaces.map(s => (
+                    <button key={s.id} onClick={() => loadLists(s.id)}
+                      className="w-full text-left px-4 py-3 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition-colors">
+                      {s.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === "list" && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select List to Sync</p>
+              {loading ? (
+                <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
+              ) : (
+                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
+                  {lists.map(l => (
+                    <button key={l.id} onClick={() => saveListSelection(l.id, l.name)}
+                      disabled={saving}
+                      className="w-full text-left px-4 py-3 hover:bg-purple-50 hover:text-purple-700 transition-colors disabled:opacity-50">
+                      <p className="text-sm text-slate-700">{l.name}</p>
+                      {l.folder && <p className="text-xs text-slate-400">In {l.folder.name}</p>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === "done" && (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-start gap-2">
+                <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-emerald-800">ClickUp connected!</p>
+                  <p className="text-xs text-emerald-600 mt-0.5">Syncing with: {selectedListName}</p>
+                </div>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-2">
+                <p className="text-xs font-semibold text-slate-600">Enable Real-Time Sync (Recommended)</p>
+                <p className="text-xs text-slate-500">Register a webhook so ClickUp pushes changes instantly — status updates, due dates, comments, and tags.</p>
+                <button
+                  onClick={registerWebhook}
+                  disabled={registering}
+                  className="flex items-center gap-2 text-xs font-medium text-purple-700 border border-purple-200 bg-purple-50 hover:bg-purple-100 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+                >
+                  {registering ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  {registering ? "Registering…" : "Register Webhook"}
+                </button>
+              </div>
+              <button onClick={onClose}
+                className="w-full text-sm text-slate-500 hover:text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors">
+                Close
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── Import from ClickUp modal ─────────────────────────────────────────────────
+
+interface CUPreviewTask {
+  id: string;
+  name: string;
+  status: string;
+  due_date: string | null;
+  assignee_name: string | null;
+  tags: string;
+}
+
+const CU_IMPORT_CLIENT_KEY = "hm_clickup_last_import_client_id";
+
+function ImportClickUpModal({
+  clients,
+  onClose,
+  onImported,
+}: {
+  clients: ApiClient[];
+  onClose: () => void;
+  onImported: () => void;
+}) {
+  const { toast } = useToast();
+  const [clientId, setClientId] = useState(() => localStorage.getItem(CU_IMPORT_CLIENT_KEY) ?? "");
+  const [preview, setPreview] = useState<CUPreviewTask[] | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(true);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/clickup/import/preview", { credentials: "include" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Failed to load ClickUp tasks");
+        setPreview(data.tasks);
+        setSelected(new Set(data.tasks.map((t: CUPreviewTask) => t.id)));
+      } catch (e: any) {
+        setPreviewError(e.message ?? "Could not connect to ClickUp");
+      } finally {
+        setLoadingPreview(false);
+      }
+    })();
+  }, []);
+
+  const toggleTask = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleImport = async () => {
+    if (!clientId || !preview) return;
+    const tasksToImport = preview.filter(t => selected.has(t.id));
+    if (tasksToImport.length === 0) return;
+    setImporting(true);
+    try {
+      const res = await fetch("/api/clickup/import", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_id: Number(clientId), tasks: tasksToImport }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Import failed");
+      localStorage.setItem(CU_IMPORT_CLIENT_KEY, clientId);
+      const msg = data.skipped > 0
+        ? `${data.created} imported · ${data.skipped} already existed`
+        : `${data.created} task${data.created !== 1 ? "s" : ""} imported from ClickUp`;
+      toast({ title: "Import complete", description: msg });
+      onImported();
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Import failed", description: e.message, variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const allSelected = preview ? preview.length > 0 && selected.size === preview.length : false;
+  const toggleAll = () => {
+    if (!preview) return;
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(preview.map(t => t.id)));
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[80vh]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center">
+              <Download className="w-4 h-4 text-purple-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-slate-900 text-sm">Import from ClickUp</h2>
+              <p className="text-xs text-slate-400">Choose tasks to bring into Task Manager</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {loadingPreview && (
+            <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-sm">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading tasks from ClickUp…
+            </div>
+          )}
+          {previewError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {previewError}
+            </div>
+          )}
+          {!loadingPreview && !previewError && preview && (
+            <>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                  Assign to Client <span className="text-red-400">*</span>
+                </label>
+                <select
+                  value={clientId}
+                  onChange={e => { setClientId(e.target.value); localStorage.setItem(CU_IMPORT_CLIENT_KEY, e.target.value); }}
+                  className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white outline-none focus:border-purple-400 transition-colors"
+                >
+                  <option value="">— Select a client —</option>
+                  {clients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                </select>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                    Tasks ({selected.size} of {preview.length} selected)
+                  </label>
+                  <button onClick={toggleAll} className="text-xs text-purple-600 hover:underline">
+                    {allSelected ? "Deselect all" : "Select all"}
+                  </button>
+                </div>
+                {preview.length === 0 ? (
+                  <p className="text-sm text-slate-400 italic text-center py-6">No tasks found in your ClickUp list.</p>
+                ) : (
+                  <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                    {preview.map(task => (
+                      <label key={task.id} className={cn(
+                        "flex items-start gap-3 px-3 py-2.5 cursor-pointer transition-colors",
+                        selected.has(task.id) ? "bg-purple-50/60" : "hover:bg-slate-50"
+                      )}>
+                        <input type="checkbox" checked={selected.has(task.id)} onChange={() => toggleTask(task.id)}
+                          className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300 accent-purple-600 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <p className={cn("text-sm text-slate-700 truncate",
+                              task.status.toLowerCase().includes("complet") && "line-through text-slate-400")}>
+                              {task.name}
+                            </p>
+                            <a href={`https://app.clickup.com/t/${task.id}`} target="_blank" rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()} title="Open in ClickUp"
+                              className="shrink-0 text-slate-300 hover:text-purple-500 transition-colors">
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                            <span className="capitalize">{task.status}</span>
+                            {task.due_date && <span>· Due {task.due_date}</span>}
+                            {task.assignee_name && <span>· {task.assignee_name}</span>}
+                            {task.tags && <span className="text-purple-500">· {task.tags}</span>}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {!loadingPreview && !previewError && preview && (
+          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-2">
+            <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors">
+              Cancel
+            </button>
+            <button onClick={handleImport} disabled={importing || !clientId || selected.size === 0}
+              className="flex items-center gap-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg px-4 py-2 transition-colors disabled:opacity-50">
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              {importing ? "Importing…" : `Import ${selected.size} Task${selected.size !== 1 ? "s" : ""}`}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 // ── New Task inline row ───────────────────────────────────────────────────────
 
 function NewTaskRow({
@@ -962,6 +1426,16 @@ export default function Tasks() {
   const [showNewRow, setShowNewRow] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showClickUpSettings, setShowClickUpSettings] = useState(false);
+  const [showClickUpImport, setShowClickUpImport] = useState(false);
+  const [clickUpConfigured, setClickUpConfigured] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/clickup/settings", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => setClickUpConfigured(!!d.configured))
+      .catch(() => {});
+  }, []);
 
   // ── Inline edit trigger ────────────────────────────────────────────────────
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
@@ -1224,7 +1698,7 @@ export default function Tasks() {
             {isLoading ? "Loading…" : `${tasks.length} tasks · click any cell to edit`}
           </p>
         </div>
-        <div className="flex items-center gap-2 self-start sm:self-auto">
+        <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <button
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-1.5 text-xs font-medium text-[#266b75] border border-[#266b75]/40 bg-[#266b75]/5 hover:bg-[#266b75]/10 rounded-lg px-3 py-2 transition-colors"
@@ -1232,6 +1706,23 @@ export default function Tasks() {
             <Download className="w-3.5 h-3.5" />
             Import from Asana
           </button>
+          <button
+            onClick={() => clickUpConfigured ? setShowClickUpImport(true) : setShowClickUpSettings(true)}
+            className="flex items-center gap-1.5 text-xs font-medium text-purple-700 border border-purple-300 bg-purple-50 hover:bg-purple-100 rounded-lg px-3 py-2 transition-colors"
+          >
+            <span className="font-bold text-[10px] leading-none bg-purple-600 text-white rounded px-1 py-0.5">CU</span>
+            {clickUpConfigured ? "Import from ClickUp" : "Connect ClickUp"}
+          </button>
+          {clickUpConfigured && (
+            <button
+              onClick={() => setShowClickUpSettings(true)}
+              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 border border-slate-200 bg-white hover:bg-slate-50 rounded-lg px-3 py-2 transition-colors"
+              title="ClickUp settings"
+            >
+              <span className="font-bold text-[10px] leading-none bg-purple-600 text-white rounded px-1 py-0.5">CU</span>
+              Settings
+            </button>
+          )}
           <button
             onClick={() => setShowNewRow(true)}
             disabled={showNewRow}
@@ -1247,6 +1738,19 @@ export default function Tasks() {
         <ImportAsanaModal
           clients={clients}
           onClose={() => setShowImportModal(false)}
+          onImported={() => refetch()}
+        />
+      )}
+      {showClickUpSettings && (
+        <ClickUpSettingsModal
+          onClose={() => setShowClickUpSettings(false)}
+          onSaved={() => { setClickUpConfigured(true); }}
+        />
+      )}
+      {showClickUpImport && (
+        <ImportClickUpModal
+          clients={clients}
+          onClose={() => setShowClickUpImport(false)}
           onImported={() => refetch()}
         />
       )}
@@ -1625,6 +2129,19 @@ export default function Tasks() {
                                 className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-50 text-orange-500 border border-orange-200 leading-none hover:bg-orange-100 transition-colors"
                               >
                                 Asana
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                            {task.clickup_task_id && (
+                              <a
+                                href={`https://app.clickup.com/t/${task.clickup_task_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                title="Open in ClickUp"
+                                className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-600 border border-purple-200 leading-none hover:bg-purple-100 transition-colors"
+                              >
+                                CU
                                 <ExternalLink className="w-2.5 h-2.5" />
                               </a>
                             )}

@@ -174,6 +174,8 @@ export const ListTasksResponseItem = zod.object({
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
   incomplete_subtask_count: zod.number().optional().default(0),
   asana_gid: zod.string().nullish(),
+  clickup_task_id: zod.string().nullish(),
+  tags: zod.string().nullish(),
 });
 export const ListTasksResponse = zod.array(ListTasksResponseItem);
 
@@ -294,6 +296,8 @@ export const UpdateTaskResponse = zod.object({
   recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  clickup_task_id: zod.string().nullish(),
+  tags: zod.string().nullish(),
 });
 
 /**
