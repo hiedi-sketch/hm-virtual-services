@@ -29,7 +29,7 @@ import {
   Plus, X, Trash2, CheckCircle2, Clock, FileText, Download,
   CreditCard, Pencil, BanIcon, DollarSign, AlertTriangle,
   ChevronDown, ChevronUp, Send, RefreshCw, ToggleLeft, ToggleRight,
-  Repeat, Play, Bell, BellRing,
+  Repeat, Play, Bell, BellRing, Eye,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -230,6 +230,140 @@ function LineItemsEditor({
   );
 }
 
+// ── Invoice Preview Modal ─────────────────────────────────────────────────────
+
+type PreviewData = {
+  invoiceId?: number;
+  clientName: string;
+  dueDate: string;
+  description: string;
+  lineItems: DraftItem[];
+  manualAmount: string;
+  notes: string;
+  thankYou: string;
+  saveAsDraft: boolean;
+};
+
+function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: () => void }) {
+  const hasItems = data.lineItems.length > 0;
+  const total = hasItems ? calcTotal(data.lineItems) : Number(data.manualAmount) || 0;
+  const status = data.saveAsDraft ? "DRAFT" : "UNPAID";
+  const statusColor = data.saveAsDraft ? "#7c3aed" : "#d97706";
+  const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const fmtD = (d: string) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
+
+  return (
+    <Modal isOpen title="Invoice Preview" onClose={onClose} description="This is how your invoice will look when sent.">
+      <div className="overflow-y-auto max-h-[75vh] -mx-1 px-1">
+        {/* Paper invoice */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden text-sm font-sans" style={{ fontFamily: "ui-sans-serif, system-ui, sans-serif" }}>
+
+          {/* Dark header bar */}
+          <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
+            <div>
+              <p className="text-white font-bold text-xl tracking-wide">INVOICE</p>
+              {data.invoiceId && <p className="text-slate-400 text-xs mt-0.5">#{data.invoiceId}</p>}
+              {!data.invoiceId && <p className="text-purple-400 text-xs mt-0.5 font-medium">DRAFT PREVIEW</p>}
+            </div>
+            <div className="text-right">
+              <p className="text-slate-300 text-xs font-medium">HM Virtual Services</p>
+              <p className="text-slate-500 text-xs">Business Suite</p>
+            </div>
+          </div>
+
+          {/* Bill To + Meta */}
+          <div className="px-6 py-5 grid grid-cols-2 gap-6 border-b border-slate-100">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Bill To</p>
+              {data.clientName
+                ? <p className="font-semibold text-slate-900 text-base">{data.clientName}</p>
+                : <p className="text-slate-400 italic">No client selected</p>}
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Invoice #</span>
+                <span className="text-slate-700 font-medium">{data.invoiceId ?? "—"}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Due Date</span>
+                <span className="text-slate-700 font-medium">{fmtD(data.dueDate)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400">Status</span>
+                <span className="font-bold text-xs" style={{ color: statusColor }}>{status}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Description / Memo */}
+          {data.description && (
+            <div className="px-6 py-3 bg-slate-50 border-b border-slate-100">
+              <p className="text-xs text-slate-500 italic">{data.description}</p>
+            </div>
+          )}
+
+          {/* Line Items */}
+          {hasItems && (
+            <div className="px-6 py-4 border-b border-slate-100">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-3">Line Items</p>
+              <div className="rounded-lg border border-slate-100 overflow-hidden">
+                <div className="grid grid-cols-[3fr_1fr_1.5fr_1.5fr] gap-2 px-3 py-2 bg-slate-50 text-[10px] font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100">
+                  <span>Item</span><span className="text-center">Qty</span><span className="text-right">Unit Price</span><span className="text-right">Total</span>
+                </div>
+                {data.lineItems.map((it, i) => (
+                  <div key={it._id} className={cn("grid grid-cols-[3fr_1fr_1.5fr_1.5fr] gap-2 px-3 py-2 items-start border-b border-slate-50 last:border-0", i % 2 === 1 ? "bg-slate-50/50" : "bg-white")}>
+                    <div>
+                      <p className="text-slate-800 font-medium text-xs">{it.name || <span className="text-slate-400 italic">Unnamed item</span>}</p>
+                      {it.description && <p className="text-slate-400 text-[10px] mt-0.5">{it.description}</p>}
+                    </div>
+                    <p className="text-slate-600 text-xs text-center">{it.qty}</p>
+                    <p className="text-slate-600 text-xs text-right">{formatCurrency(it.unit_price)}</p>
+                    <p className="text-slate-800 text-xs font-semibold text-right">{formatCurrency(it.qty * it.unit_price)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Manual amount (no line items) */}
+          {!hasItems && total > 0 && (
+            <div className="px-6 py-4 border-b border-slate-100">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Amount</p>
+              <p className="text-slate-800 font-medium">{formatCurrency(total)}</p>
+            </div>
+          )}
+
+          {/* Total box */}
+          <div className="mx-6 my-4 bg-slate-900 rounded-xl px-5 py-3 flex items-center justify-between">
+            <p className="text-slate-400 text-xs font-medium uppercase tracking-wide">Total Due</p>
+            <p className="text-white font-bold text-xl">{formatCurrency(total)}</p>
+          </div>
+
+          {/* Notes */}
+          {data.notes && (
+            <div className="px-6 pb-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">Notes</p>
+              <p className="text-xs text-slate-600 whitespace-pre-line">{data.notes}</p>
+            </div>
+          )}
+
+          {/* Thank-you */}
+          {data.thankYou && (
+            <div className="px-6 pb-4">
+              <p className="text-xs text-slate-500 italic">{data.thankYou}</p>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="bg-slate-50 border-t border-slate-100 px-6 py-3 text-center">
+            <p className="text-[10px] text-slate-400">Generated by HM Virtual Services Business Suite · {today}</p>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── Invoice Form ──────────────────────────────────────────────────────────────
 
 function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending }: {
@@ -254,6 +388,9 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
     invoice?.line_items?.map(li => ({ _id: Math.random().toString(36).slice(2), name: li.name, description: li.description ?? "", qty: li.qty, unit_price: li.unit_price })) ?? []
   );
   const [showAdvanced, setShowAdvanced] = useState(!!(invoice?.notes || invoice?.thank_you_message));
+  const [showPreview, setShowPreview] = useState(false);
+
+  const clientName = clients.find(c => String(c.id) === clientId)?.name ?? "";
 
   const hasItems = lineItems.length > 0;
   const total = hasItems ? calcTotal(lineItems) : Number(manualAmount) || 0;
@@ -323,13 +460,24 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
           </div>
         </div>
       )}
-      <div className="flex gap-2 pt-1">
+      <div className="flex gap-2 pt-1 flex-wrap">
         <button type="submit" disabled={isPending}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50">
           {isPending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Changes" : saveAsDraft ? "Save Draft" : "Create Invoice")}
         </button>
+        <button type="button" onClick={() => setShowPreview(true)}
+          className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
+          <Eye className="w-4 h-4" /> Preview
+        </button>
         <button type="button" onClick={onCancel} className="text-sm text-slate-500 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 transition-colors">Cancel</button>
       </div>
+
+      {showPreview && (
+        <InvoicePreviewModal
+          data={{ invoiceId: invoice?.id, clientName, dueDate, description, lineItems, manualAmount, notes, thankYou, saveAsDraft }}
+          onClose={() => setShowPreview(false)}
+        />
+      )}
     </form>
   );
 }
