@@ -25,6 +25,8 @@ export const recurringInvoicesTable = pgTable("recurring_invoices", {
   amount: real("amount").notNull().default(0),
   active: boolean("active").notNull().default(true),
   auto_send: boolean("auto_send").notNull().default(false),
+  service_period_start: text("service_period_start"),
+  service_period_end: text("service_period_end"),
   created_at: timestamp("created_at").defaultNow(),
 });
 
@@ -46,6 +48,8 @@ export const invoicesTable = pgTable("invoices", {
   payment_notes: text("payment_notes"),
   recurring_id: integer("recurring_id").references(() => recurringInvoicesTable.id),
   billing_type: text("billing_type", { enum: ["one_time", "recurring"] }).notNull().default("one_time"),
+  service_period_start: text("service_period_start"),
+  service_period_end: text("service_period_end"),
   updated_at: timestamp("updated_at").defaultNow(),
 });
 

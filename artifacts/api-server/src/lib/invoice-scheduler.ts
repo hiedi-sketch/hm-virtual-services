@@ -50,6 +50,20 @@ function computeNextDueDate(frequency: string, intervalDays: number | null): str
   return today.toISOString().split("T")[0]!;
 }
 
+function advancePeriod(dateStr: string, frequency: string, intervalDays: number | null): string {
+  const d = new Date(dateStr + "T00:00:00");
+  if (frequency === "weekly") {
+    d.setDate(d.getDate() + 7);
+  } else if (frequency === "monthly") {
+    d.setMonth(d.getMonth() + 1);
+  } else if (frequency === "custom" && intervalDays) {
+    d.setDate(d.getDate() + intervalDays);
+  } else {
+    d.setMonth(d.getMonth() + 1);
+  }
+  return d.toISOString().split("T")[0]!;
+}
+
 // ── Stripe checkout URL (optional) ────────────────────────────────────────────
 
 async function tryCreateStripeUrl(invoiceId: number, amount: number, description: string | null, dueDate: string): Promise<string | null> {
@@ -93,6 +107,8 @@ function buildInvoiceEmail(params: {
   notes: string | null;
   thankYouMessage: string | null;
   payUrl: string | null;
+  servicePeriodStart?: string | null;
+  servicePeriodEnd?: string | null;
 }): string {
   const lineItemsHtml = params.lineItems && params.lineItems.length > 0
     ? `<table width="100%" cellpadding="6" cellspacing="0" style="border-collapse:collapse;margin:16px 0;font-size:14px;">
@@ -135,6 +151,7 @@ function buildInvoiceEmail(params: {
         <td style="color:#64748b;font-size:13px;padding:4px 0;">Due Date</td>
         <td style="text-align:right;font-weight:600;color:#1e293b;font-size:13px;">${fmtDate(params.dueDate)}</td>
       </tr>
+      ${params.servicePeriodStart && params.servicePeriodEnd ? `<tr><td style="color:#64748b;font-size:13px;padding:4px 0;">Service Period</td><td style="text-align:right;color:#1e293b;font-size:13px;">${fmtDate(params.servicePeriodStart)} – ${fmtDate(params.servicePeriodEnd)}</td></tr>` : ""}
       ${params.description ? `<tr><td style="color:#64748b;font-size:13px;padding:4px 0;">Description</td><td style="text-align:right;color:#1e293b;font-size:13px;">${params.description}</td></tr>` : ""}
     </table>
     ${lineItemsHtml}
@@ -373,6 +390,14 @@ export async function runDailyRecurringInvoices(): Promise<void> {
 
     const nextDue = computeNextDueDate(template_.frequency, template_.interval_days);
 
+    // Advance service period for next cycle
+    const nextServiceStart = template_.service_period_start
+      ? advancePeriod(template_.service_period_start, template_.frequency, template_.interval_days)
+      : null;
+    const nextServiceEnd = template_.service_period_end
+      ? advancePeriod(template_.service_period_end, template_.frequency, template_.interval_days)
+      : null;
+
     const [invoice] = await db.insert(invoicesTable).values({
       client_id: template_.client_id,
       amount: template_.amount,
@@ -383,11 +408,17 @@ export async function runDailyRecurringInvoices(): Promise<void> {
       notes: template_.notes,
       thank_you_message: template_.thank_you_message,
       recurring_id: template_.id,
+      service_period_start: template_.service_period_start,
+      service_period_end: template_.service_period_end,
     }).returning();
 
-    // Advance next_due_date
+    // Advance next_due_date and service period
     await db.update(recurringInvoicesTable)
-      .set({ next_due_date: nextDue })
+      .set({
+        next_due_date: nextDue,
+        service_period_start: nextServiceStart,
+        service_period_end: nextServiceEnd,
+      })
       .where(eq(recurringInvoicesTable.id, template_.id));
 
     generated++;
@@ -413,6 +444,8 @@ export async function runDailyRecurringInvoices(): Promise<void> {
             notes: invoice.notes,
             thankYouMessage: invoice.thank_you_message,
             payUrl,
+            servicePeriodStart: invoice.service_period_start,
+            servicePeriodEnd: invoice.service_period_end,
           });
           await sendMail(
             client.email,

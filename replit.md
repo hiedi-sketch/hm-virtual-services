@@ -75,8 +75,8 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 - **Tasks**: id, title, description, client_id, assigned_to, status ("Not Started"|"Pending"|"Confirmed"|"In Progress"|"Completed"), due_date, completed_date (auto-set on status→Completed), recurrence fields, service_type (nullable, "Bookkeeping"|"Virtual Assistant")
 - **TimeEntries**: id, client_id, task_id (optional), duration_minutes, date, started_at, ended_at
 - **Leads**: id, name, email, estimated_value, status (new/contacted/proposal/closed), lead_source
-- **Invoices**: id, client_id, lead_id (nullable), amount, type (invoice/estimate), status (draft/sent/paid/unpaid/void/accepted/declined), billing_type ("one_time"|"recurring", default "one_time"), due_date, description, line_items (json — each item has name, description, qty, unit_price, billing_type ("one_time"|"recurring")), notes, thank_you_message, paid_at, payment_method, payment_notes, recurring_id (nullable), updated_at
-- **RecurringInvoices**: id, client_id, frequency (weekly/monthly/custom), interval_days, start_date, end_date, next_due_date, description, line_items, amount, active, auto_send, created_at
+- **Invoices**: id, client_id, lead_id (nullable), amount, type (invoice/estimate), status (draft/sent/paid/unpaid/void/accepted/declined), billing_type ("one_time"|"recurring", default "one_time"), due_date, description, line_items (json — each item has name, description, qty, unit_price, billing_type ("one_time"|"recurring")), notes, thank_you_message, paid_at, payment_method, payment_notes, recurring_id (nullable), service_period_start (nullable text), service_period_end (nullable text), updated_at
+- **RecurringInvoices**: id, client_id, frequency (weekly/monthly/custom), interval_days, start_date, end_date, next_due_date, description, line_items, amount, active, auto_send, service_period_start (nullable text), service_period_end (nullable text), created_at
 - **InvoiceReminders**: id, invoice_id, type (due/day3/day5/day10), sent_at, created_at
 - **Users**: id, email, password_hash, name, role (admin/team_member/client), client_id (nullable)
 

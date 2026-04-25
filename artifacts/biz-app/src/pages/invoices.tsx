@@ -272,6 +272,8 @@ type PreviewData = {
   notes: string;
   thankYou: string;
   saveAsDraft: boolean;
+  servicePeriodStart?: string;
+  servicePeriodEnd?: string;
 };
 
 function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: () => void }) {
@@ -320,6 +322,12 @@ function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: ()
                 <span className="text-slate-400">{dueDateLabel}</span>
                 <span className="text-slate-700 font-medium">{fmtD(data.dueDate)}</span>
               </div>
+              {data.servicePeriodStart && data.servicePeriodEnd && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-slate-400">Service Period</span>
+                  <span className="text-slate-700 font-medium">{fmtD(data.servicePeriodStart)} – {fmtD(data.servicePeriodEnd)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-xs">
                 <span className="text-slate-400">Status</span>
                 <span className="font-bold text-xs" style={{ color: statusColor }}>{status}</span>
@@ -429,9 +437,24 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   const [newContactEmail, setNewContactEmail] = useState("");
   const [newContactPhone, setNewContactPhone] = useState("");
 
+  const firstOfMonth = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  };
+  const lastOfMonth = () => {
+    const d = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+    return d.toISOString().split("T")[0];
+  };
+
   const [issueDate, setIssueDate] = useState((invoice as any)?.issue_date ?? todayISO());
   const [dueDate, setDueDate] = useState(
     invoice?.due_date ?? (initialDocType === "estimate" ? daysFromNow(30) : todayISO())
+  );
+  const [servicePeriodStart, setServicePeriodStart] = useState<string>(
+    (invoice as any)?.service_period_start ?? ""
+  );
+  const [servicePeriodEnd, setServicePeriodEnd] = useState<string>(
+    (invoice as any)?.service_period_end ?? ""
   );
   const [notes, setNotes] = useState(invoice?.notes ?? "");
   const [thankYou, setThankYou] = useState(invoice?.thank_you_message ?? "");
@@ -453,10 +476,14 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   const [showAdvanced, setShowAdvanced] = useState(!!(invoice?.notes || invoice?.thank_you_message));
   const [showPreview, setShowPreview] = useState(false);
 
-  // When invoice billing type changes, update all line items to match
+  // When invoice billing type changes, update all line items and auto-fill service period
   const handleBillingTypeChange = (kind: BillingKind) => {
     setBillingType(kind);
     setLineItems(prev => prev.map(it => ({ ...it, billing_type: kind })));
+    if (kind === "recurring" && !servicePeriodStart) {
+      setServicePeriodStart(firstOfMonth());
+      setServicePeriodEnd(lastOfMonth());
+    }
   };
 
   const resolvedClientName = recipientMode === "client"
@@ -499,6 +526,8 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
       line_items: hasItems ? lineItems.map(draftToLineItem) : null,
       notes: notes.trim() || null,
       thank_you_message: thankYou.trim() || null,
+      service_period_start: servicePeriodStart || null,
+      service_period_end: servicePeriodEnd || null,
     };
 
     if (isEdit) {
@@ -647,6 +676,19 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
           <input type="date" className={inputCls} value={dueDate} onChange={e => setDueDate(e.target.value)} required />
         </div>
       </div>
+
+      {billingType === "recurring" && docType === "invoice" && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Service Period Start</label>
+            <input type="date" className={inputCls} value={servicePeriodStart} onChange={e => setServicePeriodStart(e.target.value)} />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Service Period End</label>
+            <input type="date" className={inputCls} value={servicePeriodEnd} onChange={e => setServicePeriodEnd(e.target.value)} />
+          </div>
+        </div>
+      )}
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-2">Line Items {hasItems && <span className="text-blue-500">({lineItems.length})</span>}</label>
         <LineItemsEditor items={lineItems} onChange={setLineItems} services={services} invoiceBillingType={billingType} />
@@ -713,7 +755,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
 
       {showPreview && (
         <InvoicePreviewModal
-          data={{ invoiceId: invoice?.id, docType, clientName, dueDate, description, lineItems, manualAmount, notes, thankYou, saveAsDraft }}
+          data={{ invoiceId: invoice?.id, docType, clientName, dueDate, description, lineItems, manualAmount, notes, thankYou, saveAsDraft, servicePeriodStart, servicePeriodEnd }}
           onClose={() => setShowPreview(false)}
         />
       )}
@@ -1378,10 +1420,15 @@ export default function Invoices() {
                           {inv.line_items.length > 3 && ` +${inv.line_items.length - 3} more`}
                         </p>
                       )}
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <span className={cn("text-xs", over ? "text-red-500 font-medium" : "text-slate-400")}>
                           {isEstimate ? "Valid until " : over ? `${overDays}d overdue · Due ` : "Due "}{formatDate(inv.due_date)}
                         </span>
+                        {inv.service_period_start && inv.service_period_end && (
+                          <span className="text-xs text-slate-400">
+                            · {formatDate(inv.service_period_start)} – {formatDate(inv.service_period_end)}
+                          </span>
+                        )}
                         {isPaid && inv.paid_at && (
                           <span className="text-xs text-emerald-600">
                             · Paid {formatDate(inv.paid_at)}

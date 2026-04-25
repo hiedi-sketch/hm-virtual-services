@@ -79,8 +79,15 @@ router.post("/recurring-invoices/:id/generate", requireAdmin, async (req, res) =
     return;
   }
 
-  const today = new Date().toISOString().split("T")[0]!;
   const nextDue = computeNextDueDate(template.frequency, template.interval_days);
+
+  // Advance service period for next template cycle
+  const nextServiceStart = template.service_period_start
+    ? advancePeriod(template.service_period_start, template.frequency, template.interval_days)
+    : null;
+  const nextServiceEnd = template.service_period_end
+    ? advancePeriod(template.service_period_end, template.frequency, template.interval_days)
+    : null;
 
   const [invoice] = await db
     .insert(invoicesTable)
@@ -94,13 +101,19 @@ router.post("/recurring-invoices/:id/generate", requireAdmin, async (req, res) =
       notes: template.notes,
       thank_you_message: template.thank_you_message,
       recurring_id: template.id,
+      service_period_start: template.service_period_start,
+      service_period_end: template.service_period_end,
     })
     .returning();
 
-  // Advance next_due_date on the template
+  // Advance next_due_date and service period on the template
   await db
     .update(recurringInvoicesTable)
-    .set({ next_due_date: nextDue })
+    .set({
+      next_due_date: nextDue,
+      service_period_start: nextServiceStart,
+      service_period_end: nextServiceEnd,
+    })
     .where(eq(recurringInvoicesTable.id, id));
 
   res.status(201).json(invoice);
@@ -122,6 +135,20 @@ function computeNextDueDate(frequency: string, intervalDays: number | null): str
     today.setMonth(today.getMonth() + 1);
   }
   return today.toISOString().split("T")[0]!;
+}
+
+function advancePeriod(dateStr: string, frequency: string, intervalDays: number | null): string {
+  const d = new Date(dateStr + "T00:00:00");
+  if (frequency === "weekly") {
+    d.setDate(d.getDate() + 7);
+  } else if (frequency === "monthly") {
+    d.setMonth(d.getMonth() + 1);
+  } else if (frequency === "custom" && intervalDays) {
+    d.setDate(d.getDate() + intervalDays);
+  } else {
+    d.setMonth(d.getMonth() + 1);
+  }
+  return d.toISOString().split("T")[0]!;
 }
 
 export default router;

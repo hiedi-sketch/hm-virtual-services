@@ -352,6 +352,8 @@ export interface Invoice {
   updated_at?: string | null;
   recurring_id?: number | null;
   billing_type?: InvoiceBillingType;
+  service_period_start?: string | null;
+  service_period_end?: string | null;
 }
 
 export type CreateInvoiceInputStatus =
@@ -381,6 +383,8 @@ export interface CreateInvoiceInput {
   thank_you_message?: string | null;
   recurring_id?: number | null;
   billing_type?: InvoiceBillingType;
+  service_period_start?: string | null;
+  service_period_end?: string | null;
 }
 
 export type UpdateInvoiceInputStatus =
@@ -409,6 +413,8 @@ export interface UpdateInvoiceInput {
   payment_method?: string | null;
   payment_notes?: string | null;
   billing_type?: InvoiceBillingType;
+  service_period_start?: string | null;
+  service_period_end?: string | null;
 }
 
 export type RecurringInvoiceFrequency =
@@ -445,6 +451,8 @@ export interface RecurringInvoice {
   amount: number;
   active: boolean;
   auto_send: boolean;
+  service_period_start?: string | null;
+  service_period_end?: string | null;
   created_at?: string | null;
 }
 
@@ -462,6 +470,8 @@ export interface CreateRecurringInvoiceInput {
   amount: number;
   active?: boolean;
   auto_send?: boolean;
+  service_period_start?: string | null;
+  service_period_end?: string | null;
 }
 
 export interface UpdateRecurringInvoiceInput {
@@ -477,6 +487,8 @@ export interface UpdateRecurringInvoiceInput {
   amount?: number;
   active?: boolean;
   auto_send?: boolean;
+  service_period_start?: string | null;
+  service_period_end?: string | null;
 }
 
 export type ListTasksParams = {

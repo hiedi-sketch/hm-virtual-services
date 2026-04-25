@@ -507,6 +507,8 @@ export const CreateInvoiceBody = zod.object({
   thank_you_message: zod.string().nullish(),
   recurring_id: zod.number().nullish(),
   billing_type: zod.enum(["one_time", "recurring"]).optional().default("one_time"),
+  service_period_start: zod.string().nullish(),
+  service_period_end: zod.string().nullish(),
 });
 
 /**
@@ -530,6 +532,8 @@ export const UpdateInvoiceBody = zod.object({
   payment_method: zod.string().nullish(),
   payment_notes: zod.string().nullish(),
   billing_type: zod.enum(["one_time", "recurring"]).optional(),
+  service_period_start: zod.string().nullish(),
+  service_period_end: zod.string().nullish(),
 });
 
 export const UpdateInvoiceResponse = zod.object({
@@ -581,6 +585,8 @@ export const CreateRecurringInvoiceBody = zod.object({
   amount: zod.number(),
   active: zod.boolean().optional(),
   auto_send: zod.boolean().optional(),
+  service_period_start: zod.string().nullish(),
+  service_period_end: zod.string().nullish(),
 });
 
 export const UpdateRecurringInvoiceParams = zod.object({
@@ -600,6 +606,8 @@ export const UpdateRecurringInvoiceBody = zod.object({
   amount: zod.number().optional(),
   active: zod.boolean().optional(),
   auto_send: zod.boolean().optional(),
+  service_period_start: zod.string().nullish(),
+  service_period_end: zod.string().nullish(),
 });
 
 export const DeleteRecurringInvoiceParams = zod.object({

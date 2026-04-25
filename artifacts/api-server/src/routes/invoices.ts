@@ -521,6 +521,8 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       thank_you_message: invoicesTable.thank_you_message,
       billing_type: invoicesTable.billing_type,
       recurring_id: invoicesTable.recurring_id,
+      service_period_start: invoicesTable.service_period_start,
+      service_period_end: invoicesTable.service_period_end,
       client_name: clientsTable.name,
       client_email: clientsTable.email,
     })
@@ -622,6 +624,11 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
         <td style="color:#64748b;font-size:13px;padding:4px 0;">${isEstimate ? "Valid Until" : "Due Date"}</td>
         <td style="text-align:right;font-weight:600;color:#1e293b;font-size:13px;">${fmtDate(row.due_date)}</td>
       </tr>
+      ${row.service_period_start && row.service_period_end ? `
+      <tr>
+        <td style="color:#64748b;font-size:13px;padding:4px 0;">Service Period</td>
+        <td style="text-align:right;color:#1e293b;font-size:13px;">${fmtDate(row.service_period_start)} – ${fmtDate(row.service_period_end)}</td>
+      </tr>` : ""}
       ${row.description ? `
       <tr>
         <td style="color:#64748b;font-size:13px;padding:4px 0;">Description</td>
@@ -682,6 +689,14 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
         return d.toISOString().split("T")[0]!;
       }
 
+      // Advance service period for the template (template holds the NEXT period)
+      const nextServiceStart = row.service_period_start
+        ? addOneMonth(row.service_period_start)
+        : null;
+      const nextServiceEnd = row.service_period_end
+        ? addOneMonth(row.service_period_end)
+        : null;
+
       const [series] = await db.insert(recurringInvoicesTable).values({
         client_id: row.client_id,
         frequency: "monthly",
@@ -694,6 +709,8 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
         amount: recurringAmount,
         active: true,
         auto_send: false,
+        service_period_start: nextServiceStart,
+        service_period_end: nextServiceEnd,
       }).returning();
 
       recurringSeriesId = series.id;
