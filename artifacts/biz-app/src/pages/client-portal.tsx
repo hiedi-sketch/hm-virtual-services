@@ -11,6 +11,7 @@ import {
   Plus, X, User, Sparkles, LayoutDashboard, Send,
   KeyRound, ShieldCheck, Paperclip, DollarSign,
   MessageSquare, ChevronRight, Package, Eye, EyeOff,
+  Check, CreditCard, ThumbsDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentsTab } from "@/components/DocumentsTab";
@@ -140,11 +141,14 @@ export default function ClientPortal() {
   const pendingTasks = tasks.filter(t => t.status !== "Completed");
   const overdueTasks = pendingTasks.filter(t => t.due_date && t.due_date < todayStr);
 
-  const paidInvoices = invoices.filter(i => i.status === "paid");
-  const unpaidInvoices = invoices.filter(i => i.status !== "paid");
+  const actualInvoices = invoices.filter(i => (i as any).type !== "estimate");
+  const estimates = invoices.filter(i => (i as any).type === "estimate");
+  const paidInvoices = actualInvoices.filter(i => i.status === "paid");
+  const unpaidInvoices = actualInvoices.filter(i => i.status !== "paid");
   const overdueInvoices = unpaidInvoices.filter(i => i.due_date && i.due_date < todayStr);
   const totalOwed = unpaidInvoices.reduce((s, i) => s + Number(i.amount ?? 0), 0);
   const totalPaid = paidInvoices.reduce((s, i) => s + Number(i.amount ?? 0), 0);
+  const pendingEstimates = estimates.filter(i => i.status === "sent");
 
   const { data: messages = [] } = useQuery<any[]>({
     queryKey: ["messages", clientId],
@@ -157,7 +161,7 @@ export default function ClientPortal() {
   const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "overview", label: "Overview", icon: <LayoutDashboard className="w-4 h-4" /> },
     { key: "tasks", label: "Your Tasks", icon: <CheckSquare className="w-4 h-4" />, badge: pendingTasks.length || undefined },
-    { key: "invoices", label: "Your Billing", icon: <FileText className="w-4 h-4" />, badge: unpaidInvoices.length || undefined },
+    { key: "invoices", label: "Your Billing", icon: <FileText className="w-4 h-4" />, badge: (unpaidInvoices.length + pendingEstimates.length) || undefined },
     { key: "time", label: "Time Tracking", icon: <Clock className="w-4 h-4" /> },
     { key: "services", label: "Your Services", icon: <Sparkles className="w-4 h-4" /> },
     { key: "messages", label: "Messages", icon: <MessageSquare className="w-4 h-4" />, badge: unreadMessages || undefined },
@@ -249,7 +253,7 @@ export default function ClientPortal() {
           />
         )}
         {activeTab === "invoices" && (
-          <InvoicesTab invoices={invoices} todayStr={todayStr} />
+          <InvoicesTab invoices={invoices} todayStr={todayStr} queryClient={queryClient} toast={toast} clientId={clientId} />
         )}
         {activeTab === "services" && (
           <ServicesTab serviceRequests={serviceRequests} queryClient={queryClient} toast={toast} clientId={clientId} />
@@ -706,68 +710,236 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
 // ================================================================
 // INVOICES TAB
 // ================================================================
-function InvoicesTab({ invoices, todayStr }: { invoices: any[]; todayStr: string }) {
-  const paidInvoices = invoices.filter(i => i.status === "paid");
-  const unpaidInvoices = invoices.filter(i => i.status !== "paid");
-  const totalOwed = unpaidInvoices.reduce((s, i) => s + Number(i.amount ?? 0), 0);
-  const totalPaid = paidInvoices.reduce((s, i) => s + Number(i.amount ?? 0), 0);
+function InvoicesTab({
+  invoices, todayStr, queryClient, toast, clientId,
+}: {
+  invoices: any[]; todayStr: string; queryClient: any; toast: any; clientId: number | undefined;
+}) {
+  const estimates = invoices.filter(i => i.type === "estimate");
+  const actualInvoices = invoices.filter(i => i.type !== "estimate");
+  const paidInvoices = actualInvoices.filter(i => i.status === "paid");
+  const unpaidInvoices = actualInvoices.filter(i => i.status !== "paid");
+  const totalOwed = unpaidInvoices.reduce((s: number, i: any) => s + Number(i.amount ?? 0), 0);
+  const totalPaid = paidInvoices.reduce((s: number, i: any) => s + Number(i.amount ?? 0), 0);
+
+  const [actionLoading, setActionLoading] = useState<Record<number, string>>({});
+  const [payLoading, setPayLoading] = useState<number | null>(null);
+
+  async function handleEstimateAction(id: number, action: "accept" | "decline") {
+    setActionLoading(prev => ({ ...prev, [id]: action }));
+    const res = await fetch(`/api/invoices/${id}/${action}`, {
+      method: "PATCH",
+      credentials: "include",
+    });
+    if (res.ok) {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast({
+        title: action === "accept" ? "Estimate accepted" : "Estimate declined",
+        description: action === "accept"
+          ? "You've accepted this estimate. You can now proceed with payment."
+          : "You've declined this estimate. We'll be in touch.",
+      });
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Error", description: err.error ?? "Could not update estimate", variant: "destructive" });
+    }
+    setActionLoading(prev => { const n = { ...prev }; delete n[id]; return n; });
+  }
+
+  async function handlePayNow(invoiceId: number) {
+    setPayLoading(invoiceId);
+    const res = await fetch(`/api/stripe/checkout/${invoiceId}`, {
+      method: "POST",
+      credentials: "include",
+    });
+    if (res.ok) {
+      const { url } = await res.json();
+      if (url) window.location.href = url;
+      else toast({ title: "Payment error", description: "No checkout URL returned", variant: "destructive" });
+    } else {
+      const err = await res.json().catch(() => ({}));
+      toast({ title: "Payment error", description: err.error ?? "Could not create checkout session", variant: "destructive" });
+    }
+    setPayLoading(null);
+  }
+
+  const pendingEstimates = estimates.filter(e => e.status === "sent");
+  const acceptedEstimates = estimates.filter(e => e.status === "accepted");
+  const otherEstimates = estimates.filter(e => e.status !== "sent" && e.status !== "accepted");
+  const hasEstimates = estimates.length > 0;
+  const hasInvoices = actualInvoices.length > 0;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-xl font-bold text-slate-900">Invoices</h2>
-        <p className="text-slate-500 text-sm mt-0.5">{invoices.length} total · {unpaidInvoices.length} outstanding</p>
+        <h2 className="text-xl font-bold text-slate-900">Your Billing</h2>
+        <p className="text-slate-500 text-sm mt-0.5">
+          {actualInvoices.length > 0 && `${actualInvoices.length} invoice${actualInvoices.length !== 1 ? "s" : ""}`}
+          {actualInvoices.length > 0 && estimates.length > 0 && " · "}
+          {estimates.length > 0 && `${estimates.length} estimate${estimates.length !== 1 ? "s" : ""}`}
+          {!hasEstimates && !hasInvoices && "Nothing to show yet"}
+        </p>
       </div>
 
-      {/* Summary row */}
-      {invoices.length > 0 && (
+      {/* Invoice summary row */}
+      {hasInvoices && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           <SummaryCard label="Outstanding" value={fmtCurrency(totalOwed)} color={totalOwed > 0 ? "text-red-600" : "text-emerald-600"} />
           <SummaryCard label="Paid" value={fmtCurrency(totalPaid)} color="text-emerald-600" />
-          <SummaryCard label="Invoices" value={`${invoices.length}`} color="text-slate-900" />
+          <SummaryCard label="Invoices" value={`${actualInvoices.length}`} color="text-slate-900" />
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {invoices.length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-            <p className="text-sm font-medium text-slate-700">You're all caught up.</p>
-            <p className="text-xs text-slate-400 mt-0.5">No invoices to show right now.</p>
-          </div>
-        ) : (
-          <>
-            <ul className="divide-y divide-slate-100">
-              {[...unpaidInvoices, ...paidInvoices].map(inv => {
-                const isOverdue = inv.status !== "paid" && inv.due_date && inv.due_date < todayStr;
-                return (
-                  <li key={inv.id} className={`px-5 py-4 flex items-center gap-3 ${isOverdue ? "bg-red-50/50" : ""}`}>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-slate-800 truncate">
-                        {inv.description || `Invoice #${inv.id}`}
-                      </p>
-                      {inv.issue_date && <p className="text-xs text-slate-400 mt-0.5">Issued {fmtDate(inv.issue_date)}</p>}
-                      {inv.due_date && (
-                        <p className={`text-xs mt-0.5 ${isOverdue ? "text-red-500 font-semibold" : "text-slate-400"}`}>
-                          {isOverdue ? "⚠ Overdue · " : "Due "}{fmtDate(inv.due_date)}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="text-base font-bold text-slate-800">{fmtCurrency(Number(inv.amount ?? 0))}</span>
-                      <StatusBadge status={inv.status} />
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
-              <span className="text-xs text-slate-400">{paidInvoices.length} paid · {unpaidInvoices.length} outstanding</span>
-              {totalOwed > 0 && <span className="text-xs font-bold text-red-600">{fmtCurrency(totalOwed)} due</span>}
+      {/* ── Pending Estimates ─────────────────────────────────────────── */}
+      {pendingEstimates.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Estimates Awaiting Your Response</h3>
+          {pendingEstimates.map((est: any) => (
+            <div key={est.id} className="bg-white rounded-2xl border-2 border-primary/30 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 flex items-start gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary">Estimate #{est.id}</span>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pending Response</span>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800">{est.description || `Estimate #${est.id}`}</p>
+                  {est.due_date && (
+                    <p className="text-xs text-slate-400 mt-0.5">Valid until {fmtDate(est.due_date)}</p>
+                  )}
+                  <p className="text-xl font-bold text-slate-900 mt-2">{fmtCurrency(Number(est.amount ?? 0))}</p>
+                </div>
+              </div>
+              <div className="px-5 pb-5 flex items-center gap-3">
+                <button
+                  onClick={() => handleEstimateAction(est.id, "accept")}
+                  disabled={!!actionLoading[est.id]}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+                >
+                  <Check className="w-4 h-4" />
+                  {actionLoading[est.id] === "accept" ? "Accepting…" : "Accept Estimate"}
+                </button>
+                <button
+                  onClick={() => handleEstimateAction(est.id, "decline")}
+                  disabled={!!actionLoading[est.id]}
+                  className="flex items-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+                >
+                  <ThumbsDown className="w-4 h-4" />
+                  {actionLoading[est.id] === "decline" ? "Declining…" : "Decline"}
+                </button>
+              </div>
             </div>
-          </>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Accepted Estimates (pay now) ───────────────────────────────── */}
+      {acceptedEstimates.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Accepted Estimates</h3>
+          {acceptedEstimates.map((est: any) => (
+            <div key={est.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary/10 text-primary">Estimate #{est.id}</span>
+                    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Accepted</span>
+                  </div>
+                  <p className="text-sm font-semibold text-slate-800">{est.description || `Estimate #${est.id}`}</p>
+                  <p className="text-xl font-bold text-slate-900 mt-1">{fmtCurrency(Number(est.amount ?? 0))}</p>
+                </div>
+                <button
+                  onClick={() => handlePayNow(est.id)}
+                  disabled={payLoading === est.id}
+                  className="shrink-0 flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+                >
+                  <CreditCard className="w-4 h-4" />
+                  {payLoading === est.id ? "Redirecting…" : "Pay Now"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Other estimates (declined/void) ───────────────────────────── */}
+      {otherEstimates.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Past Estimates</h3>
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <ul className="divide-y divide-slate-100">
+              {otherEstimates.map((est: any) => (
+                <li key={est.id} className="px-5 py-4 flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-700 truncate">{est.description || `Estimate #${est.id}`}</p>
+                    {est.due_date && <p className="text-xs text-slate-400 mt-0.5">Valid until {fmtDate(est.due_date)}</p>}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-sm font-bold text-slate-700">{fmtCurrency(Number(est.amount ?? 0))}</span>
+                    <StatusBadge status={est.status} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invoices ──────────────────────────────────────────────────── */}
+      {(hasInvoices || (!hasInvoices && !hasEstimates)) && (
+        <div className="space-y-2">
+          {hasEstimates && <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Invoices</h3>}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            {!hasInvoices ? (
+              <div className="px-5 py-10 text-center">
+                <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-700">You're all caught up.</p>
+                <p className="text-xs text-slate-400 mt-0.5">No invoices or estimates to show right now.</p>
+              </div>
+            ) : (
+              <>
+                <ul className="divide-y divide-slate-100">
+                  {[...unpaidInvoices, ...paidInvoices].map((inv: any) => {
+                    const isOverdue = inv.status !== "paid" && inv.due_date && inv.due_date < todayStr;
+                    return (
+                      <li key={inv.id} className={`px-5 py-4 flex items-center gap-3 ${isOverdue ? "bg-red-50/50" : ""}`}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-800 truncate">
+                            {inv.description || `Invoice #${inv.id}`}
+                          </p>
+                          {inv.issue_date && <p className="text-xs text-slate-400 mt-0.5">Issued {fmtDate(inv.issue_date)}</p>}
+                          {inv.due_date && (
+                            <p className={`text-xs mt-0.5 ${isOverdue ? "text-red-500 font-semibold" : "text-slate-400"}`}>
+                              {isOverdue ? "⚠ Overdue · " : "Due "}{fmtDate(inv.due_date)}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-base font-bold text-slate-800">{fmtCurrency(Number(inv.amount ?? 0))}</span>
+                          <StatusBadge status={inv.status} />
+                          {inv.status !== "paid" && inv.status !== "void" && (
+                            <button
+                              onClick={() => handlePayNow(inv.id)}
+                              disabled={payLoading === inv.id}
+                              className="flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-60"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              {payLoading === inv.id ? "…" : "Pay Now"}
+                            </button>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                  <span className="text-xs text-slate-400">{paidInvoices.length} paid · {unpaidInvoices.length} outstanding</span>
+                  {totalOwed > 0 && <span className="text-xs font-bold text-red-600">{fmtCurrency(totalOwed)} due</span>}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

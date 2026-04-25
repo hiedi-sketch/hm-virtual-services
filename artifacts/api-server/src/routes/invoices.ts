@@ -319,6 +319,67 @@ router.delete("/invoices/:id", requireAdmin, async (req, res) => {
   logAudit("invoice", id, "deleted", `Invoice #${id} deleted`, { id: actor?.id, name: actor?.name });
 });
 
+// ── Client: accept estimate ───────────────────────────────────────────────────
+router.patch("/invoices/:id/accept", requireAuth, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const user = req.session.user!;
+  const [row] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.type !== "estimate") { res.status(400).json({ error: "Not an estimate" }); return; }
+  if (row.status !== "sent") { res.status(400).json({ error: "Estimate must be in sent status" }); return; }
+  if (user.role === "client" && row.client_id !== user.client_id) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+  const [updated] = await db
+    .update(invoicesTable)
+    .set({ status: "accepted", updated_at: new Date() })
+    .where(eq(invoicesTable.id, id))
+    .returning();
+  res.json(updated);
+  logAudit("invoice", id, "accepted", `Estimate #${id} accepted by client`, { id: user.id, name: user.name });
+  // Notify admins
+  try {
+    await notifyAdmins({
+      type: "invoice_updated",
+      title: `Estimate #${id} accepted`,
+      message: `Client ${user.name ?? ""} accepted estimate #${id}.`,
+      entityType: "invoice",
+      entityId: id,
+    });
+  } catch { /* ignore */ }
+});
+
+// ── Client: decline estimate ──────────────────────────────────────────────────
+router.patch("/invoices/:id/decline", requireAuth, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const user = req.session.user!;
+  const [row] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.type !== "estimate") { res.status(400).json({ error: "Not an estimate" }); return; }
+  if (row.status !== "sent") { res.status(400).json({ error: "Estimate must be in sent status" }); return; }
+  if (user.role === "client" && row.client_id !== user.client_id) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+  const [updated] = await db
+    .update(invoicesTable)
+    .set({ status: "declined", updated_at: new Date() })
+    .where(eq(invoicesTable.id, id))
+    .returning();
+  res.json(updated);
+  logAudit("invoice", id, "declined", `Estimate #${id} declined by client`, { id: user.id, name: user.name });
+  try {
+    await notifyAdmins({
+      type: "invoice_updated",
+      title: `Estimate #${id} declined`,
+      message: `Client ${user.name ?? ""} declined estimate #${id}.`,
+      entityType: "invoice",
+      entityId: id,
+    });
+  } catch { /* ignore */ }
+});
+
 // ── Convert estimate → invoice ─────────────────────────────────────────────
 router.post("/invoices/:id/convert", requireAdmin, async (req, res) => {
   const { id } = ConvertEstimateParams.parse(req.params);
