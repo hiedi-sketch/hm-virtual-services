@@ -3,6 +3,8 @@ import { logger } from "./lib/logger";
 import cron from "node-cron";
 import { runPush } from "./routes/asana";
 import { runClickUpPush } from "./routes/clickup";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 
 const rawPort = process.env["PORT"];
 
@@ -18,14 +20,37 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
-  }
+// Ensure the connect-pg-simple session table exists before the server starts.
+// We create it inline because the SQL file from the package is not available
+// in the esbuild bundle.
+async function ensureSessionTable() {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS "session" (
+      "sid"    VARCHAR NOT NULL,
+      "sess"   JSON    NOT NULL,
+      "expire" TIMESTAMP(6) NOT NULL,
+      CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+    )
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")
+  `);
+}
 
-  logger.info({ port }, "Server listening");
-});
+ensureSessionTable()
+  .then(() => {
+    app.listen(port, (err) => {
+      if (err) {
+        logger.error({ err }, "Error listening on port");
+        process.exit(1);
+      }
+      logger.info({ port }, "Server listening");
+    });
+  })
+  .catch((err) => {
+    logger.error({ err }, "Failed to ensure session table — aborting startup");
+    process.exit(1);
+  });
 
 // ── Midnight Asana push ────────────────────────────────────────────────────
 // Runs at 00:00 every day (server local time / UTC).
