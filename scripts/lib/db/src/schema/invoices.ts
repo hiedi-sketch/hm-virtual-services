@@ -32,6 +32,7 @@ export const invoicesTable = pgTable("invoices", {
   amount: real("amount").notNull(),
   type: text("type", { enum: ["invoice", "estimate"] }).notNull().default("invoice"),
   status: text("status", { enum: ["draft", "sent", "paid", "unpaid", "void", "accepted", "declined"] }).notNull().default("unpaid"),
+  issue_date: text("issue_date"),
   due_date: text("due_date").notNull(),
   description: text("description"),
   line_items: json("line_items").$type<LineItem[]>(),

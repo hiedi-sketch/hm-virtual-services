@@ -384,10 +384,21 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
   onCancel: () => void;
   isPending: boolean;
 }) {
+  const todayISO = () => new Date().toISOString().split("T")[0];
+  const daysFromNow = (n: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return d.toISOString().split("T")[0];
+  };
+
   const isEdit = !!invoice;
-  const [docType, setDocType] = useState<"invoice" | "estimate">(invoice?.type === "estimate" ? "estimate" : "invoice");
+  const initialDocType: "invoice" | "estimate" = invoice?.type === "estimate" ? "estimate" : "invoice";
+  const [docType, setDocType] = useState<"invoice" | "estimate">(initialDocType);
   const [clientId, setClientId] = useState(invoice ? String(invoice.client_id) : "");
-  const [dueDate, setDueDate] = useState(invoice?.due_date ?? "");
+  const [issueDate, setIssueDate] = useState((invoice as any)?.issue_date ?? todayISO());
+  const [dueDate, setDueDate] = useState(
+    invoice?.due_date ?? (initialDocType === "estimate" ? daysFromNow(30) : todayISO())
+  );
   const [notes, setNotes] = useState(invoice?.notes ?? "");
   const [thankYou, setThankYou] = useState(invoice?.thank_you_message ?? "");
   const [description, setDescription] = useState(invoice?.description ?? "");
@@ -406,6 +417,13 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
   const hasItems = lineItems.length > 0;
   const total = hasItems ? calcTotal(lineItems) : Number(manualAmount) || 0;
 
+  function handleDocTypeChange(type: "invoice" | "estimate") {
+    setDocType(type);
+    if (!isEdit) {
+      setDueDate(type === "estimate" ? daysFromNow(30) : todayISO());
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientId || !dueDate) return;
@@ -413,7 +431,7 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
     const currentStatus = isEdit
       ? (saveAsDraft ? "draft" : invoice?.status === "draft" ? "unpaid" : invoice?.status ?? "unpaid")
       : (saveAsDraft ? "draft" : "unpaid");
-    onSubmit({ client_id: Number(clientId), amount: total, type: docType, due_date: dueDate, status: currentStatus, description: description.trim() || null, line_items: hasItems ? lineItems.map(draftToLineItem) : null, notes: notes.trim() || null, thank_you_message: thankYou.trim() || null });
+    onSubmit({ client_id: Number(clientId), amount: total, type: docType, issue_date: issueDate || null, due_date: dueDate, status: currentStatus, description: description.trim() || null, line_items: hasItems ? lineItems.map(draftToLineItem) : null, notes: notes.trim() || null, thank_you_message: thankYou.trim() || null });
   };
 
   return (
@@ -421,11 +439,11 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
       {/* Document type toggle */}
       {!isEdit && (
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
-          <button type="button" onClick={() => setDocType("invoice")}
+          <button type="button" onClick={() => handleDocTypeChange("invoice")}
             className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", docType === "invoice" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
             Invoice
           </button>
-          <button type="button" onClick={() => setDocType("estimate")}
+          <button type="button" onClick={() => handleDocTypeChange("estimate")}
             className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", docType === "estimate" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
             Estimate
           </button>
@@ -438,6 +456,10 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
             <option value="">Select a client…</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Issue Date <span className="text-red-400">*</span></label>
+          <input type="date" className={inputCls} value={issueDate} onChange={e => setIssueDate(e.target.value)} required />
         </div>
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">
