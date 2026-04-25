@@ -304,6 +304,13 @@ export interface UpdateSubtaskInput {
   done?: boolean;
 }
 
+export type InvoiceType = (typeof InvoiceType)[keyof typeof InvoiceType];
+
+export const InvoiceType = {
+  invoice: "invoice",
+  estimate: "estimate",
+} as const;
+
 export type InvoiceStatus = (typeof InvoiceStatus)[keyof typeof InvoiceStatus];
 
 export const InvoiceStatus = {
@@ -312,6 +319,8 @@ export const InvoiceStatus = {
   paid: "paid",
   unpaid: "unpaid",
   void: "void",
+  accepted: "accepted",
+  declined: "declined",
 } as const;
 
 export interface LineItem {
@@ -325,6 +334,7 @@ export interface Invoice {
   id: number;
   client_id: number;
   amount: number;
+  type: InvoiceType;
   status: InvoiceStatus;
   due_date: string;
   description?: string | null;
@@ -347,11 +357,14 @@ export const CreateInvoiceInputStatus = {
   paid: "paid",
   unpaid: "unpaid",
   void: "void",
+  accepted: "accepted",
+  declined: "declined",
 } as const;
 
 export interface CreateInvoiceInput {
   client_id: number;
   amount: number;
+  type?: InvoiceType;
   status?: CreateInvoiceInputStatus;
   due_date: string;
   description?: string | null;
@@ -370,10 +383,13 @@ export const UpdateInvoiceInputStatus = {
   paid: "paid",
   unpaid: "unpaid",
   void: "void",
+  accepted: "accepted",
+  declined: "declined",
 } as const;
 
 export interface UpdateInvoiceInput {
   amount?: number;
+  type?: InvoiceType;
   status?: UpdateInvoiceInputStatus;
   due_date?: string;
   description?: string | null;

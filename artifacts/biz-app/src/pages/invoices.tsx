@@ -7,6 +7,7 @@ import {
   useUpdateInvoice,
   useDeleteInvoice,
   useSendInvoice,
+  useConvertEstimate,
   useSendReminder,
   useListInvoiceReminders,
   useListRecurringInvoices,
@@ -21,6 +22,7 @@ import {
   RecurringInvoice,
   InvoiceReminder,
   ReminderType,
+  InvoiceType,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -29,7 +31,7 @@ import {
   Plus, X, Trash2, CheckCircle2, Clock, FileText, Download,
   CreditCard, Pencil, BanIcon, DollarSign, AlertTriangle,
   ChevronDown, ChevronUp, Send, RefreshCw, ToggleLeft, ToggleRight,
-  Repeat, Play, Bell, BellRing, Eye,
+  Repeat, Play, Bell, BellRing, Eye, Check,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -43,7 +45,7 @@ type DraftItem = {
   unit_price: number;
 };
 
-type StatusFilter = "all" | "draft" | "sent" | "unpaid" | "paid" | "void" | "recurring";
+type StatusFilter = "all" | "draft" | "sent" | "unpaid" | "paid" | "void" | "recurring" | "estimates";
 
 function newItem(overrides?: Partial<DraftItem>): DraftItem {
   return {
@@ -111,19 +113,24 @@ function isOverdue(due_date: string, status: string) {
 }
 
 function statusBadge(inv: Invoice) {
-  if (inv.status === "void")   return "bg-slate-100 text-slate-500 border-slate-200";
-  if (inv.status === "paid")   return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (inv.status === "draft")  return "bg-purple-50 text-purple-700 border-purple-200";
-  if (inv.status === "sent")   return "bg-blue-50 text-blue-700 border-blue-200";
+  if (inv.status === "void")      return "bg-slate-100 text-slate-500 border-slate-200";
+  if (inv.status === "paid")      return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (inv.status === "accepted")  return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (inv.status === "declined")  return "bg-red-50 text-red-600 border-red-200";
+  if (inv.status === "draft")     return "bg-purple-50 text-purple-700 border-purple-200";
+  if (inv.status === "sent")      return "bg-blue-50 text-blue-700 border-blue-200";
   if (isOverdue(inv.due_date, inv.status)) return "bg-red-50 text-red-700 border-red-200";
   return "bg-amber-50 text-amber-700 border-amber-200";
 }
 
 function statusLabel(inv: Invoice) {
-  if (inv.status === "void")   return "Void";
-  if (inv.status === "paid")   return "Paid";
-  if (inv.status === "draft")  return "Draft";
-  if (inv.status === "sent")   return "Sent";
+  if (inv.status === "void")      return "Void";
+  if (inv.status === "paid")      return "Paid";
+  if (inv.status === "accepted")  return "Accepted";
+  if (inv.status === "declined")  return "Declined";
+  if (inv.status === "draft")     return "Draft";
+  if (inv.status === "sent")      return "Sent";
+  if (inv.type === "estimate")    return "Pending";
   const days = daysOverdue(inv.due_date);
   if (days > 0) return `${days}d overdue`;
   return "Unpaid";
@@ -234,6 +241,7 @@ function LineItemsEditor({
 
 type PreviewData = {
   invoiceId?: number;
+  docType: "invoice" | "estimate";
   clientName: string;
   dueDate: string;
   description: string;
@@ -247,8 +255,10 @@ type PreviewData = {
 function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: () => void }) {
   const hasItems = data.lineItems.length > 0;
   const total = hasItems ? calcTotal(data.lineItems) : Number(data.manualAmount) || 0;
-  const status = data.saveAsDraft ? "DRAFT" : "UNPAID";
-  const statusColor = data.saveAsDraft ? "#7c3aed" : "#d97706";
+  const docLabel = data.docType === "estimate" ? "ESTIMATE" : "INVOICE";
+  const dueDateLabel = data.docType === "estimate" ? "Valid Until" : "Due Date";
+  const status = data.saveAsDraft ? "DRAFT" : data.docType === "estimate" ? "PENDING" : "UNPAID";
+  const statusColor = data.saveAsDraft ? "#7c3aed" : data.docType === "estimate" ? "#0369a1" : "#d97706";
   const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   const fmtD = (d: string) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 
@@ -261,7 +271,7 @@ function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: ()
           {/* Dark header bar */}
           <div className="bg-slate-900 px-6 py-4 flex items-center justify-between">
             <div>
-              <p className="text-white font-bold text-xl tracking-wide">INVOICE</p>
+              <p className="text-white font-bold text-xl tracking-wide">{docLabel}</p>
               {data.invoiceId && <p className="text-slate-400 text-xs mt-0.5">#{data.invoiceId}</p>}
               {!data.invoiceId && <p className="text-purple-400 text-xs mt-0.5 font-medium">DRAFT PREVIEW</p>}
             </div>
@@ -285,7 +295,7 @@ function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: ()
                 <span className="text-slate-700 font-medium">{data.invoiceId ?? "—"}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Due Date</span>
+                <span className="text-slate-400">{dueDateLabel}</span>
                 <span className="text-slate-700 font-medium">{fmtD(data.dueDate)}</span>
               </div>
               <div className="flex justify-between text-xs">
@@ -375,6 +385,7 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
   isPending: boolean;
 }) {
   const isEdit = !!invoice;
+  const [docType, setDocType] = useState<"invoice" | "estimate">(invoice?.type === "estimate" ? "estimate" : "invoice");
   const [clientId, setClientId] = useState(invoice ? String(invoice.client_id) : "");
   const [dueDate, setDueDate] = useState(invoice?.due_date ?? "");
   const [notes, setNotes] = useState(invoice?.notes ?? "");
@@ -402,11 +413,24 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
     const currentStatus = isEdit
       ? (saveAsDraft ? "draft" : invoice?.status === "draft" ? "unpaid" : invoice?.status ?? "unpaid")
       : (saveAsDraft ? "draft" : "unpaid");
-    onSubmit({ client_id: Number(clientId), amount: total, due_date: dueDate, status: currentStatus, description: description.trim() || null, line_items: hasItems ? lineItems.map(draftToLineItem) : null, notes: notes.trim() || null, thank_you_message: thankYou.trim() || null });
+    onSubmit({ client_id: Number(clientId), amount: total, type: docType, due_date: dueDate, status: currentStatus, description: description.trim() || null, line_items: hasItems ? lineItems.map(draftToLineItem) : null, notes: notes.trim() || null, thank_you_message: thankYou.trim() || null });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Document type toggle */}
+      {!isEdit && (
+        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+          <button type="button" onClick={() => setDocType("invoice")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", docType === "invoice" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
+            Invoice
+          </button>
+          <button type="button" onClick={() => setDocType("estimate")}
+            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", docType === "estimate" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
+            Estimate
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Client <span className="text-red-400">*</span></label>
@@ -416,7 +440,9 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Due Date <span className="text-red-400">*</span></label>
+          <label className="block text-xs font-medium text-slate-500 mb-1">
+            {docType === "estimate" ? "Valid Until" : "Due Date"} <span className="text-red-400">*</span>
+          </label>
           <input type="date" className={inputCls} value={dueDate} onChange={e => setDueDate(e.target.value)} required />
         </div>
       </div>
@@ -463,7 +489,14 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
       <div className="flex gap-2 pt-1 flex-wrap">
         <button type="submit" disabled={isPending}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-50">
-          {isPending ? (isEdit ? "Saving…" : "Creating…") : (isEdit ? "Save Changes" : saveAsDraft ? "Save Draft" : "Create Invoice")}
+          {isPending
+            ? (isEdit ? "Saving…" : "Creating…")
+            : isEdit
+              ? "Save Changes"
+              : saveAsDraft
+                ? `Save ${docType === "estimate" ? "Estimate" : "Draft"}`
+                : docType === "estimate" ? "Create Estimate" : "Create Invoice"
+          }
         </button>
         <button type="button" onClick={() => setShowPreview(true)}
           className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
@@ -474,7 +507,7 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
 
       {showPreview && (
         <InvoicePreviewModal
-          data={{ invoiceId: invoice?.id, clientName, dueDate, description, lineItems, manualAmount, notes, thankYou, saveAsDraft }}
+          data={{ invoiceId: invoice?.id, docType, clientName, dueDate, description, lineItems, manualAmount, notes, thankYou, saveAsDraft }}
           onClose={() => setShowPreview(false)}
         />
       )}
@@ -878,6 +911,7 @@ export default function Invoices() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
+  const [convertingId, setConvertingId] = useState<number | null>(null);
 
   const { data: invoices = [], isLoading } = useListInvoices(filterClient ? { clientId: filterClient } : undefined);
   const { data: clients = [] } = useListClients();
@@ -924,14 +958,25 @@ export default function Invoices() {
     },
   });
 
+  const convertMutation = useConvertEstimate({
+    mutation: {
+      onSuccess: (inv) => {
+        invalidate(); setConvertingId(null);
+        toast({ title: `Invoice #${inv.id} created`, description: "Estimate converted to invoice." });
+      },
+      onError: () => { setConvertingId(null); toast({ title: "Failed to convert estimate", variant: "destructive" }); },
+    },
+  });
+
   const filtered = invoices
     .filter(inv => {
       if (filterStatus === "recurring") return false;
-      if (filterStatus !== "all" && inv.status !== filterStatus) return false;
-      return true;
+      if (filterStatus === "estimates") return inv.type === "estimate";
+      if (filterStatus === "all") return inv.type !== "estimate";
+      return inv.type !== "estimate" && inv.status === filterStatus;
     })
     .sort((a, b) => {
-      const order = (i: Invoice) => i.status === "void" ? 5 : i.status === "paid" ? 4 : i.status === "sent" ? 3 : i.status === "draft" ? 2 : 1;
+      const order = (i: Invoice) => i.status === "void" ? 5 : i.status === "paid" || i.status === "accepted" ? 4 : i.status === "sent" ? 3 : i.status === "draft" ? 2 : 1;
       return order(a) - order(b);
     });
 
@@ -1001,6 +1046,7 @@ export default function Invoices() {
     { value: "unpaid", label: "Unpaid" },
     { value: "paid", label: "Paid" },
     { value: "void", label: "Void" },
+    { value: "estimates", label: "Estimates" },
     { value: "recurring", label: "Recurring" },
   ];
 
@@ -1095,6 +1141,9 @@ export default function Invoices() {
                 const isPaid = inv.status === "paid";
                 const isSent = inv.status === "sent";
                 const isRecurring = !!inv.recurring_id;
+                const isEstimate = inv.type === "estimate";
+                const isAccepted = inv.status === "accepted";
+                const isDeclined = inv.status === "declined";
 
                 return (
                   <div key={inv.id} className={cn("flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 hover:bg-slate-50/60 transition-colors", isVoid && "opacity-50")}>
@@ -1104,6 +1153,7 @@ export default function Invoices() {
                         <span className="text-slate-400 text-sm">·</span>
                         <span className="text-sm text-slate-600">{getClientName(inv.client_id)}</span>
                         <span className="text-slate-300 text-xs">#{inv.id}</span>
+                        {isEstimate && <span className="text-xs text-teal-600 font-medium bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-full">Estimate</span>}
                         {isRecurring && <span className="flex items-center gap-1 text-xs text-blue-500 font-medium"><Repeat className="w-3 h-3" /> recurring</span>}
                         {inv.description && <><span className="text-slate-400 text-sm">·</span><span className="text-sm text-slate-500 truncate max-w-xs">{inv.description}</span></>}
                       </div>
@@ -1115,7 +1165,7 @@ export default function Invoices() {
                       )}
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className={cn("text-xs", over ? "text-red-500 font-medium" : "text-slate-400")}>
-                          {over ? `${overDays}d overdue · Due ` : "Due "}{formatDate(inv.due_date)}
+                          {isEstimate ? "Valid until " : over ? `${overDays}d overdue · Due ` : "Due "}{formatDate(inv.due_date)}
                         </span>
                         {isPaid && inv.paid_at && (
                           <span className="text-xs text-emerald-600">
@@ -1129,8 +1179,34 @@ export default function Invoices() {
                     <span className={cn("shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border", statusBadge(inv))}>{statusLabel(inv)}</span>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Mark paid */}
-                      {!isPaid && !isVoid && (
+                      {/* Estimate: Accept */}
+                      {isEstimate && isSent && !isVoid && (
+                        <button onClick={() => updateMutation.mutate({ id: inv.id, data: { status: "accepted" } })}
+                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors">
+                          <Check className="w-3.5 h-3.5" /> Accept
+                        </button>
+                      )}
+
+                      {/* Estimate: Decline */}
+                      {isEstimate && isSent && !isVoid && (
+                        <button onClick={() => updateMutation.mutate({ id: inv.id, data: { status: "declined" } })}
+                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors">
+                          <X className="w-3.5 h-3.5" /> Decline
+                        </button>
+                      )}
+
+                      {/* Estimate: Convert to Invoice */}
+                      {isEstimate && isAccepted && (
+                        <button onClick={() => { setConvertingId(inv.id); convertMutation.mutate({ id: inv.id }); }}
+                          disabled={convertingId === inv.id}
+                          className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors">
+                          {convertingId === inv.id ? <span className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin inline-block" /> : <FileText className="w-3.5 h-3.5" />}
+                          Convert
+                        </button>
+                      )}
+
+                      {/* Mark paid (invoices only) */}
+                      {!isEstimate && !isPaid && !isVoid && (
                         <button onClick={() => setMarkingPaidInvoice(inv)}
                           className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors">
                           <DollarSign className="w-3.5 h-3.5" /> Paid
@@ -1138,7 +1214,7 @@ export default function Invoices() {
                       )}
 
                       {/* Send */}
-                      {!isVoid && !isPaid && (
+                      {!isVoid && !isPaid && !isAccepted && !isDeclined && (
                         <button onClick={() => { setSendingId(inv.id); sendMutation.mutate({ id: inv.id }); }}
                           disabled={sendingId === inv.id}
                           className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-50 transition-colors">
@@ -1147,8 +1223,8 @@ export default function Invoices() {
                         </button>
                       )}
 
-                      {/* Reminders (bell — overdue or sent) */}
-                      {!isVoid && !isPaid && (
+                      {/* Reminders (bell — invoices only, overdue or sent) */}
+                      {!isEstimate && !isVoid && !isPaid && (
                         <button onClick={() => setReminderInvoice(inv)} title="Send payment reminder"
                           className={cn("p-1.5 rounded-lg transition-colors", over ? "text-red-400 hover:text-red-600 hover:bg-red-50" : "text-slate-300 hover:text-amber-500 hover:bg-amber-50")}>
                           <Bell className="w-4 h-4" />

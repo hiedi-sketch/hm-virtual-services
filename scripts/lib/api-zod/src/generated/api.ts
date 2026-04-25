@@ -447,13 +447,30 @@ export const ListInvoicesQueryParams = zod.object({
   clientId: zod.coerce.number().optional(),
 });
 
+export const InvoiceType = zod.enum(["invoice", "estimate"]);
+export const InvoiceStatus = zod.enum(["draft", "sent", "paid", "unpaid", "void", "accepted", "declined"]);
+
 export const ListInvoicesResponseItem = zod.object({
   id: zod.number(),
   client_id: zod.number(),
   amount: zod.number(),
-  status: zod.enum(["draft", "sent", "paid", "unpaid", "void"]),
+  type: InvoiceType.default("invoice"),
+  status: InvoiceStatus,
   due_date: zod.string(),
   description: zod.string().nullish(),
+  line_items: zod.array(zod.object({
+    name: zod.string(),
+    description: zod.string().optional(),
+    qty: zod.number(),
+    unit_price: zod.number(),
+  })).nullish(),
+  notes: zod.string().nullish(),
+  thank_you_message: zod.string().nullish(),
+  paid_at: zod.string().nullish(),
+  payment_method: zod.string().nullish(),
+  payment_notes: zod.string().nullish(),
+  updated_at: zod.string().nullish(),
+  recurring_id: zod.number().nullish(),
 });
 export const ListInvoicesResponse = zod.array(ListInvoicesResponseItem);
 
@@ -470,7 +487,8 @@ const LineItemSchema = zod.object({
 export const CreateInvoiceBody = zod.object({
   client_id: zod.number(),
   amount: zod.number(),
-  status: zod.enum(["draft", "sent", "paid", "unpaid", "void"]).optional(),
+  type: InvoiceType.optional().default("invoice"),
+  status: InvoiceStatus.optional(),
   due_date: zod.string(),
   description: zod.string().nullish(),
   line_items: zod.array(LineItemSchema).nullish(),
@@ -488,7 +506,8 @@ export const UpdateInvoiceParams = zod.object({
 
 export const UpdateInvoiceBody = zod.object({
   amount: zod.number().optional(),
-  status: zod.enum(["draft", "sent", "paid", "unpaid", "void"]).optional(),
+  type: InvoiceType.optional(),
+  status: InvoiceStatus.optional(),
   due_date: zod.string().optional(),
   description: zod.string().nullish(),
   line_items: zod.array(LineItemSchema).nullish(),
@@ -503,7 +522,8 @@ export const UpdateInvoiceResponse = zod.object({
   id: zod.number(),
   client_id: zod.number(),
   amount: zod.number(),
-  status: zod.enum(["draft", "sent", "paid", "unpaid", "void"]),
+  type: InvoiceType.default("invoice"),
+  status: InvoiceStatus,
   due_date: zod.string(),
   description: zod.string().nullish(),
   line_items: zod.array(LineItemSchema).nullish(),
@@ -514,6 +534,10 @@ export const UpdateInvoiceResponse = zod.object({
   payment_notes: zod.string().nullish(),
   updated_at: zod.string().nullish(),
   recurring_id: zod.number().nullish(),
+});
+
+export const ConvertEstimateParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**

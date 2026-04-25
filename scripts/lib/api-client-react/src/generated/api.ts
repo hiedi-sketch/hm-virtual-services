@@ -3170,6 +3170,40 @@ export const useSendInvoice = <
   return useMutation(getSendInvoiceMutationOptions(options));
 };
 
+// ── Convert Estimate to Invoice ───────────────────────────────────────────────
+
+export const getConvertEstimateUrl = (id: number) => `/api/invoices/${id}/convert`;
+
+export const convertEstimate = async (id: number, options?: RequestInit): Promise<Invoice> => {
+  return customFetch<Invoice>(getConvertEstimateUrl(id), {
+    method: "POST",
+    ...options,
+  });
+};
+
+export const getConvertEstimateMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof convertEstimate>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof convertEstimate>>, TError, { id: number }, TContext> => {
+  const { mutation: mutationOptions, request: requestOptions } = options ?? {};
+  const mutationKey = ["convertEstimate"];
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof convertEstimate>>, { id: number }> = (props) => {
+    const { id } = props ?? {};
+    return convertEstimate(id, requestOptions);
+  };
+  return { mutationKey, mutationFn, ...mutationOptions };
+};
+
+export const useConvertEstimate = <TError = ErrorType<unknown>, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof convertEstimate>>, TError, { id: number }, TContext>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<Awaited<ReturnType<typeof convertEstimate>>, TError, { id: number }, TContext> => {
+  return useMutation(getConvertEstimateMutationOptions(options));
+};
+
 // ── Invoice Reminders ─────────────────────────────────────────────────────────
 
 export const getListInvoiceRemindersUrl = (id: number) => `/api/invoices/${id}/reminders`;

@@ -9,6 +9,7 @@ import {
   UpdateInvoiceParams,
   UpdateInvoiceBody,
   DeleteInvoiceParams,
+  ConvertEstimateParams,
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
@@ -318,6 +319,22 @@ router.delete("/invoices/:id", requireAdmin, async (req, res) => {
   logAudit("invoice", id, "deleted", `Invoice #${id} deleted`, { id: actor?.id, name: actor?.name });
 });
 
+// ── Convert estimate → invoice ─────────────────────────────────────────────
+router.post("/invoices/:id/convert", requireAdmin, async (req, res) => {
+  const { id } = ConvertEstimateParams.parse(req.params);
+  const [row] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (row.type !== "estimate") { res.status(400).json({ error: "Only estimates can be converted" }); return; }
+  const [updated] = await db
+    .update(invoicesTable)
+    .set({ type: "invoice", status: "unpaid", updated_at: new Date() })
+    .where(eq(invoicesTable.id, id))
+    .returning();
+  res.json(updated);
+  const actor = req.session.user;
+  logAudit("invoice", id, "converted", `Estimate #${id} converted to invoice`, { id: actor?.id, name: actor?.name });
+});
+
 // ── Send invoice to client ────────────────────────────────────────────────────
 router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
   const id = Number(req.params["id"]);
@@ -331,6 +348,7 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       id: invoicesTable.id,
       client_id: invoicesTable.client_id,
       amount: invoicesTable.amount,
+      type: invoicesTable.type,
       status: invoicesTable.status,
       due_date: invoicesTable.due_date,
       description: invoicesTable.description,
@@ -355,6 +373,8 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
   }
 
   // Build email body
+  const isEstimate = row.type === "estimate";
+  const docLabel = isEstimate ? "Estimate" : "Invoice";
   const fmtDate = (d: string) =>
     new Date(d + "T00:00:00").toLocaleDateString("en-US", {
       month: "long", day: "numeric", year: "numeric",
@@ -427,13 +447,13 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
     : "";
 
   const emailBody = `
-    <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;">Invoice #${row.id}</h2>
+    <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;">${docLabel} #${row.id}</h2>
     <p style="margin:0 0 20px;color:#475569;">Hi ${row.client_name ?? "there"},</p>
-    <p style="color:#475569;">Please find your invoice details below.</p>
+    <p style="color:#475569;">Please find your ${docLabel.toLowerCase()} details below.</p>
 
     <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
       <tr>
-        <td style="color:#64748b;font-size:13px;padding:4px 0;">Due Date</td>
+        <td style="color:#64748b;font-size:13px;padding:4px 0;">${isEstimate ? "Valid Until" : "Due Date"}</td>
         <td style="text-align:right;font-weight:600;color:#1e293b;font-size:13px;">${fmtDate(row.due_date)}</td>
       </tr>
       ${row.description ? `
@@ -464,7 +484,9 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
   try {
     await sendMail(
       row.client_email,
-      `Invoice #${row.id} — ${fmtAmount(row.amount)} due ${fmtDate(row.due_date)}`,
+      isEstimate
+        ? `Estimate #${row.id} — ${fmtAmount(row.amount)}`
+        : `Invoice #${row.id} — ${fmtAmount(row.amount)} due ${fmtDate(row.due_date)}`,
       template(emailBody)
     );
   } catch (err) {
@@ -484,7 +506,7 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
 
   res.json({ ...updated, emailSent: mailConfigured });
   const actor = req.session.user;
-  logAudit("invoice", id, "sent", `Invoice #${id} sent to ${row.client_email}`, { id: actor?.id, name: actor?.name });
+  logAudit("invoice", id, "sent", `${docLabel} #${id} sent to ${row.client_email}`, { id: actor?.id, name: actor?.name });
 
   // Fire-and-forget: in-app notification
   (async () => {
@@ -492,8 +514,8 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       const amountStr = fmtAmount(row.amount);
       const notifOpts = {
         type: "invoice_sent" as const,
-        title: `Invoice #${id} sent — ${amountStr}`,
-        message: `Invoice sent to ${row.client_name ?? row.client_email}. Due: ${fmtDate(row.due_date)}.`,
+        title: `${docLabel} #${id} sent — ${amountStr}`,
+        message: `${docLabel} sent to ${row.client_name ?? row.client_email}.`,
         entityType: "invoice" as const,
         entityId: id,
       };
@@ -501,8 +523,10 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       if (row.client_id) {
         await notifyClientUser(row.client_id, {
           ...notifOpts,
-          title: `Invoice #${id} — ${amountStr} due`,
-          message: `You have a new invoice for ${amountStr} due on ${fmtDate(row.due_date)}.`,
+          title: `${docLabel} #${id} — ${amountStr}`,
+          message: isEstimate
+            ? `You have a new estimate for ${amountStr}.`
+            : `You have a new invoice for ${amountStr} due on ${fmtDate(row.due_date)}.`,
         });
       }
     } catch { /* ignore */ }
