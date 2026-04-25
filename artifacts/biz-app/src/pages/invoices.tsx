@@ -225,10 +225,12 @@ function LineItemsEditor({
               <input type="text" placeholder="Description" value={it.description}
                 className="w-full border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                 onChange={e => update(it._id, "description", e.target.value)} />
-              <input type="number" min={0} step={0.01} placeholder="0.00" value={it.unit_price}
+              <input type="number" step={0.01} placeholder="0.00" value={it.unit_price}
                 className="w-full border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                 onChange={e => update(it._id, "unit_price", Number(e.target.value))} />
-              <span className="text-right text-sm font-medium text-slate-700">{formatCurrency(it.qty * it.unit_price)}</span>
+              <span className={cn("text-right text-sm font-medium", it.qty * it.unit_price < 0 ? "text-red-600" : "text-slate-700")}>
+                {formatCurrency(it.qty * it.unit_price)}
+              </span>
               <button
                 type="button"
                 title={it.billing_type === "recurring" ? "Recurring — click to set as one-time" : "One-time — click to set as recurring"}
@@ -357,8 +359,8 @@ function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: ()
                       {it.description && <p className="text-slate-400 text-[10px] mt-0.5">{it.description}</p>}
                     </div>
                     <p className="text-slate-600 text-xs text-center">{it.qty}</p>
-                    <p className="text-slate-600 text-xs text-right">{formatCurrency(it.unit_price)}</p>
-                    <p className="text-slate-800 text-xs font-semibold text-right">{formatCurrency(it.qty * it.unit_price)}</p>
+                    <p className={cn("text-xs text-right", it.unit_price < 0 ? "text-red-600" : "text-slate-600")}>{formatCurrency(it.unit_price)}</p>
+                    <p className={cn("text-xs font-semibold text-right", it.qty * it.unit_price < 0 ? "text-red-600" : "text-slate-800")}>{formatCurrency(it.qty * it.unit_price)}</p>
                   </div>
                 ))}
               </div>
