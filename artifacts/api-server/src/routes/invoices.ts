@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { invoicesTable, clientsTable, tasksTable, timeEntriesTable, leadsTable, servicesTable, clientServicesTable } from "@workspace/db";
+import { invoicesTable, recurringInvoicesTable, clientsTable, tasksTable, timeEntriesTable, leadsTable, servicesTable, clientServicesTable } from "@workspace/db";
 import { eq, sql, ilike } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import {
@@ -519,6 +519,8 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       line_items: invoicesTable.line_items,
       notes: invoicesTable.notes,
       thank_you_message: invoicesTable.thank_you_message,
+      billing_type: invoicesTable.billing_type,
+      recurring_id: invoicesTable.recurring_id,
       client_name: clientsTable.name,
       client_email: clientsTable.email,
     })
@@ -661,25 +663,73 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
     // If mail not configured, still mark as sent but warn
   }
 
-  // Update invoice status to "sent"
+  // ── Auto-create recurring series if invoice is recurring and none exists ──────
+  let recurringSeriesId: number | null = null;
+  if (row.billing_type === "recurring" && !row.recurring_id && row.client_id) {
+    try {
+      // Filter to only recurring line items for the series template
+      const recurringItems = (row.line_items ?? []).filter(
+        (li: any) => !li.billing_type || li.billing_type === "recurring"
+      );
+      const recurringAmount = recurringItems.length > 0
+        ? recurringItems.reduce((s: number, li: any) => s + li.qty * li.unit_price, 0)
+        : row.amount;
+
+      // next_due_date = same day next month
+      function addOneMonth(dateStr: string): string {
+        const d = new Date(dateStr + "T00:00:00");
+        d.setMonth(d.getMonth() + 1);
+        return d.toISOString().split("T")[0]!;
+      }
+
+      const [series] = await db.insert(recurringInvoicesTable).values({
+        client_id: row.client_id,
+        frequency: "monthly",
+        start_date: row.due_date,
+        next_due_date: addOneMonth(row.due_date),
+        description: row.description ?? null,
+        line_items: recurringItems.length > 0 ? recurringItems : row.line_items,
+        notes: row.notes ?? null,
+        thank_you_message: row.thank_you_message ?? null,
+        amount: recurringAmount,
+        active: true,
+        auto_send: false,
+      }).returning();
+
+      recurringSeriesId = series.id;
+    } catch (err) {
+      // Non-fatal — log but don't block the send response
+      console.error("Failed to create recurring series:", err);
+    }
+  }
+
+  // Update invoice status to "sent" and link to recurring series if created
   const [updated] = await db
     .update(invoicesTable)
-    .set({ status: "sent", updated_at: new Date() })
+    .set({
+      status: "sent",
+      updated_at: new Date(),
+      ...(recurringSeriesId ? { recurring_id: recurringSeriesId } : {}),
+    })
     .where(eq(invoicesTable.id, id))
     .returning();
 
-  res.json({ ...updated, emailSent: mailConfigured });
+  res.json({ ...updated, emailSent: mailConfigured, recurringSeriesCreated: !!recurringSeriesId, recurringSeriesId });
   const actor = req.session.user;
-  logAudit("invoice", id, "sent", `${docLabel} #${id} sent to ${row.client_email}`, { id: actor?.id, name: actor?.name });
+  logAudit("invoice", id, "sent", `${docLabel} #${id} sent to ${row.client_email}${recurringSeriesId ? ` — recurring series #${recurringSeriesId} created` : ""}`, { id: actor?.id, name: actor?.name });
+  if (recurringSeriesId) {
+    logAudit("recurring_invoice", recurringSeriesId, "created", `Recurring series #${recurringSeriesId} auto-created from invoice #${id}`, { id: actor?.id, name: actor?.name });
+  }
 
   // Fire-and-forget: in-app notification
   (async () => {
     try {
       const amountStr = fmtAmount(row.amount);
+      const recurringNote = recurringSeriesId ? ` Monthly recurring series #${recurringSeriesId} created automatically.` : "";
       const notifOpts = {
         type: "invoice_sent" as const,
         title: `${docLabel} #${id} sent — ${amountStr}`,
-        message: `${docLabel} sent to ${row.client_name ?? row.client_email}.`,
+        message: `${docLabel} sent to ${row.client_name ?? row.client_email}.${recurringNote}`,
         entityType: "invoice" as const,
         entityId: id,
       };

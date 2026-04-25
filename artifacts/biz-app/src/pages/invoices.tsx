@@ -1156,9 +1156,11 @@ export default function Invoices() {
     mutation: {
       onSuccess: (data: any) => {
         invalidate(); setSendingId(null);
+        const emailMsg = data?.emailSent !== false ? "Email delivered to client." : "SMTP not configured — status updated.";
+        const recurringMsg = data?.recurringSeriesCreated ? ` Monthly recurring series #${data.recurringSeriesId} created automatically.` : "";
         toast({
           title: data?.emailSent !== false ? "Invoice sent!" : "Invoice marked as sent",
-          description: data?.emailSent !== false ? "Email delivered to client." : "SMTP not configured — status updated.",
+          description: emailMsg + recurringMsg,
         });
       },
       onError: () => { setSendingId(null); toast({ title: "Failed to send invoice", variant: "destructive" }); },
