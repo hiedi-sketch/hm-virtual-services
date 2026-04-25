@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { invoicesTable, clientsTable, tasksTable, timeEntriesTable } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { invoicesTable, clientsTable, tasksTable, timeEntriesTable, leadsTable, servicesTable, clientServicesTable } from "@workspace/db";
+import { eq, sql, ilike } from "drizzle-orm";
 import PDFDocument from "pdfkit";
 import {
   ListInvoicesQueryParams,
@@ -253,24 +253,127 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res) => {
 
 router.post("/invoices", requireAdmin, async (req, res) => {
   const body = CreateInvoiceBody.parse(req.body);
-  const [invoice] = await db.insert(invoicesTable).values(body).returning();
-  res.status(201).json(invoice);
+  const { client_id, lead_id, new_contact, ...invoiceFields } = body;
+  const docType = invoiceFields.type ?? "invoice";
   const actor = req.session.user;
-  logAudit("invoice", invoice.id, "created", `Invoice #${invoice.id} created ($${Number(invoice.amount).toFixed(2)})`, { id: actor?.id, name: actor?.name });
 
-  // Notify all admins about the new invoice
-  (async () => {
-    try {
-      const [client] = await db.select({ name: clientsTable.name }).from(clientsTable).where(eq(clientsTable.id, body.client_id));
-      await notifyAdmins({
-        type: "invoice_created",
-        title: `Invoice #${invoice.id} created`,
-        message: `$${Number(invoice.amount).toFixed(2)} invoice created${client?.name ? ` for ${client.name}` : ""}.`,
-        entityType: "invoice",
-        entityId: invoice.id,
-      });
-    } catch { /* ignore */ }
-  })();
+  // ── Helper: match line item names to services and create client_services rows ──
+  async function linkServicesToClient(newClientId: number) {
+    if (!invoiceFields.line_items || invoiceFields.line_items.length === 0) return;
+    const allServices = await db.select().from(servicesTable).where(eq(servicesTable.active, true));
+    for (const li of invoiceFields.line_items) {
+      const match = allServices.find(s => s.name.toLowerCase() === li.name.toLowerCase());
+      if (match) {
+        const existing = await db.select({ id: clientServicesTable.id })
+          .from(clientServicesTable)
+          .where(eq(clientServicesTable.client_id, newClientId));
+        const alreadyLinked = existing.some(r => r.id === match.id);
+        if (!alreadyLinked) {
+          await db.insert(clientServicesTable).values({ client_id: newClientId, service_id: match.id }).onConflictDoNothing();
+        }
+      }
+    }
+  }
+
+  // ── Recipient resolution ──────────────────────────────────────────────────────
+
+  // (a) Existing client — standard flow
+  if (client_id) {
+    const [invoice] = await db.insert(invoicesTable).values({ ...invoiceFields, client_id }).returning();
+    res.status(201).json(invoice);
+    logAudit("invoice", invoice.id, "created", `Invoice #${invoice.id} created ($${Number(invoice.amount).toFixed(2)})`, { id: actor?.id, name: actor?.name });
+    (async () => {
+      try {
+        const [client] = await db.select({ name: clientsTable.name }).from(clientsTable).where(eq(clientsTable.id, client_id));
+        await notifyAdmins({ type: "invoice_created", title: `Invoice #${invoice.id} created`, message: `$${Number(invoice.amount).toFixed(2)} ${docType} created for ${client?.name ?? "client"}.`, entityType: "invoice", entityId: invoice.id });
+      } catch { /* ignore */ }
+    })();
+    return;
+  }
+
+  // (b) Existing lead + invoice → promote lead to client, close lead
+  if (lead_id && docType === "invoice") {
+    const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, lead_id));
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    const [newClient] = await db.insert(clientsTable).values({
+      name: lead.name,
+      email: lead.email ?? "",
+      phone: lead.phone ?? undefined,
+      monthly_hour_budget: 0,
+      monthly_fee: 0,
+    }).returning();
+    await db.update(leadsTable).set({ status: "closed" }).where(eq(leadsTable.id, lead_id));
+    await linkServicesToClient(newClient.id);
+    const [invoice] = await db.insert(invoicesTable).values({ ...invoiceFields, client_id: newClient.id }).returning();
+    res.status(201).json(invoice);
+    logAudit("invoice", invoice.id, "created", `Invoice #${invoice.id} created from lead #${lead_id}`, { id: actor?.id, name: actor?.name });
+    (async () => {
+      try {
+        await notifyAdmins({ type: "invoice_created", title: `Invoice #${invoice.id} created`, message: `Lead "${lead.name}" promoted to client. Invoice $${Number(invoice.amount).toFixed(2)} created. Complete the client profile.`, entityType: "invoice", entityId: invoice.id });
+      } catch { /* ignore */ }
+    })();
+    return;
+  }
+
+  // (c) Existing lead + estimate → update lead to "proposal" stage, attach lead_id
+  if (lead_id && docType === "estimate") {
+    const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, lead_id));
+    if (!lead) { res.status(404).json({ error: "Lead not found" }); return; }
+    if (lead.status === "new" || lead.status === "contacted") {
+      await db.update(leadsTable).set({ status: "proposal" }).where(eq(leadsTable.id, lead_id));
+    }
+    const [invoice] = await db.insert(invoicesTable).values({ ...invoiceFields, lead_id }).returning();
+    res.status(201).json(invoice);
+    logAudit("invoice", invoice.id, "created", `Estimate #${invoice.id} created for lead #${lead_id}`, { id: actor?.id, name: actor?.name });
+    (async () => {
+      try {
+        await notifyAdmins({ type: "invoice_created", title: `Estimate #${invoice.id} created`, message: `Estimate $${Number(invoice.amount).toFixed(2)} created for lead "${lead.name}". Lead moved to proposal stage.`, entityType: "invoice", entityId: invoice.id });
+      } catch { /* ignore */ }
+    })();
+    return;
+  }
+
+  // (d) New contact + invoice → create client
+  if (new_contact && docType === "invoice") {
+    const [newClient] = await db.insert(clientsTable).values({
+      name: new_contact.name,
+      email: new_contact.email ?? "",
+      phone: new_contact.phone ?? undefined,
+      monthly_hour_budget: 0,
+      monthly_fee: 0,
+    }).returning();
+    await linkServicesToClient(newClient.id);
+    const [invoice] = await db.insert(invoicesTable).values({ ...invoiceFields, client_id: newClient.id }).returning();
+    res.status(201).json(invoice);
+    logAudit("invoice", invoice.id, "created", `Invoice #${invoice.id} created for new contact "${new_contact.name}"`, { id: actor?.id, name: actor?.name });
+    (async () => {
+      try {
+        await notifyAdmins({ type: "invoice_created", title: `Invoice #${invoice.id} created`, message: `New client "${new_contact.name}" created automatically. Invoice $${Number(invoice.amount).toFixed(2)} created. Complete the client profile.`, entityType: "invoice", entityId: invoice.id });
+      } catch { /* ignore */ }
+    })();
+    return;
+  }
+
+  // (e) New contact + estimate → create lead in "proposal" stage, attach lead_id
+  if (new_contact && docType === "estimate") {
+    const [newLead] = await db.insert(leadsTable).values({
+      name: new_contact.name,
+      email: new_contact.email ?? undefined,
+      phone: new_contact.phone ?? undefined,
+      status: "proposal",
+    }).returning();
+    const [invoice] = await db.insert(invoicesTable).values({ ...invoiceFields, lead_id: newLead.id }).returning();
+    res.status(201).json(invoice);
+    logAudit("invoice", invoice.id, "created", `Estimate #${invoice.id} created for new lead "${new_contact.name}"`, { id: actor?.id, name: actor?.name });
+    (async () => {
+      try {
+        await notifyAdmins({ type: "invoice_created", title: `Estimate #${invoice.id} created`, message: `New lead "${new_contact.name}" created in proposal stage. Estimate $${Number(invoice.amount).toFixed(2)} attached. Complete lead info.`, entityType: "invoice", entityId: invoice.id });
+      } catch { /* ignore */ }
+    })();
+    return;
+  }
+
+  res.status(400).json({ error: "Must provide client_id, lead_id, or new_contact" });
 });
 
 router.patch("/invoices/:id", requireAdmin, async (req, res) => {

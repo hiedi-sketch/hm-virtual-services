@@ -3,6 +3,7 @@ import {
   useListInvoices,
   useListClients,
   useListServices,
+  useListLeads,
   useCreateInvoice,
   useUpdateInvoice,
   useDeleteInvoice,
@@ -376,9 +377,12 @@ function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: ()
 
 // ── Invoice Form ──────────────────────────────────────────────────────────────
 
-function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending }: {
+type RecipientMode = "client" | "lead" | "new_contact";
+
+function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, isPending }: {
   invoice?: Invoice;
   clients: { id: number; name: string }[];
+  leads: { id: number; name: string; email?: string | null; status: string }[];
   services: { id: number; name: string; description?: string | null; price: number; active: boolean }[];
   onSubmit: (data: any) => void;
   onCancel: () => void;
@@ -394,7 +398,15 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
   const isEdit = !!invoice;
   const initialDocType: "invoice" | "estimate" = invoice?.type === "estimate" ? "estimate" : "invoice";
   const [docType, setDocType] = useState<"invoice" | "estimate">(initialDocType);
-  const [clientId, setClientId] = useState(invoice ? String(invoice.client_id) : "");
+
+  // Recipient mode — only applies when creating
+  const [recipientMode, setRecipientMode] = useState<RecipientMode>("client");
+  const [clientId, setClientId] = useState(invoice ? String((invoice as any).client_id ?? "") : "");
+  const [leadId, setLeadId] = useState("");
+  const [newContactName, setNewContactName] = useState("");
+  const [newContactEmail, setNewContactEmail] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+
   const [issueDate, setIssueDate] = useState((invoice as any)?.issue_date ?? todayISO());
   const [dueDate, setDueDate] = useState(
     invoice?.due_date ?? (initialDocType === "estimate" ? daysFromNow(30) : todayISO())
@@ -412,7 +424,15 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
   const [showAdvanced, setShowAdvanced] = useState(!!(invoice?.notes || invoice?.thank_you_message));
   const [showPreview, setShowPreview] = useState(false);
 
-  const clientName = clients.find(c => String(c.id) === clientId)?.name ?? "";
+  const resolvedClientName = recipientMode === "client"
+    ? (clients.find(c => String(c.id) === clientId)?.name ?? "")
+    : recipientMode === "lead"
+      ? (leads.find(l => String(l.id) === leadId)?.name ?? "")
+      : newContactName;
+
+  const clientName = isEdit
+    ? (clients.find(c => String(c.id) === clientId)?.name ?? "")
+    : resolvedClientName;
 
   const hasItems = lineItems.length > 0;
   const total = hasItems ? calcTotal(lineItems) : Number(manualAmount) || 0;
@@ -426,12 +446,40 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientId || !dueDate) return;
+    if (!dueDate) return;
     if (!hasItems && !manualAmount) return;
+
     const currentStatus = isEdit
       ? (saveAsDraft ? "draft" : invoice?.status === "draft" ? "unpaid" : invoice?.status ?? "unpaid")
       : (saveAsDraft ? "draft" : "unpaid");
-    onSubmit({ client_id: Number(clientId), amount: total, type: docType, issue_date: issueDate || null, due_date: dueDate, status: currentStatus, description: description.trim() || null, line_items: hasItems ? lineItems.map(draftToLineItem) : null, notes: notes.trim() || null, thank_you_message: thankYou.trim() || null });
+
+    const base = {
+      amount: total,
+      type: docType,
+      issue_date: issueDate || null,
+      due_date: dueDate,
+      status: currentStatus,
+      description: description.trim() || null,
+      line_items: hasItems ? lineItems.map(draftToLineItem) : null,
+      notes: notes.trim() || null,
+      thank_you_message: thankYou.trim() || null,
+    };
+
+    if (isEdit) {
+      onSubmit({ client_id: Number(clientId), ...base });
+      return;
+    }
+
+    if (recipientMode === "client") {
+      if (!clientId) return;
+      onSubmit({ client_id: Number(clientId), ...base });
+    } else if (recipientMode === "lead") {
+      if (!leadId) return;
+      onSubmit({ lead_id: Number(leadId), ...base });
+    } else {
+      if (!newContactName.trim()) return;
+      onSubmit({ new_contact: { name: newContactName.trim(), email: newContactEmail.trim() || undefined, phone: newContactPhone.trim() || undefined }, ...base });
+    }
   };
 
   return (
@@ -449,14 +497,91 @@ function InvoiceForm({ invoice, clients, services, onSubmit, onCancel, isPending
           </button>
         </div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+      {/* Recipient */}
+      {!isEdit && (
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Recipient <span className="text-red-400">*</span></label>
+            <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+              {([["client", "Existing Client"], ["lead", "Existing Lead"], ["new_contact", "New Contact"]] as [RecipientMode, string][]).map(([mode, label]) => (
+                <button key={mode} type="button" onClick={() => setRecipientMode(mode)}
+                  className={cn("px-3 py-1.5 rounded-md text-xs font-medium transition-colors", recipientMode === mode ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {recipientMode === "client" && (
+            <div>
+              <select className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)} required>
+                <option value="">Select a client…</option>
+                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          {recipientMode === "lead" && (
+            <div>
+              <select className={inputCls} value={leadId} onChange={e => setLeadId(e.target.value)} required>
+                <option value="">Select a lead…</option>
+                {leads.map(l => <option key={l.id} value={l.id}>{l.name}{l.email ? ` — ${l.email}` : ""}</option>)}
+              </select>
+              {docType === "invoice" && leadId && (
+                <p className="text-xs text-amber-600 mt-1.5 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                  This lead will be promoted to a client and their status will be set to closed.
+                </p>
+              )}
+              {docType === "estimate" && leadId && (
+                <p className="text-xs text-blue-600 mt-1.5 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                  This lead's stage will be updated to "Proposal."
+                </p>
+              )}
+            </div>
+          )}
+
+          {recipientMode === "new_contact" && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Name <span className="text-red-400">*</span></label>
+                <input type="text" className={inputCls} placeholder="Full name" value={newContactName} onChange={e => setNewContactName(e.target.value)} required />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Email</label>
+                <input type="email" className={inputCls} placeholder="email@example.com" value={newContactEmail} onChange={e => setNewContactEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
+                <input type="tel" className={inputCls} placeholder="(555) 000-0000" value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)} />
+              </div>
+              {docType === "invoice" && newContactName.trim() && (
+                <p className="text-xs text-amber-600 sm:col-span-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                  A new client record will be created automatically. Remember to complete the client profile.
+                </p>
+              )}
+              {docType === "estimate" && newContactName.trim() && (
+                <p className="text-xs text-blue-600 sm:col-span-3 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">
+                  A new lead will be created in "Proposal" stage. Remember to complete the lead info.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Edit mode — show locked client */}
+      {isEdit && (
         <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Client <span className="text-red-400">*</span></label>
-          <select className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)} required disabled={isEdit}>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Client</label>
+          <select className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)} disabled>
             <option value="">Select a client…</option>
             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Issue Date <span className="text-red-400">*</span></label>
           <input type="date" className={inputCls} value={issueDate} onChange={e => setIssueDate(e.target.value)} required />
@@ -938,6 +1063,7 @@ export default function Invoices() {
   const { data: invoices = [], isLoading } = useListInvoices(filterClient ? { clientId: filterClient } : undefined);
   const { data: clients = [] } = useListClients();
   const { data: services = [] } = useListServices();
+  const { data: leads = [] } = useListLeads();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
 
@@ -1007,7 +1133,13 @@ export default function Invoices() {
   const totalUnpaid = activeInvoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
   const overdueCount = activeInvoices.filter(i => isOverdue(i.due_date, i.status)).length;
 
-  const getClientName = (id: number) => clients.find(c => c.id === id)?.name ?? `Client #${id}`;
+  const getRecipientName = (inv: Invoice) => {
+    const cid = (inv as any).client_id as number | null | undefined;
+    const lid = (inv as any).lead_id as number | null | undefined;
+    if (cid) return clients.find(c => c.id === cid)?.name ?? `Client #${cid}`;
+    if (lid) return (leads.find(l => l.id === lid)?.name ?? `Lead #${lid}`) + " (Lead)";
+    return "—";
+  };
 
   // Stripe
   const [stripeEnabled, setStripeEnabled] = useState(false);
@@ -1115,7 +1247,7 @@ export default function Invoices() {
       {showForm && !editingInvoice && filterStatus !== "recurring" && (
         <div className="bg-white rounded-2xl border border-blue-200 shadow-sm p-6">
           <h2 className="font-semibold text-slate-900 mb-5">New Invoice</h2>
-          <InvoiceForm clients={clients} services={services} onSubmit={(data) => createMutation.mutate({ data })} onCancel={() => setShowForm(false)} isPending={createMutation.isPending} />
+          <InvoiceForm clients={clients} leads={leads as any} services={services} onSubmit={(data) => createMutation.mutate({ data })} onCancel={() => setShowForm(false)} isPending={createMutation.isPending} />
         </div>
       )}
 
@@ -1173,7 +1305,7 @@ export default function Invoices() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={cn("font-semibold text-slate-900", isVoid && "line-through")}>{formatCurrency(inv.amount)}</span>
                         <span className="text-slate-400 text-sm">·</span>
-                        <span className="text-sm text-slate-600">{getClientName(inv.client_id)}</span>
+                        <span className="text-sm text-slate-600">{getRecipientName(inv)}</span>
                         <span className="text-slate-300 text-xs">#{inv.id}</span>
                         {isEstimate && <span className="text-xs text-teal-600 font-medium bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-full">Estimate</span>}
                         {isRecurring && <span className="flex items-center gap-1 text-xs text-blue-500 font-medium"><Repeat className="w-3 h-3" /> recurring</span>}
@@ -1301,9 +1433,9 @@ export default function Invoices() {
       {/* Edit Invoice Modal */}
       <Modal isOpen={!!editingInvoice} onClose={() => setEditingInvoice(null)}
         title={`Edit Invoice #${editingInvoice?.id}`}
-        description={editingInvoice ? `${getClientName(editingInvoice.client_id)} · ${formatCurrency(editingInvoice.amount)}` : undefined}>
+        description={editingInvoice ? `${getRecipientName(editingInvoice)} · ${formatCurrency(editingInvoice.amount)}` : undefined}>
         {editingInvoice && (
-          <InvoiceForm invoice={editingInvoice} clients={clients} services={services}
+          <InvoiceForm invoice={editingInvoice} clients={clients} leads={leads as any} services={services}
             onSubmit={(data) => updateMutation.mutate({ id: editingInvoice.id, data })}
             onCancel={() => setEditingInvoice(null)} isPending={updateMutation.isPending} />
         )}

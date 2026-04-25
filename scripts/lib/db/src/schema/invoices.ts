@@ -1,5 +1,6 @@
 import { pgTable, serial, integer, real, text, json, timestamp, boolean } from "drizzle-orm/pg-core";
 import { clientsTable } from "./clients";
+import { leadsTable } from "./leads";
 
 export type LineItem = {
   name: string;
@@ -28,7 +29,8 @@ export const recurringInvoicesTable = pgTable("recurring_invoices", {
 
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
-  client_id: integer("client_id").notNull().references(() => clientsTable.id),
+  client_id: integer("client_id").references(() => clientsTable.id),
+  lead_id: integer("lead_id").references(() => leadsTable.id),
   amount: real("amount").notNull(),
   type: text("type", { enum: ["invoice", "estimate"] }).notNull().default("invoice"),
   status: text("status", { enum: ["draft", "sent", "paid", "unpaid", "void", "accepted", "declined"] }).notNull().default("unpaid"),
