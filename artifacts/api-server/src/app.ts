@@ -92,6 +92,7 @@ app.use(
     store: new PgSession({
       conString: process.env["DATABASE_URL"],
       ttl: 7 * 24 * 60 * 60, // 7 days in seconds
+      createTableIfMissing: true,
     }),
     secret: process.env["SESSION_SECRET"] ?? "flowstate-dev-secret-change-in-production",
     resave: false,
