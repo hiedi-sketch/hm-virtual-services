@@ -803,9 +803,11 @@ function InvoicesTab({
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Pending Response</span>
                   </div>
                   <p className="text-sm font-semibold text-slate-800">{est.description || `Estimate #${est.id}`}</p>
-                  {est.due_date && (
-                    <p className="text-xs text-slate-400 mt-0.5">Valid until {fmtDate(est.due_date)}</p>
-                  )}
+                  <div className="flex items-center gap-3 mt-0.5">
+                    {est.issue_date && <p className="text-xs text-slate-400">Issued {fmtDate(est.issue_date)}</p>}
+                    {est.issue_date && est.due_date && <span className="text-slate-200 text-xs">·</span>}
+                    {est.due_date && <p className="text-xs text-slate-400">Valid until {fmtDate(est.due_date)}</p>}
+                  </div>
                   <p className="text-xl font-bold text-slate-900 mt-2">{fmtCurrency(Number(est.amount ?? 0))}</p>
                 </div>
               </div>
@@ -845,6 +847,11 @@ function InvoicesTab({
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Accepted</span>
                   </div>
                   <p className="text-sm font-semibold text-slate-800">{est.description || `Estimate #${est.id}`}</p>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    {est.issue_date && <p className="text-xs text-slate-400">Issued {fmtDate(est.issue_date)}</p>}
+                    {est.issue_date && est.due_date && <span className="text-slate-200 text-xs">·</span>}
+                    {est.due_date && <p className="text-xs text-slate-400">Valid until {fmtDate(est.due_date)}</p>}
+                  </div>
                   <p className="text-xl font-bold text-slate-900 mt-1">{fmtCurrency(Number(est.amount ?? 0))}</p>
                 </div>
                 <button
@@ -871,7 +878,11 @@ function InvoicesTab({
                 <li key={est.id} className="px-5 py-4 flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-slate-700 truncate">{est.description || `Estimate #${est.id}`}</p>
-                    {est.due_date && <p className="text-xs text-slate-400 mt-0.5">Valid until {fmtDate(est.due_date)}</p>}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {est.issue_date && <p className="text-xs text-slate-400">Issued {fmtDate(est.issue_date)}</p>}
+                      {est.issue_date && est.due_date && <span className="text-slate-200 text-xs">·</span>}
+                      {est.due_date && <p className="text-xs text-slate-400">Valid until {fmtDate(est.due_date)}</p>}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="text-sm font-bold text-slate-700">{fmtCurrency(Number(est.amount ?? 0))}</span>
