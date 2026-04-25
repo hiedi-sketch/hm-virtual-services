@@ -323,12 +323,17 @@ export const InvoiceStatus = {
   declined: "declined",
 } as const;
 
+export type LineItemBillingType = "one_time" | "recurring";
+
 export interface LineItem {
   name: string;
   description?: string;
   qty: number;
   unit_price: number;
+  billing_type?: LineItemBillingType;
 }
+
+export type InvoiceBillingType = "one_time" | "recurring";
 
 export interface Invoice {
   id: number;
@@ -346,6 +351,7 @@ export interface Invoice {
   payment_notes?: string | null;
   updated_at?: string | null;
   recurring_id?: number | null;
+  billing_type?: InvoiceBillingType;
 }
 
 export type CreateInvoiceInputStatus =
@@ -362,7 +368,9 @@ export const CreateInvoiceInputStatus = {
 } as const;
 
 export interface CreateInvoiceInput {
-  client_id: number;
+  client_id?: number;
+  lead_id?: number;
+  new_contact?: { name: string; email?: string; phone?: string };
   amount: number;
   type?: InvoiceType;
   status?: CreateInvoiceInputStatus;
@@ -372,6 +380,7 @@ export interface CreateInvoiceInput {
   notes?: string | null;
   thank_you_message?: string | null;
   recurring_id?: number | null;
+  billing_type?: InvoiceBillingType;
 }
 
 export type UpdateInvoiceInputStatus =
@@ -399,6 +408,7 @@ export interface UpdateInvoiceInput {
   paid_at?: string | null;
   payment_method?: string | null;
   payment_notes?: string | null;
+  billing_type?: InvoiceBillingType;
 }
 
 export type RecurringInvoiceFrequency =

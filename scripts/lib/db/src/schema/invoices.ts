@@ -7,6 +7,7 @@ export type LineItem = {
   description?: string;
   qty: number;
   unit_price: number;
+  billing_type?: "one_time" | "recurring";
 };
 
 export const recurringInvoicesTable = pgTable("recurring_invoices", {
@@ -44,6 +45,7 @@ export const invoicesTable = pgTable("invoices", {
   payment_method: text("payment_method"),
   payment_notes: text("payment_notes"),
   recurring_id: integer("recurring_id").references(() => recurringInvoicesTable.id),
+  billing_type: text("billing_type", { enum: ["one_time", "recurring"] }).notNull().default("one_time"),
   updated_at: timestamp("updated_at").defaultNow(),
 });
 

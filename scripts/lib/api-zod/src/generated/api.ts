@@ -483,6 +483,7 @@ const LineItemSchema = zod.object({
   description: zod.string().optional(),
   qty: zod.number(),
   unit_price: zod.number(),
+  billing_type: zod.enum(["one_time", "recurring"]).optional(),
 });
 
 export const NewContactSchema = zod.object({
@@ -505,6 +506,7 @@ export const CreateInvoiceBody = zod.object({
   notes: zod.string().nullish(),
   thank_you_message: zod.string().nullish(),
   recurring_id: zod.number().nullish(),
+  billing_type: zod.enum(["one_time", "recurring"]).optional().default("one_time"),
 });
 
 /**
@@ -527,6 +529,7 @@ export const UpdateInvoiceBody = zod.object({
   paid_at: zod.string().nullish(),
   payment_method: zod.string().nullish(),
   payment_notes: zod.string().nullish(),
+  billing_type: zod.enum(["one_time", "recurring"]).optional(),
 });
 
 export const UpdateInvoiceResponse = zod.object({

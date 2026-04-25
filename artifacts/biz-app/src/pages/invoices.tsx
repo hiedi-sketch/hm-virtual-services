@@ -38,12 +38,15 @@ import { formatCurrency, cn } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+type BillingKind = "one_time" | "recurring";
+
 type DraftItem = {
   _id: string;
   name: string;
   description: string;
   qty: number;
   unit_price: number;
+  billing_type: BillingKind;
 };
 
 type StatusFilter = "all" | "draft" | "sent" | "unpaid" | "paid" | "void" | "recurring" | "estimates";
@@ -55,6 +58,7 @@ function newItem(overrides?: Partial<DraftItem>): DraftItem {
     description: "",
     qty: 1,
     unit_price: 0,
+    billing_type: "recurring",
     ...overrides,
   };
 }
@@ -64,7 +68,7 @@ function calcTotal(items: DraftItem[]) {
 }
 
 function draftToLineItem(d: DraftItem): LineItem {
-  return { name: d.name, description: d.description || undefined, qty: d.qty, unit_price: d.unit_price };
+  return { name: d.name, description: d.description || undefined, qty: d.qty, unit_price: d.unit_price, billing_type: d.billing_type };
 }
 
 const PAYMENT_METHODS = [
@@ -166,27 +170,32 @@ function ToggleDiv({ value, onChange, label, sublabel }: {
 // ── Line Items Editor ─────────────────────────────────────────────────────────
 
 function LineItemsEditor({
-  items, onChange, services,
+  items, onChange, services, invoiceBillingType,
 }: {
   items: DraftItem[];
   onChange: (items: DraftItem[]) => void;
   services: { id: number; name: string; description?: string | null; price: number; active: boolean }[];
+  invoiceBillingType: BillingKind;
 }) {
   const [addServiceId, setAddServiceId] = useState("");
 
-  const update = (id: string, field: keyof DraftItem, value: string | number) => {
+  const update = (id: string, field: keyof DraftItem, value: string | number | BillingKind) => {
     onChange(items.map(it => it._id === id ? { ...it, [field]: value } : it));
   };
   const remove = (id: string) => onChange(items.filter(it => it._id !== id));
-  const addCustom = () => onChange([...items, newItem()]);
+  const addCustom = () => onChange([...items, newItem({ billing_type: invoiceBillingType })]);
   const addFromService = () => {
     if (!addServiceId) return;
     const svc = services.find(s => String(s.id) === addServiceId);
     if (!svc) return;
-    onChange([...items, newItem({ name: svc.name, description: svc.description ?? "", qty: 1, unit_price: svc.price })]);
+    onChange([...items, newItem({ name: svc.name, description: svc.description ?? "", qty: 1, unit_price: svc.price, billing_type: invoiceBillingType })]);
     setAddServiceId("");
   };
   const activeServices = services.filter(s => s.active);
+
+  const toggleItemBilling = (id: string, current: BillingKind) => {
+    update(id, "billing_type", current === "recurring" ? "one_time" : "recurring");
+  };
 
   return (
     <div className="space-y-3">
@@ -202,11 +211,11 @@ function LineItemsEditor({
       )}
       {items.length > 0 && (
         <div className="rounded-xl border border-slate-200 overflow-hidden">
-          <div className="grid grid-cols-[1fr_3fr_2fr_1.5fr_1.5fr_auto] gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-            <span>Qty</span><span>Item</span><span>Description</span><span>Unit Price</span><span className="text-right">Total</span><span />
+          <div className="grid grid-cols-[1fr_3fr_2fr_1.5fr_1.5fr_auto_auto] gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            <span>Qty</span><span>Item</span><span>Description</span><span>Unit Price</span><span className="text-right">Total</span><span className="text-center">Type</span><span />
           </div>
           {items.map(it => (
-            <div key={it._id} className="grid grid-cols-[1fr_3fr_2fr_1.5fr_1.5fr_auto] gap-2 px-3 py-2 border-b border-slate-100 last:border-0 items-center">
+            <div key={it._id} className="grid grid-cols-[1fr_3fr_2fr_1.5fr_1.5fr_auto_auto] gap-2 px-3 py-2 border-b border-slate-100 last:border-0 items-center">
               <input type="number" min={0.01} step={0.01} value={it.qty}
                 className="w-full border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                 onChange={e => update(it._id, "qty", Number(e.target.value))} />
@@ -220,6 +229,18 @@ function LineItemsEditor({
                 className="w-full border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                 onChange={e => update(it._id, "unit_price", Number(e.target.value))} />
               <span className="text-right text-sm font-medium text-slate-700">{formatCurrency(it.qty * it.unit_price)}</span>
+              <button
+                type="button"
+                title={it.billing_type === "recurring" ? "Recurring — click to set as one-time" : "One-time — click to set as recurring"}
+                onClick={() => toggleItemBilling(it._id, it.billing_type)}
+                className={cn(
+                  "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors whitespace-nowrap",
+                  it.billing_type === "recurring"
+                    ? "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                    : "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                )}>
+                {it.billing_type === "recurring" ? <><Repeat className="w-2.5 h-2.5" /> Rec</> : <><span className="text-[9px] font-bold">1×</span> One</>}
+              </button>
               <button type="button" onClick={() => remove(it._id)} className="p-1 text-slate-300 hover:text-red-500 transition-colors">
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -398,6 +419,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   const isEdit = !!invoice;
   const initialDocType: "invoice" | "estimate" = invoice?.type === "estimate" ? "estimate" : "invoice";
   const [docType, setDocType] = useState<"invoice" | "estimate">(initialDocType);
+  const [billingType, setBillingType] = useState<BillingKind>((invoice as any)?.billing_type ?? "one_time");
 
   // Recipient mode — only applies when creating
   const [recipientMode, setRecipientMode] = useState<RecipientMode>("client");
@@ -419,10 +441,23 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
     invoice && (!invoice.line_items || invoice.line_items.length === 0) ? String(invoice.amount) : ""
   );
   const [lineItems, setLineItems] = useState<DraftItem[]>(
-    invoice?.line_items?.map(li => ({ _id: Math.random().toString(36).slice(2), name: li.name, description: li.description ?? "", qty: li.qty, unit_price: li.unit_price })) ?? []
+    invoice?.line_items?.map(li => ({
+      _id: Math.random().toString(36).slice(2),
+      name: li.name,
+      description: li.description ?? "",
+      qty: li.qty,
+      unit_price: li.unit_price,
+      billing_type: (li as any).billing_type ?? "recurring",
+    })) ?? []
   );
   const [showAdvanced, setShowAdvanced] = useState(!!(invoice?.notes || invoice?.thank_you_message));
   const [showPreview, setShowPreview] = useState(false);
+
+  // When invoice billing type changes, update all line items to match
+  const handleBillingTypeChange = (kind: BillingKind) => {
+    setBillingType(kind);
+    setLineItems(prev => prev.map(it => ({ ...it, billing_type: kind })));
+  };
 
   const resolvedClientName = recipientMode === "client"
     ? (clients.find(c => String(c.id) === clientId)?.name ?? "")
@@ -456,6 +491,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
     const base = {
       amount: total,
       type: docType,
+      billing_type: billingType,
       issue_date: issueDate || null,
       due_date: dueDate,
       status: currentStatus,
@@ -485,18 +521,36 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {/* Document type toggle */}
-      {!isEdit && (
-        <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
-          <button type="button" onClick={() => handleDocTypeChange("invoice")}
-            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", docType === "invoice" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
-            Invoice
-          </button>
-          <button type="button" onClick={() => handleDocTypeChange("estimate")}
-            className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", docType === "estimate" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
-            Estimate
-          </button>
+      <div className="flex flex-wrap gap-4 items-end">
+        {!isEdit && (
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Document Type</label>
+            <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+              <button type="button" onClick={() => handleDocTypeChange("invoice")}
+                className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", docType === "invoice" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
+                Invoice
+              </button>
+              <button type="button" onClick={() => handleDocTypeChange("estimate")}
+                className={cn("px-4 py-1.5 rounded-md text-sm font-medium transition-colors", docType === "estimate" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
+                Estimate
+              </button>
+            </div>
+          </div>
+        )}
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Billing Schedule</label>
+          <div className="flex gap-1 p-1 bg-slate-100 rounded-lg w-fit">
+            <button type="button" onClick={() => handleBillingTypeChange("one_time")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors", billingType === "one_time" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
+              <span className="text-xs font-bold">1×</span> One-Time
+            </button>
+            <button type="button" onClick={() => handleBillingTypeChange("recurring")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors", billingType === "recurring" ? "bg-white shadow-sm text-slate-900" : "text-slate-500 hover:text-slate-700")}>
+              <Repeat className="w-3.5 h-3.5" /> Recurring
+            </button>
+          </div>
         </div>
-      )}
+      </div>
 
       {/* Recipient */}
       {!isEdit && (
@@ -595,7 +649,12 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
       </div>
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-2">Line Items {hasItems && <span className="text-blue-500">({lineItems.length})</span>}</label>
-        <LineItemsEditor items={lineItems} onChange={setLineItems} services={services} />
+        <LineItemsEditor items={lineItems} onChange={setLineItems} services={services} invoiceBillingType={billingType} />
+        {billingType === "recurring" && lineItems.length > 0 && (
+          <p className="text-[11px] text-slate-400 mt-1">
+            Click the <span className="font-semibold text-blue-600">Rec</span> / <span className="font-semibold text-amber-600">One</span> badge on any line item to override its billing schedule individually.
+          </p>
+        )}
       </div>
       {!hasItems && (
         <div>
@@ -850,7 +909,7 @@ function RecurringInvoiceForm({ clients, services, onSubmit, onCancel, isPending
       </div>
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-2">Line Items</label>
-        <LineItemsEditor items={lineItems} onChange={setLineItems} services={services} />
+        <LineItemsEditor items={lineItems} onChange={setLineItems} services={services} invoiceBillingType="recurring" />
       </div>
       {!hasItems && (
         <div>
