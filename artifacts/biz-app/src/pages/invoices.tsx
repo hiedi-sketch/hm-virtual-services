@@ -178,11 +178,23 @@ function LineItemsEditor({
   invoiceBillingType: BillingKind;
 }) {
   const [addServiceId, setAddServiceId] = useState("");
+  // Track raw string input for unit_price so users can type "-" before digits
+  const [priceRaw, setPriceRaw] = useState<Record<string, string>>({});
 
   const update = (id: string, field: keyof DraftItem, value: string | number | BillingKind) => {
     onChange(items.map(it => it._id === id ? { ...it, [field]: value } : it));
   };
-  const remove = (id: string) => onChange(items.filter(it => it._id !== id));
+
+  const handlePriceInput = (id: string, raw: string) => {
+    setPriceRaw(prev => ({ ...prev, [id]: raw }));
+    const num = parseFloat(raw);
+    if (!isNaN(num)) update(id, "unit_price", num);
+  };
+
+  const remove = (id: string) => {
+    setPriceRaw(prev => { const n = { ...prev }; delete n[id]; return n; });
+    onChange(items.filter(it => it._id !== id));
+  };
   const addCustom = () => onChange([...items, newItem({ billing_type: invoiceBillingType })]);
   const addFromService = () => {
     if (!addServiceId) return;
@@ -225,9 +237,14 @@ function LineItemsEditor({
               <input type="text" placeholder="Description" value={it.description}
                 className="w-full border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
                 onChange={e => update(it._id, "description", e.target.value)} />
-              <input type="number" step={0.01} placeholder="0.00" value={it.unit_price}
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={priceRaw[it._id] ?? String(it.unit_price)}
                 className="w-full border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-                onChange={e => update(it._id, "unit_price", Number(e.target.value))} />
+                onChange={e => handlePriceInput(it._id, e.target.value)}
+              />
               <span className={cn("text-right text-sm font-medium", it.qty * it.unit_price < 0 ? "text-red-600" : "text-slate-700")}>
                 {formatCurrency(it.qty * it.unit_price)}
               </span>
@@ -703,7 +720,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
       {!hasItems && (
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Total Amount ($) <span className="text-red-400">*</span></label>
-          <input type="number" min="0" step="0.01" className={inputCls} placeholder="0.00" value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
+          <input type="text" inputMode="decimal" className={inputCls} placeholder="0.00" value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
         </div>
       )}
       <div>
@@ -958,7 +975,7 @@ function RecurringInvoiceForm({ clients, services, onSubmit, onCancel, isPending
       {!hasItems && (
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Amount ($) <span className="text-red-400">*</span></label>
-          <input type="number" min="0" step="0.01" className={inputCls} placeholder="0.00" value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
+          <input type="text" inputMode="decimal" className={inputCls} placeholder="0.00" value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
         </div>
       )}
       <div className="border-t border-slate-100 pt-4 space-y-2">
