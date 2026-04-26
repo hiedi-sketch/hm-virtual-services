@@ -35,7 +35,8 @@ async function getLocationId(): Promise<string> {
 
 // ── Public config for Web Payments SDK ───────────────────────────────────────
 export async function getSquareAppConfig() {
-  const locationId = await getLocationId();
+  let locationId = "";
+  try { locationId = await getLocationId(); } catch { /* non-fatal */ }
   return {
     applicationId: process.env.SQUARE_APPLICATION_ID ?? "",
     locationId,
