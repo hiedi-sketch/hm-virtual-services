@@ -60,6 +60,12 @@ export async function createSquarePaymentLink({
       },
       checkout_options: {
         redirect_url: successUrl,
+        accepted_payment_methods: {
+          card: true,
+          bank_account: true,
+          cash_app_pay: false,
+          buy_now_pay_later: false,
+        },
       },
     }),
   });
