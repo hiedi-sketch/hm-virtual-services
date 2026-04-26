@@ -853,6 +853,7 @@ export default function ClientDetail() {
                   <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Monthly Value</th>
                   <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Budgeted Hrs</th>
                   <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Hourly Rate</th>
+                  <th className="text-right px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Last Paid</th>
                   <th className="px-3 py-3" />
                 </tr>
               </thead>
@@ -952,6 +953,21 @@ export default function ClientDetail() {
                             <span className="font-medium text-slate-600">{formatCurrency(effRate)}/hr</span>
                           ) : (
                             <span className="text-slate-300 text-xs">—</span>
+                          )}
+                        </td>
+                        {/* Last Paid */}
+                        <td className="px-4 py-3.5 text-right">
+                          {cs.last_paid_at ? (
+                            <div>
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border bg-emerald-50 text-emerald-700 border-emerald-100">
+                                Paid
+                              </span>
+                              <p className="text-[9px] text-slate-400 mt-0.5">
+                                {new Date(cs.last_paid_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-xs">Never</span>
                           )}
                         </td>
                         {/* Actions */}

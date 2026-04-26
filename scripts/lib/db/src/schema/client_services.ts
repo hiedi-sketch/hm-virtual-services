@@ -16,6 +16,7 @@ export const clientServicesTable = pgTable("client_services", {
   monthly_hours_reset_day: integer("monthly_hours_reset_day"),
   allow_rollover: boolean("allow_rollover").notNull().default(false),
   rollover_cap_hours: real("rollover_cap_hours"),
+  last_paid_at: text("last_paid_at"),
   created_at: text("created_at")
     .notNull()
     .$defaultFn(() => new Date().toISOString()),

@@ -135,6 +135,7 @@ router.get("/clients/:clientId/services", requireAuth, async (req, res) => {
       custom_hourly_rate: clientServicesTable.custom_hourly_rate,
       custom_budgeted_hours: clientServicesTable.custom_budgeted_hours,
       monthly_hours_reset_day: clientServicesTable.monthly_hours_reset_day,
+      last_paid_at: clientServicesTable.last_paid_at,
       created_at: clientServicesTable.created_at,
       name: servicesTable.name,
       description: servicesTable.description,

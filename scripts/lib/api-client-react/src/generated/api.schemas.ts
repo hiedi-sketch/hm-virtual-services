@@ -553,6 +553,8 @@ export interface ClientService {
   custom_price?: number | null;
   custom_hourly_rate?: number | null;
   custom_budgeted_hours?: number | null;
+  monthly_hours_reset_day?: number | null;
+  last_paid_at?: string | null;
   created_at: string;
   name?: string | null;
   description?: string | null;

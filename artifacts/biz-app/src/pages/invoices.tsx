@@ -494,6 +494,41 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   );
   const [showAdvanced, setShowAdvanced] = useState(!!(invoice?.notes || invoice?.thank_you_message));
   const [showPreview, setShowPreview] = useState(false);
+  const [packagesBanner, setPackagesBanner] = useState(false);
+
+  // Auto-load client packages as line items when a client is selected (new invoices only)
+  useEffect(() => {
+    if (isEdit || recipientMode !== "client" || !clientId) {
+      setPackagesBanner(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/clients/${clientId}/services`, { credentials: "include" });
+        if (!res.ok || cancelled) return;
+        const svcs: Array<{
+          service_id: number;
+          name: string | null;
+          description: string | null;
+          custom_price: number | null;
+          price: number | null;
+        }> = await res.json();
+        if (cancelled) return;
+        if (svcs.length === 0) { setPackagesBanner(false); return; }
+        setLineItems(svcs.map(svc => newItem({
+          name: svc.name ?? "",
+          description: svc.description ?? "",
+          qty: 1,
+          unit_price: svc.custom_price ?? svc.price ?? 0,
+          billing_type: billingType,
+        })));
+        setManualAmount("");
+        setPackagesBanner(true);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [clientId, recipientMode, isEdit]);
 
   // When invoice billing type changes, update all line items and auto-fill service period
   const handleBillingTypeChange = (kind: BillingKind) => {
@@ -706,6 +741,12 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
             <label className="block text-xs font-medium text-slate-500 mb-1">Service Period End</label>
             <input type="date" className={inputCls} value={servicePeriodEnd} onChange={e => setServicePeriodEnd(e.target.value)} />
           </div>
+        </div>
+      )}
+      {packagesBanner && (
+        <div className="flex items-start gap-2.5 bg-[#266b75]/8 border border-[#266b75]/20 rounded-xl px-4 py-3 text-sm text-[#266b75]">
+          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>Package line items auto-loaded from this client's assigned services. Edit or remove them as needed.</span>
         </div>
       )}
       <div>

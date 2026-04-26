@@ -393,6 +393,18 @@ router.patch("/invoices/:id", requireAdmin, async (req, res) => {
   const statusNote = body.status ? ` → ${body.status}` : "";
   logAudit("invoice", id, "updated", `Invoice #${id} updated${statusNote}`, { id: actor?.id, name: actor?.name });
 
+  // When an invoice is marked paid, stamp last_paid_at on all the client's assigned packages
+  if (body.status === "paid" && updated.client_id) {
+    (async () => {
+      try {
+        await db
+          .update(clientServicesTable)
+          .set({ last_paid_at: new Date().toISOString() })
+          .where(eq(clientServicesTable.client_id, updated.client_id));
+      } catch { /* ignore */ }
+    })();
+  }
+
   // Notify admins on meaningful status changes
   if (body.status) {
     (async () => {
