@@ -170,6 +170,117 @@ export async function processNoncePayment({
   };
 }
 
+// ── Square Invoices API ───────────────────────────────────────────────────────
+
+export async function createSquareInvoice({
+  localInvoiceId,
+  customerId,
+  amountCents,
+  dueDate,
+  description,
+  invoiceNumber,
+  lineItems,
+}: {
+  localInvoiceId: number;
+  customerId: string;
+  amountCents: number;
+  dueDate: string; // YYYY-MM-DD
+  description?: string | null;
+  invoiceNumber?: string;
+  lineItems?: Array<{ name: string; qty: number; unit_price: number }> | null;
+}): Promise<string> {
+  const locationId = await getLocationId();
+
+  // Build Square order line items
+  const squareLineItems = lineItems && lineItems.length > 0
+    ? lineItems.map(li => ({
+        name: li.name,
+        quantity: String(li.qty),
+        base_price_money: { amount: Math.round(li.unit_price * 100), currency: "USD" },
+      }))
+    : [{
+        name: description ?? `Invoice #${localInvoiceId}`,
+        quantity: "1",
+        base_price_money: { amount: amountCents, currency: "USD" },
+      }];
+
+  // Create an order first (Square Invoices require an order)
+  const orderRes = await fetch(`${SQUARE_BASE}/v2/orders`, {
+    method: "POST",
+    headers: squareHeaders(),
+    body: JSON.stringify({
+      idempotency_key: `order-inv-${localInvoiceId}-${Date.now()}`,
+      order: {
+        location_id: locationId,
+        customer_id: customerId,
+        line_items: squareLineItems,
+        reference_id: String(localInvoiceId),
+      },
+    }),
+  });
+  const orderData = (await orderRes.json()) as any;
+  if (!orderRes.ok) throw new Error(orderData.errors?.[0]?.detail ?? "Failed to create Square order");
+  const orderId = orderData.order.id as string;
+
+  // Create the invoice
+  const invoiceRes = await fetch(`${SQUARE_BASE}/v2/invoices`, {
+    method: "POST",
+    headers: squareHeaders(),
+    body: JSON.stringify({
+      idempotency_key: `inv-sq-${localInvoiceId}-${Date.now()}`,
+      invoice: {
+        location_id: locationId,
+        order_id: orderId,
+        primary_recipient: { customer_id: customerId },
+        payment_requests: [{
+          request_type: "BALANCE",
+          due_date: dueDate,
+          automatic_payment_source: "NONE",
+        }],
+        delivery_method: "SHARE_MANUALLY",
+        invoice_number: invoiceNumber ?? `INV-${localInvoiceId}`,
+        description: description ?? undefined,
+        title: `Invoice #${localInvoiceId}`,
+      },
+    }),
+  });
+  const invoiceData = (await invoiceRes.json()) as any;
+  if (!invoiceRes.ok) throw new Error(invoiceData.errors?.[0]?.detail ?? "Failed to create Square invoice");
+
+  const squareInvoiceId = invoiceData.invoice.id as string;
+  const version = invoiceData.invoice.version as number;
+
+  // Publish it so it appears as UNPAID in the Square dashboard
+  const pubRes = await fetch(`${SQUARE_BASE}/v2/invoices/${squareInvoiceId}/publish`, {
+    method: "POST",
+    headers: squareHeaders(),
+    body: JSON.stringify({
+      idempotency_key: `pub-${squareInvoiceId}-${Date.now()}`,
+      version,
+    }),
+  });
+  if (!pubRes.ok) {
+    const pubData = (await pubRes.json()) as any;
+    throw new Error(pubData.errors?.[0]?.detail ?? "Failed to publish Square invoice");
+  }
+
+  return squareInvoiceId;
+}
+
+export async function cancelSquareInvoice(squareInvoiceId: string): Promise<void> {
+  // Fetch current version first
+  const getRes = await fetch(`${SQUARE_BASE}/v2/invoices/${squareInvoiceId}`, { headers: squareHeaders() });
+  const getData = (await getRes.json()) as any;
+  if (!getRes.ok) return; // Already gone or not found
+  const version = getData.invoice?.version ?? 0;
+
+  await fetch(`${SQUARE_BASE}/v2/invoices/${squareInvoiceId}/cancel`, {
+    method: "POST",
+    headers: squareHeaders(),
+    body: JSON.stringify({ version }),
+  });
+}
+
 // ── Payments API — charge card on file ───────────────────────────────────────
 export async function chargeCardOnFile({
   customerId,

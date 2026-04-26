@@ -52,6 +52,8 @@ export const invoicesTable = pgTable("invoices", {
   service_period_end: text("service_period_end"),
   decline_reason: text("decline_reason"),
   action_token: text("action_token"),
+  /** Square Invoice ID for two-way sync with the Square Dashboard */
+  square_invoice_id: text("square_invoice_id"),
   updated_at: timestamp("updated_at").defaultNow(),
 });
 

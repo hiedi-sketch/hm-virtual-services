@@ -16,6 +16,7 @@ import {
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
 import { notifyAdmins, notifyClientUser } from "../lib/notify";
+import { createOrGetSquareCustomer, createSquareInvoice, cancelSquareInvoice } from "../lib/squareClient";
 
 const router: IRouter = Router();
 
@@ -407,6 +408,18 @@ router.patch("/invoices/:id", requireAdmin, async (req, res) => {
     })();
   }
 
+  // If voided, cancel the corresponding Square invoice (fire-and-forget)
+  if (body.status === "void" && updated.square_invoice_id) {
+    (async () => {
+      try {
+        await cancelSquareInvoice(updated.square_invoice_id!);
+        console.log(`[Square] Invoice #${id} cancelled in Square → ${updated.square_invoice_id}`);
+      } catch (err) {
+        console.error(`[Square] Failed to cancel Square invoice ${updated.square_invoice_id}:`, err);
+      }
+    })();
+  }
+
   // Notify admins on meaningful status changes
   if (body.status) {
     (async () => {
@@ -741,6 +754,45 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
   logAudit("invoice", id, "sent", `${docLabel} #${id} sent to ${row.client_email}${recurringSeriesId ? ` — recurring series #${recurringSeriesId} created` : ""}`, { id: actor?.id, name: actor?.name });
   if (recurringSeriesId) {
     logAudit("recurring_invoice", recurringSeriesId, "created", `Recurring series #${recurringSeriesId} auto-created from invoice #${id}`, { id: actor?.id, name: actor?.name });
+  }
+
+  // Fire-and-forget: sync invoice to Square Dashboard (invoices only, not estimates)
+  if (!isEstimate && row.client_id && row.client_email) {
+    (async () => {
+      try {
+        // Get client's Square customer ID (or create one)
+        const [clientRow] = await db
+          .select({ square_customer_id: clientsTable.square_customer_id, name: clientsTable.name, email: clientsTable.email })
+          .from(clientsTable)
+          .where(eq(clientsTable.id, row.client_id!));
+
+        let squareCustomerId = clientRow?.square_customer_id ?? null;
+        if (!squareCustomerId && clientRow?.email) {
+          squareCustomerId = await createOrGetSquareCustomer({
+            clientId: row.client_id!,
+            email: clientRow.email,
+            name: clientRow.name ?? undefined,
+          });
+        }
+        if (!squareCustomerId) return;
+
+        const squareInvId = await createSquareInvoice({
+          localInvoiceId: id,
+          customerId: squareCustomerId,
+          amountCents: Math.round(row.amount * 100),
+          dueDate: row.due_date,
+          description: row.description,
+          invoiceNumber: `INV-${id}`,
+          lineItems: row.line_items as Array<{ name: string; qty: number; unit_price: number }> | null,
+        });
+
+        // Save the Square invoice ID on our record
+        await db.update(invoicesTable).set({ square_invoice_id: squareInvId } as any).where(eq(invoicesTable.id, id));
+        console.log(`[Square] Invoice #${id} synced → ${squareInvId}`);
+      } catch (err) {
+        console.error(`[Square] Failed to sync invoice #${id}:`, err);
+      }
+    })();
   }
 
   // Fire-and-forget: in-app notification
