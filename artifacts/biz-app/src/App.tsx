@@ -22,6 +22,7 @@ import Login from "@/pages/login";
 import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import ClientPortal from "@/pages/client-portal";
+import EstimateResponsePage from "@/pages/estimate-response";
 import NotificationsPage from "@/pages/notifications";
 import Backup from "@/pages/backup";
 import Services from "@/pages/services";
@@ -60,9 +61,10 @@ function Router() {
     );
   }
 
-  // Always-public password reset pages
+  // Always-public pages (no auth required)
   if (location === "/forgot-password") return <ForgotPassword />;
   if (location.startsWith("/reset-password")) return <ResetPassword />;
+  if (location === "/estimate-response") return <EstimateResponsePage />;
 
   // Public marketing pages — accessible without login
   if (location === "/" && !user) return <PublicHome />;

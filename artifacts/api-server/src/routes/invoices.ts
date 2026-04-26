@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import crypto from "crypto";
 import { z } from "zod";
 import { db } from "@workspace/db";
 import { invoicesTable, recurringInvoicesTable, clientsTable, tasksTable, timeEntriesTable, leadsTable, servicesTable, clientServicesTable } from "@workspace/db";
@@ -628,20 +629,24 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
     : "";
 
   const portalOrigin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-  const estimateActionsHtml = isEstimate ? `
+
+  // Generate a one-time action token for estimates (public, no-login-required links)
+  const actionToken = isEstimate ? crypto.randomBytes(32).toString("hex") : null;
+
+  const estimateActionsHtml = isEstimate && actionToken ? `
     <div style="text-align:center;margin:32px 0;">
       <p style="color:#475569;font-size:14px;margin:0 0 16px;">Please review the proposal above and let us know how you'd like to proceed:</p>
       <div style="display:inline-block;">
-        <a href="${portalOrigin}/portal?onboard=${row.id}"
+        <a href="${portalOrigin}/estimate-response?token=${actionToken}&action=accept"
           style="display:inline-block;background:#16a34a;color:#ffffff;font-size:15px;font-weight:700;padding:14px 32px;border-radius:8px;text-decoration:none;margin:0 6px;">
           ✓ Accept &amp; Get Started
         </a>
-        <a href="${portalOrigin}/portal?decline=${row.id}"
+        <a href="${portalOrigin}/estimate-response?token=${actionToken}&action=decline"
           style="display:inline-block;background:#ffffff;color:#64748b;font-size:15px;font-weight:600;padding:13px 32px;border-radius:8px;text-decoration:none;border:2px solid #e2e8f0;margin:0 6px;">
           Request Changes
         </a>
       </div>
-      <p style="margin:12px 0 0;font-size:12px;color:#94a3b8;">You'll be prompted to log in if you haven't already.</p>
+      <p style="margin:12px 0 0;font-size:12px;color:#94a3b8;">No account needed — respond directly from this email.</p>
     </div>` : "";
 
   const emailBody = `
@@ -750,12 +755,13 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
     }
   }
 
-  // Update invoice status to "sent" and link to recurring series if created
+  // Update invoice status to "sent", store action token, and link to recurring series if created
   const [updated] = await db
     .update(invoicesTable)
     .set({
       status: "sent",
       updated_at: new Date(),
+      ...(actionToken ? { action_token: actionToken } as any : {}),
       ...(recurringSeriesId ? { recurring_id: recurringSeriesId } : {}),
     })
     .where(eq(invoicesTable.id, id))
