@@ -587,35 +587,20 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       </table>`
     : "";
 
-  // Try to generate a Square payment link for the Pay Now button
-  let payUrl: string | null = null;
-  try {
-    const { createSquarePaymentLink } = await import("../lib/squareClient");
-    const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-    payUrl = await createSquarePaymentLink({
-      amountDollars: row.amount,
-      name: `Invoice #${row.id}`,
-      invoiceId: row.id,
-      successUrl: `${origin}/invoices?payment=success&invoice=${row.id}`,
-    });
-  } catch {
-    // Square not configured or failed — email sent without pay button
-  }
+  const portalOrigin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
 
-  const payButtonHtml = payUrl
+  // Generate a one-time action token for both estimates (accept/decline) and invoices (pay page)
+  const actionToken = crypto.randomBytes(32).toString("hex");
+
+  const payButtonHtml = !isEstimate
     ? `<div style="text-align:center;margin:28px 0;">
-        <a href="${payUrl}"
+        <a href="${portalOrigin}/pay/${actionToken}"
           style="display:inline-block;background:#266b75;color:#ffffff;font-size:16px;font-weight:700;padding:14px 36px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
           Pay Now — ${fmtAmount(row.amount)}
         </a>
-        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Square. Cards accepted.</p>
+        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Square. Cards &amp; bank transfers accepted.</p>
       </div>`
     : "";
-
-  const portalOrigin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-
-  // Generate a one-time action token for estimates (public, no-login-required links)
-  const actionToken = isEstimate ? crypto.randomBytes(32).toString("hex") : null;
 
   const estimateActionsHtml = isEstimate && actionToken ? `
     <div style="text-align:center;margin:32px 0;">

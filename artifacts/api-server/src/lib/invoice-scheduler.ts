@@ -233,7 +233,7 @@ export async function sendReminderForInvoice(
   type: ReminderType,
   skipDuplicateCheck = false,
 ): Promise<{ sent: boolean; reason?: string }> {
-  // Load invoice + client
+  // Load invoice + client (including autopay fields)
   const [row] = await db
     .select({
       id: invoicesTable.id,
@@ -245,8 +245,12 @@ export async function sendReminderForInvoice(
       line_items: invoicesTable.line_items,
       notes: invoicesTable.notes,
       thank_you_message: invoicesTable.thank_you_message,
+      action_token: (invoicesTable as any).action_token,
       client_name: clientsTable.name,
       client_email: clientsTable.email,
+      square_customer_id: (clientsTable as any).square_customer_id,
+      square_card_id: (clientsTable as any).square_card_id,
+      autopay_enabled: (clientsTable as any).autopay_enabled,
     })
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.client_id, clientsTable.id))
@@ -264,6 +268,46 @@ export async function sendReminderForInvoice(
       .where(and(eq(invoiceRemindersTable.invoice_id, invoiceId), eq(invoiceRemindersTable.type, type)))
       .limit(1);
     if (existing.length > 0) return { sent: false, reason: "Already sent" };
+  }
+
+  // ── Autopay: charge card on file instead of sending reminder ─────────────
+  if (row.autopay_enabled && row.square_customer_id && row.square_card_id) {
+    try {
+      const { chargeCardOnFile } = await import("./squareClient");
+      const result = await chargeCardOnFile({
+        customerId: row.square_customer_id,
+        cardId: row.square_card_id,
+        amountCents: Math.round(row.amount * 100),
+        note: `Autopay — Invoice #${row.id}`,
+        idempotencyKey: `autopay-${row.id}-${type}-${Date.now()}`,
+      });
+
+      const paidAt = new Date().toISOString().slice(0, 10);
+      await db.update(invoicesTable)
+        .set({ status: "paid", paid_at: paidAt, payment_method: "square_autopay" })
+        .where(eq(invoicesTable.id, row.id));
+      await db.insert(invoiceRemindersTable).values({ invoice_id: invoiceId, type });
+
+      // Send autopay receipt
+      const receiptBody = `
+        <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;">Autopay Processed</h2>
+        <p style="color:#475569;">Hi ${row.client_name ?? "there"},</p>
+        <p style="color:#475569;">Your saved payment method was automatically charged for Invoice #${row.id}.</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:8px;margin:20px 0;">
+          <tr>
+            <td style="padding:16px 20px;color:#94a3b8;font-size:13px;">Amount Charged</td>
+            <td style="padding:16px 20px;text-align:right;color:#ffffff;font-size:22px;font-weight:700;">${fmtAmount(row.amount)}</td>
+          </tr>
+        </table>
+        ${result.receiptUrl ? `<p style="text-align:center;"><a href="${result.receiptUrl}" style="color:#266b75;font-size:14px;">View Square Receipt</a></p>` : ""}
+        <p style="color:#64748b;font-size:13px;">Invoice #${row.id} is now marked paid. Thank you!</p>
+      `;
+      await sendMail(row.client_email, `Autopay Processed — Invoice #${row.id}`, template(receiptBody));
+      logger.info({ invoiceId, type }, "Autopay charged successfully");
+      return { sent: true };
+    } catch (err: any) {
+      logger.error({ err: err?.message, invoiceId }, "Autopay charge failed — falling back to reminder email");
+    }
   }
 
   const payUrl = await tryCreateSquareUrl(row.id, row.amount, row.description, row.due_date);
@@ -413,33 +457,77 @@ export async function runDailyRecurringInvoices(): Promise<void> {
     // Auto-send if configured
     if (template_.auto_send) {
       try {
-        // Load client email
-        const [client] = await db.select({ email: clientsTable.email, name: clientsTable.name })
+        // Load client including autopay fields
+        const [client] = await db.select({
+          email: clientsTable.email,
+          name: clientsTable.name,
+          square_customer_id: (clientsTable as any).square_customer_id,
+          square_card_id: (clientsTable as any).square_card_id,
+          autopay_enabled: (clientsTable as any).autopay_enabled,
+        })
           .from(clientsTable)
           .where(eq(clientsTable.id, template_.client_id));
 
         if (client?.email) {
-          const payUrl = await tryCreateSquareUrl(invoice.id, invoice.amount, invoice.description, invoice.due_date);
-          const body = buildInvoiceEmail({
-            invoiceId: invoice.id,
-            clientName: client.name,
-            amount: invoice.amount,
-            dueDate: invoice.due_date,
-            description: invoice.description,
-            lineItems: invoice.line_items as any,
-            notes: invoice.notes,
-            thankYouMessage: invoice.thank_you_message,
-            payUrl,
-            servicePeriodStart: invoice.service_period_start,
-            servicePeriodEnd: invoice.service_period_end,
-          });
-          await sendMail(
-            client.email,
-            `Invoice #${invoice.id} — ${fmtAmount(invoice.amount)} due ${fmtDate(invoice.due_date)}`,
-            template(body),
-          );
-          await db.update(invoicesTable).set({ status: "sent" }).where(eq(invoicesTable.id, invoice.id));
-          logger.info({ invoiceId: invoice.id }, "Recurring invoice auto-sent");
+          // Try autopay first
+          let charged = false;
+          if (client.autopay_enabled && client.square_customer_id && client.square_card_id) {
+            try {
+              const { chargeCardOnFile } = await import("./squareClient");
+              const result = await chargeCardOnFile({
+                customerId: client.square_customer_id,
+                cardId: client.square_card_id,
+                amountCents: Math.round(invoice.amount * 100),
+                note: `Autopay — Invoice #${invoice.id}`,
+                idempotencyKey: `autopay-recurring-${invoice.id}-${Date.now()}`,
+              });
+              const paidAt = new Date().toISOString().slice(0, 10);
+              await db.update(invoicesTable)
+                .set({ status: "paid", paid_at: paidAt, payment_method: "square_autopay" })
+                .where(eq(invoicesTable.id, invoice.id));
+              const receiptBody = `
+                <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;">Autopay Processed</h2>
+                <p style="color:#475569;">Hi ${client.name ?? "there"},</p>
+                <p style="color:#475569;">Your saved payment method was automatically charged for Invoice #${invoice.id}.</p>
+                <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:8px;margin:20px 0;">
+                  <tr>
+                    <td style="padding:16px 20px;color:#94a3b8;font-size:13px;">Amount Charged</td>
+                    <td style="padding:16px 20px;text-align:right;color:#ffffff;font-size:22px;font-weight:700;">${fmtAmount(invoice.amount)}</td>
+                  </tr>
+                </table>
+                ${result.receiptUrl ? `<p style="text-align:center;"><a href="${result.receiptUrl}" style="color:#266b75;">View Square Receipt</a></p>` : ""}
+              `;
+              await sendMail(client.email, `Autopay Processed — Invoice #${invoice.id}`, template(receiptBody));
+              charged = true;
+              logger.info({ invoiceId: invoice.id }, "Recurring invoice autopaid");
+            } catch (autopayErr: any) {
+              logger.error({ err: autopayErr?.message, invoiceId: invoice.id }, "Autopay failed for recurring invoice — falling back to email");
+            }
+          }
+
+          if (!charged) {
+            const payUrl = await tryCreateSquareUrl(invoice.id, invoice.amount, invoice.description, invoice.due_date);
+            const body = buildInvoiceEmail({
+              invoiceId: invoice.id,
+              clientName: client.name,
+              amount: invoice.amount,
+              dueDate: invoice.due_date,
+              description: invoice.description,
+              lineItems: invoice.line_items as any,
+              notes: invoice.notes,
+              thankYouMessage: invoice.thank_you_message,
+              payUrl,
+              servicePeriodStart: invoice.service_period_start,
+              servicePeriodEnd: invoice.service_period_end,
+            });
+            await sendMail(
+              client.email,
+              `Invoice #${invoice.id} — ${fmtAmount(invoice.amount)} due ${fmtDate(invoice.due_date)}`,
+              template(body),
+            );
+            await db.update(invoicesTable).set({ status: "sent" }).where(eq(invoicesTable.id, invoice.id));
+            logger.info({ invoiceId: invoice.id }, "Recurring invoice auto-sent");
+          }
         }
       } catch (err) {
         logger.error({ err, invoiceId: invoice.id }, "Failed to auto-send recurring invoice");

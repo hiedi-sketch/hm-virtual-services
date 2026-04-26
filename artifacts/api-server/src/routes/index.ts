@@ -29,6 +29,7 @@ import emailInboundRouter from "./email-inbound";
 import missiveWebhookRouter from "./missive-webhook";
 import zapierWebhookRouter from "./zapier-webhook";
 import estimateResponseRouter from "./estimate-response";
+import payRouter from "./pay";
 
 const router: IRouter = Router();
 
@@ -62,5 +63,6 @@ router.use(emailInboundRouter);
 router.use(missiveWebhookRouter);
 router.use(zapierWebhookRouter);
 router.use(estimateResponseRouter);
+router.use(payRouter);
 
 export default router;

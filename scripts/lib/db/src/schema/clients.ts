@@ -1,4 +1,4 @@
-import { pgTable, serial, text, real, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -20,6 +20,12 @@ export const clientsTable = pgTable("clients", {
   va_hour_limit: real("va_hour_limit"),
   /** Parent client id — set for sub-clients; null for top-level clients */
   parent_id: integer("parent_id"),
+  /** Square Customer ID for card-on-file / autopay */
+  square_customer_id: text("square_customer_id"),
+  /** Square Card ID saved for autopay */
+  square_card_id: text("square_card_id"),
+  /** Whether autopay is enabled for this client */
+  autopay_enabled: boolean("autopay_enabled").notNull().default(false),
 });
 
 export const insertClientSchema = createInsertSchema(clientsTable).omit({ id: true });

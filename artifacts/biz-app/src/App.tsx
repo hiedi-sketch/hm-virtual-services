@@ -23,6 +23,7 @@ import ForgotPassword from "@/pages/forgot-password";
 import ResetPassword from "@/pages/reset-password";
 import ClientPortal from "@/pages/client-portal";
 import EstimateResponsePage from "@/pages/estimate-response";
+import PayPage from "@/pages/pay";
 import NotificationsPage from "@/pages/notifications";
 import Backup from "@/pages/backup";
 import Services from "@/pages/services";
@@ -65,6 +66,7 @@ function Router() {
   if (location === "/forgot-password") return <ForgotPassword />;
   if (location.startsWith("/reset-password")) return <ResetPassword />;
   if (location === "/estimate-response") return <EstimateResponsePage />;
+  if (location.startsWith("/pay/")) return <PayPage />;
 
   // Public marketing pages — accessible without login
   if (location === "/" && !user) return <PublicHome />;
