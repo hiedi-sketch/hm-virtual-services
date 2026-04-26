@@ -292,8 +292,8 @@ function AcceptView({
         throw new Error(d.error ?? "Something went wrong");
       }
       const data = await res.json();
-      if (data.stripe_url) {
-        window.location.href = data.stripe_url;
+      if (data.payment_url) {
+        window.location.href = data.payment_url;
         return;
       }
       onDone("accepted");

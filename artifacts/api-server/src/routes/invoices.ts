@@ -587,44 +587,28 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       </table>`
     : "";
 
-  // Try to generate a Stripe checkout URL for the Pay Now button
-  let stripePayUrl: string | null = null;
+  // Try to generate a Square payment link for the Pay Now button
+  let payUrl: string | null = null;
   try {
-    const { getUncachableStripeClient } = await import("../lib/stripeClient");
-    const stripe = await getUncachableStripeClient();
+    const { createSquarePaymentLink } = await import("../lib/squareClient");
     const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            unit_amount: Math.round(row.amount * 100),
-            product_data: {
-              name: `Invoice #${row.id}`,
-              description: row.description ?? `Payment due ${fmtDate(row.due_date)}`,
-            },
-          },
-          quantity: 1,
-        },
-      ],
-      metadata: { invoice_id: String(row.id) },
-      success_url: `${origin}/invoices?payment=success&invoice=${row.id}`,
-      cancel_url: `${origin}/invoices?payment=cancelled&invoice=${row.id}`,
+    payUrl = await createSquarePaymentLink({
+      amountDollars: row.amount,
+      name: `Invoice #${row.id}`,
+      invoiceId: row.id,
+      successUrl: `${origin}/invoices?payment=success&invoice=${row.id}`,
     });
-    stripePayUrl = session.url;
   } catch {
-    // Stripe not configured or failed — email sent without pay button
+    // Square not configured or failed — email sent without pay button
   }
 
-  const payButtonHtml = stripePayUrl
+  const payButtonHtml = payUrl
     ? `<div style="text-align:center;margin:28px 0;">
-        <a href="${stripePayUrl}"
+        <a href="${payUrl}"
           style="display:inline-block;background:#266b75;color:#ffffff;font-size:16px;font-weight:700;padding:14px 36px;border-radius:8px;text-decoration:none;letter-spacing:0.01em;">
           Pay Now — ${fmtAmount(row.amount)}
         </a>
-        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Stripe. Cards accepted.</p>
+        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Square. Cards accepted.</p>
       </div>`
     : "";
 
@@ -912,35 +896,20 @@ router.post("/invoices/:id/start-services", requireAuth, async (req, res) => {
 
   // Handle payment
   if (body.payment === "pay_now") {
-    // Create Stripe checkout session for first invoice
-    let stripeUrl: string | null = null;
+    // Create Square payment link for first invoice
+    let paymentUrl: string | null = null;
     try {
-      const { getUncachableStripeClient } = await import("../lib/stripeClient");
-      const stripe = await getUncachableStripeClient();
+      const { createSquarePaymentLink } = await import("../lib/squareClient");
       const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-      const fmtDate = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "payment",
-        line_items: [{
-          price_data: {
-            currency: "usd",
-            unit_amount: Math.round(row.amount * 100),
-            product_data: {
-              name: `Invoice #${firstInvoice.id} — Services starting ${effectiveStartDate}`,
-              description: row.description ?? `First invoice, due ${fmtDate(effectiveStartDate)}`,
-            },
-          },
-          quantity: 1,
-        }],
-        metadata: { invoice_id: String(firstInvoice.id) },
-        success_url: `${origin}/portal?payment=success&invoice=${firstInvoice.id}`,
-        cancel_url: `${origin}/portal?onboard=${id}`,
+      paymentUrl = await createSquarePaymentLink({
+        amountDollars: row.amount,
+        name: `Invoice #${firstInvoice.id} — Services starting ${effectiveStartDate}`,
+        invoiceId: firstInvoice.id,
+        successUrl: `${origin}/portal?payment=success&invoice=${firstInvoice.id}`,
       });
-      stripeUrl = session.url;
-    } catch { /* Stripe not configured */ }
+    } catch { /* Square not configured */ }
 
-    res.json({ success: true, first_invoice_id: firstInvoice.id, recurring_id: recurringRow.id, stripe_url: stripeUrl });
+    res.json({ success: true, first_invoice_id: firstInvoice.id, recurring_id: recurringRow.id, payment_url: paymentUrl });
   } else {
     // Request invoice — send first invoice email
     try {
@@ -949,21 +918,17 @@ router.post("/invoices/:id/start-services", requireAuth, async (req, res) => {
         const fmtAmount = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
         const fmtDate = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-        // Try to get a Stripe pay link
+        // Try to get a Square payment link
         let payUrl: string | null = null;
         try {
-          const { getUncachableStripeClient } = await import("../lib/stripeClient");
-          const stripe = await getUncachableStripeClient();
+          const { createSquarePaymentLink } = await import("../lib/squareClient");
           const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-          const sess = await stripe.checkout.sessions.create({
-            payment_method_types: ["card"],
-            mode: "payment",
-            line_items: [{ price_data: { currency: "usd", unit_amount: Math.round(row.amount * 100), product_data: { name: `Invoice #${firstInvoice.id}` } }, quantity: 1 }],
-            metadata: { invoice_id: String(firstInvoice.id) },
-            success_url: `${origin}/portal?payment=success&invoice=${firstInvoice.id}`,
-            cancel_url: `${origin}/portal`,
+          payUrl = await createSquarePaymentLink({
+            amountDollars: row.amount,
+            name: `Invoice #${firstInvoice.id}`,
+            invoiceId: firstInvoice.id,
+            successUrl: `${origin}/portal?payment=success&invoice=${firstInvoice.id}`,
           });
-          payUrl = sess.url;
         } catch { /* ignore */ }
 
         const payBtnHtml = payUrl
@@ -988,7 +953,7 @@ router.post("/invoices/:id/start-services", requireAuth, async (req, res) => {
       }
     } catch { /* ignore */ }
 
-    res.json({ success: true, first_invoice_id: firstInvoice.id, recurring_id: recurringRow.id, stripe_url: null });
+    res.json({ success: true, first_invoice_id: firstInvoice.id, recurring_id: recurringRow.id, payment_url: null });
   }
 });
 

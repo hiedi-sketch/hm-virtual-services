@@ -64,32 +64,18 @@ function advancePeriod(dateStr: string, frequency: string, intervalDays: number 
   return d.toISOString().split("T")[0]!;
 }
 
-// ── Stripe checkout URL (optional) ────────────────────────────────────────────
+// ── Square payment link (optional) ───────────────────────────────────────────
 
-async function tryCreateStripeUrl(invoiceId: number, amount: number, description: string | null, dueDate: string): Promise<string | null> {
+async function tryCreateSquareUrl(invoiceId: number, amount: number, description: string | null, _dueDate: string): Promise<string | null> {
   try {
-    const { getUncachableStripeClient } = await import("./stripeClient");
-    const stripe = await getUncachableStripeClient();
+    const { createSquarePaymentLink } = await import("./squareClient");
     const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          unit_amount: Math.round(amount * 100),
-          product_data: {
-            name: `Invoice #${invoiceId}`,
-            description: description ?? `Payment due ${fmtDate(dueDate)}`,
-          },
-        },
-        quantity: 1,
-      }],
-      metadata: { invoice_id: String(invoiceId) },
-      success_url: `${origin}/invoices?payment=success&invoice=${invoiceId}`,
-      cancel_url: `${origin}/invoices?payment=cancelled&invoice=${invoiceId}`,
+    return await createSquarePaymentLink({
+      amountDollars: amount,
+      name: `Invoice #${invoiceId}`,
+      invoiceId,
+      successUrl: `${origin}/invoices?payment=success&invoice=${invoiceId}`,
     });
-    return session.url;
   } catch {
     return null;
   }
@@ -280,7 +266,7 @@ export async function sendReminderForInvoice(
     if (existing.length > 0) return { sent: false, reason: "Already sent" };
   }
 
-  const payUrl = await tryCreateStripeUrl(row.id, row.amount, row.description, row.due_date);
+  const payUrl = await tryCreateSquareUrl(row.id, row.amount, row.description, row.due_date);
 
   const emailHtml = buildReminderEmail({
     invoiceId: row.id,
@@ -433,7 +419,7 @@ export async function runDailyRecurringInvoices(): Promise<void> {
           .where(eq(clientsTable.id, template_.client_id));
 
         if (client?.email) {
-          const payUrl = await tryCreateStripeUrl(invoice.id, invoice.amount, invoice.description, invoice.due_date);
+          const payUrl = await tryCreateSquareUrl(invoice.id, invoice.amount, invoice.description, invoice.due_date);
           const body = buildInvoiceEmail({
             invoiceId: invoice.id,
             clientName: client.name,

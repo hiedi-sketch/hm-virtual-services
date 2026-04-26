@@ -802,8 +802,8 @@ function StartServicesModal({
       }
       const data = await res.json();
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      if (data.stripe_url) {
-        window.location.href = data.stripe_url;
+      if (data.payment_url) {
+        window.location.href = data.payment_url;
         return; // redirect — don't close
       }
       setDone(true);
@@ -1082,7 +1082,7 @@ function InvoicesTab({
 
   async function handlePayNow(invoiceId: number) {
     setPayLoading(invoiceId);
-    const res = await fetch(`/api/stripe/checkout/${invoiceId}`, {
+    const res = await fetch(`/api/square/checkout/${invoiceId}`, {
       method: "POST",
       credentials: "include",
     });

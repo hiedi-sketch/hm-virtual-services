@@ -1304,15 +1304,15 @@ export default function Invoices() {
     return "—";
   };
 
-  // Stripe
-  const [stripeEnabled, setStripeEnabled] = useState(false);
+  // Square
+  const [squareEnabled, setSquareEnabled] = useState(false);
   const [payingId, setPayingId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetch("/api/stripe/config", { credentials: "include" })
+    fetch("/api/square/config", { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
-      .then((d: { enabled: boolean } | null) => { if (d?.enabled) setStripeEnabled(true); })
+      .then((d: { enabled: boolean } | null) => { if (d?.enabled) setSquareEnabled(true); })
       .catch(() => {});
   }, []);
 
@@ -1332,7 +1332,7 @@ export default function Invoices() {
     if (payingId !== null) return;
     setPayingId(inv.id);
     try {
-      const res = await fetch(`/api/stripe/checkout/${inv.id}`, { method: "POST", credentials: "include" });
+      const res = await fetch(`/api/square/checkout/${inv.id}`, { method: "POST", credentials: "include" });
       const data = await res.json() as { url?: string; error?: string };
       if (!res.ok || !data.url) throw new Error(data.error ?? "Failed to start checkout");
       window.location.href = data.url;
@@ -1561,12 +1561,12 @@ export default function Invoices() {
                         </button>
                       )}
 
-                      {/* Stripe */}
-                      {stripeEnabled && !isPaid && !isVoid && (
+                      {/* Square */}
+                      {squareEnabled && !isPaid && !isVoid && (
                         <button onClick={() => payInvoice(inv)} disabled={payingId === inv.id}
                           className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-slate-50 text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors">
                           {payingId === inv.id ? <span className="w-3 h-3 border-2 border-slate-600 border-t-transparent rounded-full animate-spin inline-block" /> : <CreditCard className="w-3.5 h-3.5" />}
-                          Stripe
+                          Pay
                         </button>
                       )}
 
