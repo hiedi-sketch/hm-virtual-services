@@ -913,7 +913,7 @@ function StartServicesModal({
                     <CreditCard className="w-4 h-4 text-primary" />
                     <div>
                       <p className="text-sm font-semibold text-slate-800">Pay Now</p>
-                      <p className="text-xs text-slate-500">Secure payment via Stripe — card required</p>
+                      <p className="text-xs text-slate-500">Secure payment via Square — card required</p>
                     </div>
                   </div>
                 </label>

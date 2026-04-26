@@ -124,7 +124,7 @@ function buildInvoiceEmail(params: {
         <a href="${params.payUrl}" style="display:inline-block;background:#266b75;color:#ffffff;font-size:16px;font-weight:700;padding:14px 36px;border-radius:8px;text-decoration:none;">
           Pay Now — ${fmtAmount(params.amount)}
         </a>
-        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Stripe.</p>
+        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Square. Cards accepted.</p>
       </div>`
     : "";
 
@@ -189,7 +189,7 @@ function buildReminderEmail(params: {
         <a href="${params.payUrl}" style="display:inline-block;background:#266b75;color:#ffffff;font-size:16px;font-weight:700;padding:14px 36px;border-radius:8px;text-decoration:none;">
           Pay Now — ${fmtAmount(params.amount)}
         </a>
-        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Stripe.</p>
+        <p style="margin:10px 0 0;font-size:12px;color:#94a3b8;">Secure payment powered by Square. Cards accepted.</p>
       </div>`
     : "";
 
