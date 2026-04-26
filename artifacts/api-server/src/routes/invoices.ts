@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { z } from "zod";
 import { db } from "@workspace/db";
 import { invoicesTable, recurringInvoicesTable, clientsTable, tasksTable, timeEntriesTable, leadsTable, servicesTable, clientServicesTable } from "@workspace/db";
 import { eq, sql, ilike } from "drizzle-orm";
@@ -626,6 +627,23 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       </div>`
     : "";
 
+  const portalOrigin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+  const estimateActionsHtml = isEstimate ? `
+    <div style="text-align:center;margin:32px 0;">
+      <p style="color:#475569;font-size:14px;margin:0 0 16px;">Please review the proposal above and let us know how you'd like to proceed:</p>
+      <div style="display:inline-block;">
+        <a href="${portalOrigin}/portal?onboard=${row.id}"
+          style="display:inline-block;background:#16a34a;color:#ffffff;font-size:15px;font-weight:700;padding:14px 32px;border-radius:8px;text-decoration:none;margin:0 6px;">
+          ✓ Accept &amp; Get Started
+        </a>
+        <a href="${portalOrigin}/portal?decline=${row.id}"
+          style="display:inline-block;background:#ffffff;color:#64748b;font-size:15px;font-weight:600;padding:13px 32px;border-radius:8px;text-decoration:none;border:2px solid #e2e8f0;margin:0 6px;">
+          Request Changes
+        </a>
+      </div>
+      <p style="margin:12px 0 0;font-size:12px;color:#94a3b8;">You'll be prompted to log in if you haven't already.</p>
+    </div>` : "";
+
   const emailBody = `
     <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;">${docLabel} #${row.id}</h2>
     <p style="margin:0 0 20px;color:#475569;">Hi ${row.client_name ?? "there"},</p>
@@ -657,7 +675,7 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       </tr>
     </table>
 
-    ${payButtonHtml}
+    ${isEstimate ? estimateActionsHtml : payButtonHtml}
 
     ${row.notes ? `<p style="color:#64748b;font-size:13px;border-top:1px solid #e2e8f0;padding-top:16px;margin-top:16px;">${row.notes}</p>` : ""}
     ${row.thank_you_message ? `<p style="color:#475569;font-size:14px;margin-top:16px;font-style:italic;">${row.thank_you_message}</p>` : ""}
@@ -774,6 +792,249 @@ router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
       }
     } catch { /* ignore */ }
   })();
+});
+
+// ── Client: start services from accepted estimate ──────────────────────────
+const StartServicesBody = z.object({
+  start_type: z.enum(["immediate", "future"]),
+  start_date: z.string().optional(), // required when start_type === "future"
+  payment: z.enum(["pay_now", "request_invoice"]),
+});
+
+router.post("/invoices/:id/start-services", requireAuth, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const body = StartServicesBody.parse(req.body);
+  const user = req.session.user!;
+
+  const [row] = await db
+    .select({
+      id: invoicesTable.id,
+      client_id: invoicesTable.client_id,
+      type: invoicesTable.type,
+      status: invoicesTable.status,
+      amount: invoicesTable.amount,
+      description: invoicesTable.description,
+      line_items: invoicesTable.line_items,
+      notes: invoicesTable.notes,
+      thank_you_message: invoicesTable.thank_you_message,
+      due_date: invoicesTable.due_date,
+      client_name: clientsTable.name,
+      client_email: clientsTable.email,
+    })
+    .from(invoicesTable)
+    .leftJoin(clientsTable, eq(invoicesTable.client_id, clientsTable.id))
+    .where(eq(invoicesTable.id, id));
+
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.type !== "estimate") { res.status(400).json({ error: "Not an estimate" }); return; }
+  if (row.status !== "sent" && row.status !== "accepted") {
+    res.status(400).json({ error: "Estimate must be in sent or accepted status" }); return;
+  }
+  if (user.role === "client" && row.client_id !== user.client_id) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+  if (!row.client_id) { res.status(400).json({ error: "Estimate has no client" }); return; }
+
+  // Determine effective start date
+  function addDays(dateStr: string, n: number): string {
+    const d = new Date(dateStr + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().split("T")[0]!;
+  }
+  function addOneMonth(dateStr: string): string {
+    const d = new Date(dateStr + "T00:00:00");
+    d.setMonth(d.getMonth() + 1);
+    return d.toISOString().split("T")[0]!;
+  }
+
+  const todayStr = new Date().toISOString().split("T")[0]!;
+  const effectiveStartDate = body.start_type === "immediate"
+    ? addDays(todayStr, 1) // tomorrow
+    : (body.start_date ?? addDays(todayStr, 1));
+
+  // Mark estimate as accepted
+  await db
+    .update(invoicesTable)
+    .set({ status: "accepted", updated_at: new Date() })
+    .where(eq(invoicesTable.id, id));
+
+  // Create recurring invoice series (starts one month AFTER first invoice)
+  const [recurringRow] = await db.insert(recurringInvoicesTable).values({
+    client_id: row.client_id,
+    frequency: "monthly",
+    start_date: effectiveStartDate,
+    next_due_date: addOneMonth(effectiveStartDate),
+    description: row.description ?? null,
+    line_items: row.line_items ?? null,
+    notes: row.notes ?? null,
+    thank_you_message: row.thank_you_message ?? null,
+    amount: row.amount,
+    active: true,
+    auto_send: true,
+  }).returning();
+
+  // Create the first invoice
+  const [firstInvoice] = await db.insert(invoicesTable).values({
+    client_id: row.client_id,
+    amount: row.amount,
+    type: "invoice",
+    status: "unpaid",
+    billing_type: "recurring",
+    due_date: effectiveStartDate,
+    description: row.description ?? null,
+    line_items: row.line_items ?? null,
+    notes: row.notes ?? null,
+    thank_you_message: row.thank_you_message ?? null,
+    recurring_id: recurringRow.id,
+    updated_at: new Date(),
+  }).returning();
+
+  logAudit("invoice", id, "start_services", `Services started from estimate #${id} — recurring series #${recurringRow.id} created`, { id: user.id, name: user.name });
+
+  // Notify admins
+  try {
+    await notifyAdmins({
+      type: "invoice_updated",
+      title: `Estimate #${id} accepted — services starting`,
+      message: `${row.client_name ?? "Client"} accepted estimate #${id} and is starting services on ${effectiveStartDate}. Recurring series #${recurringRow.id} created.`,
+      entityType: "invoice",
+      entityId: id,
+    });
+  } catch { /* ignore */ }
+
+  // Handle payment
+  if (body.payment === "pay_now") {
+    // Create Stripe checkout session for first invoice
+    let stripeUrl: string | null = null;
+    try {
+      const { getUncachableStripeClient } = await import("../lib/stripeClient");
+      const stripe = await getUncachableStripeClient();
+      const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+      const fmtDate = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "payment",
+        line_items: [{
+          price_data: {
+            currency: "usd",
+            unit_amount: Math.round(row.amount * 100),
+            product_data: {
+              name: `Invoice #${firstInvoice.id} — Services starting ${effectiveStartDate}`,
+              description: row.description ?? `First invoice, due ${fmtDate(effectiveStartDate)}`,
+            },
+          },
+          quantity: 1,
+        }],
+        metadata: { invoice_id: String(firstInvoice.id) },
+        success_url: `${origin}/portal?payment=success&invoice=${firstInvoice.id}`,
+        cancel_url: `${origin}/portal?onboard=${id}`,
+      });
+      stripeUrl = session.url;
+    } catch { /* Stripe not configured */ }
+
+    res.json({ success: true, first_invoice_id: firstInvoice.id, recurring_id: recurringRow.id, stripe_url: stripeUrl });
+  } else {
+    // Request invoice — send first invoice email
+    try {
+      const { sendMail, template: mailTemplate, isMailConfigured } = await import("../lib/mailer");
+      if (isMailConfigured() && row.client_email) {
+        const fmtAmount = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+        const fmtDate = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+        // Try to get a Stripe pay link
+        let payUrl: string | null = null;
+        try {
+          const { getUncachableStripeClient } = await import("../lib/stripeClient");
+          const stripe = await getUncachableStripeClient();
+          const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
+          const sess = await stripe.checkout.sessions.create({
+            payment_method_types: ["card"],
+            mode: "payment",
+            line_items: [{ price_data: { currency: "usd", unit_amount: Math.round(row.amount * 100), product_data: { name: `Invoice #${firstInvoice.id}` } }, quantity: 1 }],
+            metadata: { invoice_id: String(firstInvoice.id) },
+            success_url: `${origin}/portal?payment=success&invoice=${firstInvoice.id}`,
+            cancel_url: `${origin}/portal`,
+          });
+          payUrl = sess.url;
+        } catch { /* ignore */ }
+
+        const payBtnHtml = payUrl
+          ? `<div style="text-align:center;margin:24px 0;"><a href="${payUrl}" style="display:inline-block;background:#266b75;color:#fff;font-size:16px;font-weight:700;padding:14px 36px;border-radius:8px;text-decoration:none;">Pay Now — ${fmtAmount(row.amount)}</a></div>`
+          : "";
+
+        const body = `
+          <h2 style="margin:0 0 8px;font-size:20px;color:#0f172a;">Invoice #${firstInvoice.id}</h2>
+          <p style="margin:0 0 20px;color:#475569;">Hi ${row.client_name ?? "there"},</p>
+          <p style="color:#475569;">Thank you for accepting our proposal! Your services are scheduled to begin on <strong>${fmtDate(effectiveStartDate)}</strong>. Please find your first invoice below.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:20px 0;">
+            <tr><td style="color:#64748b;font-size:13px;padding:4px 0;">Due Date</td><td style="text-align:right;font-weight:600;color:#1e293b;font-size:13px;">${fmtDate(effectiveStartDate)}</td></tr>
+            ${row.description ? `<tr><td style="color:#64748b;font-size:13px;padding:4px 0;">Description</td><td style="text-align:right;color:#1e293b;font-size:13px;">${row.description}</td></tr>` : ""}
+          </table>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#0f172a;border-radius:8px;margin:20px 0;">
+            <tr><td style="padding:16px 20px;color:#94a3b8;font-size:13px;">Total Due</td><td style="padding:16px 20px;text-align:right;color:#ffffff;font-size:22px;font-weight:700;">${fmtAmount(row.amount)}</td></tr>
+          </table>
+          ${payBtnHtml}
+        `;
+        await sendMail(row.client_email, `Invoice #${firstInvoice.id} — ${fmtAmount(row.amount)} due ${fmtDate(effectiveStartDate)}`, mailTemplate(body));
+        await db.update(invoicesTable).set({ status: "sent", updated_at: new Date() }).where(eq(invoicesTable.id, firstInvoice.id));
+      }
+    } catch { /* ignore */ }
+
+    res.json({ success: true, first_invoice_id: firstInvoice.id, recurring_id: recurringRow.id, stripe_url: null });
+  }
+});
+
+// ── Client: decline estimate with feedback ────────────────────────────────
+const DeclineFeedbackBody = z.object({
+  reason: z.string().min(1),
+});
+
+router.post("/invoices/:id/decline-with-feedback", requireAuth, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const { reason } = DeclineFeedbackBody.parse(req.body);
+  const user = req.session.user!;
+
+  const [row] = await db
+    .select({
+      id: invoicesTable.id,
+      client_id: invoicesTable.client_id,
+      type: invoicesTable.type,
+      status: invoicesTable.status,
+      amount: invoicesTable.amount,
+      client_name: clientsTable.name,
+    })
+    .from(invoicesTable)
+    .leftJoin(clientsTable, eq(invoicesTable.client_id, clientsTable.id))
+    .where(eq(invoicesTable.id, id));
+
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  if (row.type !== "estimate") { res.status(400).json({ error: "Not an estimate" }); return; }
+  if (user.role === "client" && row.client_id !== user.client_id) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+
+  const [updated] = await db
+    .update(invoicesTable)
+    .set({ status: "declined", decline_reason: reason, updated_at: new Date() } as any)
+    .where(eq(invoicesTable.id, id))
+    .returning();
+
+  res.json(updated);
+  logAudit("invoice", id, "declined", `Estimate #${id} declined with feedback`, { id: user.id, name: user.name });
+
+  try {
+    await notifyAdmins({
+      type: "invoice_updated",
+      title: `Estimate #${id} — Changes Requested`,
+      message: `${row.client_name ?? "Client"} requested changes to estimate #${id}: "${reason}"`,
+      entityType: "invoice",
+      entityId: id,
+    });
+  } catch { /* ignore */ }
 });
 
 export default router;

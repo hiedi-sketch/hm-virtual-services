@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListTasks, useListInvoices, useListTimeEntries, useCreateTask, useListClientServices } from "@workspace/api-client-react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
@@ -98,6 +98,35 @@ export default function ClientPortal() {
   const queryClient = useQueryClient();
   const clientId = user?.client_id ?? undefined;
   const [activeTab, setActiveTab] = useState<Tab>("overview");
+  const [onboardEstimateId, setOnboardEstimateId] = useState<number | null>(null);
+  const [declineEstimateId, setDeclineEstimateId] = useState<number | null>(null);
+
+  // On mount: read ?onboard=ID or ?decline=ID from URL and auto-open the modal
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const onboard = params.get("onboard");
+    const decline = params.get("decline");
+    if (onboard) {
+      const id = Number(onboard);
+      if (!isNaN(id) && id > 0) {
+        setOnboardEstimateId(id);
+        setActiveTab("invoices");
+      }
+    } else if (decline) {
+      const id = Number(decline);
+      if (!isNaN(id) && id > 0) {
+        setDeclineEstimateId(id);
+        setActiveTab("invoices");
+      }
+    }
+    // Clear params from URL without reloading
+    if (onboard || decline) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("onboard");
+      url.searchParams.delete("decline");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
 
   const todayStr = new Date().toLocaleDateString("sv-SE");
   const now = new Date();
@@ -253,7 +282,15 @@ export default function ClientPortal() {
           />
         )}
         {activeTab === "invoices" && (
-          <InvoicesTab invoices={invoices} todayStr={todayStr} queryClient={queryClient} toast={toast} clientId={clientId} />
+          <InvoicesTab
+            invoices={invoices}
+            todayStr={todayStr}
+            queryClient={queryClient}
+            toast={toast}
+            clientId={clientId}
+            onOpenOnboard={setOnboardEstimateId}
+            onOpenDecline={setDeclineEstimateId}
+          />
         )}
         {activeTab === "services" && (
           <ServicesTab serviceRequests={serviceRequests} queryClient={queryClient} toast={toast} clientId={clientId} />
@@ -271,6 +308,26 @@ export default function ClientPortal() {
           <ProfileTab user={user} refreshUser={refreshUser} toast={toast} />
         )}
       </main>
+
+      {/* ── Onboarding modal (from estimate Accept link) ─────────────── */}
+      {onboardEstimateId !== null && (
+        <StartServicesModal
+          estimateId={onboardEstimateId}
+          onClose={() => setOnboardEstimateId(null)}
+          queryClient={queryClient}
+          toast={toast}
+        />
+      )}
+
+      {/* ── Decline modal (from estimate Decline link) ──────────────── */}
+      {declineEstimateId !== null && (
+        <DeclineFeedbackModal
+          estimateId={declineEstimateId}
+          onClose={() => setDeclineEstimateId(null)}
+          queryClient={queryClient}
+          toast={toast}
+        />
+      )}
     </div>
   );
 }
@@ -708,12 +765,311 @@ function TasksTab({ tasks, todayStr, clientId, queryClient, toast }: {
 }
 
 // ================================================================
+// START SERVICES MODAL
+// ================================================================
+function StartServicesModal({
+  estimateId, onClose, queryClient, toast,
+}: {
+  estimateId: number; onClose: () => void; queryClient: any; toast: any;
+}) {
+  const [startType, setStartType] = useState<"immediate" | "future">("immediate");
+  const [startDate, setStartDate] = useState("");
+  const [payment, setPayment] = useState<"pay_now" | "request_invoice">("pay_now");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const todayStr = new Date().toLocaleDateString("sv-SE");
+
+  async function handleSubmit() {
+    if (startType === "future" && !startDate) {
+      toast({ title: "Please choose a start date", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/invoices/${estimateId}/start-services`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          start_type: startType,
+          start_date: startType === "future" ? startDate : undefined,
+          payment,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Something went wrong");
+      }
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      if (data.stripe_url) {
+        window.location.href = data.stripe_url;
+        return; // redirect — don't close
+      }
+      setDone(true);
+      toast({
+        title: "Services confirmed!",
+        description: payment === "request_invoice"
+          ? "We've sent you an invoice. You're all set!"
+          : "Services scheduled. You'll receive a confirmation soon.",
+      });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message ?? "Could not start services", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Accept Estimate #{estimateId}</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Let's get your services started</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="px-6 py-10 text-center">
+            <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+              <Check className="w-7 h-7 text-emerald-600" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">
+              {payment === "request_invoice" ? "Invoice sent!" : "You're all set!"}
+            </h3>
+            <p className="text-sm text-slate-500 mb-6">
+              {payment === "request_invoice"
+                ? "Check your inbox for your first invoice. We look forward to working with you!"
+                : "Your services are confirmed. We look forward to working with you!"}
+            </p>
+            <button
+              onClick={onClose}
+              className="bg-primary text-white px-8 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <div className="px-6 py-6 space-y-6">
+            {/* Start Type */}
+            <div>
+              <p className="text-sm font-semibold text-slate-700 mb-3">When would you like to start?</p>
+              <div className="space-y-2">
+                <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${startType === "immediate" ? "border-primary bg-primary/5" : "border-slate-200 hover:border-slate-300"}`}>
+                  <input
+                    type="radio"
+                    className="accent-[#266b75]"
+                    checked={startType === "immediate"}
+                    onChange={() => setStartType("immediate")}
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Start Immediately</p>
+                    <p className="text-xs text-slate-500">Services begin tomorrow</p>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${startType === "future" ? "border-primary bg-primary/5" : "border-slate-200 hover:border-slate-300"}`}>
+                  <input
+                    type="radio"
+                    className="accent-[#266b75]"
+                    checked={startType === "future"}
+                    onChange={() => setStartType("future")}
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-800">Choose a Start Date</p>
+                    <p className="text-xs text-slate-500">Pick a future date for services to begin</p>
+                  </div>
+                </label>
+                {startType === "future" && (
+                  <div className="mt-2 ml-4">
+                    <input
+                      type="date"
+                      min={todayStr}
+                      value={startDate}
+                      onChange={e => setStartDate(e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm text-slate-800 focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Payment */}
+            <div>
+              <p className="text-sm font-semibold text-slate-700 mb-3">How would you like to pay for the first month?</p>
+              <div className="space-y-2">
+                <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${payment === "pay_now" ? "border-primary bg-primary/5" : "border-slate-200 hover:border-slate-300"}`}>
+                  <input
+                    type="radio"
+                    className="accent-[#266b75]"
+                    checked={payment === "pay_now"}
+                    onChange={() => setPayment("pay_now")}
+                  />
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-primary" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Pay Now</p>
+                      <p className="text-xs text-slate-500">Secure payment via Stripe — card required</p>
+                    </div>
+                  </div>
+                </label>
+                <label className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer transition-all ${payment === "request_invoice" ? "border-primary bg-primary/5" : "border-slate-200 hover:border-slate-300"}`}>
+                  <input
+                    type="radio"
+                    className="accent-[#266b75]"
+                    checked={payment === "request_invoice"}
+                    onChange={() => setPayment("request_invoice")}
+                  />
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-slate-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Request Invoice</p>
+                      <p className="text-xs text-slate-500">We'll send an invoice to your email</p>
+                    </div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={onClose}
+                className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="flex-1 bg-primary hover:bg-primary/90 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                {loading ? "Processing…" : payment === "pay_now" ? "Proceed to Payment" : "Confirm & Request Invoice"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
+// DECLINE FEEDBACK MODAL
+// ================================================================
+function DeclineFeedbackModal({
+  estimateId, onClose, queryClient, toast,
+}: {
+  estimateId: number; onClose: () => void; queryClient: any; toast: any;
+}) {
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+
+  async function handleSubmit() {
+    if (!reason.trim()) {
+      toast({ title: "Please share your feedback before submitting", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/invoices/${estimateId}/decline-with-feedback`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Something went wrong");
+      }
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      setDone(true);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message ?? "Could not submit feedback", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm px-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Request Changes — Estimate #{estimateId}</h2>
+            <p className="text-sm text-slate-500 mt-0.5">Tell us how we can adjust the proposal</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="px-6 py-10 text-center">
+            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <Send className="w-6 h-6 text-slate-600" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900 mb-1">Feedback received!</h3>
+            <p className="text-sm text-slate-500 mb-6">
+              Thank you for your response. We'll review your feedback and get back to you soon with an updated proposal.
+            </p>
+            <button
+              onClick={onClose}
+              className="bg-primary text-white px-8 py-2.5 rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="px-6 py-6 space-y-4">
+            <div>
+              <label className="text-sm font-semibold text-slate-700 block mb-2">
+                What would you like us to change or adjust?
+              </label>
+              <textarea
+                className="w-full border border-slate-300 rounded-xl px-4 py-3 text-sm text-slate-800 resize-none focus:ring-2 focus:ring-primary/30 focus:border-primary outline-none"
+                rows={5}
+                placeholder="e.g. I'd like to adjust the scope, pricing, or start date…"
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+              />
+              <p className="text-xs text-slate-400 mt-1">Your feedback is sent directly to our team and we'll be in touch shortly.</p>
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={onClose}
+                className="flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={loading || !reason.trim()}
+                className="flex-1 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                <Send className="w-4 h-4" />
+                {loading ? "Sending…" : "Send Feedback"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ================================================================
 // INVOICES TAB
 // ================================================================
 function InvoicesTab({
-  invoices, todayStr, queryClient, toast, clientId,
+  invoices, todayStr, queryClient, toast, clientId, onOpenOnboard, onOpenDecline,
 }: {
   invoices: any[]; todayStr: string; queryClient: any; toast: any; clientId: number | undefined;
+  onOpenOnboard: (id: number) => void; onOpenDecline: (id: number) => void;
 }) {
   const estimates = invoices.filter(i => i.type === "estimate");
   const actualInvoices = invoices.filter(i => i.type !== "estimate");
@@ -722,29 +1078,7 @@ function InvoicesTab({
   const totalOwed = unpaidInvoices.reduce((s: number, i: any) => s + Number(i.amount ?? 0), 0);
   const totalPaid = paidInvoices.reduce((s: number, i: any) => s + Number(i.amount ?? 0), 0);
 
-  const [actionLoading, setActionLoading] = useState<Record<number, string>>({});
   const [payLoading, setPayLoading] = useState<number | null>(null);
-
-  async function handleEstimateAction(id: number, action: "accept" | "decline") {
-    setActionLoading(prev => ({ ...prev, [id]: action }));
-    const res = await fetch(`/api/invoices/${id}/${action}`, {
-      method: "PATCH",
-      credentials: "include",
-    });
-    if (res.ok) {
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      toast({
-        title: action === "accept" ? "Estimate accepted" : "Estimate declined",
-        description: action === "accept"
-          ? "You've accepted this estimate. You can now proceed with payment."
-          : "You've declined this estimate. We'll be in touch.",
-      });
-    } else {
-      const err = await res.json().catch(() => ({}));
-      toast({ title: "Error", description: err.error ?? "Could not update estimate", variant: "destructive" });
-    }
-    setActionLoading(prev => { const n = { ...prev }; delete n[id]; return n; });
-  }
 
   async function handlePayNow(invoiceId: number) {
     setPayLoading(invoiceId);
@@ -813,20 +1147,18 @@ function InvoicesTab({
               </div>
               <div className="px-5 pb-5 flex items-center gap-3">
                 <button
-                  onClick={() => handleEstimateAction(est.id, "accept")}
-                  disabled={!!actionLoading[est.id]}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+                  onClick={() => onOpenOnboard(est.id)}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                 >
                   <Check className="w-4 h-4" />
-                  {actionLoading[est.id] === "accept" ? "Accepting…" : "Accept Estimate"}
+                  Accept &amp; Get Started
                 </button>
                 <button
-                  onClick={() => handleEstimateAction(est.id, "decline")}
-                  disabled={!!actionLoading[est.id]}
-                  className="flex items-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+                  onClick={() => onOpenDecline(est.id)}
+                  className="flex items-center gap-2 border border-slate-200 text-slate-600 hover:bg-slate-50 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors"
                 >
                   <ThumbsDown className="w-4 h-4" />
-                  {actionLoading[est.id] === "decline" ? "Declining…" : "Decline"}
+                  Request Changes
                 </button>
               </div>
             </div>

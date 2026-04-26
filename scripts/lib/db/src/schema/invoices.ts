@@ -50,6 +50,7 @@ export const invoicesTable = pgTable("invoices", {
   billing_type: text("billing_type", { enum: ["one_time", "recurring"] }).notNull().default("one_time"),
   service_period_start: text("service_period_start"),
   service_period_end: text("service_period_end"),
+  decline_reason: text("decline_reason"),
   updated_at: timestamp("updated_at").defaultNow(),
 });
 
