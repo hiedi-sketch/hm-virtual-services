@@ -20,7 +20,8 @@ function createTransport() {
 export async function sendMail(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>
 ): Promise<void> {
   if (!isMailConfigured()) {
     console.warn(`[mailer] SMTP not configured — skipping email to ${to}: "${subject}"`);
@@ -28,7 +29,14 @@ export async function sendMail(
   }
   const transport = createTransport();
   const from = process.env.SMTP_FROM ?? process.env.SMTP_USER;
-  await transport.sendMail({ from, to, subject, html });
+  await transport.sendMail({
+    from, to, subject, html,
+    attachments: attachments?.map(a => ({
+      filename: a.filename,
+      content: a.content,
+      contentType: a.contentType,
+    })),
+  });
 }
 
 // ── Simple HTML template ───────────────────────────────────────────────────
