@@ -24,9 +24,95 @@ import {
   Plus, ArrowLeft, X, Paperclip, Mail, Phone, DollarSign,
   Monitor, Pencil, Check, AlertCircle, Globe, User, Package,
   RefreshCw, ShoppingBag, Trash2, MessageSquare, Send, ChevronDown, ChevronUp,
-  Users, ArrowUpDown, ArrowUp, ArrowDown, Link as LinkIcon, MapPin, Building2,
+  Users, ArrowUpDown, ArrowUp, ArrowDown, Link as LinkIcon, MapPin, Building2, Clock,
 } from "lucide-react";
 import { cn, formatCurrency, fmtHours } from "@/lib/utils";
+
+const MY_TZ = "America/Chicago";
+
+function fmtTime(date: Date, tz: string) {
+  return date.toLocaleTimeString("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
+function fmtDay(date: Date, tz: string) {
+  return date.toLocaleDateString("en-US", {
+    timeZone: tz,
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function fmtTzAbbr(date: Date, tz: string) {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(date);
+  return parts.find(p => p.type === "timeZoneName")?.value ?? tz;
+}
+
+function getOffsetDiffHours(clientTz: string, date: Date): number {
+  const toMs = (tz: string) => new Date(date.toLocaleString("en-US", { timeZone: tz })).getTime();
+  const diffMs = toMs(clientTz) - toMs(MY_TZ);
+  return Math.round(diffMs / (1000 * 60 * 60) * 10) / 10;
+}
+
+function fmtOffsetLabel(hours: number): string {
+  if (hours === 0) return "Same time as you";
+  const abs = Math.abs(hours);
+  const h = Math.floor(abs);
+  const m = Math.round((abs - h) * 60);
+  const parts = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  return hours > 0 ? `${parts.join(" ")} ahead of you` : `${parts.join(" ")} behind you`;
+}
+
+function ClientTimeCard({ timezone, clientName }: { timezone: string; clientName: string }) {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const offsetHours = getOffsetDiffHours(timezone, now);
+  const isSame = timezone === MY_TZ;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <Clock className="w-4 h-4 text-[#266b75]" />
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Time Zone</h3>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        {/* My time */}
+        <div className="bg-slate-50 rounded-xl p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Your Time</p>
+          <p className="text-2xl font-bold text-slate-900 leading-none">{fmtTime(now, MY_TZ)}</p>
+          <p className="text-xs text-slate-500 mt-1">{fmtDay(now, MY_TZ)}</p>
+          <p className="text-[10px] font-medium text-slate-400 mt-1 bg-white border border-slate-200 rounded px-1.5 py-0.5 inline-block">{fmtTzAbbr(now, MY_TZ)}</p>
+        </div>
+        {/* Client time */}
+        <div className="bg-[#266b75]/5 rounded-xl p-4 border border-[#266b75]/10">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#266b75]/70 mb-2">{clientName}'s Time</p>
+          <p className="text-2xl font-bold text-slate-900 leading-none">{fmtTime(now, timezone)}</p>
+          <p className="text-xs text-slate-500 mt-1">{fmtDay(now, timezone)}</p>
+          <p className="text-[10px] font-medium text-[#266b75] mt-1 bg-white border border-[#266b75]/20 rounded px-1.5 py-0.5 inline-block">{fmtTzAbbr(now, timezone)}</p>
+        </div>
+      </div>
+      {!isSame && (
+        <p className={cn(
+          "text-xs font-medium mt-3 text-center px-3 py-1.5 rounded-lg",
+          offsetHours > 0 ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-blue-50 text-blue-700 border border-blue-100"
+        )}>
+          {fmtOffsetLabel(offsetHours)}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function isWeekday(d: Date): boolean {
   const day = d.getDay();
@@ -91,6 +177,7 @@ export default function ClientDetail() {
   const [editPhone, setEditPhone] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
+  const [editTimezone, setEditTimezone] = useState("");
   const [editParentId, setEditParentId] = useState<string>("");
 
   // Subclients sort state
@@ -283,6 +370,7 @@ export default function ClientDetail() {
     setEditPhone(client.phone ?? "");
     setEditAddress((client as any).address ?? "");
     setEditWebsite(client.website ?? "");
+    setEditTimezone((client as any).timezone ?? "");
     setEditParentId((client as any).parent_id != null ? String((client as any).parent_id) : "");
     setShowEditProfile(true);
   };
@@ -298,6 +386,7 @@ export default function ClientDetail() {
         phone: editPhone.trim() || null,
         address: editAddress.trim() || null,
         website: editWebsite.trim() || null,
+        timezone: editTimezone || null,
         parent_id: editParentId !== "" ? Number(editParentId) : null,
       } as any,
     });
@@ -406,6 +495,59 @@ export default function ClientDetail() {
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Website</label>
               <input type="url" className={inputCls} value={editWebsite} onChange={e => setEditWebsite(e.target.value)} placeholder="https://acmecorp.com" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Time Zone</label>
+              <select className={inputCls} value={editTimezone} onChange={e => setEditTimezone(e.target.value)}>
+                <option value="">— Not set —</option>
+                <optgroup label="United States">
+                  <option value="America/New_York">Eastern Time (ET)</option>
+                  <option value="America/Chicago">Central Time (CT)</option>
+                  <option value="America/Denver">Mountain Time (MT)</option>
+                  <option value="America/Los_Angeles">Pacific Time (PT)</option>
+                  <option value="America/Anchorage">Alaska Time (AKT)</option>
+                  <option value="Pacific/Honolulu">Hawaii Time (HT)</option>
+                </optgroup>
+                <optgroup label="Canada">
+                  <option value="America/Toronto">Toronto (ET)</option>
+                  <option value="America/Vancouver">Vancouver (PT)</option>
+                  <option value="America/Halifax">Halifax (AT)</option>
+                  <option value="America/Winnipeg">Winnipeg (CT)</option>
+                  <option value="America/Edmonton">Edmonton (MT)</option>
+                </optgroup>
+                <optgroup label="Europe">
+                  <option value="Europe/London">London (GMT/BST)</option>
+                  <option value="Europe/Paris">Paris (CET/CEST)</option>
+                  <option value="Europe/Berlin">Berlin (CET/CEST)</option>
+                  <option value="Europe/Amsterdam">Amsterdam (CET/CEST)</option>
+                  <option value="Europe/Madrid">Madrid (CET/CEST)</option>
+                  <option value="Europe/Rome">Rome (CET/CEST)</option>
+                  <option value="Europe/Zurich">Zurich (CET/CEST)</option>
+                  <option value="Europe/Stockholm">Stockholm (CET/CEST)</option>
+                  <option value="Europe/Athens">Athens (EET/EEST)</option>
+                  <option value="Europe/Moscow">Moscow (MSK)</option>
+                </optgroup>
+                <optgroup label="Middle East & Africa">
+                  <option value="Asia/Dubai">Dubai (GST)</option>
+                  <option value="Asia/Riyadh">Riyadh (AST)</option>
+                  <option value="Africa/Cairo">Cairo (EET)</option>
+                  <option value="Africa/Johannesburg">Johannesburg (SAST)</option>
+                </optgroup>
+                <optgroup label="Asia & Pacific">
+                  <option value="Asia/Kolkata">India (IST)</option>
+                  <option value="Asia/Dhaka">Dhaka (BST)</option>
+                  <option value="Asia/Bangkok">Bangkok (ICT)</option>
+                  <option value="Asia/Singapore">Singapore (SGT)</option>
+                  <option value="Asia/Hong_Kong">Hong Kong (HKT)</option>
+                  <option value="Asia/Shanghai">China (CST)</option>
+                  <option value="Asia/Tokyo">Tokyo (JST)</option>
+                  <option value="Asia/Seoul">Seoul (KST)</option>
+                  <option value="Australia/Perth">Perth (AWST)</option>
+                  <option value="Australia/Adelaide">Adelaide (ACST/ACDT)</option>
+                  <option value="Australia/Sydney">Sydney (AEST/AEDT)</option>
+                  <option value="Pacific/Auckland">Auckland (NZST/NZDT)</option>
+                </optgroup>
+              </select>
             </div>
 
             {/* Parent Client */}
@@ -527,6 +669,14 @@ export default function ClientDetail() {
           </div>
         )}
       </div>
+
+      {/* Time Zone Card */}
+      {(client as any).timezone && (
+        <ClientTimeCard
+          timezone={(client as any).timezone}
+          clientName={client.contact_name || client.name}
+        />
+      )}
 
       {/* Hours Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -10,6 +10,7 @@ export const clientsTable = pgTable("clients", {
   phone: text("phone"),
   address: text("address"),
   website: text("website"),
+  timezone: text("timezone"),
   monthly_hour_budget: real("monthly_hour_budget").notNull(),
   monthly_fee: real("monthly_fee").notNull(),
   service_type: text("service_type", { enum: ["bookkeeping", "va", "hybrid"] }),
