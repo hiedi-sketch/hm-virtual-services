@@ -71,6 +71,7 @@ function fmtOffsetLabel(hours: number): string {
 }
 
 function ClientTimeCard({ timezone, clientName }: { timezone: string; clientName: string }) {
+  const firstName = clientName.split(" ")[0];
   const [now, setNow] = useState(new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
@@ -96,7 +97,7 @@ function ClientTimeCard({ timezone, clientName }: { timezone: string; clientName
         </div>
         {/* Client time */}
         <div className="bg-[#266b75]/5 rounded-xl p-4 border border-[#266b75]/10">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#266b75]/70 mb-2">{clientName}'s Time</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-[#266b75]/70 mb-2">{firstName}'s Time</p>
           <p className="text-2xl font-bold text-slate-900 leading-none">{fmtTime(now, timezone)}</p>
           <p className="text-xs text-slate-500 mt-1">{fmtDay(now, timezone)}</p>
           <p className="text-[10px] font-medium text-[#266b75] mt-1 bg-white border border-[#266b75]/20 rounded px-1.5 py-0.5 inline-block">{fmtTzAbbr(now, timezone)}</p>
