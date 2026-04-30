@@ -48,8 +48,6 @@ async function buildInvoicePdf(invoiceId: number): Promise<Buffer | null> {
       service_period_end: invoicesTable.service_period_end,
       client_name: clientsTable.name,
       client_email: clientsTable.email,
-      monthly_hour_budget: clientsTable.monthly_hour_budget,
-      service_type: clientsTable.service_type,
     })
     .from(invoicesTable)
     .leftJoin(clientsTable, eq(invoicesTable.client_id, clientsTable.id))
@@ -63,20 +61,6 @@ async function buildInvoicePdf(invoiceId: number): Promise<Buffer | null> {
     });
   const fmtAmt = (n: number) =>
     n.toLocaleString("en-US", { style: "currency", currency: "USD" });
-
-  // Only show hours section if client has a VA/hybrid package with a set hour budget
-  const showHours =
-    (row.monthly_hour_budget ?? 0) > 0 &&
-    (row.service_type === "va" || row.service_type === "hybrid");
-
-  let totalMinutes = 0;
-  if (showHours && row.client_id) {
-    const [hr] = await db
-      .select({ total_minutes: sql<number>`coalesce(sum(${timeEntriesTable.duration_minutes}), 0)` })
-      .from(timeEntriesTable)
-      .where(eq(timeEntriesTable.client_id, row.client_id));
-    totalMinutes = Number(hr?.total_minutes ?? 0);
-  }
 
   const lineItems = (row.line_items ?? []) as Array<{
     name: string; description?: string; qty: number; unit_price: number;
@@ -150,29 +134,6 @@ async function buildInvoicePdf(invoiceId: number): Promise<Buffer | null> {
     doc.font("Helvetica").fontSize(10).fillColor("#475569")
       .text(row.description, L, doc.y, { width: R - L });
     doc.moveDown(0.75);
-  }
-
-  // ── Hours summary (only for VA/hybrid clients with a set hour budget) ──
-  if (showHours) {
-    doc.font("Helvetica-Bold").fontSize(9).fillColor("#64748b")
-      .text("SERVICE HOURS", L, doc.y);
-    doc.moveDown(0.5);
-    const hoursBoxY = doc.y;
-    doc.rect(L, hoursBoxY, R - L, 36).fillColor("#f8fafc").fill();
-    doc.rect(L, hoursBoxY, R - L, 36).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
-    const totalHours = (totalMinutes / 60).toFixed(1);
-    doc.font("Helvetica-Bold").fontSize(20).fillColor("#0f172a")
-      .text(totalHours, L + 12, hoursBoxY + 7, { width: 100 });
-    doc.font("Helvetica").fontSize(10).fillColor("#64748b")
-      .text("total hours logged", L + 60, hoursBoxY + 12, { width: 200 });
-    doc.font("Helvetica").fontSize(9).fillColor("#94a3b8")
-      .text(
-        `${totalMinutes} min  ·  Budget: ${row.monthly_hour_budget ?? 0}h/mo`,
-        MID, hoursBoxY + 12, { width: metaW, align: "right" }
-      );
-    doc.y = hoursBoxY + 50;
-    doc.moveTo(L, doc.y).lineTo(R, doc.y).strokeColor("#e2e8f0").lineWidth(0.75).stroke();
-    doc.moveDown(1);
   }
 
   // ── Line items table ──────────────────────────────────────────────────
