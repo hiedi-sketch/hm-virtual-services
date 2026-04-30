@@ -516,6 +516,32 @@ router.post("/invoices/:id/convert", requireAdmin, async (req, res) => {
   logAudit("invoice", id, "converted", `Estimate #${id} converted to invoice`, { id: actor?.id, name: actor?.name });
 });
 
+// ── Duplicate invoice ─────────────────────────────────────────────────────────
+router.post("/invoices/:id/duplicate", requireAdmin, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid invoice id" }); return; }
+  const [original] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, id));
+  if (!original) { res.status(404).json({ error: "Invoice not found" }); return; }
+  const [copy] = await db.insert(invoicesTable).values({
+    client_id: original.client_id,
+    lead_id: original.lead_id,
+    type: original.type,
+    status: "draft",
+    amount: original.amount,
+    description: original.description ? `Copy of: ${original.description}` : null,
+    notes: original.notes,
+    due_date: original.due_date,
+    thank_you_message: original.thank_you_message,
+    line_items: original.line_items,
+    billing_type: original.billing_type,
+    service_period_start: original.service_period_start,
+    service_period_end: original.service_period_end,
+  }).returning();
+  res.status(201).json(copy);
+  const actor = req.session.user;
+  logAudit("invoice", copy.id, "duplicated", `Invoice #${id} duplicated as #${copy.id}`, { id: actor?.id, name: actor?.name });
+});
+
 // ── Send invoice to client ────────────────────────────────────────────────────
 router.post("/invoices/:id/send", requireAdmin, async (req, res) => {
   const id = Number(req.params["id"]);

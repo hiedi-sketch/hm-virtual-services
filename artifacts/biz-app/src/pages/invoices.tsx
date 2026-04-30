@@ -32,7 +32,7 @@ import {
   Plus, X, Trash2, CheckCircle2, Clock, FileText, Download,
   CreditCard, Pencil, BanIcon, DollarSign, AlertTriangle,
   ChevronDown, ChevronUp, Send, RefreshCw, ToggleLeft, ToggleRight,
-  Repeat, Play, Bell, BellRing, Eye, Check,
+  Repeat, Play, Bell, BellRing, Eye, Check, Copy,
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
@@ -1220,6 +1220,7 @@ export default function Invoices() {
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [reminderInvoice, setReminderInvoice] = useState<Invoice | null>(null);
   const [convertingId, setConvertingId] = useState<number | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<number | null>(null);
 
   const { data: invoices = [], isLoading } = useListInvoices(filterClient ? { clientId: filterClient } : undefined);
   const { data: clients = [] } = useListClients();
@@ -1354,6 +1355,22 @@ export default function Invoices() {
       URL.revokeObjectURL(url);
     } catch { toast({ title: "Failed to download PDF", variant: "destructive" }); }
     finally { setDownloadingId(null); }
+  };
+
+  const duplicateInvoice = async (inv: Invoice) => {
+    if (duplicatingId !== null) return;
+    setDuplicatingId(inv.id);
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}/duplicate`, { method: "POST", credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to duplicate");
+      invalidate();
+      toast({ title: `Invoice #${data.id} created`, description: "Duplicate saved as draft." });
+    } catch (err: any) {
+      toast({ title: "Duplicate failed", description: err.message, variant: "destructive" });
+    } finally {
+      setDuplicatingId(null);
+    }
   };
 
   const STATUS_TABS: { value: StatusFilter; label: string }[] = [
@@ -1548,15 +1565,21 @@ export default function Invoices() {
                       {/* Reminders (bell — invoices only, overdue or sent) */}
                       {!isEstimate && !isVoid && !isPaid && (
                         <button onClick={() => setReminderInvoice(inv)} title="Send payment reminder"
-                          className={cn("p-1.5 rounded-lg transition-colors", over ? "text-red-400 hover:text-red-600 hover:bg-red-50" : "text-slate-300 hover:text-amber-500 hover:bg-amber-50")}>
+                          className={cn("p-1.5 rounded-lg transition-colors", over ? "text-red-400 hover:text-red-600 hover:bg-red-50" : "text-slate-400 hover:text-amber-500 hover:bg-amber-50")}>
                           <Bell className="w-4 h-4" />
                         </button>
                       )}
 
+                      {/* Duplicate */}
+                      <button onClick={() => duplicateInvoice(inv)} disabled={duplicatingId === inv.id}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-violet-500 hover:bg-violet-50 transition-colors disabled:opacity-50" title="Duplicate invoice">
+                        {duplicatingId === inv.id ? <span className="w-4 h-4 border-2 border-violet-400 border-t-transparent rounded-full animate-spin inline-block" /> : <Copy className="w-4 h-4" />}
+                      </button>
+
                       {/* Edit */}
                       {!isVoid && (
                         <button onClick={() => { setEditingInvoice(inv); setShowForm(false); }}
-                          className="p-1.5 rounded-lg text-slate-300 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Edit invoice">
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors" title="Edit invoice">
                           <Pencil className="w-4 h-4" />
                         </button>
                       )}
@@ -1572,21 +1595,21 @@ export default function Invoices() {
 
                       {/* PDF */}
                       <button onClick={() => downloadPdf(inv)} disabled={downloadingId === inv.id}
-                        className="p-1.5 rounded-lg text-slate-300 hover:text-blue-500 transition-colors" title="Download PDF">
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 transition-colors" title="Download PDF">
                         {downloadingId === inv.id ? <span className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin inline-block" /> : <Download className="w-4 h-4" />}
                       </button>
 
                       {/* Void */}
                       {!isVoid && (
                         <button onClick={() => setVoidingId(inv.id)}
-                          className="p-1.5 rounded-lg text-slate-300 hover:text-amber-500 hover:bg-amber-50 transition-colors" title="Void invoice">
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-amber-500 hover:bg-amber-50 transition-colors" title="Void invoice">
                           <BanIcon className="w-4 h-4" />
                         </button>
                       )}
 
                       {/* Delete */}
                       <button onClick={() => setDeleteConfirmId(inv.id)}
-                        className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete permanently">
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors" title="Delete permanently">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
