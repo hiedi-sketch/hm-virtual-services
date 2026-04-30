@@ -24,7 +24,7 @@ import {
   Plus, ArrowLeft, X, Paperclip, Mail, Phone, DollarSign,
   Monitor, Pencil, Check, AlertCircle, Globe, User, Package,
   RefreshCw, ShoppingBag, Trash2, MessageSquare, Send, ChevronDown, ChevronUp,
-  Users, ArrowUpDown, ArrowUp, ArrowDown, Link as LinkIcon,
+  Users, ArrowUpDown, ArrowUp, ArrowDown, Link as LinkIcon, MapPin, Building2,
 } from "lucide-react";
 import { cn, formatCurrency, fmtHours } from "@/lib/utils";
 
@@ -89,6 +89,7 @@ export default function ClientDetail() {
   const [editEmail, setEditEmail] = useState("");
   const [editContactName, setEditContactName] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editAddress, setEditAddress] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
   const [editParentId, setEditParentId] = useState<string>("");
 
@@ -280,6 +281,7 @@ export default function ClientDetail() {
     setEditEmail(client.email);
     setEditContactName(client.contact_name ?? "");
     setEditPhone(client.phone ?? "");
+    setEditAddress((client as any).address ?? "");
     setEditWebsite(client.website ?? "");
     setEditParentId((client as any).parent_id != null ? String((client as any).parent_id) : "");
     setShowEditProfile(true);
@@ -294,6 +296,7 @@ export default function ClientDetail() {
         email: editEmail.trim() || undefined,
         contact_name: editContactName.trim() || null,
         phone: editPhone.trim() || null,
+        address: editAddress.trim() || null,
         website: editWebsite.trim() || null,
         parent_id: editParentId !== "" ? Number(editParentId) : null,
       } as any,
@@ -378,12 +381,12 @@ export default function ClientDetail() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Business Name</label>
-                <input className={inputCls} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Acme Corp" />
+                <label className="block text-xs font-medium text-slate-500 mb-1">Client Name</label>
+                <input className={inputCls} value={editContactName} onChange={e => setEditContactName(e.target.value)} placeholder="Jane Smith" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Contact Name</label>
-                <input className={inputCls} value={editContactName} onChange={e => setEditContactName(e.target.value)} placeholder="Jane Smith" />
+                <label className="block text-xs font-medium text-slate-500 mb-1">Business Name</label>
+                <input className={inputCls} value={editName} onChange={e => setEditName(e.target.value)} placeholder="Acme Corp" />
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -393,24 +396,16 @@ export default function ClientDetail() {
               </div>
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">Phone</label>
-                <input
-                  type="tel"
-                  className={inputCls}
-                  value={editPhone}
-                  onChange={e => setEditPhone(e.target.value)}
-                  placeholder="(555) 123-4567"
-                />
+                <input type="tel" className={inputCls} value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="(555) 123-4567" />
               </div>
             </div>
             <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
+              <input className={inputCls} value={editAddress} onChange={e => setEditAddress(e.target.value)} placeholder="123 Main St, City, State 12345" />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Website</label>
-              <input
-                type="url"
-                className={inputCls}
-                value={editWebsite}
-                onChange={e => setEditWebsite(e.target.value)}
-                placeholder="https://acmecorp.com"
-              />
+              <input type="url" className={inputCls} value={editWebsite} onChange={e => setEditWebsite(e.target.value)} placeholder="https://acmecorp.com" />
             </div>
 
             {/* Parent Client */}
@@ -441,27 +436,35 @@ export default function ClientDetail() {
           </form>
         ) : (
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-start gap-4">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shrink-0">
-                {client.name.charAt(0).toUpperCase()}
+                {(client.contact_name || client.name).charAt(0).toUpperCase()}
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">{client.name}</h1>
+                <h1 className="text-2xl font-bold text-slate-900">
+                  {client.contact_name || client.name}
+                </h1>
                 {client.contact_name && (
                   <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5" />
-                    {client.contact_name}
+                    <Building2 className="w-3.5 h-3.5" />
+                    {client.name}
                   </p>
                 )}
-                <div className="flex flex-wrap items-center gap-3 mt-1">
+                <div className="flex flex-col gap-1 mt-2">
                   <span className="flex items-center gap-1.5 text-sm text-slate-500">
-                    <Mail className="w-3.5 h-3.5" />
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
                     {client.email}
                   </span>
                   {client.phone && (
                     <span className="flex items-center gap-1.5 text-sm text-slate-500">
-                      <Phone className="w-3.5 h-3.5" />
+                      <Phone className="w-3.5 h-3.5 shrink-0" />
                       {client.phone}
+                    </span>
+                  )}
+                  {(client as any).address && (
+                    <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      {(client as any).address}
                     </span>
                   )}
                   {client.website && (
@@ -472,7 +475,7 @@ export default function ClientDetail() {
                       className="flex items-center gap-1.5 text-sm text-primary hover:underline"
                       onClick={e => e.stopPropagation()}
                     >
-                      <Globe className="w-3.5 h-3.5" />
+                      <Globe className="w-3.5 h-3.5 shrink-0" />
                       {client.website.replace(/^https?:\/\//, "")}
                     </a>
                   )}

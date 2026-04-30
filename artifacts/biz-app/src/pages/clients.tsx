@@ -230,13 +230,13 @@ export default function Clients() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
+                <label className="label-text">Client Name</label>
+                <input {...register("contact_name")} className="input-field" placeholder="Jane Smith" />
+              </div>
+              <div>
                 <label className="label-text">Business Name <span className="text-destructive">*</span></label>
                 <input {...register("name")} className="input-field" placeholder="Acme Corp" />
                 {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
-              </div>
-              <div>
-                <label className="label-text">Contact Name</label>
-                <input {...register("contact_name")} className="input-field" placeholder="Jane Smith" />
               </div>
             </div>
 
