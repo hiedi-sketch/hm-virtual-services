@@ -168,10 +168,12 @@ export default function Clients() {
                     style={{ "--tw-bg-opacity": "1" } as any}
                   >
                     <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900 group-hover:text-primary transition-colors">{client.name}</div>
+                      <div className="font-semibold text-slate-900 group-hover:text-primary transition-colors">
+                        {client.contact_name || client.name}
+                      </div>
                       {client.contact_name && (
                         <div className="text-slate-500 text-xs mt-0.5 flex items-center gap-1">
-                          <User className="w-3 h-3" /> {client.contact_name}
+                          <Building2 className="w-3 h-3" /> {client.name}
                         </div>
                       )}
                       <div className="text-slate-400 text-xs flex items-center gap-1 mt-0.5">
