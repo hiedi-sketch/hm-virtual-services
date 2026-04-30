@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { CheckCircle, AlertCircle, Lock, CreditCard, RefreshCw } from "lucide-react";
+import { CheckCircle, AlertCircle, Lock, CreditCard, RefreshCw, Building2 } from "lucide-react";
 
 declare global {
   interface Window {
@@ -49,6 +49,8 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
+type PayMethod = "card" | "ach";
+
 export default function PayPage() {
   const [location] = useLocation();
   const token = location.startsWith("/pay/") ? location.slice(5).split("?")[0] : null;
@@ -56,12 +58,16 @@ export default function PayPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [payMethod, setPayMethod] = useState<PayMethod>("card");
+
   const [sdkReady, setSdkReady] = useState(false);
   const [sdkError, setSdkError] = useState<string | null>(null);
   const cardRef = useRef<any>(null);
+  const achRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [saveAutopay, setSaveAutopay] = useState(false);
+  const [achName, setAchName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{ receiptUrl: string | null; autopay: boolean } | null>(null);
@@ -79,7 +85,7 @@ export default function PayPage() {
       .finally(() => setLoading(false));
   }, [token]);
 
-  // Load Square Web Payments SDK and initialize card form
+  // Load Square Web Payments SDK and initialize card + ACH
   useEffect(() => {
     if (!invoice?.square || invoice.already_paid) return;
     const { applicationId, locationId, scriptSrc } = invoice.square;
@@ -89,23 +95,19 @@ export default function PayPage() {
     }
 
     let card: any;
+    let ach: any;
 
     loadScript(scriptSrc)
       .then(async () => {
         if (!window.Square) throw new Error("Square SDK not available");
-        const payments = window.Square.payments(applicationId, locationId);
+        const payments = window.Square.payments(applicationId, locationId || undefined);
+
+        // Initialize card
         card = await payments.card({
           style: {
-            ".input-container": {
-              borderColor: "#e2e8f0",
-              borderRadius: "8px",
-            },
-            ".input-container.is-focus": {
-              borderColor: "#266b75",
-            },
-            ".input-container.is-error": {
-              borderColor: "#ef4444",
-            },
+            ".input-container": { borderColor: "#e2e8f0", borderRadius: "8px" },
+            ".input-container.is-focus": { borderColor: "#266b75" },
+            ".input-container.is-error": { borderColor: "#ef4444" },
             ".message-text": { color: "#64748b" },
             ".message-icon": { color: "#64748b" },
             ".message-text.is-error": { color: "#ef4444" },
@@ -122,8 +124,17 @@ export default function PayPage() {
         if (containerRef.current) {
           await card.attach(containerRef.current);
           cardRef.current = card;
-          setSdkReady(true);
         }
+
+        // Initialize ACH
+        try {
+          ach = await payments.ach();
+          achRef.current = ach;
+        } catch {
+          // ACH may not be enabled — fail silently, card still works
+        }
+
+        setSdkReady(true);
       })
       .catch((err) => {
         setSdkError(err.message ?? "Failed to load payment form.");
@@ -136,23 +147,55 @@ export default function PayPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cardRef.current || !token) return;
+    if (!token) return;
     setSubmitting(true);
     setPayError(null);
 
     try {
-      const result = await cardRef.current.tokenize();
-      if (result.status !== "OK") {
-        const msg = result.errors?.[0]?.message ?? "Card tokenization failed. Please check your card details.";
-        setPayError(msg);
-        setSubmitting(false);
-        return;
+      let nonce: string;
+
+      if (payMethod === "ach") {
+        if (!achRef.current) {
+          setPayError("ACH bank transfer is not available. Please pay by card.");
+          setSubmitting(false);
+          return;
+        }
+        if (!achName.trim()) {
+          setPayError("Please enter the account holder name.");
+          setSubmitting(false);
+          return;
+        }
+        const result = await achRef.current.tokenize({ accountHolderName: achName.trim() });
+        if (result.status !== "OK") {
+          const msg = result.errors?.[0]?.message ?? "Bank account linking failed. Please try again.";
+          setPayError(msg);
+          setSubmitting(false);
+          return;
+        }
+        nonce = result.token;
+      } else {
+        if (!cardRef.current) {
+          setPayError("Card form is not ready. Please refresh and try again.");
+          setSubmitting(false);
+          return;
+        }
+        const result = await cardRef.current.tokenize();
+        if (result.status !== "OK") {
+          const msg = result.errors?.[0]?.message ?? "Card tokenization failed. Please check your card details.";
+          setPayError(msg);
+          setSubmitting(false);
+          return;
+        }
+        nonce = result.token;
       }
 
       const res = await fetch(`/api/pay/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nonce: result.token, saveAutopay }),
+        body: JSON.stringify({
+          nonce,
+          saveAutopay: payMethod === "card" ? saveAutopay : false,
+        }),
       });
       const data = await res.json();
 
@@ -295,10 +338,34 @@ export default function PayPage() {
 
         {/* Payment form */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-base font-semibold text-slate-900 mb-4 flex items-center gap-2">
-            <CreditCard className="w-4 h-4 text-[#266b75]" />
-            Payment Details
-          </h2>
+
+          {/* Payment method tabs */}
+          <div className="flex rounded-xl border border-slate-200 p-1 mb-5 gap-1">
+            <button
+              type="button"
+              onClick={() => { setPayMethod("card"); setPayError(null); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                payMethod === "card"
+                  ? "bg-[#266b75] text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <CreditCard className="w-4 h-4" />
+              Card
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPayMethod("ach"); setPayError(null); setSaveAutopay(false); }}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                payMethod === "ach"
+                  ? "bg-[#266b75] text-white shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              Bank Transfer (ACH)
+            </button>
+          </div>
 
           {sdkError && (
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm text-red-700">
@@ -307,40 +374,75 @@ export default function PayPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Square card element */}
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">
-                Card Information
-              </label>
-              {!sdkReady && !sdkError && (
-                <div className="h-[54px] bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center">
-                  <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />
-                </div>
-              )}
-              <div
-                ref={containerRef}
-                id="card-container"
-                className={sdkReady ? "" : "hidden"}
-              />
-            </div>
 
-            {/* Autopay option */}
-            <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 hover:border-[#266b75]/40 cursor-pointer transition-colors group">
-              <input
-                type="checkbox"
-                checked={saveAutopay}
-                onChange={e => setSaveAutopay(e.target.checked)}
-                className="mt-0.5 rounded border-slate-300 text-[#266b75] focus:ring-[#266b75]"
-              />
-              <div>
-                <p className="text-sm font-semibold text-slate-800 group-hover:text-slate-900">
-                  Save card for autopay
-                </p>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Automatically charge this card for future recurring invoices. Cancel anytime by contacting us.
-                </p>
+            {/* Card method */}
+            {payMethod === "card" && (
+              <>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">
+                    Card Information
+                  </label>
+                  {!sdkReady && !sdkError && (
+                    <div className="h-[54px] bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-center">
+                      <RefreshCw className="w-4 h-4 text-slate-400 animate-spin" />
+                    </div>
+                  )}
+                  <div
+                    ref={containerRef}
+                    id="card-container"
+                    className={sdkReady ? "" : "hidden"}
+                  />
+                </div>
+
+                <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-slate-200 hover:border-[#266b75]/40 cursor-pointer transition-colors group">
+                  <input
+                    type="checkbox"
+                    checked={saveAutopay}
+                    onChange={e => setSaveAutopay(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-[#266b75] focus:ring-[#266b75]"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 group-hover:text-slate-900">
+                      Save card for autopay
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Automatically charge this card for future recurring invoices. Cancel anytime by contacting us.
+                    </p>
+                  </div>
+                </label>
+              </>
+            )}
+
+            {/* ACH method */}
+            {payMethod === "ach" && (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+                  <p className="font-semibold mb-1">Pay directly from your bank account</p>
+                  <p className="text-xs text-blue-700">
+                    You'll be securely connected to your bank via Plaid to authorize this payment. ACH transfers typically settle in 3–5 business days.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">
+                    Account Holder Name
+                  </label>
+                  <input
+                    type="text"
+                    value={achName}
+                    onChange={e => setAchName(e.target.value)}
+                    placeholder="Full name on bank account"
+                    required={payMethod === "ach"}
+                    className="w-full border border-slate-200 rounded-lg px-4 py-3 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#266b75] focus:ring-1 focus:ring-[#266b75]"
+                  />
+                </div>
+                {!sdkReady && !sdkError && (
+                  <div className="flex items-center gap-2 text-slate-400 text-sm">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Loading bank transfer…
+                  </div>
+                )}
               </div>
-            </label>
+            )}
 
             {payError && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-700 flex items-start gap-2">
@@ -359,6 +461,11 @@ export default function PayPage() {
                   <RefreshCw className="w-4 h-4 animate-spin" />
                   Processing…
                 </>
+              ) : payMethod === "ach" ? (
+                <>
+                  <Building2 className="w-4 h-4" />
+                  Connect Bank & Pay {fmtAmount(invoice?.amount ?? 0)}
+                </>
               ) : (
                 <>
                   <Lock className="w-4 h-4" />
@@ -369,7 +476,9 @@ export default function PayPage() {
 
             <p className="text-center text-xs text-slate-400 flex items-center justify-center gap-1.5">
               <Lock className="w-3 h-3" />
-              Secured by Square · Your card info is never stored on our servers
+              {payMethod === "ach"
+                ? "Bank connection secured by Plaid · Powered by Square"
+                : "Secured by Square · Your card info is never stored on our servers"}
             </p>
           </form>
         </div>
