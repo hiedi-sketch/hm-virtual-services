@@ -54,7 +54,7 @@ Auth middleware: `requireAuth`, `requireAdmin`, `requireRole(...)` in `artifacts
 
 - **Login** — Email/password login form with error handling; shown to all unauthenticated visitors
 - **Dashboard** (`/dashboard`) — Client overview with hours used/remaining; admin only
-- **Clients** (`/clients`) — Add and view clients (name, email, monthly hour budget, fee, service type); admin only
+- **Clients** (`/clients`) — Add and view clients (name, email, monthly hour budget, fee, service type); admin only. Two entry points: "Onboard New Client" (full 8-step guided wizard) and "Quick Add" (simple modal). Onboarding wizard collects services, business info, bookkeeping details, VA details, access notes, goals, and portal invite option; saves to `client_onboarding_data` table and optionally sends portal invite email.
 - **Tasks** (`/tasks`) — Create and manage tasks; team_member sees own assigned tasks; client sees their tasks
 - **Time Tracking** (`/time`) — Timer + manual entry; client sees their time only
 - **Leads CRM** (`/leads`) — 4-stage pipeline (New/Contacted/Proposal/Closed); admin + team_member
@@ -87,6 +87,8 @@ All under `/api`. All routes require auth except `/api/auth/*`.
 - `GET/POST /users` — Admin only; list/create users
 - `PATCH/DELETE /users/:id` — Admin only
 - `GET/POST /clients` — Admin only
+- `POST /clients/onboard` — Admin only; full onboarding: creates client + saves `client_onboarding_data` + optional portal invite email
+- `POST /clients/:id/send-portal-invite` — Creates/finds client user, sends branded invite email with 7-day reset token
 - `GET/PATCH /clients/:id` — Admin or client (own only)
 - `GET /dashboard` — Admin only
 - `GET/POST /tasks` — Auth required; role-filtered
