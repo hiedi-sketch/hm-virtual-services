@@ -731,7 +731,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
         </div>
       </div>
 
-      {billingType === "recurring" && docType === "invoice" && (
+      {docType === "invoice" && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1">Service Period Start</label>
