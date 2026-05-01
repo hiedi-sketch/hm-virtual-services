@@ -414,6 +414,52 @@ router.get("/dashboard", requireAdmin, async (req, res) => {
   res.json(parsed);
 });
 
+// ── GET /clients/:id/checklist ───────────────────────────────────────────────
+router.get("/clients/:id/checklist", requireAdmin, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const result = await db.execute(sql`
+    SELECT checked_items, notes FROM client_checklist_state WHERE client_id = ${id} LIMIT 1
+  `);
+  const rows = result.rows as any[];
+  if (rows.length === 0) {
+    res.json({ checked_items: [], notes: "" });
+    return;
+  }
+  const row = rows[0];
+  let checkedItems: string[] = [];
+  try { checkedItems = JSON.parse(row.checked_items ?? "[]"); } catch { checkedItems = []; }
+  res.json({ checked_items: checkedItems, notes: row.notes ?? "" });
+});
+
+// ── PATCH /clients/:id/checklist ─────────────────────────────────────────────
+router.patch("/clients/:id/checklist", requireAdmin, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { checked_items, notes } = req.body;
+  const jsonVal = JSON.stringify(Array.isArray(checked_items) ? checked_items : []);
+  const notesVal = notes ?? null;
+  const existingResult = await db.execute(sql`
+    SELECT id FROM client_checklist_state WHERE client_id = ${id} LIMIT 1
+  `);
+  const existing = existingResult.rows as any[];
+  if (existing.length === 0) {
+    await db.execute(sql`
+      INSERT INTO client_checklist_state (client_id, checked_items, notes, updated_at)
+      VALUES (${id}, ${jsonVal}, ${notesVal}, NOW())
+    `);
+  } else {
+    await db.execute(sql`
+      UPDATE client_checklist_state
+      SET checked_items = ${jsonVal},
+          notes = ${notesVal},
+          updated_at = NOW()
+      WHERE client_id = ${id}
+    `);
+  }
+  res.json({ ok: true });
+});
+
 // ── Subclients: list subclients of a parent client with VA hours data ───────
 router.get("/clients/:id/subclients", requireAuth, async (req, res) => {
   const parentId = Number(req.params["id"]);

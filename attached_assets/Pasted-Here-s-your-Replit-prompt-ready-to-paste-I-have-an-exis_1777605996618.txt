@@ -1,0 +1,90 @@
+Here's your Replit prompt, ready to paste:
+
+---
+
+I have an existing client dashboard. I need you to add a **Client Onboarding Checklist** feature. Here are the full requirements:
+
+**Where it lives:**
+Add an "Onboarding Checklist" option that is accessible from the client's profile or record inside the Client Hub. When I open a client's record, there should be a button or tab labeled **"Onboarding Checklist"** that opens the checklist for that specific client.
+
+**How it works:**
+- Each client gets their own instance of the checklist
+- At the top of the checklist, display the client's name, their service type (Bookkeeping, VA, or Both), and their start date — pulled from their client record
+- Each checklist item has a checkbox that I can check off as I complete it
+- Checked items should be saved automatically so if I close and reopen the checklist, my progress is preserved
+- Show a progress bar or percentage at the top so I can see how far along I am (e.g. "12 of 28 tasks complete")
+- Each phase should be collapsible so I can hide completed phases and focus on what's next
+
+**The checklist has 6 phases with the following tasks:**
+
+**Phase 1 — Before They Sign**
+- Initial discovery call completed
+- Client needs and scope documented
+- Services and pricing determined
+- Send estimate / proposal for acceptance
+- Follow up on estimate if no response within 3 business days
+- Estimate accepted
+- Send contract for signature
+- Confirm contract is signed
+- Collect deposit or first invoice payment if required
+- Payment received and confirmed
+
+**Phase 2 — Welcome & Setup**
+- Send welcome email
+- Send onboarding questionnaire / intake form
+- Completed intake form received and reviewed
+- Set up client folder
+- Add client to project management tool
+- Add client to invoicing/accounting software
+- Create client portal login and send access details
+- Add client contact info to CRM or client list
+- Schedule kickoff call
+
+**Phase 3 — Kickoff Call**
+- Kickoff call completed
+- Reviewed scope of work and expectations
+- Confirmed communication preferences
+- Confirmed preferred meeting cadence
+- Confirmed deadlines and deliverable schedule
+- Answered any client questions
+- Sent kickoff call recap/summary email to client
+
+**Phase 4 — Bookkeeping Setup** *(only show this phase if the client's service type is Bookkeeping or Both)*
+- Gained access to their accounting software
+- Reviewed existing books for accuracy / cleanup needed
+- Noted cleanup scope if applicable
+- Gained access to bank and credit card accounts
+- Confirmed chart of accounts is set up correctly
+- Confirmed fiscal year and reporting preferences
+- Set up recurring tasks / due date reminders for monthly close
+- Confirmed how they will send receipts and documents
+- First month/period reconciliation completed
+- Sent first financial report or update to client
+
+**Phase 5 — VA Setup** *(only show this phase if the client's service type is VA or Both)*
+- Received access to email and/or calendar
+- Received access to all relevant tools and platforms
+- Reviewed existing workflows or SOPs if available
+- Documented recurring tasks and their frequency
+- Clarified priorities and how to handle urgent requests
+- Confirmed response time expectations on both sides
+- First batch of tasks assigned or identified
+- First tasks completed and delivered
+
+**Phase 6 — Wrap-Up & Ongoing**
+- Send 1-week check-in email
+- Confirm client knows how to reach me and submit requests
+- Schedule first recurring check-in or reporting call
+- Add recurring invoice to billing schedule
+- Client marked as Active in the system
+
+**Additional details:**
+- There should be a **Notes field** at the bottom of the checklist where I can type free-form notes for that client
+- Notes should save automatically along with checkbox progress
+- Add a **"Reset Checklist"** button at the bottom (with a confirmation prompt so I don't do it accidentally) in case I need to start over for a client
+- Match the existing dashboard's fonts, colors, and button styles exactly — do not introduce new design styles
+- The checklist should work on both desktop and mobile
+
+---
+
+Want me to write you a follow-up prompt for adding reminders or due dates to individual checklist items?

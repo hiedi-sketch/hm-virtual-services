@@ -25,7 +25,9 @@ import {
   Monitor, Pencil, Check, AlertCircle, Globe, User, Package,
   RefreshCw, ShoppingBag, Trash2, MessageSquare, Send, ChevronDown, ChevronUp,
   Users, ArrowUpDown, ArrowUp, ArrowDown, Link as LinkIcon, MapPin, Building2, Clock,
+  ClipboardList,
 } from "lucide-react";
+import { ClientOnboardingChecklist } from "@/components/ClientOnboardingChecklist";
 import { cn, formatCurrency, fmtHours } from "@/lib/utils";
 
 const MY_TZ = "America/Chicago";
@@ -182,6 +184,7 @@ export default function ClientDetail() {
   const [editParentId, setEditParentId] = useState<string>("");
 
   const [sendingInvite, setSendingInvite] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   // Subclients sort state
   const [subclientSort, setSubclientSort] = useState<{ col: "name" | "hours_remaining" | "next_reset_date"; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
@@ -693,6 +696,13 @@ export default function ClientDetail() {
                   Mark Inactive
                 </button>
               )}
+              <button
+                onClick={() => setShowChecklist(v => !v)}
+                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${showChecklist ? "bg-[#266b75] text-white border-[#266b75]" : "text-[#266b75] border-[#266b75]/30 bg-[#266b75]/5 hover:bg-[#266b75]/10 hover:border-[#266b75]/60"}`}
+              >
+                <ClipboardList className="w-3.5 h-3.5" />
+                Onboarding Checklist
+              </button>
               <button
                 onClick={handleSendPortalInvite}
                 disabled={sendingInvite}
@@ -1524,6 +1534,21 @@ export default function ClientDetail() {
           </div>
         );
       })()}
+
+      {/* Onboarding Checklist */}
+      {showChecklist && (
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-4">
+            <ClipboardList className="w-5 h-5 text-[#266b75]" />
+            <h2 className="text-lg font-semibold text-slate-900">Onboarding Checklist</h2>
+          </div>
+          <ClientOnboardingChecklist
+            clientId={client.id}
+            clientName={client.contact_name ?? client.name}
+            serviceType={(client as any).service_type}
+          />
+        </div>
+      )}
 
       {/* Client Documents */}
       <div className="mt-8">
