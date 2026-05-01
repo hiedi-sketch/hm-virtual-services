@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 
 export type UserRole = "admin" | "team_member" | "client";
 
@@ -21,9 +21,37 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Global auth-aware fetch — replaces window.fetch once AuthProvider mounts.
+// On any 401 (except auth endpoints) it fires a custom event that AuthProvider
+// listens for, clears the user and redirects to /login.
+const AUTH_ENDPOINTS = ["/api/auth/login", "/api/auth/logout", "/api/auth/me"];
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const sessionExpiredRef = useRef(false);
+
+  // Patch global fetch once on mount to detect 401 session expiry everywhere.
+  useEffect(() => {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = async (...args) => {
+      const response = await originalFetch(...args);
+      if (
+        response.status === 401 &&
+        !sessionExpiredRef.current &&
+        !AUTH_ENDPOINTS.some(ep => args[0]?.toString().includes(ep))
+      ) {
+        sessionExpiredRef.current = true;
+        setUser(null);
+        // Small delay so the current toast/UI update can render first
+        setTimeout(() => {
+          window.location.href = "/login?reason=session_expired";
+        }, 800);
+      }
+      return response;
+    };
+    return () => { window.fetch = originalFetch; };
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/me", { credentials: "include" })
@@ -45,6 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(data.error ?? "Login failed");
     }
     const u = await res.json();
+    sessionExpiredRef.current = false;
     setUser(u);
   }
 

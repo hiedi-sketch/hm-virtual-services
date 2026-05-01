@@ -19,12 +19,14 @@ export default function Login() {
   const { login } = useAuth();
   const [, navigate] = useLocation();
 
+  const sessionExpired = new URLSearchParams(window.location.search).get("reason") === "session_expired";
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [passwordError, setPasswordError] = useState("");
-  const [serverError, setServerError] = useState("");
+  const [serverError, setServerError] = useState(sessionExpired ? "Your session expired. Please sign in again." : "");
   const [loading, setLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [pwFocused, setPwFocused] = useState(false);

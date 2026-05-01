@@ -1362,6 +1362,10 @@ export default function Invoices() {
     setDuplicatingId(inv.id);
     try {
       const res = await fetch(`/api/invoices/${inv.id}/duplicate`, { method: "POST", credentials: "include" });
+      if (res.status === 401) {
+        toast({ title: "Session expired", description: "Redirecting to login…", variant: "destructive" });
+        return;
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to duplicate");
       invalidate();
