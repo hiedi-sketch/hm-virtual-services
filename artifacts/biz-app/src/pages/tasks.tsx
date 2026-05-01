@@ -798,12 +798,13 @@ function ClickUpSettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
   const [lists, setLists] = useState<CUList[]>([]);
   const [selectedTeam, setSelectedTeam] = useState("");
   const [selectedSpace, setSelectedSpace] = useState("");
-  const [selectedList, setSelectedList] = useState("");
-  const [selectedListName, setSelectedListName] = useState("");
+  const [selectedLists, setSelectedLists] = useState<Set<string>>(new Set());
+  const [listNamesMap, setListNamesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState<"token" | "team" | "space" | "list" | "done">("token");
-  const [settings, setSettings] = useState<{ configured: boolean; token_masked: string | null; list_name: string | null; clickup_user?: { username: string } | null } | null>(null);
+  const [savedListIds, setSavedListIds] = useState<Array<{ id: string; name: string }>>([]);
+  const [settings, setSettings] = useState<{ configured: boolean; token_masked: string | null; list_name: string | null; list_ids?: Array<{ id: string; name: string }>; clickup_user?: { username: string } | null } | null>(null);
   const [registering, setRegistering] = useState(false);
   const [webhookError, setWebhookError] = useState<string | null>(null);
   const [webhookEndpoint, setWebhookEndpoint] = useState(`${window.location.origin}/api/clickup/webhook`);
@@ -856,26 +857,41 @@ function ClickUpSettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
       const res = await fetch(`/api/clickup/lists/${spaceId}`, { credentials: "include" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to load lists");
-      setLists(data.lists ?? []);
+      const fetchedLists: CUList[] = data.lists ?? [];
+      setLists(fetchedLists);
+      // Build a name map for quick lookup
+      const map: Record<string, string> = {};
+      for (const l of fetchedLists) map[l.id] = l.name;
+      setListNamesMap(map);
+      setSelectedLists(new Set());
       setStep("list");
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setLoading(false); }
   };
 
-  const saveListSelection = async (listId: string, listName: string) => {
-    setSelectedList(listId);
-    setSelectedListName(listName);
+  const toggleListSelection = (id: string) => {
+    setSelectedLists(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const saveListSelections = async () => {
+    if (selectedLists.size === 0) return;
+    const chosenIds = Array.from(selectedLists).map(id => ({ id, name: listNamesMap[id] ?? id }));
     setSaving(true);
     try {
       const res = await fetch("/api/clickup/settings", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: "__keep__", list_id: listId, list_name: listName, team_id: selectedTeam }),
+        body: JSON.stringify({ token: "__keep__", team_id: selectedTeam, list_ids: chosenIds }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save settings");
-      toast({ title: "ClickUp connected!", description: `Syncing with list "${listName}"` });
+      setSavedListIds(chosenIds);
+      toast({ title: "ClickUp connected!", description: `Syncing with ${chosenIds.length} list${chosenIds.length !== 1 ? "s" : ""}` });
       setStep("done");
       onSaved();
     } catch (e: any) {
@@ -996,20 +1012,45 @@ function ClickUpSettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
 
           {step === "list" && (
             <div className="space-y-2">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select List to Sync</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Lists to Sync</p>
+                {selectedLists.size > 0 && (
+                  <span className="text-xs font-medium text-purple-600">{selectedLists.size} selected</span>
+                )}
+              </div>
+              <p className="text-xs text-slate-400">You can sync multiple lists at once.</p>
               {loading ? (
                 <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-slate-400" /></div>
               ) : (
-                <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto">
-                  {lists.map(l => (
-                    <button key={l.id} onClick={() => saveListSelection(l.id, l.name)}
-                      disabled={saving}
-                      className="w-full text-left px-4 py-3 hover:bg-purple-50 hover:text-purple-700 transition-colors disabled:opacity-50">
-                      <p className="text-sm text-slate-700">{l.name}</p>
-                      {l.folder && <p className="text-xs text-slate-400">In {l.folder.name}</p>}
-                    </button>
-                  ))}
-                </div>
+                <>
+                  <div className="divide-y divide-slate-100 border border-slate-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
+                    {lists.map(l => (
+                      <label key={l.id}
+                        className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-purple-50 transition-colors ${selectedLists.has(l.id) ? "bg-purple-50" : ""}`}>
+                        <input
+                          type="checkbox"
+                          checked={selectedLists.has(l.id)}
+                          onChange={() => toggleListSelection(l.id)}
+                          className="rounded border-slate-300 text-purple-600 focus:ring-purple-400"
+                        />
+                        <div>
+                          <p className="text-sm text-slate-700">{l.name}</p>
+                          {l.folder && <p className="text-xs text-slate-400">In {l.folder.name}</p>}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    onClick={saveListSelections}
+                    disabled={saving || selectedLists.size === 0}
+                    className="w-full flex items-center justify-center gap-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg px-4 py-2 transition-colors disabled:opacity-50 mt-2"
+                  >
+                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    {selectedLists.size === 0
+                      ? "Select at least one list"
+                      : `Save ${selectedLists.size} List${selectedLists.size !== 1 ? "s" : ""}`}
+                  </button>
+                </>
               )}
             </div>
           )}
@@ -1020,7 +1061,13 @@ function ClickUpSettingsModal({ onClose, onSaved }: { onClose: () => void; onSav
                 <Check className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-emerald-800">ClickUp connected!</p>
-                  <p className="text-xs text-emerald-600 mt-0.5">Syncing with: {selectedListName}</p>
+                  <p className="text-xs text-emerald-600 mt-0.5">
+                    {savedListIds.length > 0
+                      ? `Syncing with: ${savedListIds.map(l => l.name).join(", ")}`
+                      : settings?.list_ids && settings.list_ids.length > 0
+                        ? `Syncing with: ${settings.list_ids.map(l => l.name).join(", ")}`
+                        : `Syncing with: ${settings?.list_name ?? "your list"}`}
+                  </p>
                 </div>
               </div>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 space-y-2">
@@ -1080,34 +1127,43 @@ function ImportClickUpModal({
   clients,
   onClose,
   onImported,
+  configuredListIds = [],
 }: {
   clients: ApiClient[];
   onClose: () => void;
   onImported: () => void;
+  configuredListIds?: Array<{ id: string; name: string }>;
 }) {
   const { toast } = useToast();
   const [clientId, setClientId] = useState(() => localStorage.getItem(CU_IMPORT_CLIENT_KEY) ?? "");
   const [preview, setPreview] = useState<CUPreviewTask[] | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(true);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [importing, setImporting] = useState(false);
+  const [selectedListId, setSelectedListId] = useState(() => configuredListIds[0]?.id ?? "");
+
+  const fetchPreview = async (listId: string) => {
+    setLoadingPreview(true);
+    setPreview(null);
+    setPreviewError(null);
+    try {
+      const url = listId ? `/api/clickup/import/preview?list_id=${listId}` : "/api/clickup/import/preview";
+      const res = await fetch(url, { credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load ClickUp tasks");
+      setPreview(data.tasks);
+      setSelected(new Set(data.tasks.map((t: CUPreviewTask) => t.id)));
+    } catch (e: any) {
+      setPreviewError(e.message ?? "Could not connect to ClickUp");
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/clickup/import/preview", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Failed to load ClickUp tasks");
-        setPreview(data.tasks);
-        setSelected(new Set(data.tasks.map((t: CUPreviewTask) => t.id)));
-      } catch (e: any) {
-        setPreviewError(e.message ?? "Could not connect to ClickUp");
-      } finally {
-        setLoadingPreview(false);
-      }
-    })();
-  }, []);
+    fetchPreview(selectedListId);
+  }, [selectedListId]);
 
   const toggleTask = (id: string) => {
     setSelected(prev => {
@@ -1171,6 +1227,22 @@ function ImportClickUpModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {configuredListIds.length > 1 && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                Import from List
+              </label>
+              <select
+                value={selectedListId}
+                onChange={e => setSelectedListId(e.target.value)}
+                className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:border-purple-400 transition-colors"
+              >
+                {configuredListIds.map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {loadingPreview && (
             <div className="flex items-center justify-center gap-2 py-10 text-slate-400 text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1446,13 +1518,19 @@ export default function Tasks() {
   const [showClickUpSettings, setShowClickUpSettings] = useState(false);
   const [showClickUpImport, setShowClickUpImport] = useState(false);
   const [clickUpConfigured, setClickUpConfigured] = useState(false);
+  const [cuListIds, setCuListIds] = useState<Array<{ id: string; name: string }>>([]);
 
-  useEffect(() => {
+  const refreshCuSettings = () => {
     fetch("/api/clickup/settings", { credentials: "include" })
       .then(r => r.json())
-      .then(d => setClickUpConfigured(!!d.configured))
+      .then(d => {
+        setClickUpConfigured(!!d.configured);
+        setCuListIds(d.list_ids ?? (d.list_id ? [{ id: d.list_id, name: d.list_name ?? d.list_id }] : []));
+      })
       .catch(() => {});
-  }, []);
+  };
+
+  useEffect(() => { refreshCuSettings(); }, []);
 
   // ── Inline edit trigger ────────────────────────────────────────────────────
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
@@ -1761,7 +1839,7 @@ export default function Tasks() {
       {showClickUpSettings && (
         <ClickUpSettingsModal
           onClose={() => setShowClickUpSettings(false)}
-          onSaved={() => { setClickUpConfigured(true); }}
+          onSaved={() => { setClickUpConfigured(true); refreshCuSettings(); }}
         />
       )}
       {showClickUpImport && (
@@ -1769,6 +1847,7 @@ export default function Tasks() {
           clients={clients}
           onClose={() => setShowClickUpImport(false)}
           onImported={() => refetch()}
+          configuredListIds={cuListIds}
         />
       )}
 

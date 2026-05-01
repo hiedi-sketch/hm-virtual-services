@@ -92,11 +92,17 @@ router.get("/clickup/settings", requireAuth, requireRole("admin"), async (_req, 
     try { cuUser = await getAuthorizedUser(token); } catch { /* invalid token */ }
   }
 
+  const listIdsRaw = await getSetting("clickup_list_ids");
+  const listIds: Array<{ id: string; name: string }> = listIdsRaw
+    ? (() => { try { return JSON.parse(listIdsRaw); } catch { return []; } })()
+    : (listId && listName ? [{ id: listId, name: listName }] : listId ? [{ id: listId, name: listId }] : []);
+
   res.json({
     configured: !!(token && listId),
     token_masked: token ? `${token.slice(0, 6)}${"•".repeat(Math.max(0, token.length - 6))}` : null,
     list_id: listId,
     list_name: listName,
+    list_ids: listIds,
     last_sync_at: lastSyncAt,
     webhook_id: webhookId,
     team_id: teamId,
@@ -112,6 +118,7 @@ router.post("/clickup/settings", requireAuth, requireRole("admin"), async (req, 
     list_id: z.string().optional(),
     list_name: z.string().optional(),
     team_id: z.string().optional(),
+    list_ids: z.array(z.object({ id: z.string(), name: z.string() })).optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -120,7 +127,7 @@ router.post("/clickup/settings", requireAuth, requireRole("admin"), async (req, 
     return;
   }
 
-  const { token, list_id, list_name, team_id } = parsed.data;
+  const { token, list_id, list_name, team_id, list_ids } = parsed.data;
 
   let effectiveToken = token;
   if (token === "__keep__") {
@@ -144,11 +151,23 @@ router.post("/clickup/settings", requireAuth, requireRole("admin"), async (req, 
   }
 
   await setSetting("clickup_token", effectiveToken);
-  if (list_id) await setSetting("clickup_list_id", list_id);
-  if (list_name) await setSetting("clickup_list_name", list_name);
   if (team_id) await setSetting("clickup_team_id", team_id);
 
-  res.json({ ok: true, clickup_user: cuUser, list_id, list_name, team_id });
+  // Multi-list support: save both the array (list_ids) and the first list as primary (list_id)
+  if (list_ids && list_ids.length > 0) {
+    await setSetting("clickup_list_ids", JSON.stringify(list_ids));
+    // Keep single-list fields in sync with the first list for backward compat
+    await setSetting("clickup_list_id", list_ids[0]!.id);
+    await setSetting("clickup_list_name", list_ids[0]!.name);
+  } else if (list_id) {
+    await setSetting("clickup_list_id", list_id);
+    if (list_name) await setSetting("clickup_list_name", list_name);
+    // Rewrite list_ids array to match single selection
+    await setSetting("clickup_list_ids", JSON.stringify([{ id: list_id, name: list_name ?? list_id }]));
+  }
+
+  const savedListIds = await getSetting("clickup_list_ids");
+  res.json({ ok: true, clickup_user: cuUser, list_ids: savedListIds ? JSON.parse(savedListIds) : [] });
 });
 
 // ─── GET /api/clickup/workspaces ─────────────────────────────────────────────
@@ -201,14 +220,20 @@ router.get("/clickup/lists/:spaceId", requireAuth, requireRole("admin"), async (
 
 // ─── GET /api/clickup/import/preview ─────────────────────────────────────────
 
-router.get("/clickup/import/preview", requireAuth, requireRole("admin"), async (_req, res) => {
-  const creds = await getCredentials();
-  if (!creds) {
+router.get("/clickup/import/preview", requireAuth, requireRole("admin"), async (req, res) => {
+  const token = await getToken();
+  if (!token) {
     res.status(400).json({ error: "ClickUp is not configured. Please add your token and choose a list." });
     return;
   }
+  // Allow caller to override which list to preview; fall back to the primary list
+  const listId = (req.query["list_id"] as string | undefined) || await getDefaultListId();
+  if (!listId) {
+    res.status(400).json({ error: "No list configured. Please complete ClickUp setup." });
+    return;
+  }
   try {
-    const tasks = await getListTasks(creds.token, creds.listId);
+    const tasks = await getListTasks(token, listId);
     res.json({
       tasks: tasks.map(t => ({
         id: t.id,
