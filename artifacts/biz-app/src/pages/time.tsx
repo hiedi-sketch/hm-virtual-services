@@ -200,6 +200,7 @@ const editSchema = z.object({
   ended_at: z.string().optional(),
   service_type: serviceTypeSchema,
   notes: z.string().optional(),
+  is_invoiced: z.boolean().optional(),
 });
 
 type ManualValues = z.infer<typeof manualSchema>;
@@ -250,7 +251,7 @@ function EditTimeEntryModal({
   onCancel,
   isPending,
 }: {
-  entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null };
+  entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null; is_invoiced?: boolean | null };
   clients: { id: number; name: string }[] | undefined;
   tasks: { id: number; title: string; client_id: number | null; status: string }[] | undefined;
   onSave: (id: number, data: EditValues) => void;
@@ -268,6 +269,7 @@ function EditTimeEntryModal({
       ended_at: toDatetimeLocal(entry.ended_at),
       service_type: (entry.service_type as "Bookkeeping" | "Virtual Assistant" | null) ?? null,
       notes: entry.notes ?? "",
+      is_invoiced: entry.is_invoiced ?? false,
     },
   });
 
@@ -391,6 +393,15 @@ function EditTimeEntryModal({
             />
           </div>
 
+          <label className="flex items-center gap-2.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              {...register("is_invoiced")}
+              className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-400"
+            />
+            <span className="text-sm text-slate-700">Mark as invoiced</span>
+          </label>
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"
@@ -435,12 +446,14 @@ export default function TimeTracking() {
   const [timerClientId, setTimerClientId] = useState("");
   const [timerTaskId, setTimerTaskId] = useState("");
   const [activeTab, setActiveTab] = useState<"timer" | "manual">("timer");
-  const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null } | null>(null);
+  const [editingEntry, setEditingEntry] = useState<{ id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null; is_invoiced?: boolean | null } | null>(null);
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
-  const [filterDate, setFilterDate] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
   const [filterClientId, setFilterClientId] = useState<number | "">("");
   const [filterServiceType, setFilterServiceType] = useState<"" | "Bookkeeping" | "Virtual Assistant">("");
+  const [filterInvoiced, setFilterInvoiced] = useState<"" | "invoiced" | "not_invoiced">("");
   const [showFilters, setShowFilters] = useState(false);
 
   const today = getTodayLocal();
@@ -455,13 +468,15 @@ export default function TimeTracking() {
     [entries, currentMonth]
   );
 
-  const activeFilterCount = [filterDate, filterClientId, filterServiceType].filter(Boolean).length;
+  const activeFilterCount = [filterDateFrom || filterDateTo, filterClientId, filterServiceType, filterInvoiced].filter(Boolean).length;
   const hasFilters = activeFilterCount > 0;
 
   const clearFilters = () => {
-    setFilterDate("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
     setFilterClientId("");
     setFilterServiceType("");
+    setFilterInvoiced("");
   };
 
   const sortedEntries = useMemo(
@@ -471,11 +486,14 @@ export default function TimeTracking() {
 
   const displayedEntries = useMemo(() => {
     let result = sortedEntries;
-    if (filterDate) result = result.filter(e => e.date === filterDate);
+    if (filterDateFrom) result = result.filter(e => e.date >= filterDateFrom);
+    if (filterDateTo) result = result.filter(e => e.date <= filterDateTo);
     if (filterClientId) result = result.filter(e => e.client_id === Number(filterClientId));
     if (filterServiceType) result = result.filter(e => e.service_type === filterServiceType);
+    if (filterInvoiced === "invoiced") result = result.filter(e => e.is_invoiced === true);
+    if (filterInvoiced === "not_invoiced") result = result.filter(e => !e.is_invoiced);
     return result;
-  }, [sortedEntries, filterDate, filterClientId, filterServiceType]);
+  }, [sortedEntries, filterDateFrom, filterDateTo, filterClientId, filterServiceType, filterInvoiced]);
 
   const filteredMinutes = useMemo(
     () => displayedEntries.reduce((s, e) => s + e.duration_minutes, 0),
@@ -969,10 +987,14 @@ export default function TimeTracking() {
               <div className="flex items-center gap-2 flex-wrap">
                 {/* Today quick-fill */}
                 <button
-                  onClick={() => setFilterDate(d => d === today ? "" : today)}
+                  onClick={() => {
+                    const isToday = filterDateFrom === today && filterDateTo === today;
+                    if (isToday) { setFilterDateFrom(""); setFilterDateTo(""); }
+                    else { setFilterDateFrom(today); setFilterDateTo(today); }
+                  }}
                   className={cn(
                     "flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-lg transition-colors",
-                    filterDate === today
+                    filterDateFrom === today && filterDateTo === today
                       ? "bg-[#266b75] text-white"
                       : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                   )}
@@ -1020,15 +1042,25 @@ export default function TimeTracking() {
             {/* Filter bar */}
             {(showFilters || hasFilters) && (
               <div className="px-6 py-3 border-b border-slate-100 bg-slate-50 flex flex-wrap items-end gap-3">
-                {/* Date picker */}
-                <div className="flex flex-col gap-1 min-w-[160px]">
-                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Date</label>
-                  <div className="relative">
+                {/* Date range */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Date Range</label>
+                  <div className="flex items-center gap-1.5">
                     <input
                       type="date"
-                      value={filterDate}
-                      onChange={e => setFilterDate(e.target.value)}
-                      className="w-full text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none"
+                      value={filterDateFrom}
+                      onChange={e => setFilterDateFrom(e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none w-[140px]"
+                      placeholder="From"
+                    />
+                    <span className="text-xs text-slate-400">to</span>
+                    <input
+                      type="date"
+                      value={filterDateTo}
+                      min={filterDateFrom || undefined}
+                      onChange={e => setFilterDateTo(e.target.value)}
+                      className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none w-[140px]"
+                      placeholder="To"
                     />
                   </div>
                 </div>
@@ -1049,7 +1081,7 @@ export default function TimeTracking() {
                 </div>
 
                 {/* Service type picker */}
-                <div className="flex flex-col gap-1 min-w-[160px]">
+                <div className="flex flex-col gap-1 min-w-[140px]">
                   <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Service Type</label>
                   <select
                     value={filterServiceType}
@@ -1059,6 +1091,20 @@ export default function TimeTracking() {
                     <option value="">All types</option>
                     <option value="Bookkeeping">Bookkeeping</option>
                     <option value="Virtual Assistant">Virtual Assistant</option>
+                  </select>
+                </div>
+
+                {/* Invoiced filter */}
+                <div className="flex flex-col gap-1 min-w-[130px]">
+                  <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Invoice Status</label>
+                  <select
+                    value={filterInvoiced}
+                    onChange={e => setFilterInvoiced(e.target.value as "" | "invoiced" | "not_invoiced")}
+                    className="text-sm border border-slate-200 rounded-lg px-3 py-1.5 bg-white focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] outline-none"
+                  >
+                    <option value="">All entries</option>
+                    <option value="invoiced">Invoiced</option>
+                    <option value="not_invoiced">Not invoiced</option>
                   </select>
                 </div>
 
@@ -1167,22 +1213,38 @@ export default function TimeTracking() {
                             {runningLabel}
                           </div>
                         </div>
-                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1">
+                          {/* Invoiced toggle */}
                           <button
-                            onClick={() => setEditingEntry(entry)}
-                            className="p-1.5 text-slate-300 hover:text-blue-500 transition-colors rounded"
-                            title="Edit entry"
+                            onClick={() => updateMutation.mutate({ id: entry.id, data: { is_invoiced: !entry.is_invoiced } })}
+                            title={entry.is_invoiced ? "Mark as not invoiced" : "Mark as invoiced"}
+                            className={cn(
+                              "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors",
+                              entry.is_invoiced
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100 opacity-0 group-hover:opacity-100"
+                            )}
                           >
-                            <Pencil className="w-3.5 h-3.5" />
+                            <Check className="w-3 h-3" />
+                            {entry.is_invoiced ? "Invoiced" : "Invoice"}
                           </button>
-                          <button
-                            onClick={() => deleteMutation.mutate({ id: entry.id })}
-                            disabled={deleteMutation.isPending}
-                            className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded"
-                            title="Delete entry"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => setEditingEntry(entry)}
+                              className="p-1.5 text-slate-300 hover:text-blue-500 transition-colors rounded"
+                              title="Edit entry"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => deleteMutation.mutate({ id: entry.id })}
+                              disabled={deleteMutation.isPending}
+                              className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded"
+                              title="Delete entry"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

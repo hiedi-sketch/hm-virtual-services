@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -13,6 +13,7 @@ export const timeEntriesTable = pgTable("time_entries", {
   ended_at: text("ended_at"),
   service_type: text("service_type", { enum: ["Bookkeeping", "Virtual Assistant"] }),
   notes: text("notes"),
+  is_invoiced: boolean("is_invoiced").default(false),
 });
 
 export const insertTimeEntrySchema = createInsertSchema(timeEntriesTable).omit({ id: true });

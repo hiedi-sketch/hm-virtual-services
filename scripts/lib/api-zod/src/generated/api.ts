@@ -324,6 +324,7 @@ export const ListTimeEntriesResponseItem = zod.object({
   task_title: zod.string().nullish(),
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
   notes: zod.string().nullish(),
+  is_invoiced: zod.boolean().nullish(),
 });
 export const ListTimeEntriesResponse = zod.array(ListTimeEntriesResponseItem);
 
@@ -357,6 +358,7 @@ export const UpdateTimeEntryBody = zod.object({
   ended_at: zod.string().nullish(),
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
   notes: zod.string().nullish(),
+  is_invoiced: zod.boolean().optional(),
 });
 
 export const UpdateTimeEntryResponse = zod.object({
@@ -371,6 +373,7 @@ export const UpdateTimeEntryResponse = zod.object({
   task_title: zod.string().nullish(),
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
   notes: zod.string().nullish(),
+  is_invoiced: zod.boolean().nullish(),
 });
 
 /**
