@@ -233,7 +233,9 @@ export async function registerWebhook(
       "taskTagUpdated",
     ],
   })) as { id: string; webhook: { id: string; secret: string } };
-  return { id: data.webhook?.id ?? data.id, secret: (data as unknown as Record<string, string>)["secret"] ?? "" };
+  const id = data.webhook?.id ?? data.id;
+  const secret = data.webhook?.secret ?? (data as any).secret ?? "";
+  return { id, secret };
 }
 
 export async function deleteWebhook(token: string, webhookId: string): Promise<void> {

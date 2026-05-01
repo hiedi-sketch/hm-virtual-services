@@ -359,10 +359,10 @@ router.post("/clickup/sync", requireAuth, requireRole("admin"), async (_req, res
 // ─── POST /api/clickup/webhook/register ──────────────────────────────────────
 
 router.post("/clickup/webhook/register", requireAuth, requireRole("admin"), async (req, res) => {
-  const schema = z.object({ endpoint: z.string().url() });
+  const schema = z.object({ endpoint: z.string().url().optional() });
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "A valid endpoint URL is required." });
+    res.status(400).json({ error: "Invalid endpoint URL." });
     return;
   }
 
@@ -378,6 +378,22 @@ router.post("/clickup/webhook/register", requireAuth, requireRole("admin"), asyn
     return;
   }
 
+  // Build the endpoint URL — prefer the caller-supplied override, otherwise derive
+  // from REPLIT_DEV_DOMAIN (development) or HOST env var (production).
+  let endpoint = parsed.data.endpoint;
+  if (!endpoint) {
+    const replitDomain = process.env["REPLIT_DEV_DOMAIN"];
+    const host = process.env["HOST"] ?? process.env["RAILWAY_STATIC_URL"];
+    if (replitDomain) {
+      endpoint = `https://${replitDomain}/api/clickup/webhook`;
+    } else if (host) {
+      endpoint = `${host.startsWith("http") ? host : `https://${host}`}/api/clickup/webhook`;
+    } else {
+      res.status(400).json({ error: "Could not determine public webhook URL. Please supply an endpoint URL manually." });
+      return;
+    }
+  }
+
   try {
     // Delete existing webhook if any
     const existingId = await getSetting("clickup_webhook_id");
@@ -385,11 +401,11 @@ router.post("/clickup/webhook/register", requireAuth, requireRole("admin"), asyn
       try { await deleteWebhook(token, existingId); } catch { /* ignore */ }
     }
 
-    const result = await registerWebhook(token, teamId, parsed.data.endpoint);
+    const result = await registerWebhook(token, teamId, endpoint);
     await setSetting("clickup_webhook_id", result.id);
     if (result.secret) await setSetting("clickup_webhook_secret", result.secret);
 
-    res.json({ ok: true, webhook_id: result.id, secret_saved: !!result.secret });
+    res.json({ ok: true, webhook_id: result.id, endpoint, secret_saved: !!result.secret });
   } catch (err: any) {
     res.status(err.statusCode ?? 502).json({ error: err.message ?? "Failed to register webhook" });
   }
