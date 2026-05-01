@@ -1627,6 +1627,7 @@ export default function Invoices() {
 
       {/* Edit Invoice Modal */}
       <Modal isOpen={!!editingInvoice} onClose={() => setEditingInvoice(null)}
+        size="xl"
         title={`Edit Invoice #${editingInvoice?.id}`}
         description={editingInvoice ? `${getRecipientName(editingInvoice)} · ${formatCurrency(editingInvoice.amount)}` : undefined}>
         {editingInvoice && (

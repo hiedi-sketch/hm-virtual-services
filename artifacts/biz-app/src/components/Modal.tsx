@@ -2,15 +2,26 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect } from "react";
 
+type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl";
+
+const sizeClasses: Record<ModalSize, string> = {
+  sm: "max-w-sm",
+  md: "max-w-lg",
+  lg: "max-w-2xl",
+  xl: "max-w-3xl",
+  "2xl": "max-w-5xl",
+};
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
   description?: string;
   children: React.ReactNode;
+  size?: ModalSize;
 }
 
-export function Modal({ isOpen, onClose, title, description, children }: ModalProps) {
+export function Modal({ isOpen, onClose, title, description, children, size = "md" }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = "hidden";
@@ -38,7 +49,7 @@ export function Modal({ isOpen, onClose, title, description, children }: ModalPr
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: "spring", duration: 0.4, bounce: 0.15 }}
-            className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2"
+            className={`fixed left-1/2 top-1/2 z-50 w-full ${sizeClasses[size]} -translate-x-1/2 -translate-y-1/2 px-4`}
           >
             <div className="bg-card rounded-2xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
               <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white/50">
