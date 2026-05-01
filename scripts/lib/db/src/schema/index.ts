@@ -16,3 +16,4 @@ export * from "./file_uploads";
 export * from "./task_comments";
 export * from "./messages";
 export * from "./app_settings";
+export * from "./client_onboarding_data";

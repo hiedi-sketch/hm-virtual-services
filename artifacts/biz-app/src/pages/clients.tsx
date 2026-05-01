@@ -8,12 +8,13 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { formatCurrency } from "@/lib/utils";
 import { Modal } from "@/components/Modal";
+import { ClientOnboardingModal } from "@/components/ClientOnboardingModal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, Building2, Mail, ChevronRight, Clock, Phone, Globe, User,
-  DollarSign, Monitor, TrendingUp, ChevronDown, ChevronUp, Send,
+  DollarSign, Monitor, TrendingUp, ChevronDown, ChevronUp, Send, ClipboardList,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -98,6 +99,7 @@ async function sendPortalInvite(clientId: number) {
 export default function Clients() {
   const { data: clients, isLoading } = useListClients();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [sendInvite, setSendInvite] = useState(false);
   const queryClient = useQueryClient();
@@ -185,10 +187,16 @@ export default function Clients() {
           <h1 className="text-3xl font-display font-bold text-slate-900">Clients</h1>
           <p className="text-slate-500 mt-1">Manage your clients and their service details.</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="btn-primary">
-          <Plus className="w-5 h-5 mr-2" />
-          Add New Client
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowOnboarding(true)} className="btn-primary">
+            <ClipboardList className="w-4 h-4 mr-1.5" />
+            Onboard New Client
+          </button>
+          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+            <Plus className="w-4 h-4" />
+            Quick Add
+          </button>
+        </div>
       </div>
 
       {/* Running Monthly Total Card — active clients only */}
@@ -350,6 +358,8 @@ export default function Clients() {
           </div>
         </form>
       </Modal>
+
+      <ClientOnboardingModal isOpen={showOnboarding} onClose={() => setShowOnboarding(false)} />
     </div>
   );
 }

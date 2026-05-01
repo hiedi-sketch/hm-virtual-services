@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable, usersTable, passwordResetTokensTable } from "@workspace/db";
+import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable, usersTable, passwordResetTokensTable, clientOnboardingDataTable } from "@workspace/db";
 import { eq, and, gte, lt, sql, inArray, or, isNull } from "drizzle-orm";
 import {
   CreateClientBody,
@@ -94,6 +94,99 @@ router.post("/clients", requireAdmin, async (req, res) => {
   const body = CreateClientBody.parse(req.body);
   const [client] = await db.insert(clientsTable).values(body).returning();
   res.status(201).json(client);
+});
+
+// ── POST /clients/onboard ────────────────────────────────────────────────────
+router.post("/clients/onboard", requireAdmin, async (req, res) => {
+  const {
+    // Client basics
+    name, contact_name, email, phone, website,
+    // Onboarding fields
+    services, industry,
+    bk_software, bk_existing_accounts, bk_fiscal_year_end, bk_accounting_basis,
+    bk_business_bank_account, bk_notes,
+    va_task_types, va_tools, va_communication, va_availability,
+    access_notes, goals, other_notes,
+    // Portal invite option
+    send_invite,
+  } = req.body;
+
+  if (!name || !email || !services) {
+    res.status(400).json({ error: "name, email, and services are required" });
+    return;
+  }
+
+  // 1. Create the client record
+  const [client] = await db.insert(clientsTable).values({
+    name, email,
+    contact_name: contact_name || null,
+    phone: phone || null,
+    website: website || null,
+    monthly_hour_budget: 0,
+    monthly_fee: 0,
+    autopay_enabled: false,
+  }).returning();
+
+  // 2. Save the onboarding details
+  await db.insert(clientOnboardingDataTable).values({
+    client_id: client.id,
+    services,
+    industry: industry || null,
+    bk_software: bk_software || null,
+    bk_existing_accounts: bk_existing_accounts || null,
+    bk_fiscal_year_end: bk_fiscal_year_end || null,
+    bk_accounting_basis: bk_accounting_basis || null,
+    bk_business_bank_account: bk_business_bank_account || null,
+    bk_notes: bk_notes || null,
+    va_task_types: va_task_types || null,
+    va_tools: va_tools || null,
+    va_communication: va_communication || null,
+    va_availability: va_availability || null,
+    access_notes: access_notes || null,
+    goals: goals || null,
+    other_notes: other_notes || null,
+  });
+
+  // 3. Optionally send portal invite
+  if (send_invite && isMailConfigured()) {
+    try {
+      let [user] = await db.select().from(usersTable).where(eq(usersTable.email, email.toLowerCase()));
+      if (!user) {
+        const tempHash = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
+        [user] = await db.insert(usersTable).values({
+          email: email.toLowerCase(),
+          name: contact_name ?? name,
+          password_hash: tempHash,
+          role: "client",
+          client_id: client.id,
+        }).returning();
+      }
+      const token = randomBytes(32).toString("hex");
+      await db.insert(passwordResetTokensTable).values({
+        user_id: user.id, token,
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        used: false,
+      });
+      const appUrl = process.env.REPLIT_DEV_DOMAIN
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+        : (process.env.APP_URL ?? "http://localhost:3000");
+      const inviteUrl = `${appUrl}/reset-password?token=${token}`;
+      const clientName = contact_name ?? name;
+      await sendMail(email, "You're invited to the HM Virtual Services Client Portal", template(`
+        <p>Hi ${clientName},</p>
+        <p>Welcome! Your onboarding is complete. Click below to set up your portal login.</p>
+        <p style="text-align:center;margin:28px 0;">
+          <a href="${inviteUrl}" style="display:inline-block;background:#266b75;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px;">Set Up My Account</a>
+        </p>
+        <p style="color:#64748b;font-size:13px;">This link expires in 7 days.</p>
+      `));
+    } catch (err) {
+      // Non-fatal — client is already saved
+      console.error("[onboard] invite send failed:", err);
+    }
+  }
+
+  res.status(201).json({ client, ok: true });
 });
 
 router.get("/clients/:id", requireAuth, async (req, res) => {

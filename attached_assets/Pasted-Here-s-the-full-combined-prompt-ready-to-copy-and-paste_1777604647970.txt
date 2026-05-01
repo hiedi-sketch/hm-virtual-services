@@ -1,0 +1,76 @@
+Here's the full combined prompt, ready to copy and paste into Replit:
+
+---
+
+I have an existing client dashboard with a "Client Hub" section. I need you to make the following changes:
+
+**1. Modify the existing "Add New Client" button**
+Keep the existing "Add New Client" button at the top of the Client Hub. This button should continue to do what it already does — add a client quickly without any workflow.
+
+**2. Add a new "Onboard a New Client" button**
+Place a second button directly next to (or near) the existing "Add New Client" button at the top of the Client Hub. Label it **"Onboard a New Client"**.
+
+When clicked, this button should launch a **multi-step onboarding workflow** that collects the following information about my new client:
+
+**Step 1 — Service Selection**
+Ask me to select which service(s) this client needs:
+- Bookkeeping only
+- Virtual Assistant (VA) only
+- Both Bookkeeping & VA
+
+The rest of the form should show only the sections relevant to the selected service(s).
+
+**Step 2 — Business Basics (all clients)**
+- Client full name
+- Business name
+- Email address
+- Phone number
+- Industry / type of business
+
+**Step 3 — Bookkeeping Details** *(show only if Bookkeeping or Both was selected)*
+- Accounting software they currently use (QuickBooks, Wave, Xero, FreshBooks, None, Other)
+- Do they have existing accounts set up? (Yes / No)
+- Fiscal year end (month)
+- Are they on cash or accrual basis?
+- Do they have a dedicated business bank account? (Yes / No)
+- Any notes on their current bookkeeping situation
+
+**Step 4 — Virtual Assistant Details** *(show only if VA or Both was selected)*
+- What types of tasks do they need help with? (multi-select: email management, scheduling, data entry, customer follow-up, social media, research, other)
+- Tools/platforms they use (e.g. Google Workspace, Microsoft 365, Trello, Asana, etc.)
+- Preferred communication method (email, Slack, Voxer, text, phone)
+- Availability expectations / working hours
+
+**Step 5 — Access & Credentials**
+- A checklist or text field for noting what software access and logins the client will need to share with me separately — do NOT collect actual passwords in this form
+
+**Step 6 — Goals & Priorities**
+- What are their top 3 goals for working together?
+- Anything else they want me to know?
+
+**Step 7 — Client Portal Access Setup**
+- Prompt the client to create a login for their own client portal
+- Fields:
+  - Email address (pre-filled from Step 2, but editable)
+  - Create a password
+  - Confirm password
+- Password requirements: minimum 8 characters, at least one number
+- Validate that both password fields match before allowing submission
+- On submit, save these credentials to the existing user/auth system so the client can log into their own portal
+
+**Step 8 — Confirmation & Submission**
+- Show a summary of everything entered
+- On submit, send the full onboarding details to my email using a mailto: link (I will configure the email address)
+- Also save the client to my existing client list/database just like the "Add New Client" button does
+- Display a success confirmation message that tells the client their portal is ready and includes their login email
+
+**Design requirements:**
+- The workflow should appear as a **modal or slide-in panel** (not a separate page) so I stay in my dashboard
+- Show a **progress bar or step indicator** at the top so I can see where I am in the workflow
+- Each step should have Back and Next buttons; the final step has a Submit button
+- Match the existing dashboard's fonts, colors, and button styles exactly — do not introduce new design styles
+- The form should be clean, readable, and work on both desktop and mobile
+
+---
+
+Good luck with the build! Come back if you want help writing prompts for any other features you want to add to the dashboard.
