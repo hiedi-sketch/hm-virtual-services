@@ -954,6 +954,7 @@ function RecurringInvoiceForm({ clients, services, onSubmit, onCancel, isPending
   const [lineItems, setLineItems] = useState<DraftItem[]>([]);
   const [manualAmount, setManualAmount] = useState("");
   const [autoSend, setAutoSend] = useState(false);
+  const [autoSendDate, setAutoSendDate] = useState(todayStr());
 
   const hasItems = lineItems.length > 0;
   const total = hasItems ? calcTotal(lineItems) : Number(manualAmount) || 0;
@@ -965,7 +966,8 @@ function RecurringInvoiceForm({ clients, services, onSubmit, onCancel, isPending
       client_id: Number(clientId), frequency,
       interval_days: frequency === "custom" ? intervalDays : null,
       start_date: startDate, end_date: endDate || null,
-      next_due_date: startDate, description: description.trim() || null,
+      next_due_date: autoSend ? (autoSendDate || startDate) : startDate,
+      description: description.trim() || null,
       line_items: hasItems ? lineItems.map(draftToLineItem) : null,
       notes: null, thank_you_message: null,
       amount: total, auto_send: autoSend,
@@ -1019,8 +1021,24 @@ function RecurringInvoiceForm({ clients, services, onSubmit, onCancel, isPending
           <input type="text" inputMode="decimal" className={inputCls} placeholder="0.00" value={manualAmount} onChange={e => setManualAmount(e.target.value)} required={!hasItems} />
         </div>
       )}
-      <div className="border-t border-slate-100 pt-4 space-y-2">
+      <div className="border-t border-slate-100 pt-4 space-y-3">
         <ToggleDiv value={autoSend} onChange={setAutoSend} label="Auto-send to client" sublabel="(email sent automatically when each invoice generates)" />
+        {autoSend && (
+          <div className="ml-1 flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-emerald-800 mb-1">First send date <span className="text-red-400">*</span></label>
+              <input
+                type="date"
+                className={inputCls}
+                value={autoSendDate}
+                min={todayStr()}
+                onChange={e => setAutoSendDate(e.target.value)}
+                required
+              />
+            </div>
+            <p className="text-xs text-emerald-700 max-w-[160px]">The invoice will be generated and emailed on this date, then repeat on your chosen frequency.</p>
+          </div>
+        )}
       </div>
       {total > 0 && (
         <div className="flex justify-end">
@@ -1052,6 +1070,8 @@ function RecurringInvoicesPanel({ clients, services }: {
   const [showForm, setShowForm] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [generatingId, setGeneratingId] = useState<number | null>(null);
+  const [autoSendPromptId, setAutoSendPromptId] = useState<number | null>(null);
+  const [autoSendPromptDate, setAutoSendPromptDate] = useState(todayStr());
 
   const { data: recurring = [], isLoading } = useListRecurringInvoices();
 
@@ -1089,8 +1109,20 @@ function RecurringInvoicesPanel({ clients, services }: {
   });
 
   const getClientName = (id: number) => clients.find(c => c.id === id)?.name ?? `Client #${id}`;
-  const toggle = (r: RecurringInvoice, field: "active" | "auto_send") => {
+  const toggle = (r: RecurringInvoice, field: "active") => {
     updateMutation.mutate({ id: r.id, data: { [field]: !r[field] } });
+  };
+  const toggleAutoSend = (r: RecurringInvoice) => {
+    if (r.auto_send) {
+      updateMutation.mutate({ id: r.id, data: { auto_send: false } });
+    } else {
+      setAutoSendPromptDate(r.next_due_date || todayStr());
+      setAutoSendPromptId(r.id);
+    }
+  };
+  const confirmAutoSend = (id: number) => {
+    updateMutation.mutate({ id, data: { auto_send: true, next_due_date: autoSendPromptDate } });
+    setAutoSendPromptId(null);
   };
 
   return (
@@ -1157,13 +1189,40 @@ function RecurringInvoicesPanel({ clients, services }: {
                       </div>
                       <div
                         role="button" tabIndex={0}
-                        onClick={() => toggle(r, "auto_send")}
-                        onKeyDown={e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(r, "auto_send"); } }}
+                        onClick={() => toggleAutoSend(r)}
+                        onKeyDown={e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggleAutoSend(r); } }}
                         className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500 hover:text-slate-700">
                         {r.auto_send ? <ToggleRight className="w-4 h-4 text-emerald-500" /> : <ToggleLeft className="w-4 h-4" />}
                         Auto-send
                       </div>
                     </div>
+                    {autoSendPromptId === r.id && (
+                      <div className="mt-2 flex flex-wrap items-end gap-3 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                        <div>
+                          <label className="block text-xs font-medium text-emerald-800 mb-1">Send date</label>
+                          <input
+                            type="date"
+                            className={inputCls + " text-sm"}
+                            value={autoSendPromptDate}
+                            onChange={e => setAutoSendPromptDate(e.target.value)}
+                            autoFocus
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => confirmAutoSend(r.id)}
+                            disabled={!autoSendPromptDate || updateMutation.isPending}
+                            className="text-xs font-medium px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-50">
+                            Enable Auto-send
+                          </button>
+                          <button
+                            onClick={() => setAutoSendPromptId(null)}
+                            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-700 transition-colors">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
