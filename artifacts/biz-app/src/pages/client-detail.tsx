@@ -656,7 +656,7 @@ export default function ClientDetail() {
             <div className="flex items-center gap-3 shrink-0">
               {(client as any).is_active === false ? (
                 <button
-                  onClick={() => updateClientMutation.mutate({ params: { id: clientId }, data: { is_active: true } as any })}
+                  onClick={() => updateClientMutation.mutate({ id: clientId, data: { is_active: true } as any })}
                   disabled={updateClientMutation.isPending}
                   className="flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-900 border border-emerald-200 hover:border-emerald-300 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors"
                 >
@@ -665,7 +665,7 @@ export default function ClientDetail() {
                 </button>
               ) : (
                 <button
-                  onClick={() => updateClientMutation.mutate({ params: { id: clientId }, data: { is_active: false } as any })}
+                  onClick={() => updateClientMutation.mutate({ id: clientId, data: { is_active: false } as any })}
                   disabled={updateClientMutation.isPending}
                   className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
                 >
