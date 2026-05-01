@@ -13,7 +13,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, Building2, Mail, ChevronRight, Clock, Phone, Globe, User,
-  DollarSign, Monitor, TrendingUp, ChevronDown, ChevronUp,
+  DollarSign, Monitor, TrendingUp, ChevronDown, ChevronUp, Send,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -88,22 +88,44 @@ function ClientRow({ client, onClick }: { client: any; onClick: () => void }) {
   );
 }
 
+async function sendPortalInvite(clientId: number) {
+  await fetch(`/api/clients/${clientId}/send-portal-invite`, {
+    method: "POST",
+    credentials: "include",
+  });
+}
+
 export default function Clients() {
   const { data: clients, isLoading } = useListClients();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
+  const [sendInvite, setSendInvite] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
   const createMutation = useCreateClient({
     mutation: {
-      onSuccess: () => {
+      onSuccess: async (newClient) => {
         queryClient.invalidateQueries({ queryKey: getListClientsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
         setIsModalOpen(false);
         reset();
-        toast({ title: "Client created successfully" });
+        if (sendInvite) {
+          try {
+            const res = await fetch(`/api/clients/${newClient.id}/send-portal-invite`, {
+              method: "POST", credentials: "include",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error ?? "Failed to send invite");
+            toast({ title: "Client created", description: "Portal invite email sent." });
+          } catch (err: any) {
+            toast({ title: "Client created", description: `Could not send invite: ${err.message}`, variant: "destructive" });
+          }
+        } else {
+          toast({ title: "Client created successfully" });
+        }
+        setSendInvite(false);
       },
       onError: (error) => {
         toast({ title: "Failed to create client", description: error.message, variant: "destructive" });
@@ -130,6 +152,7 @@ export default function Clients() {
 
   const closeModal = () => {
     setIsModalOpen(false);
+    setSendInvite(false);
     reset();
   };
 
@@ -304,6 +327,21 @@ export default function Clients() {
               </div>
             </div>
           </div>
+          <label className="flex items-start gap-3 cursor-pointer select-none rounded-xl border border-[#266b75]/30 bg-[#266b75]/5 px-4 py-3 hover:bg-[#266b75]/10 transition-colors">
+            <input
+              type="checkbox"
+              checked={sendInvite}
+              onChange={e => setSendInvite(e.target.checked)}
+              className="mt-0.5 w-4 h-4 rounded accent-[#266b75] shrink-0"
+            />
+            <div>
+              <p className="text-sm font-medium text-slate-800 flex items-center gap-1.5">
+                <Send className="w-3.5 h-3.5 text-[#266b75]" />
+                Send portal invite email
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">An email will be sent inviting the client to set up their login and access their portal.</p>
+            </div>
+          </label>
           <div className="pt-2 flex justify-end gap-3">
             <button type="button" onClick={closeModal} className="btn-secondary">Cancel</button>
             <button type="submit" disabled={isSubmitting || createMutation.isPending} className="btn-primary">

@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
+import { randomBytes } from "crypto";
+import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable } from "@workspace/db";
+import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable, usersTable, passwordResetTokensTable } from "@workspace/db";
 import { eq, and, gte, lt, sql, inArray, or, isNull } from "drizzle-orm";
 import {
   CreateClientBody,
@@ -12,6 +14,7 @@ import {
 } from "@workspace/api-zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { computeResetWindow } from "./services";
+import { sendMail, template, isMailConfigured } from "../lib/mailer";
 
 const router: IRouter = Router();
 
@@ -164,6 +167,80 @@ router.patch("/clients/:id", requireAdmin, async (req, res) => {
     return;
   }
   res.json(updated);
+});
+
+// ── POST /clients/:id/send-portal-invite ──────────────────────────────────────
+router.post("/clients/:id/send-portal-invite", requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid client id" }); return; }
+
+  const [client] = await db.select().from(clientsTable).where(eq(clientsTable.id, id));
+  if (!client) { res.status(404).json({ error: "Client not found" }); return; }
+  if (!client.email) { res.status(400).json({ error: "Client has no email address" }); return; }
+
+  if (!isMailConfigured()) {
+    res.status(503).json({ error: "SMTP not configured — cannot send invite" });
+    return;
+  }
+
+  // Find or create the portal user account for this client
+  let [user] = await db
+    .select()
+    .from(usersTable)
+    .where(eq(usersTable.email, client.email.toLowerCase()));
+
+  if (!user) {
+    const tempHash = await bcrypt.hash(randomBytes(24).toString("hex"), 10);
+    [user] = await db
+      .insert(usersTable)
+      .values({
+        email: client.email.toLowerCase(),
+        name: client.contact_name ?? client.name,
+        password_hash: tempHash,
+        role: "client",
+        client_id: id,
+      })
+      .returning();
+  } else if (user.role !== "client" || user.client_id !== id) {
+    // Update existing user to link as client portal user if not already
+    [user] = await db
+      .update(usersTable)
+      .set({ role: "client", client_id: id })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+  }
+
+  const token = randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  await db.insert(passwordResetTokensTable).values({
+    user_id: user.id,
+    token,
+    expires_at: expiresAt,
+    used: false,
+  });
+
+  const appUrl = process.env.REPLIT_DEV_DOMAIN
+    ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+    : (process.env.APP_URL ?? "http://localhost:3000");
+  const inviteUrl = `${appUrl}/reset-password?token=${token}`;
+  const clientName = client.contact_name ?? client.name;
+
+  await sendMail(
+    client.email,
+    "You're invited to the HM Virtual Services Client Portal",
+    template(`
+      <p>Hi ${clientName},</p>
+      <p>You've been invited to access your client portal at <strong>HM Virtual Services</strong>. From your portal you can view invoices, track project updates, and communicate with our team.</p>
+      <p style="text-align:center;margin:28px 0;">
+        <a href="${inviteUrl}" style="display:inline-block;background:#266b75;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;font-size:15px;">Set Up My Account</a>
+      </p>
+      <p style="color:#64748b;font-size:13px;">This invitation link expires in <strong>7 days</strong>. If you have any questions, just reply to this email.</p>
+      <p style="color:#64748b;font-size:13px;">Or copy and paste this link into your browser:<br><a href="${inviteUrl}" style="color:#266b75;word-break:break-all;">${inviteUrl}</a></p>
+    `)
+  );
+
+  res.json({ ok: true });
 });
 
 router.get("/dashboard", requireAdmin, async (req, res) => {

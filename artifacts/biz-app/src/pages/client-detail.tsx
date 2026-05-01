@@ -181,6 +181,8 @@ export default function ClientDetail() {
   const [editTimezone, setEditTimezone] = useState("");
   const [editParentId, setEditParentId] = useState<string>("");
 
+  const [sendingInvite, setSendingInvite] = useState(false);
+
   // Subclients sort state
   const [subclientSort, setSubclientSort] = useState<{ col: "name" | "hours_remaining" | "next_reset_date"; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
 
@@ -361,6 +363,24 @@ export default function ClientDetail() {
         client_id: clientId,
       } as any,
     });
+  };
+
+  const handleSendPortalInvite = async () => {
+    if (!client || sendingInvite) return;
+    setSendingInvite(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/send-portal-invite`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to send invite");
+      toast({ title: "Portal invite sent", description: `An invite email was sent to ${client.email}.` });
+    } catch (err: any) {
+      toast({ title: "Could not send invite", description: err.message, variant: "destructive" });
+    } finally {
+      setSendingInvite(false);
+    }
   };
 
   const openEditProfile = () => {
@@ -673,6 +693,17 @@ export default function ClientDetail() {
                   Mark Inactive
                 </button>
               )}
+              <button
+                onClick={handleSendPortalInvite}
+                disabled={sendingInvite}
+                title="Send portal invite email"
+                className="flex items-center gap-1.5 text-sm text-[#266b75] hover:text-[#1d5159] border border-[#266b75]/30 hover:border-[#266b75]/60 bg-[#266b75]/5 hover:bg-[#266b75]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {sendingInvite
+                  ? <span className="w-3.5 h-3.5 border-2 border-[#266b75] border-t-transparent rounded-full animate-spin inline-block" />
+                  : <Send className="w-3.5 h-3.5" />}
+                {sendingInvite ? "Sending…" : "Send Invite"}
+              </button>
               <button
                 onClick={openEditProfile}
                 className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-lg transition-colors"
