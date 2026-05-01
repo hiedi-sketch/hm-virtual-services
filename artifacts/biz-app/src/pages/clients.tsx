@@ -13,12 +13,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Plus, Building2, Mail, ChevronRight, Clock, Phone, Globe, User,
-  DollarSign, Monitor, TrendingUp,
+  DollarSign, Monitor, TrendingUp, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
-// ── Form schema (contact info only) ──────────────────────────────────────────
 const formSchema = z.object({
   name: z.string().min(1, "Business name is required"),
   contact_name: z.string().optional(),
@@ -29,10 +28,70 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-// ── Main page component ───────────────────────────────────────────────────────
+function ClientRow({ client, onClick }: { client: any; onClick: () => void }) {
+  return (
+    <tr
+      onClick={onClick}
+      className="hover:bg-primary/5 transition-colors cursor-pointer group"
+    >
+      <td className="px-6 py-4">
+        <div className="font-semibold text-slate-900 group-hover:text-primary transition-colors flex items-center gap-2">
+          {client.contact_name || client.name}
+          {client.is_active === false && (
+            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 border border-slate-200">
+              Inactive
+            </span>
+          )}
+        </div>
+        {client.contact_name && (
+          <div className="text-slate-500 text-xs mt-0.5 flex items-center gap-1">
+            <Building2 className="w-3 h-3" /> {client.name}
+          </div>
+        )}
+        <div className="text-slate-400 text-xs flex items-center gap-1 mt-0.5">
+          <Mail className="w-3 h-3" /> {client.email}
+        </div>
+      </td>
+      <td className="px-6 py-4">
+        <div className="flex flex-wrap gap-1.5">
+          {!client.service_type && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
+              No package yet
+            </span>
+          )}
+          {(client.service_type === "bookkeeping" || client.service_type === "hybrid") && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+              <DollarSign className="w-3 h-3" />
+              BK{client.bk_fee != null ? ` · ${formatCurrency(client.bk_fee)}/mo` : ""}
+            </span>
+          )}
+          {(client.service_type === "va" || client.service_type === "hybrid") && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/20">
+              <Clock className="w-3 h-3" />
+              VA{client.va_hourly_rate != null ? ` · ${formatCurrency(client.va_hourly_rate)}/hr` : ""}
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-6 py-4 text-slate-600">
+        {client.monthly_hour_budget > 0
+          ? <span>{client.monthly_hour_budget} hrs/mo</span>
+          : <span className="text-slate-300">—</span>}
+      </td>
+      <td className="px-6 py-4 text-right font-semibold text-slate-900">
+        {formatCurrency(client.monthly_fee)}
+      </td>
+      <td className="px-4 py-4 text-slate-300 group-hover:text-primary transition-colors">
+        <ChevronRight className="w-4 h-4" />
+      </td>
+    </tr>
+  );
+}
+
 export default function Clients() {
   const { data: clients, isLoading } = useListClients();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showInactive, setShowInactive] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -74,13 +133,27 @@ export default function Clients() {
     reset();
   };
 
-  // ── Running monthly totals ─────────────────────────────────────────────────
   const allClients = clients ?? [];
-  const runningMonthlyTotal = allClients.reduce((sum, c) => sum + (c.monthly_fee ?? 0), 0);
-  const bkMonthlyTotal = allClients
+  const activeClients = allClients.filter(c => (c as any).is_active !== false);
+  const inactiveClients = allClients.filter(c => (c as any).is_active === false);
+
+  const runningMonthlyTotal = activeClients.reduce((sum, c) => sum + (c.monthly_fee ?? 0), 0);
+  const bkMonthlyTotal = activeClients
     .filter(c => c.service_type === "bookkeeping" || c.service_type === "hybrid")
     .reduce((sum, c) => sum + (c.bk_fee ?? 0), 0);
   const vaMonthlyTotal = runningMonthlyTotal - bkMonthlyTotal;
+
+  const tableHeader = (
+    <thead>
+      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider font-semibold">
+        <th className="px-6 py-4">Client</th>
+        <th className="px-6 py-4">Services</th>
+        <th className="px-6 py-4">Hour Budget</th>
+        <th className="px-6 py-4 text-right">Monthly Fee</th>
+        <th className="px-4 py-4" />
+      </tr>
+    </thead>
+  );
 
   return (
     <div className="space-y-8">
@@ -95,8 +168,8 @@ export default function Clients() {
         </button>
       </div>
 
-      {/* ── Running Monthly Total Card ──────────────────────────────────────── */}
-      {allClients.length > 0 && (
+      {/* Running Monthly Total Card — active clients only */}
+      {activeClients.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
           <div className="flex items-center gap-3 flex-1">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#266b75" }}>
@@ -105,7 +178,7 @@ export default function Clients() {
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Running Monthly Total</p>
               <p className="text-3xl font-bold text-slate-900 leading-tight">{formatCurrency(runningMonthlyTotal)}</p>
-              <p className="text-xs text-slate-400 mt-0.5">across {allClients.length} client{allClients.length !== 1 ? "s" : ""}</p>
+              <p className="text-xs text-slate-400 mt-0.5">across {activeClients.length} active client{activeClients.length !== 1 ? "s" : ""}</p>
             </div>
           </div>
           <div className="flex gap-6 sm:gap-8 sm:border-l sm:border-slate-100 sm:pl-6">
@@ -129,30 +202,23 @@ export default function Clients() {
         </div>
       )}
 
+      {/* Active Clients Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider font-semibold">
-                <th className="px-6 py-4">Client</th>
-                <th className="px-6 py-4">Services</th>
-                <th className="px-6 py-4">Hour Budget</th>
-                <th className="px-6 py-4 text-right">Monthly Fee</th>
-                <th className="px-4 py-4" />
-              </tr>
-            </thead>
+            {tableHeader}
             <tbody className="divide-y divide-slate-100 text-sm">
               {isLoading ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-8 text-center text-slate-400">Loading clients...</td>
                 </tr>
-              ) : clients?.length === 0 ? (
+              ) : activeClients.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Building2 className="w-12 h-12 text-slate-300 mb-3" />
-                      <p className="text-slate-700 font-medium">You're all caught up.</p>
-                      <p className="text-slate-400 text-sm mt-0.5">No clients yet. Add your first to get started.</p>
+                      <p className="text-slate-700 font-medium">No active clients.</p>
+                      <p className="text-slate-400 text-sm mt-0.5">Add your first client to get started.</p>
                       <button onClick={() => setIsModalOpen(true)} className="mt-3 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors" style={{ background: "#266b75" }}>
                         Add New Client
                       </button>
@@ -160,59 +226,8 @@ export default function Clients() {
                   </td>
                 </tr>
               ) : (
-                clients?.map(client => (
-                  <tr
-                    key={client.id}
-                    onClick={() => navigate(`/clients/${client.id}`)}
-                    className="hover:bg-primary/5 transition-colors cursor-pointer group"
-                    style={{ "--tw-bg-opacity": "1" } as any}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900 group-hover:text-primary transition-colors">
-                        {client.contact_name || client.name}
-                      </div>
-                      {client.contact_name && (
-                        <div className="text-slate-500 text-xs mt-0.5 flex items-center gap-1">
-                          <Building2 className="w-3 h-3" /> {client.name}
-                        </div>
-                      )}
-                      <div className="text-slate-400 text-xs flex items-center gap-1 mt-0.5">
-                        <Mail className="w-3 h-3" /> {client.email}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-wrap gap-1.5">
-                        {!client.service_type && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-400 border border-slate-200">
-                            No package yet
-                          </span>
-                        )}
-                        {(client.service_type === "bookkeeping" || client.service_type === "hybrid") && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                            <DollarSign className="w-3 h-3" />
-                            BK{client.bk_fee != null ? ` · ${formatCurrency(client.bk_fee)}/mo` : ""}
-                          </span>
-                        )}
-                        {(client.service_type === "va" || client.service_type === "hybrid") && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/20">
-                            <Clock className="w-3 h-3" />
-                            VA{client.va_hourly_rate != null ? ` · ${formatCurrency(client.va_hourly_rate)}/hr` : ""}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600">
-                      {client.monthly_hour_budget > 0
-                        ? <span>{client.monthly_hour_budget} hrs/mo</span>
-                        : <span className="text-slate-300">—</span>}
-                    </td>
-                    <td className="px-6 py-4 text-right font-semibold text-slate-900">
-                      {formatCurrency(client.monthly_fee)}
-                    </td>
-                    <td className="px-4 py-4 text-slate-300 group-hover:text-primary transition-colors">
-                      <ChevronRight className="w-4 h-4" />
-                    </td>
-                  </tr>
+                activeClients.map(client => (
+                  <ClientRow key={client.id} client={client} onClick={() => navigate(`/clients/${client.id}`)} />
                 ))
               )}
             </tbody>
@@ -220,14 +235,39 @@ export default function Clients() {
         </div>
       </div>
 
-      {/* ── Add New Client Modal ────────────────────────────────────────── */}
+      {/* Inactive Clients — collapsible section */}
+      {inactiveClients.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 overflow-hidden">
+          <button
+            onClick={() => setShowInactive(v => !v)}
+            className="w-full flex items-center justify-between px-6 py-4 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-slate-500">Inactive Clients</span>
+              <span className="text-xs font-semibold bg-slate-200 text-slate-500 rounded-full px-2 py-0.5">{inactiveClients.length}</span>
+            </div>
+            {showInactive ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+          </button>
+          {showInactive && (
+            <div className="bg-white overflow-x-auto">
+              <table className="w-full text-left border-collapse opacity-70">
+                {tableHeader}
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {inactiveClients.map(client => (
+                    <ClientRow key={client.id} client={client} onClick={() => navigate(`/clients/${client.id}`)} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Add New Client Modal */}
       <Modal isOpen={isModalOpen} onClose={closeModal} title="Add New Client" description="Enter the client's contact details. Services can be assigned from the client detail page.">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-
-          {/* Contact Info */}
           <div className="space-y-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Contact Information</p>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label-text">Client Name</label>
@@ -239,7 +279,6 @@ export default function Clients() {
                 {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
               </div>
             </div>
-
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label-text">Email Address <span className="text-destructive">*</span></label>
@@ -257,7 +296,6 @@ export default function Clients() {
                 </div>
               </div>
             </div>
-
             <div>
               <label className="label-text">Website</label>
               <div className="relative">
@@ -266,7 +304,6 @@ export default function Clients() {
               </div>
             </div>
           </div>
-
           <div className="pt-2 flex justify-end gap-3">
             <button type="button" onClick={closeModal} className="btn-secondary">Cancel</button>
             <button type="submit" disabled={isSubmitting || createMutation.isPending} className="btn-primary">

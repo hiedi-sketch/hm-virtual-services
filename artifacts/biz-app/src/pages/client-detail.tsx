@@ -584,8 +584,13 @@ export default function ClientDetail() {
                 {(client.contact_name || client.name).charAt(0).toUpperCase()}
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">
+                <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
                   {client.contact_name || client.name}
+                  {(client as any).is_active === false && (
+                    <span className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-400 border border-slate-200">
+                      Inactive
+                    </span>
+                  )}
                 </h1>
                 {client.contact_name && (
                   <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-1.5">
@@ -649,6 +654,25 @@ export default function ClientDetail() {
               </div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
+              {(client as any).is_active === false ? (
+                <button
+                  onClick={() => updateClientMutation.mutate({ params: { id: clientId }, data: { is_active: true } as any })}
+                  disabled={updateClientMutation.isPending}
+                  className="flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-900 border border-emerald-200 hover:border-emerald-300 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Restore Client
+                </button>
+              ) : (
+                <button
+                  onClick={() => updateClientMutation.mutate({ params: { id: clientId }, data: { is_active: false } as any })}
+                  disabled={updateClientMutation.isPending}
+                  className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Mark Inactive
+                </button>
+              )}
               <button
                 onClick={openEditProfile}
                 className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-lg transition-colors"

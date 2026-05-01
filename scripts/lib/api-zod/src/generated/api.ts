@@ -96,6 +96,7 @@ export const UpdateClientBody = zod.object({
   va_hourly_rate: zod.number().nullable().optional(),
   va_hour_limit: zod.number().nullable().optional(),
   parent_id: zod.number().nullable().optional(),
+  is_active: zod.boolean().optional(),
 });
 
 export const UpdateClientResponse = zod.object({

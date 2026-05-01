@@ -28,6 +28,8 @@ export const clientsTable = pgTable("clients", {
   square_card_id: text("square_card_id"),
   /** Whether autopay is enabled for this client */
   autopay_enabled: boolean("autopay_enabled").notNull().default(false),
+  /** Whether this client is active; inactive clients are hidden from main lists */
+  is_active: boolean("is_active").notNull().default(true),
 });
 
 export const insertClientSchema = createInsertSchema(clientsTable).omit({ id: true });
