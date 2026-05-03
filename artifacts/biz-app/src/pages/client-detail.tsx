@@ -606,6 +606,13 @@ export default function ClientDetail() {
                   <option value="America/Winnipeg">Winnipeg (CT)</option>
                   <option value="America/Edmonton">Edmonton (MT)</option>
                 </optgroup>
+                <optgroup label="Caribbean &amp; Atlantic">
+                  <option value="Atlantic/Bermuda">Bermuda (AST/ADT)</option>
+                  <option value="America/Puerto_Rico">Puerto Rico (AST)</option>
+                  <option value="America/Jamaica">Jamaica (EST)</option>
+                  <option value="America/Barbados">Barbados (AST)</option>
+                  <option value="America/Nassau">Nassau / Bahamas (ET)</option>
+                </optgroup>
                 <optgroup label="Europe">
                   <option value="Europe/London">London (GMT/BST)</option>
                   <option value="Europe/Paris">Paris (CET/CEST)</option>
