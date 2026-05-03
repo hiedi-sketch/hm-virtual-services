@@ -30,6 +30,12 @@ export const clientsTable = pgTable("clients", {
   autopay_enabled: boolean("autopay_enabled").notNull().default(false),
   /** Whether this client is active; inactive clients are hidden from main lists */
   is_active: boolean("is_active").notNull().default(true),
+  /** Date the client agreement was signed */
+  signed_date: text("signed_date"),
+  /** Client's recurring billing date (YYYY-MM-DD or MM-DD) */
+  billing_date: text("billing_date"),
+  /** Billing method: 'direct' = Direct Bill, 'time_etc' = Time Etc Billing */
+  billing_method: text("billing_method"),
 });
 
 export const insertClientSchema = createInsertSchema(clientsTable).omit({ id: true });

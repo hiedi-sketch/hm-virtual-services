@@ -25,7 +25,7 @@ import {
   Monitor, Pencil, Check, AlertCircle, Globe, User, Package,
   RefreshCw, ShoppingBag, Trash2, MessageSquare, Send, ChevronDown, ChevronUp,
   Users, ArrowUpDown, ArrowUp, ArrowDown, Link as LinkIcon, MapPin, Building2, Clock,
-  ClipboardList,
+  ClipboardList, Calendar, CreditCard, Receipt,
 } from "lucide-react";
 import { ClientOnboardingChecklist } from "@/components/ClientOnboardingChecklist";
 import { cn, formatCurrency, fmtHours } from "@/lib/utils";
@@ -71,6 +71,17 @@ function fmtOffsetLabel(hours: number): string {
   if (m > 0) parts.push(`${m}m`);
   return hours > 0 ? `${parts.join(" ")} ahead of you` : `${parts.join(" ")} behind you`;
 }
+
+function formatDisplayDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+const BILLING_METHOD_LABELS: Record<string, string> = {
+  direct: "Direct Bill",
+  time_etc: "Time Etc Billing",
+};
 
 function ClientTimeCard({ timezone, clientName }: { timezone: string; clientName: string }) {
   const firstName = clientName.split(" ")[0];
@@ -182,6 +193,9 @@ export default function ClientDetail() {
   const [editWebsite, setEditWebsite] = useState("");
   const [editTimezone, setEditTimezone] = useState("");
   const [editParentId, setEditParentId] = useState<string>("");
+  const [editSignedDate, setEditSignedDate] = useState("");
+  const [editBillingDate, setEditBillingDate] = useState("");
+  const [editBillingMethod, setEditBillingMethod] = useState("");
 
   const [sendingInvite, setSendingInvite] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -396,6 +410,9 @@ export default function ClientDetail() {
     setEditWebsite(client.website ?? "");
     setEditTimezone((client as any).timezone ?? "");
     setEditParentId((client as any).parent_id != null ? String((client as any).parent_id) : "");
+    setEditSignedDate((client as any).signed_date ?? "");
+    setEditBillingDate((client as any).billing_date ?? "");
+    setEditBillingMethod((client as any).billing_method ?? "");
     setShowEditProfile(true);
   };
 
@@ -412,6 +429,9 @@ export default function ClientDetail() {
         website: editWebsite.trim() || null,
         timezone: editTimezone || null,
         parent_id: editParentId !== "" ? Number(editParentId) : null,
+        signed_date: editSignedDate || null,
+        billing_date: editBillingDate || null,
+        billing_method: editBillingMethod || null,
       } as any,
     });
   };
@@ -512,6 +532,38 @@ export default function ClientDetail() {
                 <input type="tel" className={inputCls} value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder="(555) 123-4567" />
               </div>
             </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Signed Date</label>
+                <input type="date" className={inputCls} value={editSignedDate} onChange={e => setEditSignedDate(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Billing Date</label>
+                <input type="date" className={inputCls} value={editBillingDate} onChange={e => setEditBillingDate(e.target.value)} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-2">Billing Method</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["", "direct", "time_etc"] as const).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setEditBillingMethod(v)}
+                    className={cn(
+                      "py-2 px-3 rounded-lg text-sm font-medium border transition-colors",
+                      editBillingMethod === v
+                        ? "bg-[#266b75] text-white border-[#266b75]"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    {v === "" ? "Not set" : v === "direct" ? "Direct Bill" : "Time Etc"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Address</label>
               <input className={inputCls} value={editAddress} onChange={e => setEditAddress(e.target.value)} placeholder="123 Main St, City, State 12345" />
@@ -630,6 +682,24 @@ export default function ClientDetail() {
                     <span className="flex items-center gap-1.5 text-sm text-slate-500">
                       <Phone className="w-3.5 h-3.5 shrink-0" />
                       {client.phone}
+                    </span>
+                  )}
+                  {(client as any).signed_date && (
+                    <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                      <Calendar className="w-3.5 h-3.5 shrink-0" />
+                      Signed: {formatDisplayDate((client as any).signed_date)}
+                    </span>
+                  )}
+                  {(client as any).billing_date && (
+                    <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                      <CreditCard className="w-3.5 h-3.5 shrink-0" />
+                      Billing date: {formatDisplayDate((client as any).billing_date)}
+                    </span>
+                  )}
+                  {(client as any).billing_method && (
+                    <span className="flex items-center gap-1.5 text-sm text-slate-500">
+                      <Receipt className="w-3.5 h-3.5 shrink-0" />
+                      {BILLING_METHOD_LABELS[(client as any).billing_method] ?? (client as any).billing_method}
                     </span>
                   )}
                   {(client as any).address && (

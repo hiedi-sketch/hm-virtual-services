@@ -32,6 +32,9 @@ export const ListClientsResponseItem = zod.object({
   va_hour_limit: zod.number().nullable().optional(),
   parent_id: zod.number().nullable().optional(),
   is_active: zod.boolean().optional(),
+  signed_date: zod.string().nullable().optional(),
+  billing_date: zod.string().nullable().optional(),
+  billing_method: zod.string().nullable().optional(),
 });
 export const ListClientsResponse = zod.array(ListClientsResponseItem);
 
@@ -73,6 +76,9 @@ export const GetClientResponse = zod.object({
   bk_fee: zod.number().nullable().optional(),
   va_hourly_rate: zod.number().nullable().optional(),
   va_hour_limit: zod.number().nullable().optional(),
+  signed_date: zod.string().nullable().optional(),
+  billing_date: zod.string().nullable().optional(),
+  billing_method: zod.string().nullable().optional(),
 });
 
 /**
@@ -98,6 +104,9 @@ export const UpdateClientBody = zod.object({
   va_hour_limit: zod.number().nullable().optional(),
   parent_id: zod.number().nullable().optional(),
   is_active: zod.boolean().optional(),
+  signed_date: zod.string().nullable().optional(),
+  billing_date: zod.string().nullable().optional(),
+  billing_method: zod.string().nullable().optional(),
 });
 
 export const UpdateClientResponse = zod.object({
