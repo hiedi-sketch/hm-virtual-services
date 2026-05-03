@@ -14,8 +14,10 @@ import { usersTable } from "@workspace/db";
 import { spawnRecurringTasks } from "./lib/spawn-recurring";
 import { runDailyRecurringInvoices, runDailyReminders } from "./lib/invoice-scheduler";
 import { WebhookHandlers } from "./lib/webhookHandlers";
+import { verifySquareWebhookSignature } from "./lib/squareClient";
 import { invoicesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 const app: Express = express();
 
@@ -58,6 +60,103 @@ app.post(
       logger.error({ err }, "Stripe webhook error");
       res.status(400).json({ error: "Webhook processing error" });
     }
+  }
+);
+
+// ── Square webhook: must be registered BEFORE express.json() ─────────────
+// Square sends a raw body; express.json() would break HMAC-SHA256 verification.
+app.post(
+  "/api/webhooks/square",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const rawBody = req.body as Buffer;
+    const signature = req.headers["x-square-hmacsha256-signature"];
+    const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
+
+    // Verify signature if key is configured
+    if (signatureKey) {
+      if (!signature || typeof signature !== "string") {
+        logger.warn("[Square webhook] Missing signature header");
+        res.status(400).json({ error: "Missing Square webhook signature" });
+        return;
+      }
+      const notificationUrl = `https://${req.headers.host}${req.url}`;
+      const valid = verifySquareWebhookSignature({ signatureKey, notificationUrl, rawBody, signature });
+      if (!valid) {
+        logger.warn("[Square webhook] Invalid signature");
+        res.status(401).json({ error: "Invalid Square webhook signature" });
+        return;
+      }
+    } else {
+      logger.warn("[Square webhook] SQUARE_WEBHOOK_SIGNATURE_KEY not set — skipping signature verification");
+    }
+
+    let event: any;
+    try {
+      event = JSON.parse(rawBody.toString("utf-8"));
+    } catch {
+      res.status(400).json({ error: "Invalid JSON body" });
+      return;
+    }
+
+    const eventType: string = event.type ?? "";
+    logger.info({ eventType }, "[Square webhook] Received event");
+
+    try {
+      // ── payment.completed — fired when a payment link or checkout is paid ──
+      if (eventType === "payment.completed") {
+        const payment = event.data?.object?.payment;
+        const orderId: string | undefined = payment?.order_id;
+        const status: string | undefined = payment?.status;
+
+        if (status === "COMPLETED" && orderId) {
+          // Find the invoice that stored this order_id in square_invoice_id
+          const rows = await db.execute(
+            sql`SELECT id, status FROM invoices WHERE square_invoice_id = ${orderId} LIMIT 1`
+          );
+          const row = (rows as any).rows?.[0];
+          if (row && row.status !== "paid") {
+            const paidAt = new Date().toISOString().slice(0, 10);
+            await db
+              .update(invoicesTable)
+              .set({ status: "paid", paid_at: paidAt, payment_method: "square_link" } as any)
+              .where(eq(invoicesTable.id, row.id));
+            logger.info({ invoiceId: row.id, orderId }, "[Square webhook] Invoice marked paid via payment link");
+          } else if (!row) {
+            logger.warn({ orderId }, "[Square webhook] payment.completed — no invoice found for order_id");
+          }
+        }
+      }
+
+      // ── invoice.payment_made — fired when a Square Invoice is paid ──────────
+      if (eventType === "invoice.payment_made") {
+        const squareInvoice = event.data?.object?.invoice;
+        const squareInvoiceId: string | undefined = squareInvoice?.id;
+
+        if (squareInvoiceId) {
+          const rows = await db.execute(
+            sql`SELECT id, status FROM invoices WHERE square_invoice_id = ${squareInvoiceId} LIMIT 1`
+          );
+          const row = (rows as any).rows?.[0];
+          if (row && row.status !== "paid") {
+            const paidAt = new Date().toISOString().slice(0, 10);
+            await db
+              .update(invoicesTable)
+              .set({ status: "paid", paid_at: paidAt, payment_method: "square_invoice" } as any)
+              .where(eq(invoicesTable.id, row.id));
+            logger.info({ invoiceId: row.id, squareInvoiceId }, "[Square webhook] Invoice marked paid via Square Invoice");
+          } else if (!row) {
+            logger.warn({ squareInvoiceId }, "[Square webhook] invoice.payment_made — no local invoice found");
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.error({ err, eventType }, "[Square webhook] Error processing event");
+      res.status(500).json({ error: "Webhook processing error" });
+      return;
+    }
+
+    res.status(200).json({ received: true });
   }
 );
 

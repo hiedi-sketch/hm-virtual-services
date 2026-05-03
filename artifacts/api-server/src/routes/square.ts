@@ -4,6 +4,7 @@ import { invoicesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { isSquareConfigured, createSquarePaymentLink } from "../lib/squareClient";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -24,12 +25,18 @@ router.post("/square/checkout/:invoiceId", requireAuth, async (req, res) => {
 
   const origin = `https://${process.env.REPLIT_DOMAINS?.split(",")[0]}`;
   try {
-    const url = await createSquarePaymentLink({
+    const { url, orderId } = await createSquarePaymentLink({
       amountDollars: invoice.amount,
       name: `Invoice #${invoice.id}`,
       invoiceId: invoice.id,
       successUrl: `${origin}/invoices?payment=success&invoice=${invoice.id}`,
     });
+    // Store the Square order_id so we can match payment webhook events back to this invoice
+    await db
+      .update(invoicesTable)
+      .set({ square_invoice_id: orderId } as any)
+      .where(eq(invoicesTable.id, invoiceId));
+    logger.info({ invoiceId, orderId }, "[Square] Payment link created, order_id stored");
     res.json({ url });
   } catch (err: any) {
     res.status(500).json({ error: err.message ?? "Square error" });

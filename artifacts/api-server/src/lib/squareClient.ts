@@ -83,7 +83,10 @@ export async function createSquarePaymentLink({
 
   const data = (await res.json()) as any;
   if (!res.ok) throw new Error(data.errors?.[0]?.detail ?? "Square API error");
-  return data.payment_link.url as string;
+  return {
+    url: data.payment_link.url as string,
+    orderId: data.payment_link.order_id as string,
+  };
 }
 
 // ── Customers API ─────────────────────────────────────────────────────────────
@@ -279,6 +282,35 @@ export async function cancelSquareInvoice(squareInvoiceId: string): Promise<void
     headers: squareHeaders(),
     body: JSON.stringify({ version }),
   });
+}
+
+// ── Webhook signature verification ───────────────────────────────────────────
+/**
+ * Square uses HMAC-SHA256 of (notificationUrl + rawBody) signed with the
+ * webhook signature key from the Square Developer Dashboard.
+ * Header: x-square-hmacsha256-signature
+ */
+export function verifySquareWebhookSignature({
+  signatureKey,
+  notificationUrl,
+  rawBody,
+  signature,
+}: {
+  signatureKey: string;
+  notificationUrl: string;
+  rawBody: Buffer | string;
+  signature: string;
+}): boolean {
+  const payload = notificationUrl + (Buffer.isBuffer(rawBody) ? rawBody.toString("utf-8") : rawBody);
+  const expected = crypto
+    .createHmac("sha256", signatureKey)
+    .update(payload)
+    .digest("base64");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    return false;
+  }
 }
 
 // ── Payments API — charge card on file ───────────────────────────────────────
