@@ -365,6 +365,43 @@ export default function Dashboard() {
     .reduce((s, i) => s + i.amount, 0);
   const totalProjected = totalPaid + totalUnpaid;
 
+  // ── Projected Annual Income ────────────────────────────────────────────────
+  // = YTD paid invoices + outstanding invoices this month + (active client monthly rate × full months left)
+  const _pai_now = new Date();
+  const _pai_year = _pai_now.getFullYear();
+  const _pai_month = _pai_now.getMonth(); // 0-indexed (Jan=0, Dec=11)
+  const _pai_yearStr = String(_pai_year);
+  const _pai_monthStr = `${_pai_yearStr}-${String(_pai_month + 1).padStart(2, "0")}`;
+  const _pai_remainingMonths = 11 - _pai_month; // full months left after the current month
+
+  // 1. All invoices paid since Jan 1 of this year
+  const paiYtdPaid = invoices
+    .filter((i) => i.status === "paid" && (i.due_date ?? "").startsWith(_pai_yearStr))
+    .reduce((s, i) => s + i.amount, 0);
+
+  // 2. Outstanding (unpaid/sent) invoices due this month
+  const paiOutstandingThisMonth = invoices
+    .filter(
+      (i) =>
+        (i.status === "unpaid" || i.status === "sent") &&
+        (i.due_date ?? "").startsWith(_pai_monthStr),
+    )
+    .reduce((s, i) => s + i.amount, 0);
+
+  // 3. Active clients' combined monthly fee × remaining full months in the year
+  const paiActiveMonthlyRevenue = dashClients.reduce((acc, c) => acc + c.monthly_fee, 0);
+  const paiFutureRevenue = paiActiveMonthlyRevenue * _pai_remainingMonths;
+
+  const projectedAnnualIncome = paiYtdPaid + paiOutstandingThisMonth + paiFutureRevenue;
+
+  // Human-readable label for the future-months span (e.g. "Jun – Dec")
+  const _monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const paiNextMonthName = _pai_month < 11 ? _monthNames[_pai_month + 1] : null;
+  const paiLastMonthName = _pai_month < 11 ? _monthNames[11] : null;
+  const paiFutureLabel = paiNextMonthName
+    ? `${paiNextMonthName}–${paiLastMonthName} (${_pai_remainingMonths}mo × ${formatCurrency(paiActiveMonthlyRevenue)})`
+    : null;
+
   // Goal progress
   const incomePaidPct =
     goals.incomeGoal > 0
@@ -840,12 +877,17 @@ export default function Dashboard() {
           <div className="p-3 text-[#7dbdc6] rounded-xl shrink-0">
             <DollarSign className="w-10 h-10" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-s font-semibold uppercase tracking-wider text-slate-500">
-              Projected Total
+              Projected Annual Income
             </p>
             <p className="text-2xl font-bold text-slate-900">
-              {formatCurrency(totalProjected)}
+              {formatCurrency(projectedAnnualIncome)}
+            </p>
+            <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">
+              {formatCurrency(paiYtdPaid)} YTD paid
+              {paiOutstandingThisMonth > 0 && ` · ${formatCurrency(paiOutstandingThisMonth)} outstanding`}
+              {paiFutureLabel && ` · ${paiFutureLabel}`}
             </p>
           </div>
         </div>
