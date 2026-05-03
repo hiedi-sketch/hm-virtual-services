@@ -195,6 +195,7 @@ export default function ClientDetail() {
   const [editSignedDate, setEditSignedDate] = useState("");
   const [editBillingDate, setEditBillingDate] = useState("");
   const [editBillingMethod, setEditBillingMethod] = useState("");
+  const [editNotes, setEditNotes] = useState("");
 
   const [sendingInvite, setSendingInvite] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -411,6 +412,7 @@ export default function ClientDetail() {
     setEditSignedDate((client as any).signed_date ?? "");
     setEditBillingDate((client as any).billing_date ?? "");
     setEditBillingMethod((client as any).billing_method ?? "");
+    setEditNotes((client as any).notes ?? "");
     setShowEditProfile(true);
   };
 
@@ -429,6 +431,7 @@ export default function ClientDetail() {
         signed_date: editSignedDate || null,
         billing_date: editBillingDate || null,
         billing_method: editBillingMethod || null,
+        notes: editNotes.trim() || null,
       } as any,
     });
   };
@@ -488,7 +491,7 @@ export default function ClientDetail() {
   }, 0);
 
   return (
-    <div className="space-y-8 max-w-4xl">
+    <div className="space-y-8 max-w-5xl">
       {/* Back */}
       <button
         onClick={() => navigate("/clients")}
@@ -623,6 +626,16 @@ export default function ClientDetail() {
               </select>
             </div>
 
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Notes</label>
+              <textarea
+                className={inputCls + " resize-none"}
+                rows={4}
+                value={editNotes}
+                onChange={e => setEditNotes(e.target.value)}
+                placeholder="Internal notes about this client…"
+              />
+            </div>
 
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={updateClientMutation.isPending} className="btn-primary flex items-center gap-1.5 text-sm px-4 py-2 min-h-0 rounded-lg">
@@ -635,6 +648,7 @@ export default function ClientDetail() {
             </div>
           </form>
         ) : (
+          <>
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center text-xl font-bold shrink-0">
@@ -785,6 +799,14 @@ export default function ClientDetail() {
               </div>
             </div>
           </div>
+          {/* Notes — shown below the header row when present */}
+          {(client as any).notes && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Notes</p>
+              <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{(client as any).notes}</p>
+            </div>
+          )}
+          </>
         )}
       </div>
 

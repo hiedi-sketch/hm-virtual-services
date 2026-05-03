@@ -36,6 +36,8 @@ export const clientsTable = pgTable("clients", {
   billing_date: text("billing_date"),
   /** Billing method: 'direct' = Direct Bill, 'time_etc' = Time Etc Billing */
   billing_method: text("billing_method"),
+  /** Internal notes about the client */
+  notes: text("notes"),
 });
 
 export const insertClientSchema = createInsertSchema(clientsTable).omit({ id: true });

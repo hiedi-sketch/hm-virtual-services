@@ -35,6 +35,7 @@ export const ListClientsResponseItem = zod.object({
   signed_date: zod.string().nullable().optional(),
   billing_date: zod.string().nullable().optional(),
   billing_method: zod.string().nullable().optional(),
+  notes: zod.string().nullable().optional(),
 });
 export const ListClientsResponse = zod.array(ListClientsResponseItem);
 
@@ -79,6 +80,7 @@ export const GetClientResponse = zod.object({
   signed_date: zod.string().nullable().optional(),
   billing_date: zod.string().nullable().optional(),
   billing_method: zod.string().nullable().optional(),
+  notes: zod.string().nullable().optional(),
 });
 
 /**
@@ -107,6 +109,7 @@ export const UpdateClientBody = zod.object({
   signed_date: zod.string().nullable().optional(),
   billing_date: zod.string().nullable().optional(),
   billing_method: zod.string().nullable().optional(),
+  notes: zod.string().nullable().optional(),
 });
 
 export const UpdateClientResponse = zod.object({
