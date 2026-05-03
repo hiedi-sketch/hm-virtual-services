@@ -10,14 +10,12 @@ import fs from "fs";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db";
+import { usersTable, invoicesTable } from "@workspace/db";
 import { spawnRecurringTasks } from "./lib/spawn-recurring";
 import { runDailyRecurringInvoices, runDailyReminders } from "./lib/invoice-scheduler";
 import { WebhookHandlers } from "./lib/webhookHandlers";
 import { verifySquareWebhookSignature } from "./lib/squareClient";
-import { invoicesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 const app: Express = express();
 

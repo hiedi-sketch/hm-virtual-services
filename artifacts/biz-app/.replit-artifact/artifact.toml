@@ -22,5 +22,4 @@ build = "pnpm --filter @workspace/biz-app --filter @workspace/api-server run bui
 run = "node --enable-source-maps artifacts/api-server/dist/index.mjs"
 
 [services.env]
-PORT = "21931"
 BASE_PATH = "/"
