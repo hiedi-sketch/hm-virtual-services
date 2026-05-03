@@ -78,6 +78,14 @@ function formatDisplayDate(dateStr: string | null | undefined): string {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function ordinalDay(val: string | null | undefined): string {
+  const n = Number(val);
+  if (!val || isNaN(n)) return "";
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 const BILLING_METHOD_LABELS: Record<string, string> = {
   direct: "Direct Bill",
   time_etc: "Time Etc Billing",
@@ -538,8 +546,13 @@ export default function ClientDetail() {
                 <input type="date" className={inputCls} value={editSignedDate} onChange={e => setEditSignedDate(e.target.value)} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Billing Date</label>
-                <input type="date" className={inputCls} value={editBillingDate} onChange={e => setEditBillingDate(e.target.value)} />
+                <label className="block text-xs font-medium text-slate-500 mb-1">Billing Day of Month</label>
+                <select className={inputCls} value={editBillingDate} onChange={e => setEditBillingDate(e.target.value)}>
+                  <option value="">— Not set —</option>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                    <option key={d} value={String(d)}>{ordinalDay(String(d))}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -637,14 +650,37 @@ export default function ClientDetail() {
               />
             </div>
 
-            <div className="flex gap-2 pt-1">
-              <button type="submit" disabled={updateClientMutation.isPending} className="btn-primary flex items-center gap-1.5 text-sm px-4 py-2 min-h-0 rounded-lg">
-                <Check className="w-3.5 h-3.5" />
-                Save Changes
-              </button>
-              <button type="button" onClick={() => setShowEditProfile(false)} className="btn-secondary text-sm px-4 py-2 min-h-0 rounded-lg">
-                Cancel
-              </button>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+              <div className="flex gap-2">
+                <button type="submit" disabled={updateClientMutation.isPending} className="btn-primary flex items-center gap-1.5 text-sm px-4 py-2 min-h-0 rounded-lg">
+                  <Check className="w-3.5 h-3.5" />
+                  Save Changes
+                </button>
+                <button type="button" onClick={() => setShowEditProfile(false)} className="btn-secondary text-sm px-4 py-2 min-h-0 rounded-lg">
+                  Cancel
+                </button>
+              </div>
+              {(client as any).is_active === false ? (
+                <button
+                  type="button"
+                  onClick={() => updateClientMutation.mutate({ id: clientId, data: { is_active: true } as any })}
+                  disabled={updateClientMutation.isPending}
+                  className="flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-900 border border-emerald-200 hover:border-emerald-300 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 rounded-lg transition-colors"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  Restore Client
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => updateClientMutation.mutate({ id: clientId, data: { is_active: false } as any })}
+                  disabled={updateClientMutation.isPending}
+                  className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-200 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Mark Inactive
+                </button>
+              )}
             </div>
           </form>
         ) : (
@@ -689,7 +725,7 @@ export default function ClientDetail() {
                   {(client as any).billing_date && (
                     <span className="flex items-center gap-1.5 text-sm text-slate-500">
                       <CreditCard className="w-3.5 h-3.5 shrink-0" />
-                      Billing date: {formatDisplayDate((client as any).billing_date)}
+                      Billed on the {ordinalDay((client as any).billing_date)}
                     </span>
                   )}
                   {(client as any).billing_method && (
@@ -743,25 +779,6 @@ export default function ClientDetail() {
               </div>
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              {(client as any).is_active === false ? (
-                <button
-                  onClick={() => updateClientMutation.mutate({ id: clientId, data: { is_active: true } as any })}
-                  disabled={updateClientMutation.isPending}
-                  className="flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-900 border border-emerald-200 hover:border-emerald-300 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Restore Client
-                </button>
-              ) : (
-                <button
-                  onClick={() => updateClientMutation.mutate({ id: clientId, data: { is_active: false } as any })}
-                  disabled={updateClientMutation.isPending}
-                  className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Mark Inactive
-                </button>
-              )}
               <button
                 onClick={() => setShowChecklist(v => !v)}
                 className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg border transition-colors ${showChecklist ? "bg-[#266b75] text-white border-[#266b75]" : "text-[#266b75] border-[#266b75]/30 bg-[#266b75]/5 hover:bg-[#266b75]/10 hover:border-[#266b75]/60"}`}
