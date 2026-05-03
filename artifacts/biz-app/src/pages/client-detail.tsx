@@ -192,7 +192,6 @@ export default function ClientDetail() {
   const [editAddress, setEditAddress] = useState("");
   const [editWebsite, setEditWebsite] = useState("");
   const [editTimezone, setEditTimezone] = useState("");
-  const [editParentId, setEditParentId] = useState<string>("");
   const [editSignedDate, setEditSignedDate] = useState("");
   const [editBillingDate, setEditBillingDate] = useState("");
   const [editBillingMethod, setEditBillingMethod] = useState("");
@@ -409,7 +408,6 @@ export default function ClientDetail() {
     setEditAddress((client as any).address ?? "");
     setEditWebsite(client.website ?? "");
     setEditTimezone((client as any).timezone ?? "");
-    setEditParentId((client as any).parent_id != null ? String((client as any).parent_id) : "");
     setEditSignedDate((client as any).signed_date ?? "");
     setEditBillingDate((client as any).billing_date ?? "");
     setEditBillingMethod((client as any).billing_method ?? "");
@@ -428,7 +426,6 @@ export default function ClientDetail() {
         address: editAddress.trim() || null,
         website: editWebsite.trim() || null,
         timezone: editTimezone || null,
-        parent_id: editParentId !== "" ? Number(editParentId) : null,
         signed_date: editSignedDate || null,
         billing_date: editBillingDate || null,
         billing_method: editBillingMethod || null,
@@ -626,21 +623,6 @@ export default function ClientDetail() {
               </select>
             </div>
 
-            {/* Parent Client */}
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Parent Client (optional)</label>
-              <select
-                className={inputCls}
-                value={editParentId}
-                onChange={e => setEditParentId(e.target.value)}
-              >
-                <option value="">— None (top-level client) —</option>
-                {(dashboard ?? []).filter(c => c.id !== clientId).map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              <p className="text-[11px] text-slate-400 mt-1">Set this if the client is a sub-account of another client.</p>
-            </div>
 
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={updateClientMutation.isPending} className="btn-primary flex items-center gap-1.5 text-sm px-4 py-2 min-h-0 rounded-lg">
