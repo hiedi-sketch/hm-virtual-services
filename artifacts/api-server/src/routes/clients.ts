@@ -259,6 +259,29 @@ router.patch("/clients/:id", requireAdmin, async (req, res) => {
     res.status(404).json({ error: "Client not found" });
     return;
   }
+
+  // When billing_date changes, cascade it to all VA services' monthly_hours_reset_day
+  if (body.billing_date != null) {
+    const billingDay = parseInt(String(body.billing_date), 10);
+    if (!isNaN(billingDay) && billingDay >= 1 && billingDay <= 31) {
+      const vaServices = await db
+        .select({ id: servicesTable.id })
+        .from(servicesTable)
+        .where(eq(servicesTable.service_type, "Virtual Assistant"));
+      if (vaServices.length > 0) {
+        await db
+          .update(clientServicesTable)
+          .set({ monthly_hours_reset_day: billingDay })
+          .where(
+            and(
+              eq(clientServicesTable.client_id, id),
+              inArray(clientServicesTable.service_id, vaServices.map(s => s.id))
+            )
+          );
+      }
+    }
+  }
+
   res.json(updated);
 });
 
