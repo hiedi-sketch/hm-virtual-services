@@ -15,7 +15,7 @@
   --color-secondary-foreground: hsl(188 51% 22%);
   
   --color-muted: hsl(210 16% 93%);
-  --color-muted-foreground: hsl(215 16% 47%);
+  --color-muted-foreground: hsl(215 25% 32%);
   
   --color-accent: hsl(188 51% 30%);
   --color-accent-foreground: hsl(0 0% 100%);
@@ -31,6 +31,10 @@
 }
 
 @layer base {
+  html {
+    font-size: 19px;                          /* +3pt: scales all rem-based text globally */
+  }
+
   body {
     @apply bg-background text-foreground antialiased font-sans;
   }
@@ -95,3 +99,13 @@
   font-family: 'Caveat', cursive;
   letter-spacing: 0.01em;
 }
+
+/*
+ * Grey text & icon readability overrides.
+ * Declared outside @layer so they win the cascade over Tailwind's layered utilities.
+ * Only affects text/color — bg-slate-xxx and border-slate-xxx are unchanged.
+ * Icons inherit currentColor so they darken automatically with their parent text class.
+ */
+.text-slate-300 { color: #607d8b; }   /* was #cbd5e1 — now Blue Grey 600 (5.7:1 on white) */
+.text-slate-400 { color: #455a64; }   /* was #94a3b8 — now Blue Grey 700 (8.8:1 on white) */
+.text-slate-500 { color: #37474f; }   /* was #64748b — now Blue Grey 800 (12:1 on white)  */
