@@ -480,6 +480,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   const [thankYou, setThankYou] = useState(invoice?.thank_you_message ?? "");
   const [description, setDescription] = useState(invoice?.description ?? "");
   const [saveAsDraft, setSaveAsDraft] = useState(invoice?.status === "draft");
+  const [scheduledSendDate, setScheduledSendDate] = useState<string>((invoice as any)?.scheduled_send_date ?? "");
   const [manualAmount, setManualAmount] = useState<string>(
     invoice && (!invoice.line_items || invoice.line_items.length === 0) ? String(invoice.amount) : ""
   );
@@ -496,6 +497,11 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   const [showAdvanced, setShowAdvanced] = useState(!!(invoice?.notes || invoice?.thank_you_message));
   const [showPreview, setShowPreview] = useState(false);
   const [packagesBanner, setPackagesBanner] = useState(false);
+
+  // When an auto-send date is set, force draft mode
+  useEffect(() => {
+    if (scheduledSendDate) setSaveAsDraft(true);
+  }, [scheduledSendDate]);
 
   // Derive billing day from service period start; notify parent so it can
   // PATCH the client after the invoice is confirmed created (avoids race conditions)
@@ -574,9 +580,11 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
     if (!dueDate) return;
     if (!hasItems && !manualAmount) return;
 
+    // A scheduled send date always keeps the invoice as a draft until that date arrives
+    const forceDraft = !!scheduledSendDate;
     const currentStatus = isEdit
-      ? (saveAsDraft ? "draft" : invoice?.status === "draft" ? "unpaid" : invoice?.status ?? "unpaid")
-      : (saveAsDraft ? "draft" : "unpaid");
+      ? (saveAsDraft || forceDraft ? "draft" : invoice?.status === "draft" ? "unpaid" : invoice?.status ?? "unpaid")
+      : (saveAsDraft || forceDraft ? "draft" : "unpaid");
 
     const base = {
       amount: total,
@@ -591,6 +599,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
       thank_you_message: thankYou.trim() || null,
       service_period_start: servicePeriodStart || null,
       service_period_end: servicePeriodEnd || null,
+      scheduled_send_date: scheduledSendDate || null,
     };
 
     if (isEdit) {
@@ -797,7 +806,41 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
           </div>
         </div>
       )}
-      <ToggleDiv value={saveAsDraft} onChange={setSaveAsDraft} label="Save as Draft" sublabel="(don't send yet)" />
+      {docType === "invoice" && (
+        <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-slate-50/60">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-slate-700">Auto Send Date</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">Invoice stays as draft and is emailed automatically on this date</p>
+            </div>
+            {scheduledSendDate && (
+              <button type="button" onClick={() => setScheduledSendDate("")}
+                className="text-[11px] text-slate-400 hover:text-red-500 transition-colors px-2 py-1 rounded">
+                Clear
+              </button>
+            )}
+          </div>
+          <input
+            type="date"
+            className={inputCls}
+            value={scheduledSendDate}
+            min={new Date().toISOString().split("T")[0]}
+            onChange={e => setScheduledSendDate(e.target.value)}
+          />
+          {scheduledSendDate && (
+            <p className="text-[11px] text-[#266b75] flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#266b75]" />
+              Will be emailed on {new Date(scheduledSendDate + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+            </p>
+          )}
+        </div>
+      )}
+      <ToggleDiv
+        value={saveAsDraft}
+        onChange={(v) => { setSaveAsDraft(v); if (!v) setScheduledSendDate(""); }}
+        label="Save as Draft"
+        sublabel={scheduledSendDate ? "(auto-send scheduled)" : "(don't send yet)"}
+      />
       {total > 0 && (
         <div className="flex justify-end">
           <div className="bg-slate-900 text-white rounded-xl px-5 py-3 text-right">
@@ -1581,6 +1624,12 @@ export default function Invoices() {
                         <span className="text-slate-300 text-xs">#{inv.id}</span>
                         {isEstimate && <span className="text-xs text-teal-600 font-medium bg-teal-50 border border-teal-200 px-1.5 py-0.5 rounded-full">Estimate</span>}
                         {isRecurring && <span className="flex items-center gap-1 text-xs text-blue-500 font-medium"><Repeat className="w-3 h-3" /> recurring</span>}
+                        {(inv as any).scheduled_send_date && inv.status === "draft" && (
+                          <span className="flex items-center gap-1 text-xs text-violet-600 font-medium bg-violet-50 border border-violet-200 px-1.5 py-0.5 rounded-full">
+                            <Clock className="w-3 h-3" />
+                            Sends {new Date((inv as any).scheduled_send_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </span>
+                        )}
                         {inv.description && <><span className="text-slate-400 text-sm">·</span><span className="text-sm text-slate-500 truncate max-w-xs">{inv.description}</span></>}
                       </div>
                       {inv.line_items && inv.line_items.length > 0 && (

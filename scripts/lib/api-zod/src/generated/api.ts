@@ -528,6 +528,7 @@ export const CreateInvoiceBody = zod.object({
   billing_type: zod.enum(["one_time", "recurring"]).optional().default("one_time"),
   service_period_start: zod.string().nullish(),
   service_period_end: zod.string().nullish(),
+  scheduled_send_date: zod.string().nullish(),
 });
 
 /**
@@ -553,6 +554,7 @@ export const UpdateInvoiceBody = zod.object({
   billing_type: zod.enum(["one_time", "recurring"]).optional(),
   service_period_start: zod.string().nullish(),
   service_period_end: zod.string().nullish(),
+  scheduled_send_date: zod.string().nullish(),
 });
 
 export const UpdateInvoiceResponse = zod.object({

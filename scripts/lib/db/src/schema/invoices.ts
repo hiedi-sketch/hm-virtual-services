@@ -54,6 +54,8 @@ export const invoicesTable = pgTable("invoices", {
   action_token: text("action_token"),
   /** Square Invoice ID for two-way sync with the Square Dashboard */
   square_invoice_id: text("square_invoice_id"),
+  /** Future date on which to automatically email this draft invoice */
+  scheduled_send_date: text("scheduled_send_date"),
   updated_at: timestamp("updated_at").defaultNow(),
 });
 

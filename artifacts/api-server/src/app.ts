@@ -12,7 +12,7 @@ import { logger } from "./lib/logger";
 import { db } from "@workspace/db";
 import { usersTable, invoicesTable } from "@workspace/db";
 import { spawnRecurringTasks } from "./lib/spawn-recurring";
-import { runDailyRecurringInvoices, runDailyReminders } from "./lib/invoice-scheduler";
+import { runDailyRecurringInvoices, runDailyReminders, runScheduledSends } from "./lib/invoice-scheduler";
 import { WebhookHandlers } from "./lib/webhookHandlers";
 import { verifySquareWebhookSignature } from "./lib/squareClient";
 import { eq, sql } from "drizzle-orm";
@@ -249,6 +249,7 @@ seedAdmin();
 spawnRecurringTasks().catch((err) => logger.error({ err }, "Startup spawn failed"));
 runDailyRecurringInvoices().catch((err) => logger.error({ err }, "Startup recurring invoices failed"));
 runDailyReminders().catch((err) => logger.error({ err }, "Startup reminders failed"));
+runScheduledSends().catch((err) => logger.error({ err }, "Startup scheduled sends failed"));
 
 // Schedule daily at midnight server time
 cron.schedule("0 0 * * *", () => {
@@ -256,6 +257,7 @@ cron.schedule("0 0 * * *", () => {
   spawnRecurringTasks().catch((err) => logger.error({ err }, "Scheduled spawn failed"));
   runDailyRecurringInvoices().catch((err) => logger.error({ err }, "Scheduled recurring invoices failed"));
   runDailyReminders().catch((err) => logger.error({ err }, "Scheduled reminders failed"));
+  runScheduledSends().catch((err) => logger.error({ err }, "Scheduled sends failed"));
 });
 
 export default app;

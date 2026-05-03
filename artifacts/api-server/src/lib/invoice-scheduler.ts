@@ -394,6 +394,86 @@ export async function runDailyReminders(): Promise<void> {
   if (sent > 0) logger.info({ count: sent }, "Daily reminders sent");
 }
 
+// ── Scheduled send runner ─────────────────────────────────────────────────────
+// Finds draft invoices whose scheduled_send_date has arrived and emails them.
+
+export async function runScheduledSends(): Promise<void> {
+  const today = todayStr();
+
+  const scheduled = await db
+    .select({
+      id: invoicesTable.id,
+      client_id: invoicesTable.client_id,
+      amount: invoicesTable.amount,
+      due_date: invoicesTable.due_date,
+      description: invoicesTable.description,
+      line_items: invoicesTable.line_items,
+      notes: invoicesTable.notes,
+      thank_you_message: invoicesTable.thank_you_message,
+      service_period_start: invoicesTable.service_period_start,
+      service_period_end: invoicesTable.service_period_end,
+      scheduled_send_date: invoicesTable.scheduled_send_date,
+      client_name: clientsTable.name,
+      client_email: clientsTable.email,
+    })
+    .from(invoicesTable)
+    .leftJoin(clientsTable, eq(invoicesTable.client_id, clientsTable.id))
+    .where(
+      and(
+        eq(invoicesTable.status, "draft"),
+        lte(invoicesTable.scheduled_send_date, today),
+      ),
+    );
+
+  let sent = 0;
+
+  for (const inv of scheduled) {
+    if (!inv.scheduled_send_date) continue;
+
+    if (!inv.client_email) {
+      // Can't send — promote to unpaid so it doesn't loop
+      await db.update(invoicesTable)
+        .set({ status: "unpaid", scheduled_send_date: null })
+        .where(eq(invoicesTable.id, inv.id));
+      continue;
+    }
+
+    try {
+      const payUrl = await tryCreateSquareUrl(inv.id, inv.amount, inv.description, inv.due_date);
+      const body = buildInvoiceEmail({
+        invoiceId: inv.id,
+        clientName: inv.client_name ?? "there",
+        amount: inv.amount,
+        dueDate: inv.due_date,
+        description: inv.description,
+        lineItems: inv.line_items as any,
+        notes: inv.notes,
+        thankYouMessage: inv.thank_you_message,
+        payUrl,
+        servicePeriodStart: inv.service_period_start,
+        servicePeriodEnd: inv.service_period_end,
+      });
+
+      await sendMail(
+        inv.client_email,
+        `Invoice #${inv.id} — ${fmtAmount(inv.amount)} due ${fmtDate(inv.due_date)}`,
+        template(body),
+      );
+
+      await db.update(invoicesTable)
+        .set({ status: "sent", scheduled_send_date: null })
+        .where(eq(invoicesTable.id, inv.id));
+
+      sent++;
+      logger.info({ invoiceId: inv.id }, "Scheduled invoice sent");
+    } catch (err: any) {
+      logger.error({ err: err?.message, invoiceId: inv.id }, "Failed to send scheduled invoice");
+    }
+  }
+
+  if (sent > 0) logger.info({ count: sent }, "Scheduled sends complete");
+}
+
 // ── Daily recurring invoice generator ────────────────────────────────────────
 
 export async function runDailyRecurringInvoices(): Promise<void> {
