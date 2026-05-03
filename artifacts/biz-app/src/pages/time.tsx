@@ -243,6 +243,10 @@ function toDatetimeLocal(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function clientDisplayName(c: { name: string; contact_name?: string | null }): string {
+  return c.contact_name?.trim() || c.name;
+}
+
 function EditTimeEntryModal({
   entry,
   clients,
@@ -252,7 +256,7 @@ function EditTimeEntryModal({
   isPending,
 }: {
   entry: { id: number; client_id: number; task_id: number | null; duration_minutes: number; date: string; started_at?: string | null; ended_at?: string | null; service_type?: string | null; notes?: string | null; is_invoiced?: boolean | null };
-  clients: { id: number; name: string }[] | undefined;
+  clients: { id: number; name: string; contact_name?: string | null }[] | undefined;
   tasks: { id: number; title: string; client_id: number | null; status: string }[] | undefined;
   onSave: (id: number, data: EditValues) => void;
   onCancel: () => void;
@@ -314,7 +318,7 @@ function EditTimeEntryModal({
               <select {...register("client_id")} className="input-field">
                 <option value="">Select…</option>
                 {clients?.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>{clientDisplayName(c)}</option>
                 ))}
               </select>
               {errors.client_id && <p className="text-destructive text-xs mt-1">{errors.client_id.message}</p>}
@@ -639,7 +643,8 @@ export default function TimeTracking() {
       },
     }, {
       onSuccess: () => {
-        const clientName = clients?.find(c => c.id === activeTimer.clientId)?.name ?? "Client";
+        const _c = clients?.find(c => c.id === activeTimer.clientId);
+        const clientName = _c ? clientDisplayName(_c) : "Client";
         toast({ title: `Logged ${formatDuration(mins)} for ${clientName}` });
       },
     });
@@ -680,7 +685,8 @@ export default function TimeTracking() {
     updateMutation.mutate({ id, data });
   };
 
-  const timerClientName = clients?.find(c => c.id === activeTimer?.clientId)?.name;
+  const timerClientObj = clients?.find(c => c.id === activeTimer?.clientId);
+  const timerClientName = timerClientObj ? clientDisplayName(timerClientObj) : undefined;
   const timerTaskName = tasks?.find(t => t.id === activeTimer?.taskId)?.title;
 
   return (
@@ -809,7 +815,7 @@ export default function TimeTracking() {
                     >
                       <option value="">Select a client…</option>
                       {clients?.map(c => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <option key={c.id} value={c.id}>{clientDisplayName(c)}</option>
                       ))}
                     </select>
                   </div>
@@ -861,7 +867,7 @@ export default function TimeTracking() {
                   <select {...register("client_id")} className="input-field bg-slate-50">
                     <option value="">Select a client…</option>
                     {clients?.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <option key={c.id} value={c.id}>{clientDisplayName(c)}</option>
                     ))}
                   </select>
                   {errors.client_id && (

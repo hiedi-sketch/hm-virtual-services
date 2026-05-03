@@ -56,7 +56,8 @@ function TimerPopoutInner() {
 
   function handleClientChange(val: string) {
     const id = val ? Number(val) : null;
-    const name = clients?.find(c => c.id === id)?.name ?? null;
+    const found = clients?.find(c => c.id === id);
+    const name = found ? (found.contact_name?.trim() || found.name) : null;
     if (id && name) assignClient(id, name);
   }
 
@@ -134,7 +135,7 @@ function TimerPopoutInner() {
         <div
           className={cn(
             "font-mono text-[3.5rem] font-bold tracking-tight tabular-nums leading-none transition-colors",
-            isRunning ? "text-[#266b75]" : isPaused ? "text-amber-500" : "text-slate-300"
+            isRunning ? "text-[#266b75]" : isPaused ? "text-amber-500" : "text-slate-400"
           )}
         >
           {formatElapsed(elapsedMs)}
@@ -155,13 +156,13 @@ function TimerPopoutInner() {
             <span className="text-[11px] font-semibold text-amber-500 tracking-wide">PAUSED</span>
           )}
           {isIdle && (
-            <span className="text-[11px] text-slate-400">Ready to start</span>
+            <span className="text-[11px] text-slate-600">Ready to start</span>
           )}
         </div>
 
         {/* Elapsed label */}
         {!isIdle && (
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             {durationMins >= 60
               ? `${Math.floor(durationMins / 60)}h ${durationMins % 60}m elapsed`
               : `${durationMins} min elapsed`}
@@ -228,7 +229,7 @@ function TimerPopoutInner() {
       <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
         {/* Client */}
         <div>
-          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
             <Briefcase className="w-3 h-3" /> Client
           </label>
           <div className="relative">
@@ -239,7 +240,7 @@ function TimerPopoutInner() {
             >
               <option value="">— Select client —</option>
               {clients?.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>
               ))}
             </select>
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
@@ -251,8 +252,8 @@ function TimerPopoutInner() {
 
         {/* Task */}
         <div>
-          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-            <ClipboardList className="w-3 h-3" /> Task <span className="normal-case font-normal text-slate-300">(optional)</span>
+          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            <ClipboardList className="w-3 h-3" /> Task <span className="normal-case font-normal text-slate-500">(optional)</span>
           </label>
           <div className="relative">
             <select
@@ -272,7 +273,7 @@ function TimerPopoutInner() {
 
         {/* Service type */}
         <div>
-          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
             Service Type
           </label>
           <div className="grid grid-cols-3 gap-1.5">
@@ -309,22 +310,22 @@ function TimerPopoutInner() {
 
         {/* Notes */}
         <div>
-          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-            <StickyNote className="w-3 h-3" /> Notes <span className="normal-case font-normal text-slate-300">(optional)</span>
+          <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+            <StickyNote className="w-3 h-3" /> Notes <span className="normal-case font-normal text-slate-500">(optional)</span>
           </label>
           <textarea
             rows={3}
             placeholder="What are you working on?"
             value={state.notes ?? ""}
             onChange={e => setNotes(e.target.value || null)}
-            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 text-slate-700 bg-white shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] placeholder:text-slate-300"
+            className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 text-slate-700 bg-white shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] placeholder:text-slate-400"
           />
         </div>
       </div>
 
       {/* Footer */}
       <div className="px-5 py-3 border-t border-slate-100 text-center shrink-0">
-        <p className="text-[10px] text-slate-300">HM Virtual Services · Timer stays in sync with main app</p>
+        <p className="text-[10px] text-slate-500">HM Virtual Services · Timer stays in sync with main app</p>
       </div>
 
       <Toaster />
