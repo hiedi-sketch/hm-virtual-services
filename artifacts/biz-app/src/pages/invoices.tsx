@@ -427,9 +427,18 @@ function InvoicePreviewModal({ data, onClose }: { data: PreviewData; onClose: ()
 
 type RecipientMode = "client" | "lead" | "new_contact";
 
+function ordinalSuffix(n: number): string {
+  if (n === 11 || n === 12 || n === 13) return "th";
+  const last = n % 10;
+  if (last === 1) return "st";
+  if (last === 2) return "nd";
+  if (last === 3) return "rd";
+  return "th";
+}
+
 function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, isPending }: {
   invoice?: Invoice;
-  clients: { id: number; name: string }[];
+  clients: { id: number; name: string; billing_date?: string | null }[];
   leads: { id: number; name: string; email?: string | null; status: string }[];
   services: { id: number; name: string; description?: string | null; price: number; active: boolean }[];
   onSubmit: (data: any) => void;
@@ -451,6 +460,13 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   // Recipient mode — only applies when creating
   const [recipientMode, setRecipientMode] = useState<RecipientMode>("client");
   const [clientId, setClientId] = useState(invoice ? String((invoice as any).client_id ?? "") : "");
+  const [billingDay, setBillingDay] = useState<string>(() => {
+    if (invoice) {
+      const c = clients.find(x => String(x.id) === String((invoice as any).client_id ?? ""));
+      return c?.billing_date ? String(c.billing_date) : "";
+    }
+    return "";
+  });
   const [leadId, setLeadId] = useState("");
   const [newContactName, setNewContactName] = useState("");
   const [newContactEmail, setNewContactEmail] = useState("");
@@ -495,6 +511,26 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   const [showAdvanced, setShowAdvanced] = useState(!!(invoice?.notes || invoice?.thank_you_message));
   const [showPreview, setShowPreview] = useState(false);
   const [packagesBanner, setPackagesBanner] = useState(false);
+
+  // Sync billing day when client selection changes
+  useEffect(() => {
+    if (recipientMode !== "client" || !clientId) { setBillingDay(""); return; }
+    const c = clients.find(x => String(x.id) === clientId);
+    setBillingDay(c?.billing_date ? String(c.billing_date) : "");
+  }, [clientId, recipientMode]);
+
+  const handleBillingDayChange = async (day: string) => {
+    setBillingDay(day);
+    if (!clientId || recipientMode !== "client") return;
+    try {
+      await fetch(`/api/clients/${clientId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ billing_date: day || null }),
+      });
+    } catch { /* ignore */ }
+  };
 
   // Auto-load client packages as line items when a client is selected (new invoices only)
   useEffect(() => {
@@ -651,11 +687,29 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
           </div>
 
           {recipientMode === "client" && (
-            <div>
+            <div className="space-y-3">
               <select className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)} required>
                 <option value="">Select a client…</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              {clientId && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                    Client Billing Day
+                    <span className="ml-1.5 font-normal text-slate-400">(drives VA hours reset · saved to client profile)</span>
+                  </label>
+                  <select
+                    className={inputCls}
+                    value={billingDay}
+                    onChange={e => handleBillingDayChange(e.target.value)}
+                  >
+                    <option value="">Not set</option>
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                      <option key={d} value={String(d)}>{d}{ordinalSuffix(d)} of the month</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           )}
 

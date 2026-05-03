@@ -316,7 +316,9 @@ export default function ClientDetail() {
     setEditCustomPrice(effPrice != null ? String(effPrice) : "");
     setEditCustomHourlyRate(effRate != null ? String(effRate) : "");
     setEditCustomBudgetedHours(effHours != null ? String(effHours) : "");
-    setEditResetDay(resetDay != null ? String(resetDay) : "");
+    // Fall back to client billing_date when no reset day has been stored yet
+    const clientBillingDate = (client as any)?.billing_date;
+    setEditResetDay(resetDay != null ? String(resetDay) : (clientBillingDate ? String(clientBillingDate) : ""));
     setEditAllowRollover(hoursInfo?.allow_rollover ?? false);
     setEditRolloverCap(hoursInfo?.rollover_cap_hours != null ? String(hoursInfo.rollover_cap_hours) : "");
     setEditingServiceId(cs.service_id);
@@ -1018,6 +1020,11 @@ export default function ClientDetail() {
                     setAddCustomPrice(svc.billing_type === "Flat Rate" ? String(svc.price ?? 0) : "");
                     setAddCustomHourlyRate(svc.billing_type === "Hourly" ? String(svc.hourly_rate ?? "") : "");
                     setAddCustomBudgetedHours(svc.service_type === "Virtual Assistant" ? String(svc.budgeted_hours ?? "") : "");
+                    // Auto-populate reset day from client's billing_date for VA services
+                    if (svc.service_type === "Virtual Assistant") {
+                      const billingDate = (client as any)?.billing_date;
+                      if (billingDate) setAddResetDay(String(billingDate));
+                    }
                   }
                 }}
               >
@@ -1072,13 +1079,23 @@ export default function ClientDetail() {
                 )}
                 {selectedAddService.service_type === "Virtual Assistant" && (
                   <div>
-                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Monthly Hours Reset Day (1–31)</label>
-                    <input type="number" min="1" max="31" step="1"
-                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
-                      placeholder="e.g. 1 (first of month)"
+                    <label className="block text-[11px] font-medium text-slate-500 mb-1">
+                      Monthly Hours Reset Day
+                      {(client as any)?.billing_date && addResetDay === String((client as any).billing_date) && (
+                        <span className="ml-1.5 text-[#266b75] font-normal">(from billing date)</span>
+                      )}
+                    </label>
+                    <select
+                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
                       value={addResetDay}
                       onChange={e => setAddResetDay(e.target.value)}
-                    />
+                    >
+                      <option value="">— choose day —</option>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => {
+                        const sfx = d === 1 ? "st" : d === 2 ? "nd" : d === 3 ? "rd" : "th";
+                        return <option key={d} value={String(d)}>{d}{sfx}</option>;
+                      })}
+                    </select>
                   </div>
                 )}
               </div>
@@ -1350,13 +1367,23 @@ export default function ClientDetail() {
                                 )}
                                 {isVA && (
                                   <div>
-                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">Reset Day (1–31)</label>
-                                    <input type="number" min="1" max="31" step="1"
-                                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
-                                      placeholder="e.g. 1"
+                                    <label className="block text-[11px] font-medium text-slate-500 mb-1">
+                                      Reset Day
+                                      {(client as any)?.billing_date && editResetDay === String((client as any).billing_date) && (
+                                        <span className="ml-1.5 text-[#266b75] font-normal">(from billing date)</span>
+                                      )}
+                                    </label>
+                                    <select
+                                      className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-[#266b75]/30 focus:border-[#266b75]"
                                       value={editResetDay}
                                       onChange={e => setEditResetDay(e.target.value)}
-                                    />
+                                    >
+                                      <option value="">— choose day —</option>
+                                      {Array.from({ length: 31 }, (_, i) => i + 1).map(d => {
+                                        const sfx = d === 1 ? "st" : d === 2 ? "nd" : d === 3 ? "rd" : "th";
+                                        return <option key={d} value={String(d)}>{d}{sfx}</option>;
+                                      })}
+                                    </select>
                                   </div>
                                 )}
                               </div>
