@@ -360,8 +360,13 @@ export default function Dashboard() {
   const totalPaid = invoices
     .filter((i) => i.status === "paid")
     .reduce((s, i) => s + i.amount, 0);
+  const _outstandingMonth = new Date().toISOString().slice(0, 7);
   const totalUnpaid = invoices
-    .filter((i) => i.status === "unpaid")
+    .filter((i) => {
+      if (i.status === "paid" || i.status === "void") return false;
+      if (i.status === "draft") return (i.due_date ?? "").startsWith(_outstandingMonth);
+      return true;
+    })
     .reduce((s, i) => s + i.amount, 0);
   const totalProjected = totalPaid + totalUnpaid;
 

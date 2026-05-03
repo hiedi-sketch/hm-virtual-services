@@ -1425,7 +1425,14 @@ export default function Invoices() {
 
   const activeInvoices = invoices.filter(i => i.status !== "void");
   const totalPaid = activeInvoices.filter(i => i.status === "paid").reduce((s, i) => s + i.amount, 0);
-  const totalUnpaid = activeInvoices.filter(i => i.status !== "paid").reduce((s, i) => s + i.amount, 0);
+  const _thisMonth = new Date().toISOString().slice(0, 7);
+  const totalUnpaid = activeInvoices
+    .filter(i => {
+      if (i.status === "paid" || i.status === "void") return false;
+      if (i.status === "draft") return (i.due_date ?? "").startsWith(_thisMonth);
+      return true;
+    })
+    .reduce((s, i) => s + i.amount, 0);
   const overdueCount = activeInvoices.filter(i => isOverdue(i.due_date, i.status)).length;
 
   const getRecipientName = (inv: Invoice) => {
