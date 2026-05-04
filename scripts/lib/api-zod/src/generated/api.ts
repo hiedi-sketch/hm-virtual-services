@@ -408,6 +408,7 @@ export const ListLeadsResponseItem = zod.object({
   lead_source: zod.string().nullish(),
   notes: zod.string().nullish(),
   follow_up_date: zod.string().nullish(),
+  client_id: zod.number().nullish(),
 });
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem);
 
@@ -420,6 +421,7 @@ export const CreateLeadBody = zod.object({
   phone: zod.string().nullish(),
   cell_phone: zod.string().nullish(),
   business_name: zod.string().nullish(),
+  client_id: zod.number().nullish(),
   title: zod.string().nullish(),
   management_level: zod.string().nullish(),
   industry: zod.string().nullish(),
@@ -452,6 +454,7 @@ export const UpdateLeadBody = zod.object({
   phone: zod.string().nullish(),
   cell_phone: zod.string().nullish(),
   business_name: zod.string().nullish(),
+  client_id: zod.number().nullish(),
   title: zod.string().nullish(),
   management_level: zod.string().nullish(),
   industry: zod.string().nullish(),

@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import {
   useListLeads,
+  useListClients,
   useCreateLead,
   useUpdateLead,
   useDeleteLead,
@@ -13,7 +14,7 @@ import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Upload, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote, Calendar, FileSpreadsheet, AlertCircle } from "lucide-react";
+import { Plus, Upload, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote, Calendar, FileSpreadsheet, AlertCircle, Link2, X, UserCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -279,8 +280,104 @@ function LeadNotes({
   );
 }
 
+// ── Lead → Client linker ──────────────────────────────────────────────────────
+
+type ClientOption = { id: number; name: string; is_active: boolean };
+
+function LeadClientLink({
+  leadId,
+  clientId,
+  clients,
+}: {
+  leadId: number;
+  clientId: number | null | undefined;
+  clients: ClientOption[];
+}) {
+  const [picking, setPicking] = useState(false);
+  const queryClient = useQueryClient();
+
+  const updateMutation = useUpdateLead({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+        setPicking(false);
+      },
+    },
+  });
+
+  const linked = clients.find(c => c.id === clientId);
+  const active = clients.filter(c => c.is_active).sort((a, b) => a.name.localeCompare(b.name));
+  const inactive = clients.filter(c => !c.is_active).sort((a, b) => a.name.localeCompare(b.name));
+
+  const link = (id: number | null) =>
+    updateMutation.mutate({ id: leadId, data: { client_id: id } });
+
+  if (linked) {
+    return (
+      <div className="flex items-center gap-1.5 bg-[#266b75]/8 border border-[#266b75]/20 rounded-lg px-2.5 py-1.5">
+        <UserCheck className="w-3 h-3 text-[#266b75] shrink-0" />
+        <span className="text-xs font-medium text-[#266b75] truncate flex-1">{linked.name}</span>
+        {!linked.is_active && (
+          <span className="text-[10px] bg-slate-100 text-slate-500 px-1 rounded">inactive</span>
+        )}
+        <button
+          onClick={() => link(null)}
+          disabled={updateMutation.isPending}
+          className="shrink-0 text-slate-400 hover:text-red-500 transition-colors"
+          title="Unlink client"
+          aria-label="Unlink client"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+    );
+  }
+
+  if (picking) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <select
+          autoFocus
+          className="flex-1 text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:border-[#266b75]"
+          defaultValue=""
+          onChange={e => { if (e.target.value) link(Number(e.target.value)); }}
+          onBlur={() => setPicking(false)}
+        >
+          <option value="" disabled>Select a client…</option>
+          {active.length > 0 && (
+            <optgroup label="Active">
+              {active.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </optgroup>
+          )}
+          {inactive.length > 0 && (
+            <optgroup label="Inactive">
+              {inactive.map(c => <option key={c.id} value={c.id}>{c.name} (inactive)</option>)}
+            </optgroup>
+          )}
+        </select>
+        <button onClick={() => setPicking(false)} className="text-slate-400 hover:text-slate-600">
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setPicking(true)}
+      className="w-full flex items-center gap-1.5 text-xs text-slate-400 hover:text-[#266b75] border border-dashed border-slate-200 hover:border-[#266b75]/40 rounded-lg px-2.5 py-1.5 transition-colors"
+    >
+      <Link2 className="w-3 h-3 shrink-0" />
+      Link a client…
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function Leads() {
   const { data: leads, isLoading } = useListLeads();
+  const { data: clients = [] } = useListClients();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [importRows, setImportRows] = useState<CsvLead[]>([]);
@@ -652,6 +749,13 @@ export default function Leads() {
 
                       {/* Notes */}
                       <LeadNotes leadId={lead.id} notes={lead.notes} />
+
+                      {/* Linked Client */}
+                      <LeadClientLink
+                        leadId={lead.id}
+                        clientId={(lead as any).client_id}
+                        clients={clients}
+                      />
                     </div>
                   ))
                 )}

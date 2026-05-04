@@ -1,4 +1,4 @@
-import { pgTable, serial, text, real } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -9,6 +9,7 @@ export const leadsTable = pgTable("leads", {
   phone: text("phone"),
   cell_phone: text("cell_phone"),
   business_name: text("business_name"),
+  client_id: integer("client_id"),
   title: text("title"),
   management_level: text("management_level"),
   industry: text("industry"),
