@@ -13,9 +13,94 @@ import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote, Calendar } from "lucide-react";
+import { Plus, Upload, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote, Calendar, FileSpreadsheet, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+
+// ── CSV Import ────────────────────────────────────────────────────────────────
+
+type CsvLead = {
+  name: string;
+  email?: string;
+  phone?: string;
+  cell_phone?: string;
+  business_name?: string;
+  title?: string;
+  management_level?: string;
+  industry?: string;
+  city?: string;
+  state?: string;
+  linkedin_url?: string;
+  website?: string;
+  facebook_url?: string;
+  x_url?: string;
+  notes?: string;
+  company_size?: string;
+  revenue?: string;
+  founded_year?: string;
+};
+
+function parseCsvLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQuote && line[i + 1] === '"') { current += '"'; i++; }
+      else { inQuote = !inQuote; }
+    } else if (c === "," && !inQuote) {
+      result.push(current); current = "";
+    } else {
+      current += c;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function parseCsv(text: string): CsvLead[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]).map(h => h.trim().toLowerCase());
+  const idx = (key: string) => headers.indexOf(key.toLowerCase());
+  const get = (row: string[], ...keys: string[]) => {
+    for (const k of keys) {
+      const i = idx(k);
+      if (i !== -1) { const v = row[i]?.trim(); if (v) return v; }
+    }
+    return undefined;
+  };
+  return lines.slice(1).map(line => {
+    const row = parseCsvLine(line);
+    const firstName = get(row, "first name") ?? "";
+    const lastName = get(row, "last name") ?? "";
+    const name = [firstName, lastName].filter(Boolean).join(" ").trim();
+    if (!name && !get(row, "email")) return null;
+    return {
+      name: name || "Unknown",
+      email: get(row, "email"),
+      phone: get(row, "biz phone"),
+      cell_phone: get(row, "cell phone"),
+      business_name: get(row, "company"),
+      title: get(row, "title"),
+      management_level: get(row, "management level"),
+      industry: get(row, "industry"),
+      city: get(row, "city"),
+      state: get(row, "state"),
+      linkedin_url: get(row, "linkedin profile"),
+      website: get(row, "website"),
+      facebook_url: get(row, "facebook profile"),
+      x_url: get(row, "x profile"),
+      notes: get(row, "description"),
+      company_size: get(row, "company size"),
+      revenue: get(row, "revenue"),
+      founded_year: get(row, "founded year"),
+    } satisfies CsvLead;
+  }).filter((r): r is CsvLead => r !== null);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -198,6 +283,11 @@ export default function Leads() {
   const { data: leads, isLoading } = useListLeads();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [importRows, setImportRows] = useState<CsvLead[]>([]);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -250,6 +340,52 @@ export default function Leads() {
     },
   });
 
+  const handleCsvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImportError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".csv")) {
+      setImportError("Please select a .csv file.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const rows = parseCsv(text);
+      if (rows.length === 0) {
+        setImportError("No valid leads found. Check that your CSV has the expected column headings.");
+        setShowImportModal(true);
+      } else {
+        setImportRows(rows);
+        setShowImportModal(true);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleImport = async () => {
+    setImportProgress({ done: 0, total: importRows.length });
+    let done = 0;
+    for (const lead of importRows) {
+      try {
+        await fetch("/api/leads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ ...lead, status: "new" }),
+        });
+      } catch { /* continue */ }
+      done++;
+      setImportProgress({ done, total: importRows.length });
+    }
+    await queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() });
+    setImportProgress(null);
+    setShowImportModal(false);
+    setImportRows([]);
+    toast({ title: `${done} lead${done !== 1 ? "s" : ""} imported successfully` });
+  };
+
   const setStatus = (id: number, status: LeadStatus) =>
     updateMutation.mutate({ id, data: { status } });
 
@@ -276,10 +412,26 @@ export default function Leads() {
           <h1 className="text-3xl font-display font-bold text-slate-900">CRM Leads</h1>
           <p className="text-slate-500 mt-1">Track and advance your prospect pipeline.</p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="btn-primary">
-          <Plus className="w-5 h-5 mr-2" />
-          Add New Lead
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => csvInputRef.current?.click()}
+            className="flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-medium px-4 py-2 rounded-xl text-sm transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            Import CSV
+          </button>
+          <button onClick={() => setIsModalOpen(true)} className="btn-primary">
+            <Plus className="w-5 h-5 mr-2" />
+            Add New Lead
+          </button>
+        </div>
+        <input
+          ref={csvInputRef}
+          type="file"
+          accept=".csv"
+          className="hidden"
+          onChange={handleCsvFile}
+        />
       </div>
 
       {/* Summary Cards */}
@@ -600,6 +752,99 @@ export default function Leads() {
           </div>
         </form>
       </Modal>
+
+      {/* CSV Import Preview Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center gap-3 p-6 border-b border-slate-100">
+              <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+                <FileSpreadsheet className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Import Leads from CSV</h2>
+                {importRows.length > 0 && (
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {importRows.length} lead{importRows.length !== 1 ? "s" : ""} found — all will be added as <span className="font-medium text-blue-600">New Lead</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {importError ? (
+                <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+                  <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-700">Could not read CSV</p>
+                    <p className="text-sm text-red-600 mt-0.5">{importError}</p>
+                    <p className="text-xs text-red-500 mt-2">Expected headings: First Name, Last Name, Company, Title, Email, Biz Phone, Cell Phone, City, State, LinkedIn Profile, Website, Facebook Profile, X Profile, Description, Management Level, Industry, Company Size, Revenue, Founded Year</p>
+                  </div>
+                </div>
+              ) : importProgress ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-600 text-center">
+                    Importing {importProgress.done} of {importProgress.total} leads…
+                  </p>
+                  <div className="w-full bg-slate-100 rounded-full h-2.5">
+                    <div
+                      className="bg-blue-500 h-2.5 rounded-full transition-all"
+                      style={{ width: `${(importProgress.done / importProgress.total) * 100}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-400 text-center">{Math.round((importProgress.done / importProgress.total) * 100)}% complete</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Preview (first 5 rows)</p>
+                  <div className="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden">
+                    {importRows.slice(0, 5).map((lead, i) => (
+                      <div key={i} className="flex items-start gap-3 px-4 py-3 bg-white hover:bg-slate-50 transition-colors">
+                        <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                          {lead.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{lead.name}</p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                            {lead.business_name && <span className="text-xs text-slate-500">{lead.business_name}{lead.title ? ` · ${lead.title}` : ""}</span>}
+                            {lead.email && <span className="text-xs text-slate-400">{lead.email}</span>}
+                            {(lead.city || lead.state) && <span className="text-xs text-slate-400">{[lead.city, lead.state].filter(Boolean).join(", ")}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {importRows.length > 5 && (
+                      <div className="px-4 py-2.5 bg-slate-50 text-center text-xs text-slate-400">
+                        + {importRows.length - 5} more lead{importRows.length - 5 !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            {!importProgress && (
+              <div className="p-6 border-t border-slate-100 flex justify-end gap-3">
+                <button
+                  onClick={() => { setShowImportModal(false); setImportRows([]); setImportError(null); }}
+                  className="btn-secondary"
+                >
+                  Cancel
+                </button>
+                {importRows.length > 0 && (
+                  <button onClick={handleImport} className="btn-primary">
+                    <Upload className="w-4 h-4 mr-1.5" />
+                    Import {importRows.length} Lead{importRows.length !== 1 ? "s" : ""}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
