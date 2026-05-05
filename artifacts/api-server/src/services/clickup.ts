@@ -223,14 +223,7 @@ export async function registerWebhook(
 ): Promise<{ id: string; secret: string }> {
   const data = (await fetchCU(token, "POST", `/team/${teamId}/webhook`, {
     endpoint,
-    events: [
-      "taskCreated",
-      "taskUpdated",
-      "taskStatusUpdated",
-      "taskDueDateUpdated",
-      "taskCommentPosted",
-      "taskTagUpdated",
-    ],
+    events: ["*"],
   })) as { id: string; webhook: { id: string; secret: string } };
   const id = data.webhook?.id ?? data.id;
   const secret = data.webhook?.secret ?? (data as any).secret ?? "";
