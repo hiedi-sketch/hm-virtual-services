@@ -228,7 +228,6 @@ export async function registerWebhook(
       "taskUpdated",
       "taskStatusUpdated",
       "taskDueDateUpdated",
-      "taskNameUpdated",
       "taskCommentPosted",
       "taskTagUpdated",
     ],
