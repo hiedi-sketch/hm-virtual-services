@@ -1174,7 +1174,7 @@ function ImportClickUpModal({
   };
 
   const handleImport = async () => {
-    if (!clientId || !preview) return;
+    if (!preview) return;
     const tasksToImport = preview.filter(t => selected.has(t.id));
     if (tasksToImport.length === 0) return;
     setImporting(true);
@@ -1182,7 +1182,7 @@ function ImportClickUpModal({
       const res = await fetch("/api/clickup/import", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ client_id: Number(clientId), tasks: tasksToImport }),
+        body: JSON.stringify({ client_id: clientId ? Number(clientId) : null, tasks: tasksToImport }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Import failed");
@@ -1258,16 +1258,17 @@ function ImportClickUpModal({
             <>
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Assign to Client <span className="text-red-400">*</span>
+                  Assign to Client <span className="text-slate-400 font-normal normal-case">(optional — auto-matched from tags)</span>
                 </label>
                 <select
                   value={clientId}
                   onChange={e => { setClientId(e.target.value); localStorage.setItem(CU_IMPORT_CLIENT_KEY, e.target.value); }}
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white outline-none focus:border-purple-400 transition-colors"
                 >
-                  <option value="">— Select a client —</option>
+                  <option value="">— Auto-match from tags —</option>
                   {clients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
                 </select>
+                <p className="text-[10px] text-slate-400 mt-1">If a task tag matches a client name exactly, it will be linked automatically. Leave blank to rely on tag matching.</p>
               </div>
               <div>
                 <div className="flex items-center justify-between mb-2">
@@ -1322,7 +1323,7 @@ function ImportClickUpModal({
             <button onClick={onClose} className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-100 transition-colors">
               Cancel
             </button>
-            <button onClick={handleImport} disabled={importing || !clientId || selected.size === 0}
+            <button onClick={handleImport} disabled={importing || selected.size === 0}
               className="flex items-center gap-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg px-4 py-2 transition-colors disabled:opacity-50">
               {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
               {importing ? "Importing…" : `Import ${selected.size} Task${selected.size !== 1 ? "s" : ""}`}

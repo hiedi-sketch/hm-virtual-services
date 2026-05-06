@@ -18,7 +18,7 @@
 import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db } from "@workspace/db";
-import { appSettingsTable, tasksTable, taskCommentsTable } from "@workspace/db";
+import { appSettingsTable, tasksTable, taskCommentsTable, clientsTable } from "@workspace/db";
 import { eq, isNotNull, and, sql } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { z } from "zod";
@@ -253,7 +253,7 @@ router.get("/clickup/import/preview", requireAuth, requireRole("admin"), async (
 
 router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, res) => {
   const schema = z.object({
-    client_id: z.number().int().positive(),
+    client_id: z.number().int().positive().optional().nullable(),
     tasks: z.array(z.object({
       id: z.string(),
       name: z.string(),
@@ -270,11 +270,28 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
     return;
   }
 
-  const { client_id, tasks } = parsed.data;
+  const { client_id: fallbackClientId, tasks } = parsed.data;
+
+  // Build a case-insensitive name → id map for all clients
+  const allClients = await db.select({ id: clientsTable.id, name: clientsTable.name }).from(clientsTable);
+  const clientNameMap = new Map<string, number>();
+  for (const c of allClients) {
+    clientNameMap.set(c.name.toLowerCase().trim(), c.id);
+  }
+
   let created = 0;
   let skipped = 0;
 
   for (const t of tasks) {
+    // Resolve client_id: check each tag against client names first
+    let resolvedClientId: number | null = fallbackClientId ?? null;
+    if (t.tags) {
+      for (const tag of t.tags.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)) {
+        const matched = clientNameMap.get(tag);
+        if (matched !== undefined) { resolvedClientId = matched; break; }
+      }
+    }
+
     // Already linked — skip
     const byId = await db
       .select({ id: tasksTable.id })
@@ -284,27 +301,29 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
     if (byId.length > 0) { skipped++; continue; }
 
     // Same title in same client — backfill clickup_task_id
-    const byTitle = await db
-      .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id })
-      .from(tasksTable)
-      .where(and(
-        sql`LOWER(TRIM(${tasksTable.title})) = LOWER(TRIM(${t.name}))`,
-        eq(tasksTable.client_id, client_id),
-      ))
-      .limit(1);
-    if (byTitle.length > 0) {
-      const match = byTitle[0]!;
-      if (!match.clickup_task_id) {
-        await db.update(tasksTable).set({ clickup_task_id: t.id, tags: t.tags ?? null }).where(eq(tasksTable.id, match.id));
+    if (resolvedClientId !== null) {
+      const byTitle = await db
+        .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id })
+        .from(tasksTable)
+        .where(and(
+          sql`LOWER(TRIM(${tasksTable.title})) = LOWER(TRIM(${t.name}))`,
+          eq(tasksTable.client_id, resolvedClientId),
+        ))
+        .limit(1);
+      if (byTitle.length > 0) {
+        const match = byTitle[0]!;
+        if (!match.clickup_task_id) {
+          await db.update(tasksTable).set({ clickup_task_id: t.id, tags: t.tags ?? null }).where(eq(tasksTable.id, match.id));
+        }
+        skipped++;
+        continue;
       }
-      skipped++;
-      continue;
     }
 
     // Brand-new task
     await db.insert(tasksTable).values({
       title: t.name,
-      client_id,
+      client_id: resolvedClientId,
       clickup_task_id: t.id,
       status: cuStatusToLocal(t.status),
       due_date: t.due_date ?? null,
@@ -332,8 +351,11 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
       due_date: tasksTable.due_date,
       description: tasksTable.description,
       tags: tasksTable.tags,
+      client_id: tasksTable.client_id,
+      client_name: clientsTable.name,
     })
     .from(tasksTable)
+    .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
     .where(isNotNull(tasksTable.clickup_task_id));
 
   let pushed = 0;
@@ -341,12 +363,19 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
 
   await Promise.all(linked.map(async task => {
     try {
+      // Build tag list — include existing tags plus the client name (if linked)
+      const existingTags = task.tags ? task.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
+      const clientName = task.client_name ?? null;
+      const tags = clientName && !existingTags.some(t => t.toLowerCase() === clientName.toLowerCase())
+        ? [...existingTags, clientName]
+        : existingTags;
+
       await updateTask(creds.token, task.clickup_task_id!, {
         name: task.title,
         description: task.description ?? undefined,
         due_date: dateToMs(task.due_date),
         status: localStatusToCU(task.status),
-        tags: task.tags ? task.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+        tags,
       });
       pushed++;
     } catch {
