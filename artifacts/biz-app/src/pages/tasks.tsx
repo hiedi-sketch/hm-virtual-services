@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Filter, Plus, Play, Pause, Square, Loader2, Pencil,
   ChevronRight, ChevronDown, Check, X, Trash2, ClipboardList,
-  ArrowUpDown, ArrowUp, ArrowDown, Download, ExternalLink,
+  ArrowUpDown, ArrowUp, ArrowDown, Download, ExternalLink, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -570,7 +570,11 @@ function ImportAsanaModal({
   onImported: () => void;
 }) {
   const { toast } = useToast();
-  const [clientId, setClientId] = useState(() => localStorage.getItem(IMPORT_CLIENT_KEY) ?? "");
+  const [clientId, setClientId] = useState(() => {
+    const isabel = clients.find(c => c.name.toLowerCase().includes("isabel diaz"));
+    if (isabel) return String(isabel.id);
+    return localStorage.getItem(IMPORT_CLIENT_KEY) ?? "";
+  });
   const [preview, setPreview] = useState<AsanaPreviewTask[] | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(true);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -678,7 +682,7 @@ function ImportAsanaModal({
               {/* Client selector */}
               <div>
                 <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Assign to Client <span className="text-red-400">*</span>
+                  Assign to Client <span className="text-slate-400 font-normal normal-case">(defaults to Isabel Diaz)</span>
                 </label>
                 <select
                   value={clientId}
@@ -770,7 +774,7 @@ function ImportAsanaModal({
             </button>
             <button
               onClick={handleImport}
-              disabled={importing || !clientId || selected.size === 0}
+              disabled={importing || selected.size === 0}
               className="flex items-center gap-2 text-sm font-medium text-white bg-[#266b75] hover:bg-[#1f5560] rounded-lg px-4 py-2 transition-colors disabled:opacity-50"
             >
               {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
@@ -1520,6 +1524,7 @@ export default function Tasks() {
   const [showClickUpImport, setShowClickUpImport] = useState(false);
   const [clickUpConfigured, setClickUpConfigured] = useState(false);
   const [cuListIds, setCuListIds] = useState<Array<{ id: string; name: string }>>([]);
+  const [syncing, setSyncing] = useState(false);
 
   const refreshCuSettings = () => {
     fetch("/api/clickup/settings", { credentials: "include" })
@@ -1529,6 +1534,31 @@ export default function Tasks() {
         setCuListIds(d.list_ids ?? (d.list_id ? [{ id: d.list_id, name: d.list_name ?? d.list_id }] : []));
       })
       .catch(() => {});
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    try {
+      const [cuRes, asanaRes] = await Promise.allSettled([
+        fetch("/api/clickup/sync", { method: "POST", credentials: "include" }).then(r => r.json()),
+        fetch("/api/asana/push", { method: "POST", credentials: "include" }).then(r => r.json()),
+      ]);
+      const cuOk = cuRes.status === "fulfilled" && !cuRes.value?.error;
+      const asanaOk = asanaRes.status === "fulfilled" && !asanaRes.value?.error;
+      const parts = [];
+      if (cuOk && cuRes.status === "fulfilled") parts.push(`ClickUp: ${cuRes.value.pushed ?? 0} pushed`);
+      if (asanaOk && asanaRes.status === "fulfilled") parts.push(`Asana: ${asanaRes.value.pushed ?? 0} pushed`);
+      if (parts.length > 0) {
+        toast({ title: "Sync complete", description: parts.join(" · ") });
+      } else {
+        toast({ title: "Sync finished", description: "No linked tasks to push, or integration not configured.", variant: "destructive" });
+      }
+      refetch();
+    } catch {
+      toast({ title: "Sync failed", description: "Could not reach one or both integrations.", variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
   };
 
   useEffect(() => { refreshCuSettings(); }, []);
@@ -1819,6 +1849,15 @@ export default function Tasks() {
               Settings
             </button>
           )}
+          <button
+            onClick={handleSyncNow}
+            disabled={syncing}
+            className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded-lg px-3 py-2 transition-colors disabled:opacity-60"
+            title="Push all linked tasks to ClickUp and Asana"
+          >
+            {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            {syncing ? "Syncing…" : "Sync Now"}
+          </button>
           <button
             onClick={() => setShowNewRow(true)}
             disabled={showNewRow}

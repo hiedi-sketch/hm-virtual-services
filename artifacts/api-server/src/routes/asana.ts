@@ -10,8 +10,8 @@
 
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { appSettingsTable, tasksTable } from "@workspace/db";
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
+import { appSettingsTable, tasksTable, clientsTable } from "@workspace/db";
+import { and, eq, isNotNull, or, sql, ilike } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import {
   getProjectTasks,
@@ -266,7 +266,7 @@ router.get("/asana/import/preview", requireAuth, requireRole("admin"), async (re
 /** POST /api/asana/import — create selected Asana tasks in the local tasks table */
 router.post("/asana/import", requireAuth, requireRole("admin"), async (req, res) => {
   const schema = z.object({
-    client_id: z.number().int().positive(),
+    client_id: z.number().int().positive().optional().nullable(),
     tasks: z.array(z.object({
       gid: z.string(),
       name: z.string(),
@@ -282,7 +282,17 @@ router.post("/asana/import", requireAuth, requireRole("admin"), async (req, res)
     return;
   }
 
-  const { client_id, tasks } = parsed.data;
+  let { client_id, tasks } = parsed.data;
+
+  // Default to Isabel Diaz if no client specified
+  if (!client_id) {
+    const [isabel] = await db
+      .select({ id: clientsTable.id })
+      .from(clientsTable)
+      .where(ilike(clientsTable.name, "%isabel diaz%"))
+      .limit(1);
+    client_id = isabel?.id ?? null;
+  }
   const created: number[] = [];
   const skipped: number[] = [];
 
