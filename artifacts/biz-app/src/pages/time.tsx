@@ -247,6 +247,32 @@ function clientDisplayName(c: { name: string; contact_name?: string | null }): s
   return c.contact_name?.trim() || c.name;
 }
 
+type BillingType = "time_etc" | "hourly" | "monthly";
+
+function getBillingType(client: { billing_method?: string | null; va_hourly_rate?: number | null }): BillingType {
+  if (client.billing_method === "time_etc") return "time_etc";
+  if (client.va_hourly_rate != null && client.va_hourly_rate > 0) return "hourly";
+  return "monthly";
+}
+
+function BillingStatusBadge({ billingType, isInvoiced }: { billingType: BillingType; isInvoiced: boolean | null | undefined }) {
+  if (billingType === "monthly") {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-400 border border-slate-200 whitespace-nowrap">
+        Monthly
+      </span>
+    );
+  }
+  if (!isInvoiced) {
+    return (
+      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+        Needs Invoiced
+      </span>
+    );
+  }
+  return null;
+}
+
 function EditTimeEntryModal({
   entry,
   clients,
@@ -459,6 +485,13 @@ export default function TimeTracking() {
   const [filterServiceType, setFilterServiceType] = useState<"" | "Bookkeeping" | "Virtual Assistant">("");
   const [filterInvoiced, setFilterInvoiced] = useState<"" | "invoiced" | "not_invoiced">("");
   const [showFilters, setShowFilters] = useState(false);
+
+  // Map client id → billing type for badge display
+  const clientBillingMap = useMemo(() => {
+    const map = new Map<number, BillingType>();
+    (clients ?? []).forEach(c => map.set(c.id, getBillingType(c)));
+    return map;
+  }, [clients]);
 
   const today = getTodayLocal();
   const currentMonth = today.slice(0, 7); // "YYYY-MM"
@@ -1180,6 +1213,12 @@ export default function TimeTracking() {
                             </span>
                           )}
                           <ServiceTypeBadge value={entry.service_type} />
+                          {entry.client_id != null && clientBillingMap.has(entry.client_id) && (
+                            <BillingStatusBadge
+                              billingType={clientBillingMap.get(entry.client_id)!}
+                              isInvoiced={entry.is_invoiced}
+                            />
+                          )}
                         </div>
                         {entry.task_title ? (
                           <p className="text-xs text-slate-500 truncate">{entry.task_title}</p>
@@ -1220,20 +1259,28 @@ export default function TimeTracking() {
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
-                          {/* Invoiced toggle */}
-                          <button
-                            onClick={() => updateMutation.mutate({ id: entry.id, data: { is_invoiced: !entry.is_invoiced } })}
-                            title={entry.is_invoiced ? "Mark as not invoiced" : "Mark as invoiced"}
-                            className={cn(
-                              "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors",
-                              entry.is_invoiced
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                                : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100 opacity-0 group-hover:opacity-100"
-                            )}
-                          >
-                            <Check className="w-3 h-3" />
-                            {entry.is_invoiced ? "Invoiced" : "Invoice"}
-                          </button>
+                          {/* Invoiced toggle — always visible for Time Etc / hourly clients */}
+                          {(() => {
+                            const bt = entry.client_id != null ? clientBillingMap.get(entry.client_id) : undefined;
+                            const needsInvoicingClient = bt === "time_etc" || bt === "hourly";
+                            return (
+                              <button
+                                onClick={() => updateMutation.mutate({ id: entry.id, data: { is_invoiced: !entry.is_invoiced } })}
+                                title={entry.is_invoiced ? "Mark as not invoiced" : "Mark as invoiced"}
+                                className={cn(
+                                  "flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full border transition-colors",
+                                  entry.is_invoiced
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                    : needsInvoicingClient
+                                      ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                                      : "bg-slate-50 text-slate-400 border-slate-200 hover:bg-slate-100 opacity-0 group-hover:opacity-100"
+                                )}
+                              >
+                                <Check className="w-3 h-3" />
+                                {entry.is_invoiced ? "Invoiced" : "Mark Invoiced"}
+                              </button>
+                            );
+                          })()}
                           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => setEditingEntry(entry)}

@@ -77,9 +77,26 @@ router.post("/time", requireRole("admin", "team_member"), async (req, res) => {
     if (task?.service_type) serviceType = task.service_type as typeof serviceType;
   }
 
+  // Auto-set is_invoiced for monthly (flat-fee) clients.
+  // Time Etc and hourly clients need manual invoicing; monthly clients are pre-covered.
+  let isInvoiced = body.is_invoiced ?? false;
+  if (body.client_id) {
+    const [clientInfo] = await db
+      .select({ billing_method: clientsTable.billing_method, va_hourly_rate: clientsTable.va_hourly_rate })
+      .from(clientsTable)
+      .where(eq(clientsTable.id, body.client_id));
+    if (clientInfo) {
+      const isTimeEtc = clientInfo.billing_method === "time_etc";
+      const isHourly = clientInfo.va_hourly_rate != null && clientInfo.va_hourly_rate > 0;
+      if (!isTimeEtc && !isHourly) {
+        isInvoiced = true;
+      }
+    }
+  }
+
   const [entry] = await db
     .insert(timeEntriesTable)
-    .values({ ...body, user_id: user.id, service_type: serviceType ?? body.service_type })
+    .values({ ...body, user_id: user.id, service_type: serviceType ?? body.service_type, is_invoiced: isInvoiced })
     .returning();
 
   res.status(201).json(entry);
