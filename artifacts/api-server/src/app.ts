@@ -78,7 +78,9 @@ app.post(
         res.status(400).json({ error: "Missing Square webhook signature" });
         return;
       }
-      const notificationUrl = `https://${req.headers.host}${req.url}`;
+      // Use the canonical registered URL — req.headers.host is the internal
+      // Replit proxy hostname and won't match what Square signed against.
+      const notificationUrl = `https://${process.env.REPLIT_DOMAINS?.split(",")[0] ?? req.headers.host}/api/webhooks/square`;
       const valid = verifySquareWebhookSignature({ signatureKey, notificationUrl, rawBody, signature });
       if (!valid) {
         logger.warn("[Square webhook] Invalid signature");
