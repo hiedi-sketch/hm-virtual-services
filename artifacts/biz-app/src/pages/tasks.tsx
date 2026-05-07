@@ -5,6 +5,7 @@ import {
   Filter, Plus, Play, Pause, Square, Loader2, Pencil,
   ChevronRight, ChevronDown, Check, X, Trash2, ClipboardList,
   ArrowUpDown, ArrowUp, ArrowDown, Download, ExternalLink, RefreshCw,
+  Pin, PinOff, ListOrdered, GripVertical,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -30,6 +31,8 @@ interface ApiTask {
   clickup_task_id: string | null;
   tags: string | null;
   incomplete_subtask_count: number;
+  is_pinned: boolean;
+  queue_position: number | null;
 }
 
 interface ApiTeamMember {
@@ -1892,6 +1895,118 @@ export default function Tasks() {
         />
       )}
 
+      {/* ── Pinned Daily Tasks ─────────────────────────────────────────── */}
+      {(() => {
+        const pinned = tasks.filter(t => t.is_pinned);
+        if (pinned.length === 0) return null;
+        return (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Pin className="w-4 h-4 text-amber-600" />
+              <h3 className="text-sm font-semibold text-amber-800">Daily Tasks</h3>
+              <span className="text-xs text-amber-600 bg-amber-100 rounded-full px-2 py-0.5">{pinned.length}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {pinned.map(task => {
+                const isSaving = saving.has(task.id);
+                const statusColors: Record<string, string> = {
+                  "Completed": "bg-emerald-100 text-emerald-700",
+                  "In Progress": "bg-blue-100 text-blue-700",
+                  "Pending": "bg-yellow-100 text-yellow-700",
+                  "Confirmed": "bg-purple-100 text-purple-700",
+                  "Not Started": "bg-slate-100 text-slate-600",
+                };
+                const done = task.status === "Completed";
+                return (
+                  <div key={task.id} className={cn("bg-white border rounded-lg px-3 py-2.5 flex items-start gap-2.5 shadow-sm transition-opacity", done && "opacity-60")}>
+                    <button
+                      onClick={() => patchTask(task.id, { status: done ? "Not Started" : "Completed" })}
+                      disabled={isSaving}
+                      className={cn("mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                        done ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 hover:border-emerald-400")}
+                      title={done ? "Mark not started" : "Mark complete"}
+                    >
+                      {done && <Check className="w-3 h-3" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-xs font-medium text-slate-800 truncate", done && "line-through text-slate-400")}>{task.title}</p>
+                      {task.client_name && <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>}
+                      <span className={cn("inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium", statusColors[task.status] ?? "bg-slate-100 text-slate-600")}>
+                        {task.status}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => patchTask(task.id, { is_pinned: false })}
+                      disabled={isSaving}
+                      className="shrink-0 w-5 h-5 flex items-center justify-center text-amber-400 hover:text-slate-400 transition-colors"
+                      title="Unpin"
+                    >
+                      <PinOff className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Queue (Next Up) ─────────────────────────────────────────────── */}
+      {(() => {
+        const queued = tasks.filter(t => t.queue_position !== null && t.queue_position !== undefined)
+          .sort((a, b) => (a.queue_position ?? 0) - (b.queue_position ?? 0));
+        if (queued.length === 0) return null;
+        const moveInQueue = async (task: ApiTask, direction: "up" | "down") => {
+          const sorted = [...queued];
+          const idx = sorted.findIndex(t => t.id === task.id);
+          const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+          if (swapIdx < 0 || swapIdx >= sorted.length) return;
+          const other = sorted[swapIdx];
+          await Promise.all([
+            patchTask(task.id, { queue_position: other.queue_position }),
+            patchTask(other.id, { queue_position: task.queue_position }),
+          ]);
+        };
+        return (
+          <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <ListOrdered className="w-4 h-4 text-sky-600" />
+              <h3 className="text-sm font-semibold text-sky-800">Queue — Next Up</h3>
+              <span className="text-xs text-sky-600 bg-sky-100 rounded-full px-2 py-0.5">{queued.length}</span>
+            </div>
+            <div className="space-y-1.5">
+              {queued.map((task, idx) => {
+                const isSaving = saving.has(task.id);
+                const done = task.status === "Completed";
+                return (
+                  <div key={task.id} className={cn("bg-white border border-sky-100 rounded-lg px-3 py-2 flex items-center gap-2.5 shadow-sm", done && "opacity-60")}>
+                    <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 text-[10px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("text-xs font-medium text-slate-800 truncate", done && "line-through text-slate-400")}>{task.title}</p>
+                      {task.client_name && <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>}
+                    </div>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button onClick={() => moveInQueue(task, "up")} disabled={idx === 0 || isSaving}
+                        className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-sky-600 disabled:opacity-30 transition-colors" title="Move up">
+                        <ArrowUp className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => moveInQueue(task, "down")} disabled={idx === queued.length - 1 || isSaving}
+                        className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-sky-600 disabled:opacity-30 transition-colors" title="Move down">
+                        <ArrowDown className="w-3 h-3" />
+                      </button>
+                      <button onClick={() => patchTask(task.id, { queue_position: null })} disabled={isSaving}
+                        className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-red-500 disabled:opacity-30 transition-colors ml-1" title="Remove from queue">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-sm">
@@ -2328,6 +2443,47 @@ export default function Tasks() {
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
+                        </td>
+
+                        {/* Pin */}
+                        <td className="px-1 py-2">
+                          <button
+                            onClick={() => patchTask(task.id, { is_pinned: !task.is_pinned })}
+                            disabled={isSaving}
+                            className={cn("w-6 h-6 rounded flex items-center justify-center transition-colors disabled:opacity-40",
+                              task.is_pinned
+                                ? "text-amber-500 bg-amber-50 hover:bg-amber-100"
+                                : "text-slate-400 hover:text-amber-500 hover:bg-amber-50")}
+                            title={task.is_pinned ? "Unpin from daily tasks" : "Pin to daily tasks"}
+                          >
+                            <Pin className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+
+                        {/* Queue */}
+                        <td className="px-1 py-2">
+                          {task.queue_position !== null && task.queue_position !== undefined ? (
+                            <button
+                              onClick={() => patchTask(task.id, { queue_position: null })}
+                              disabled={isSaving}
+                              className="w-6 h-6 rounded flex items-center justify-center text-sky-500 bg-sky-50 hover:bg-sky-100 transition-colors disabled:opacity-40"
+                              title="Remove from queue"
+                            >
+                              <ListOrdered className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                const maxPos = Math.max(0, ...tasks.filter(t => t.queue_position !== null && t.queue_position !== undefined).map(t => t.queue_position as number));
+                                patchTask(task.id, { queue_position: maxPos + 1 });
+                              }}
+                              disabled={isSaving}
+                              className="w-6 h-6 rounded flex items-center justify-center text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-colors disabled:opacity-40"
+                              title="Add to queue"
+                            >
+                              <ListOrdered className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </td>
 
                         {/* Delete */}

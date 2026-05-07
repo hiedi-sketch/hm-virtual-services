@@ -192,6 +192,8 @@ export const ListTasksResponseItem = zod.object({
   asana_gid: zod.string().nullish(),
   clickup_task_id: zod.string().nullish(),
   tags: zod.string().nullish(),
+  is_pinned: zod.boolean().optional().default(false),
+  queue_position: zod.number().nullable().optional(),
 });
 export const ListTasksResponse = zod.array(ListTasksResponseItem);
 
@@ -291,12 +293,15 @@ export const UpdateTaskBody = zod.object({
   title: zod.string().optional(),
   description: zod.string().nullish(),
   client_id: zod.number().optional(),
+  client_name: zod.string().nullish(),
   assigned_to: zod.string().nullish(),
   status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"]).optional(),
   due_date: zod.string().nullish(),
   completed_date: zod.string().nullish(),
   recurrence: recurrenceZod,
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  is_pinned: zod.boolean().optional(),
+  queue_position: zod.number().nullable().optional(),
 });
 
 export const UpdateTaskResponse = zod.object({

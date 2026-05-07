@@ -17,6 +17,8 @@ export const tasksTable = pgTable("tasks", {
   asana_gid: text("asana_gid"),
   clickup_task_id: text("clickup_task_id"),
   tags: text("tags"),
+  is_pinned: boolean("is_pinned").notNull().default(false),
+  queue_position: integer("queue_position"),
 });
 
 export const insertTaskSchema = createInsertSchema(tasksTable).omit({ id: true });
