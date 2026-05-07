@@ -273,10 +273,14 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
   const { client_id: fallbackClientId, tasks } = parsed.data;
 
   // Build a case-insensitive name → id map for all clients
-  const allClients = await db.select({ id: clientsTable.id, name: clientsTable.name }).from(clientsTable);
+  // Both business name AND contact name are indexed so tags match either one
+  const allClients = await db.select({ id: clientsTable.id, name: clientsTable.name, contact_name: clientsTable.contact_name }).from(clientsTable);
   const clientNameMap = new Map<string, number>();
   for (const c of allClients) {
     clientNameMap.set(c.name.toLowerCase().trim(), c.id);
+    if (c.contact_name?.trim()) {
+      clientNameMap.set(c.contact_name.toLowerCase().trim(), c.id);
+    }
   }
 
   let created = 0;
