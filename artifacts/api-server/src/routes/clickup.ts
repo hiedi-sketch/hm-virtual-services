@@ -281,6 +281,7 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
 
   let created = 0;
   let skipped = 0;
+  let unmatched = 0;
 
   for (const t of tasks) {
     // Resolve client_id: check each tag against client names first
@@ -292,6 +293,12 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
       }
     }
 
+    // No client resolved — can't insert (client_id is required). Track and skip.
+    if (resolvedClientId === null) {
+      unmatched++;
+      continue;
+    }
+
     // Already linked — skip
     const byId = await db
       .select({ id: tasksTable.id })
@@ -301,23 +308,21 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
     if (byId.length > 0) { skipped++; continue; }
 
     // Same title in same client — backfill clickup_task_id
-    if (resolvedClientId !== null) {
-      const byTitle = await db
-        .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id })
-        .from(tasksTable)
-        .where(and(
-          sql`LOWER(TRIM(${tasksTable.title})) = LOWER(TRIM(${t.name}))`,
-          eq(tasksTable.client_id, resolvedClientId),
-        ))
-        .limit(1);
-      if (byTitle.length > 0) {
-        const match = byTitle[0]!;
-        if (!match.clickup_task_id) {
-          await db.update(tasksTable).set({ clickup_task_id: t.id, tags: t.tags ?? null }).where(eq(tasksTable.id, match.id));
-        }
-        skipped++;
-        continue;
+    const byTitle = await db
+      .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id })
+      .from(tasksTable)
+      .where(and(
+        sql`LOWER(TRIM(${tasksTable.title})) = LOWER(TRIM(${t.name}))`,
+        eq(tasksTable.client_id, resolvedClientId),
+      ))
+      .limit(1);
+    if (byTitle.length > 0) {
+      const match = byTitle[0]!;
+      if (!match.clickup_task_id) {
+        await db.update(tasksTable).set({ clickup_task_id: t.id, tags: t.tags ?? null }).where(eq(tasksTable.id, match.id));
       }
+      skipped++;
+      continue;
     }
 
     // Brand-new task
@@ -333,7 +338,7 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
     created++;
   }
 
-  res.json({ created, skipped });
+  res.json({ created, skipped, unmatched });
 });
 
 // ─── Core push logic (exported for cron) ─────────────────────────────────────
