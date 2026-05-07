@@ -6,7 +6,7 @@ export const tasksTable = pgTable("tasks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description"),
-  client_id: integer("client_id").notNull(),
+  client_id: integer("client_id"),
   assigned_to: text("assigned_to"),
   status: text("status", { enum: ["Not Started", "Pending", "Confirmed", "In Progress", "Completed"] }).notNull().default("Not Started"),
   due_date: text("due_date"),

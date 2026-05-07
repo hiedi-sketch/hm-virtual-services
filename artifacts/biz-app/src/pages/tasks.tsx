@@ -1194,7 +1194,6 @@ function ImportClickUpModal({
       const parts = [];
       if (data.created > 0) parts.push(`${data.created} imported`);
       if (data.skipped > 0) parts.push(`${data.skipped} already existed`);
-      if (data.unmatched > 0) parts.push(`${data.unmatched} skipped — no matching client tag`);
       const msg = parts.length > 0 ? parts.join(" · ") : "No new tasks to import";
       toast({ title: "Import complete", description: msg });
       onImported();

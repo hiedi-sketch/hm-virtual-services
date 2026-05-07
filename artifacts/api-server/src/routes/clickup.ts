@@ -281,22 +281,15 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
 
   let created = 0;
   let skipped = 0;
-  let unmatched = 0;
 
   for (const t of tasks) {
-    // Resolve client_id: check each tag against client names first
+    // Resolve client_id: check each tag against client names first, fallback to null
     let resolvedClientId: number | null = fallbackClientId ?? null;
     if (t.tags) {
       for (const tag of t.tags.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)) {
         const matched = clientNameMap.get(tag);
         if (matched !== undefined) { resolvedClientId = matched; break; }
       }
-    }
-
-    // No client resolved — can't insert (client_id is required). Track and skip.
-    if (resolvedClientId === null) {
-      unmatched++;
-      continue;
     }
 
     // Already linked — skip
@@ -307,25 +300,27 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
       .limit(1);
     if (byId.length > 0) { skipped++; continue; }
 
-    // Same title in same client — backfill clickup_task_id
-    const byTitle = await db
-      .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id })
-      .from(tasksTable)
-      .where(and(
-        sql`LOWER(TRIM(${tasksTable.title})) = LOWER(TRIM(${t.name}))`,
-        eq(tasksTable.client_id, resolvedClientId),
-      ))
-      .limit(1);
-    if (byTitle.length > 0) {
-      const match = byTitle[0]!;
-      if (!match.clickup_task_id) {
-        await db.update(tasksTable).set({ clickup_task_id: t.id, tags: t.tags ?? null }).where(eq(tasksTable.id, match.id));
+    // Same title + same client — backfill clickup_task_id (only when client is known)
+    if (resolvedClientId !== null) {
+      const byTitle = await db
+        .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id })
+        .from(tasksTable)
+        .where(and(
+          sql`LOWER(TRIM(${tasksTable.title})) = LOWER(TRIM(${t.name}))`,
+          eq(tasksTable.client_id, resolvedClientId),
+        ))
+        .limit(1);
+      if (byTitle.length > 0) {
+        const match = byTitle[0]!;
+        if (!match.clickup_task_id) {
+          await db.update(tasksTable).set({ clickup_task_id: t.id, tags: t.tags ?? null }).where(eq(tasksTable.id, match.id));
+        }
+        skipped++;
+        continue;
       }
-      skipped++;
-      continue;
     }
 
-    // Brand-new task
+    // Brand-new task — client_id may be null if no tag matched; user can assign later
     await db.insert(tasksTable).values({
       title: t.name,
       client_id: resolvedClientId,
@@ -338,7 +333,7 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
     created++;
   }
 
-  res.json({ created, skipped, unmatched });
+  res.json({ created, skipped });
 });
 
 // ─── Core push logic (exported for cron) ─────────────────────────────────────
