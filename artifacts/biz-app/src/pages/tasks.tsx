@@ -17,7 +17,7 @@ interface ApiTask {
   id: number;
   title: string;
   description: string | null;
-  client_id: number;
+  client_id: number | null;
   client_name: string | null;
   assigned_to: string | null;
   status: string;
