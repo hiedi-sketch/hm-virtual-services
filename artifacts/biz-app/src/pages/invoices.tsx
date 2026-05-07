@@ -556,13 +556,13 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
   };
 
   const resolvedClientName = recipientMode === "client"
-    ? (clients.find(c => String(c.id) === clientId)?.name ?? "")
+    ? (clients.find(c => String(c.id) === clientId) != null ? (clients.find(c => String(c.id) === clientId)!.contact_name?.trim() || clients.find(c => String(c.id) === clientId)!.name) : "")
     : recipientMode === "lead"
       ? (leads.find(l => String(l.id) === leadId)?.name ?? "")
       : newContactName;
 
   const clientName = isEdit
-    ? (clients.find(c => String(c.id) === clientId)?.name ?? "")
+    ? (clients.find(c => String(c.id) === clientId) != null ? (clients.find(c => String(c.id) === clientId)!.contact_name?.trim() || clients.find(c => String(c.id) === clientId)!.name) : "")
     : resolvedClientName;
 
   const hasItems = lineItems.length > 0;
@@ -672,7 +672,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
             <div>
               <select className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)} required>
                 <option value="">Select a client…</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {clients.map(c => <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>)}
               </select>
             </div>
           )}
@@ -731,7 +731,7 @@ function InvoiceForm({ invoice, clients, leads, services, onSubmit, onCancel, is
           <label className="block text-xs font-medium text-slate-500 mb-1">Client</label>
           <select className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)} disabled>
             <option value="">Select a client…</option>
-            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {clients.map(c => <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>)}
           </select>
         </div>
       )}
@@ -1036,7 +1036,7 @@ function RecurringInvoiceForm({ clients, services, onSubmit, onCancel, isPending
           <label className="block text-xs font-medium text-slate-500 mb-1">Client <span className="text-red-400">*</span></label>
           <select className={inputCls} value={clientId} onChange={e => setClientId(e.target.value)} required>
             <option value="">Select a client…</option>
-            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {clients.map(c => <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>)}
           </select>
         </div>
         <div>
@@ -1163,7 +1163,7 @@ function RecurringInvoicesPanel({ clients, services }: {
     },
   });
 
-  const getClientName = (id: number) => clients.find(c => c.id === id)?.name ?? `Client #${id}`;
+  const getClientName = (id: number) => { const c = clients.find(c => c.id === id); return c ? (c.contact_name?.trim() || c.name) : `Client #${id}`; };
   const toggle = (r: RecurringInvoice, field: "active") => {
     updateMutation.mutate({ id: r.id, data: { [field]: !r[field] } });
   };
@@ -1438,7 +1438,7 @@ export default function Invoices() {
   const getRecipientName = (inv: Invoice) => {
     const cid = (inv as any).client_id as number | null | undefined;
     const lid = (inv as any).lead_id as number | null | undefined;
-    if (cid) return clients.find(c => c.id === cid)?.name ?? `Client #${cid}`;
+    if (cid) { const c = clients.find(c => c.id === cid); return c ? (c.contact_name?.trim() || c.name) : `Client #${cid}`; }
     if (lid) return (leads.find(l => l.id === lid)?.name ?? `Lead #${lid}`) + " (Lead)";
     return "—";
   };
@@ -1579,7 +1579,7 @@ export default function Invoices() {
           <select className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             value={filterClient ?? ""} onChange={e => setFilterClient(e.target.value ? Number(e.target.value) : undefined)}>
             <option value="">All Clients</option>
-            {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {clients.map(c => <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>)}
           </select>
         )}
         <div className="flex rounded-lg border border-slate-200 overflow-hidden text-sm">

@@ -691,7 +691,7 @@ function ImportAsanaModal({
                 >
                   <option value="">— Select a client —</option>
                   {clients.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
+                    <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>
                   ))}
                 </select>
               </div>
@@ -1271,7 +1271,7 @@ function ImportClickUpModal({
                   className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white outline-none focus:border-purple-400 transition-colors"
                 >
                   <option value="">— Auto-match from tags —</option>
-                  {clients.map(c => (<option key={c.id} value={c.id}>{c.name}</option>))}
+                  {clients.map(c => (<option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>))}
                 </select>
                 <p className="text-[10px] text-slate-400 mt-1">If a task tag matches a client name exactly, it will be linked automatically. Leave blank to rely on tag matching.</p>
               </div>
@@ -1401,7 +1401,7 @@ function NewTaskRow({
           className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75] w-36">
           <option value="">— Client —</option>
           {clients.map(c => (
-            <option key={c.id} value={c.id}>{c.name}{c.company ? ` (${c.company})` : ""}</option>
+            <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>
           ))}
         </select>
       </td>
@@ -1975,7 +1975,7 @@ export default function Tasks() {
                 className="text-xs text-slate-800 bg-white border-0 rounded px-2 py-1 outline-none"
               >
                 <option value="">— pick —</option>
-                {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {clients.map(c => <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>)}
               </select>
               <button
                 onClick={() => { if (!bulkClientId) return; handleBulkAction("update_client"); }}
@@ -2172,12 +2172,12 @@ export default function Tasks() {
                         <td className="px-2 py-2 text-xs whitespace-nowrap">
                           <EditableSelect
                             value={task.client_name}
-                            options={clients.map(c => c.name)}
+                            options={clients.map(c => c.contact_name?.trim() || c.name)}
                             saving={isSaving}
                             placeholder="— Client —"
                             onSave={v => {
-                              const client = clients.find(c => c.name === v);
-                              if (client) patchTask(task.id, { client_id: client.id, client_name: client.name });
+                              const client = clients.find(c => (c.contact_name?.trim() || c.name) === v);
+                              if (client) patchTask(task.id, { client_id: client.id, client_name: client.contact_name?.trim() || client.name });
                             }}
                             renderValue={v => v
                               ? <span className="text-slate-700 text-xs">{v}</span>

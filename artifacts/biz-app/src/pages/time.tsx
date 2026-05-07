@@ -1114,7 +1114,7 @@ export default function TimeTracking() {
                   >
                     <option value="">All clients</option>
                     {(clients ?? []).map(c => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>
                     ))}
                   </select>
                 </div>

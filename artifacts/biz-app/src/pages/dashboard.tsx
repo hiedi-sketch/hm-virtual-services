@@ -180,14 +180,14 @@ export default function Dashboard() {
         }
         for (const c of result.overBudgetClients ?? []) {
           toast({
-            title: `${c.name} is over budget`,
+            title: `${(c as any).contact_name?.trim() || c.name} is over budget`,
             description: `${fmtHours(c.hoursUsed)}h used of ${c.budget}h monthly budget.`,
             variant: "destructive",
           });
         }
         for (const c of result.nearBudgetClients ?? []) {
           toast({
-            title: `${c.name} is nearing their budget`,
+            title: `${(c as any).contact_name?.trim() || c.name} is nearing their budget`,
             description: `${fmtHours(c.hoursUsed)}h used of ${c.budget}h — over 90% consumed.`,
           });
         }
@@ -432,7 +432,7 @@ export default function Dashboard() {
   const in7DaysStr = in7Days.toLocaleDateString("sv-SE");
 
   const clientMap = Object.fromEntries(
-    (clients ?? []).map((c) => [c.id, c.name]),
+    (clients ?? []).map((c) => [c.id, c.contact_name?.trim() || c.name]),
   );
 
   const overdueInvoices = invoices.filter(
@@ -624,7 +624,7 @@ export default function Dashboard() {
                   <option value="">Assign to client…</option>
                   {clients?.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}
+                      {c.contact_name?.trim() || c.name}
                     </option>
                   ))}
                 </select>
@@ -675,7 +675,7 @@ export default function Dashboard() {
                     <option value="">Select client…</option>
                     {clients?.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.name}
+                        {c.contact_name?.trim() || c.name}
                       </option>
                     ))}
                   </select>
@@ -1559,7 +1559,7 @@ export default function Dashboard() {
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h3 className="font-semibold text-slate-900">
-                        {client.name}
+                        {client.contact_name?.trim() || client.name}
                       </h3>
                       <p className="text-xs text-slate-400 mt-0.5">
                         <span className="font-medium text-slate-500">
