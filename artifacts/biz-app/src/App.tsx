@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TimerProvider } from "@/contexts/TimerContext";
 import NotFound from "@/pages/not-found";
 import React, { Suspense } from "react";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 import Dashboard from "@/pages/dashboard";
 import TeamDashboard from "@/pages/team-dashboard";
@@ -112,9 +113,11 @@ function Router() {
         {user.role === "admin" && <Route path="/clients/:id" component={ClientDetail} />}
         {user.role === "admin" && <Route path="/clients" component={Clients} />}
         <Route path="/tasks">
-          <Suspense fallback={<div className="min-h-screen bg-[#f8fafc] flex items-center justify-center"><div className="text-slate-400 text-sm">Loading…</div></div>}>
-            <Tasks />
-          </Suspense>
+          <ErrorBoundary>
+            <Suspense fallback={<div className="min-h-screen bg-[#f8fafc] flex items-center justify-center"><div className="text-slate-400 text-sm">Loading…</div></div>}>
+              <Tasks />
+            </Suspense>
+          </ErrorBoundary>
         </Route>
         <Route path="/time" component={TimeTracking} />
         <Route path="/invoices" component={Invoices} />
