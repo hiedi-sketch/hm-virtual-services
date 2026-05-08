@@ -1568,12 +1568,21 @@ export default function Tasks() {
       const cuOk = cuRes.status === "fulfilled" && !cuRes.value?.error;
       const asanaOk = asanaRes.status === "fulfilled" && !asanaRes.value?.error;
       const parts = [];
-      if (cuOk && cuRes.status === "fulfilled") parts.push(`ClickUp: ${cuRes.value.pushed ?? 0} pushed`);
+      if (cuOk && cuRes.status === "fulfilled") {
+        const v = cuRes.value;
+        const cuParts = [];
+        if ((v.pushed ?? 0) > 0) cuParts.push(`${v.pushed} pushed`);
+        if ((v.updated ?? 0) > 0) cuParts.push(`${v.updated} updated`);
+        if ((v.created ?? 0) > 0) cuParts.push(`${v.created} new`);
+        const cuErrors = (v.push_errors ?? 0) + (v.pull_errors ?? 0);
+        if (cuErrors > 0) cuParts.push(`${cuErrors} errors`);
+        if (cuParts.length > 0) parts.push(`ClickUp: ${cuParts.join(", ")}`);
+      }
       if (asanaOk && asanaRes.status === "fulfilled") parts.push(`Asana: ${asanaRes.value.pushed ?? 0} pushed`);
       if (parts.length > 0) {
         toast({ title: "Sync complete", description: parts.join(" · ") });
       } else {
-        toast({ title: "Sync finished", description: "No linked tasks to push, or integration not configured.", variant: "destructive" });
+        toast({ title: "Sync finished", description: "No linked tasks to sync, or integration not configured.", variant: "destructive" });
       }
       refetch();
     } catch {

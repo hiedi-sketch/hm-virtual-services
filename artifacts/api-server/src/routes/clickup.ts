@@ -348,7 +348,7 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
 
 // ─── Core push logic (exported for cron) ─────────────────────────────────────
 
-export async function runClickUpPush(): Promise<{ pushed: number; errors: number; pushedAt: string }> {
+export async function runClickUpPush(): Promise<{ pushed: number; errors: number }> {
   const creds = await getCredentials();
   if (!creds) throw new Error("ClickUp is not configured.");
 
@@ -373,7 +373,6 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
 
   await Promise.all(linked.map(async task => {
     try {
-      // Build tag list — include existing tags plus the client name (if linked)
       const existingTags = task.tags ? task.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
       const clientName = task.client_name ?? null;
       const tags = clientName && !existingTags.some(t => t.toLowerCase() === clientName.toLowerCase())
@@ -388,14 +387,90 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
         tags,
       });
       pushed++;
-    } catch {
+    } catch (err: any) {
+      logger.warn({ taskId: task.id, clickup_task_id: task.clickup_task_id, err: err?.message }, "ClickUp push: failed to update task");
       errors++;
     }
   }));
 
-  const pushedAt = new Date().toISOString();
-  await setSetting("clickup_last_sync_at", pushedAt);
-  return { pushed, errors, pushedAt };
+  return { pushed, errors };
+}
+
+export async function runClickUpPull(): Promise<{ updated: number; created: number; errors: number }> {
+  const creds = await getCredentials();
+  if (!creds) throw new Error("ClickUp is not configured.");
+
+  const cuTasks = await getListTasks(creds.token, creds.listId);
+
+  // Build client name → id map for tag-based linking
+  const allClients = await db.select({ id: clientsTable.id, name: clientsTable.name, contact_name: clientsTable.contact_name }).from(clientsTable);
+  const clientNameMap = new Map<string, number>();
+  for (const c of allClients) {
+    clientNameMap.set(c.name.toLowerCase().trim(), c.id);
+    if (c.contact_name?.trim()) clientNameMap.set(c.contact_name.toLowerCase().trim(), c.id);
+  }
+
+  // Load all locally linked task IDs for fast lookup
+  const localLinked = await db
+    .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id })
+    .from(tasksTable)
+    .where(isNotNull(tasksTable.clickup_task_id));
+  const linkedMap = new Map(localLinked.map(t => [t.clickup_task_id!, t.id]));
+
+  let updated = 0;
+  let created = 0;
+  let errors = 0;
+
+  for (const cuTask of cuTasks) {
+    try {
+      const localId = linkedMap.get(cuTask.id);
+
+      if (localId !== undefined) {
+        // Already linked — pull ClickUp changes into local record
+        const newStatus = cuStatusToLocal(cuTask.status.status) as "Not Started" | "Pending" | "Confirmed" | "In Progress" | "Completed";
+        const newDueDate = msToDate(cuTask.due_date);
+        const newTags = (cuTask.tags ?? []).map(t => t.name).join(", ") || null;
+
+        await db.update(tasksTable).set({
+          title: cuTask.name,
+          status: newStatus,
+          due_date: newDueDate,
+          tags: newTags,
+          assigned_to: cuTask.assignees?.[0]?.username ?? undefined,
+        }).where(eq(tasksTable.id, localId));
+        updated++;
+      } else {
+        // New task in ClickUp — create it locally
+        // Resolve client from tags
+        let resolvedClientId: number | null = null;
+        const tagNames = (cuTask.tags ?? []).map(t => t.name.toLowerCase().trim());
+        for (const tag of tagNames) {
+          const matched = clientNameMap.get(tag);
+          if (matched !== undefined) { resolvedClientId = matched; break; }
+        }
+
+        const missiveMatch = cuTask.description?.match(/Missive ID:\s*([a-f0-9-]{36})/i);
+
+        await db.insert(tasksTable).values({
+          title: cuTask.name,
+          description: cuTask.description ?? null,
+          client_id: resolvedClientId,
+          clickup_task_id: cuTask.id,
+          status: cuStatusToLocal(cuTask.status.status) as any,
+          due_date: msToDate(cuTask.due_date),
+          assigned_to: cuTask.assignees?.[0]?.username ?? null,
+          tags: (cuTask.tags ?? []).map(t => t.name).join(", ") || null,
+          missive_conversation_id: missiveMatch?.[1] ?? null,
+        });
+        created++;
+      }
+    } catch (err: any) {
+      logger.warn({ cuTaskId: cuTask.id, err: err?.message }, "ClickUp pull: failed to sync task");
+      errors++;
+    }
+  }
+
+  return { updated, created, errors };
 }
 
 // ─── GET /api/clickup/sync/status ────────────────────────────────────────────
@@ -413,9 +488,24 @@ router.get("/clickup/sync/status", requireAuth, requireRole("admin"), async (_re
 
 router.post("/clickup/sync", requireAuth, requireRole("admin"), async (_req, res) => {
   try {
-    const result = await runClickUpPush();
-    res.json(result);
+    const [pushResult, pullResult] = await Promise.all([
+      runClickUpPush(),
+      runClickUpPull(),
+    ]);
+
+    const syncedAt = new Date().toISOString();
+    await setSetting("clickup_last_sync_at", syncedAt);
+
+    res.json({
+      pushed: pushResult.pushed,
+      push_errors: pushResult.errors,
+      updated: pullResult.updated,
+      created: pullResult.created,
+      pull_errors: pullResult.errors,
+      syncedAt,
+    });
   } catch (err: any) {
+    logger.error({ err: err?.message }, "ClickUp sync failed");
     res.status(502).json({ error: err.message ?? "Sync failed" });
   }
 });
@@ -528,6 +618,59 @@ router.post("/clickup/webhook", async (req: Request, res: Response) => {
   };
 
   if (!event.task_id) return;
+
+  // Handle taskCreated — fetch the task from ClickUp and create it locally
+  if (event.event === "taskCreated") {
+    try {
+      const token = await getToken();
+      if (!token) return;
+
+      // Avoid duplicates
+      const [existing] = await db
+        .select({ id: tasksTable.id })
+        .from(tasksTable)
+        .where(eq(tasksTable.clickup_task_id, event.task_id))
+        .limit(1);
+      if (existing) return;
+
+      // Fetch the full task from ClickUp
+      const listId = await getDefaultListId();
+      if (!listId) return;
+      const cuTasks = await getListTasks(token, listId);
+      const cuTask = cuTasks.find(t => t.id === event.task_id);
+      if (!cuTask) return;
+
+      // Resolve client from tags
+      const allClients = await db.select({ id: clientsTable.id, name: clientsTable.name, contact_name: clientsTable.contact_name }).from(clientsTable);
+      const clientNameMap = new Map<string, number>();
+      for (const c of allClients) {
+        clientNameMap.set(c.name.toLowerCase().trim(), c.id);
+        if (c.contact_name?.trim()) clientNameMap.set(c.contact_name.toLowerCase().trim(), c.id);
+      }
+      let resolvedClientId: number | null = null;
+      for (const tag of (cuTask.tags ?? []).map(t => t.name.toLowerCase().trim())) {
+        const matched = clientNameMap.get(tag);
+        if (matched !== undefined) { resolvedClientId = matched; break; }
+      }
+
+      const missiveMatch = cuTask.description?.match(/Missive ID:\s*([a-f0-9-]{36})/i);
+
+      await db.insert(tasksTable).values({
+        title: cuTask.name,
+        description: cuTask.description ?? null,
+        client_id: resolvedClientId,
+        clickup_task_id: cuTask.id,
+        status: cuStatusToLocal(cuTask.status.status) as any,
+        due_date: msToDate(cuTask.due_date),
+        assigned_to: cuTask.assignees?.[0]?.username ?? null,
+        tags: (cuTask.tags ?? []).map(t => t.name).join(", ") || null,
+        missive_conversation_id: missiveMatch?.[1] ?? null,
+      });
+    } catch (err: any) {
+      logger.warn({ cuTaskId: event.task_id, err: err?.message }, "ClickUp webhook: failed to create task");
+    }
+    return;
+  }
 
   // Find the local task linked to this ClickUp task
   const [localTask] = await db
