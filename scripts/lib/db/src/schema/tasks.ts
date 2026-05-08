@@ -19,6 +19,7 @@ export const tasksTable = pgTable("tasks", {
   tags: text("tags"),
   is_pinned: boolean("is_pinned").notNull().default(false),
   queue_position: integer("queue_position"),
+  missive_conversation_id: text("missive_conversation_id"),
 });
 
 export const insertTaskSchema = createInsertSchema(tasksTable).omit({ id: true });

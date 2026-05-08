@@ -324,15 +324,21 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
       }
     }
 
+    // Extract Missive conversation ID from description if present
+    const missiveMatch = t.description?.match(/Missive ID:\s*([a-f0-9-]{36})/i);
+    const missiveConversationId = missiveMatch?.[1] ?? null;
+
     // Brand-new task — client_id may be null if no tag matched; user can assign later
     await db.insert(tasksTable).values({
       title: t.name,
+      description: t.description ?? null,
       client_id: resolvedClientId,
       clickup_task_id: t.id,
       status: cuStatusToLocal(t.status),
       due_date: t.due_date ?? null,
       assigned_to: t.assignee_name ?? null,
       tags: t.tags ?? null,
+      missive_conversation_id: missiveConversationId,
     });
     created++;
   }

@@ -33,6 +33,7 @@ interface ApiTask {
   incomplete_subtask_count: number;
   is_pinned: boolean;
   queue_position: number | null;
+  missive_conversation_id: string | null;
 }
 
 interface ApiTeamMember {
@@ -2567,6 +2568,19 @@ export default function Tasks() {
                                 className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-600 border border-purple-200 leading-none hover:bg-purple-100 transition-colors"
                               >
                                 CU
+                                <ExternalLink className="w-2.5 h-2.5" />
+                              </a>
+                            )}
+                            {task.missive_conversation_id && (
+                              <a
+                                href={`https://mail.missiveapp.com/#conversations/${task.missive_conversation_id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                title="Open in Missive"
+                                className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-600 border border-sky-200 leading-none hover:bg-sky-100 transition-colors"
+                              >
+                                Missive
                                 <ExternalLink className="w-2.5 h-2.5" />
                               </a>
                             )}

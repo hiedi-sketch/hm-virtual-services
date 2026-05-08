@@ -302,7 +302,6 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
   const metaLines: string[] = [];
   if (fromAddress) metaLines.push(`From: ${fromName} <${fromAddress}>`);
   if (toAddresses.length > 0) metaLines.push(`To: ${toAddresses.join(", ")}`);
-  if (conversation.id) metaLines.push(`Missive ID: ${conversation.id}`);
   if (payload.rule?.name) metaLines.push(`Rule: ${payload.rule.name}`);
 
   const descriptionParts = [
@@ -321,6 +320,7 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
       assigned_to: adminUser?.name ?? null,
       status: "Not Started",
       due_date: dueDate ?? undefined,
+      missive_conversation_id: conversation.id ?? null,
     })
     .returning({ id: tasksTable.id });
 

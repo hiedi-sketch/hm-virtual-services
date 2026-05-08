@@ -194,6 +194,7 @@ export const ListTasksResponseItem = zod.object({
   tags: zod.string().nullish(),
   is_pinned: zod.boolean().optional().default(false),
   queue_position: zod.number().nullable().optional(),
+  missive_conversation_id: zod.string().nullish(),
 });
 export const ListTasksResponse = zod.array(ListTasksResponseItem);
 
@@ -321,6 +322,7 @@ export const UpdateTaskResponse = zod.object({
   tags: zod.string().nullish(),
   is_pinned: zod.boolean().optional().default(false),
   queue_position: zod.number().nullable().optional(),
+  missive_conversation_id: zod.string().nullish(),
 });
 
 /**
