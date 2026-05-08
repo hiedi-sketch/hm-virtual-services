@@ -1511,6 +1511,22 @@ export default function Tasks() {
   const [statusFilter, setStatusFilter] = useState("incomplete");
   const [sortField, setSortField] = useState<"due_date" | "status" | "client_name" | null>("due_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [highlightedTaskId, setHighlightedTaskId] = useState<number | null>(null);
+  const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+
+  const scrollToTask = useCallback((task: ApiTask) => {
+    setSearchQuery("");
+    setClientFilter("all");
+    setServiceFilter("all");
+    if (task.status === "Completed") setStatusFilter("all");
+    else setStatusFilter("incomplete");
+    setHighlightedTaskId(task.id);
+    setTimeout(() => {
+      const el = rowRefs.current.get(task.id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => setHighlightedTaskId(null), 2000);
+    }, 80);
+  }, []);
 
   function handleSort(field: typeof sortField) {
     if (sortField === field) {
@@ -1936,8 +1952,10 @@ export default function Tasks() {
                       {done && <Check className="w-3 h-3" />}
                     </button>
                     <div className="flex-1 min-w-0">
-                      <p className={cn("text-xs font-medium text-slate-800 truncate", done && "line-through text-slate-400")}>{task.title}</p>
-                      {task.client_name && <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>}
+                      <button onClick={() => scrollToTask(task)} className="w-full text-left group">
+                        <p className={cn("text-xs font-medium text-slate-800 truncate group-hover:text-[#266b75] group-hover:underline transition-colors", done && "line-through text-slate-400")}>{task.title}</p>
+                        {task.client_name && <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>}
+                      </button>
                       <div className="flex items-center gap-1.5 mt-1">
                         <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium", statusColors[task.status] ?? "bg-slate-100 text-slate-600")}>
                           {task.status}
@@ -2011,8 +2029,10 @@ export default function Tasks() {
                   <div key={task.id} className={cn("bg-white border border-sky-100 rounded-lg px-3 py-2 flex items-center gap-2.5 shadow-sm", done && "opacity-60")}>
                     <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 text-[10px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
                     <div className="flex-1 min-w-0">
-                      <p className={cn("text-xs font-medium text-slate-800 truncate", done && "line-through text-slate-400")}>{task.title}</p>
-                      {task.client_name && <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>}
+                      <button onClick={() => scrollToTask(task)} className="w-full text-left group">
+                        <p className={cn("text-xs font-medium text-slate-800 truncate group-hover:text-[#266b75] group-hover:underline transition-colors", done && "line-through text-slate-400")}>{task.title}</p>
+                        {task.client_name && <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>}
+                      </button>
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
                       <button onClick={() => moveInQueue(task, "up")} disabled={idx === 0 || isSaving}
@@ -2237,9 +2257,12 @@ export default function Tasks() {
 
                   return (
                     <React.Fragment key={task.id}>
-                      <tr className={cn(
+                      <tr
+                        ref={el => { if (el) rowRefs.current.set(task.id, el); else rowRefs.current.delete(task.id); }}
+                        className={cn(
                         "border-b border-slate-100 transition-colors",
-                        selectedIds.has(task.id) ? "bg-[#266b75]/5" : isThisTask ? "bg-[#266b75]/5" : "hover:bg-slate-50/50",
+                        highlightedTaskId === task.id ? "bg-amber-100 ring-2 ring-inset ring-amber-400"
+                          : selectedIds.has(task.id) ? "bg-[#266b75]/5" : isThisTask ? "bg-[#266b75]/5" : "hover:bg-slate-50/50",
                         isExpanded && "border-b-0",
                       )}>
                         {/* Row checkbox */}
