@@ -550,7 +550,7 @@ export default function TimeTracking() {
   const pendingClientIdRef = useRef<number | null>(null);
 
   const timerTasks = tasks?.filter(
-    t => t.client_id === Number(timerClientId) && t.status === "pending"
+    t => t.client_id === Number(timerClientId) && t.status !== "Completed"
   ) || [];
 
   const invalidateAll = () => {
@@ -628,7 +628,7 @@ export default function TimeTracking() {
   const manualEndTime = watch("end_time");
   const manualDate = watch("date");
   const manualTasks = tasks?.filter(
-    t => t.client_id === selectedClientIdNum && t.status === "pending"
+    t => t.client_id === selectedClientIdNum && t.status !== "Completed"
   ) || [];
 
   const timesAutoCalc = !!(manualStartTime && manualEndTime && manualDate && manualEndTime > manualStartTime);
