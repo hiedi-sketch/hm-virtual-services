@@ -236,25 +236,75 @@ export async function deleteWebhook(token: string, webhookId: string): Promise<v
 
 // ── Status mapping ────────────────────────────────────────────────────────────
 
+export interface CUStatus {
+  status: string;
+  type: string;   // "open" | "custom" | "closed" | "done"
+  color?: string;
+}
+
+/** Fetch the statuses configured for a list */
+export async function getListStatuses(token: string, listId: string): Promise<CUStatus[]> {
+  const data = (await fetchCU(token, "GET", `/list/${listId}`)) as { statuses?: CUStatus[] };
+  return data.statuses ?? [];
+}
+
+/** Simple best-effort map of local status → ClickUp status name (no list context).
+ *  Use localStatusToCUActual when you have the list's real statuses available. */
+export function localStatusToCU(localStatus: string): string {
+  switch (localStatus) {
+    case "Completed":   return "complete";
+    case "In Progress": return "in progress";
+    case "Pending":     return "pending";
+    case "Confirmed":   return "confirmed";
+    default:            return "open";
+  }
+}
+
 /** Map a ClickUp status string to a local task status */
 export function cuStatusToLocal(cuStatus: string): string {
   const s = cuStatus.toLowerCase().replace(/[_\s-]+/g, " ").trim();
   if (["complete", "completed", "done", "closed", "resolved"].includes(s)) return "Completed";
-  if (["in progress", "inprogress", "active", "open", "in review", "review"].includes(s)) return "In Progress";
+  if (["in progress", "inprogress", "active", "in review", "review"].includes(s)) return "In Progress";
   if (["pending", "waiting", "on hold", "blocked", "deferred"].includes(s)) return "Pending";
   if (["confirmed", "approved", "accepted"].includes(s)) return "Confirmed";
   return "Not Started";
 }
 
-/** Map a local task status string to a ClickUp status name (best-effort) */
-export function localStatusToCU(localStatus: string): string {
-  switch (localStatus) {
-    case "Completed":  return "complete";
-    case "In Progress": return "in progress";
-    case "Pending":    return "pending";
-    case "Confirmed":  return "confirmed";
-    default:           return "open";
+/** Map a local task status to the best-matching actual ClickUp status name.
+ *  Falls back to the first status of the appropriate type if no name match found. */
+export function localStatusToCUActual(localStatus: string, cuStatuses: CUStatus[]): string | undefined {
+  if (cuStatuses.length === 0) return undefined;
+
+  // Build keyword candidates in priority order
+  const candidates: string[][] = {
+    "Completed":  [["complete", "done", "closed", "resolved", "finished"]],
+    "In Progress":[["in progress", "inprogress", "active", "started", "in review"]],
+    "Pending":    [["pending", "waiting", "on hold", "blocked"]],
+    "Confirmed":  [["confirmed", "approved", "accepted"]],
+    "Not Started":[["open", "not started", "to do", "todo", "backlog", "new"]],
+  }[localStatus] ?? [[]];
+
+  const keywords = candidates[0] ?? [];
+
+  // Try exact/substring name match first
+  for (const kw of keywords) {
+    const found = cuStatuses.find(s => s.status.toLowerCase().replace(/[_\s-]+/g, " ").trim().includes(kw));
+    if (found) return found.status;
   }
+
+  // Fall back to type-based match
+  const typeMap: Record<string, string> = {
+    "Completed": "closed",
+    "In Progress": "custom",
+    "Not Started": "open",
+  };
+  const targetType = typeMap[localStatus];
+  if (targetType) {
+    const byType = cuStatuses.find(s => s.type === targetType);
+    if (byType) return byType.status;
+  }
+
+  return undefined; // don't send status if we can't match safely
 }
 
 /** Convert a YYYY-MM-DD string to ClickUp's ms timestamp, or null */

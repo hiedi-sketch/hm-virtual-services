@@ -29,6 +29,7 @@ import {
   getSpaces,
   getSpaceLists,
   getListTasks,
+  getListStatuses,
   createTask,
   updateTask,
   getTaskComments,
@@ -36,7 +37,7 @@ import {
   registerWebhook,
   deleteWebhook,
   cuStatusToLocal,
-  localStatusToCU,
+  localStatusToCUActual,
   dateToMs,
   msToDate,
 } from "../services/clickup";
@@ -349,6 +350,22 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
 
 // ─── Core push logic (exported for cron) ─────────────────────────────────────
 
+/** Send requests in batches to avoid ClickUp rate limits */
+async function batchedAsync<T>(
+  items: T[],
+  batchSize: number,
+  delayMs: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    await Promise.all(batch.map(fn));
+    if (i + batchSize < items.length) {
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+}
+
 export async function runClickUpPush(): Promise<{ pushed: number; errors: number }> {
   const creds = await getCredentials();
   if (!creds) throw new Error("ClickUp is not configured.");
@@ -369,10 +386,14 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
     .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
     .where(isNotNull(tasksTable.clickup_task_id));
 
+  // Fetch the actual statuses for the default list so we can map correctly
+  const cuStatuses = await getListStatuses(creds.token, creds.listId).catch(() => []);
+  logger.info({ statusCount: cuStatuses.length, statuses: cuStatuses.map(s => `${s.status}(${s.type})`) }, "ClickUp push: fetched list statuses");
+
   let pushed = 0;
   let errors = 0;
 
-  await Promise.all(linked.map(async task => {
+  await batchedAsync(linked, 4, 300, async task => {
     try {
       const existingTags = task.tags ? task.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
       const clientName = task.client_name ?? null;
@@ -380,11 +401,14 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
         ? [...existingTags, clientName]
         : existingTags;
 
+      // Map status to what actually exists in this ClickUp list
+      const mappedStatus = localStatusToCUActual(task.status, cuStatuses);
+
       await updateTask(creds.token, task.clickup_task_id!, {
         name: task.title,
         description: task.description ?? undefined,
         due_date: dateToMs(task.due_date),
-        status: localStatusToCU(task.status),
+        ...(mappedStatus !== undefined ? { status: mappedStatus } : {}),
         tags,
       });
       pushed++;
@@ -392,7 +416,7 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
       logger.warn({ taskId: task.id, clickup_task_id: task.clickup_task_id, err: err?.message }, "ClickUp push: failed to update task");
       errors++;
     }
-  }));
+  });
 
   return { pushed, errors };
 }
@@ -401,7 +425,25 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
   const creds = await getCredentials();
   if (!creds) throw new Error("ClickUp is not configured.");
 
-  const cuTasks = await getListTasks(creds.token, creds.listId);
+  // Resolve all configured list IDs — use the multi-list setting if available
+  const listIdsRaw = await getSetting("clickup_list_ids");
+  const allListIds: string[] = listIdsRaw
+    ? (() => { try { return (JSON.parse(listIdsRaw) as Array<{ id: string }>).map(l => l.id).filter(Boolean); } catch { return []; } })()
+    : [creds.listId];
+  // Always include the default list if not already present
+  if (!allListIds.includes(creds.listId)) allListIds.unshift(creds.listId);
+
+  logger.info({ listIds: allListIds }, "ClickUp pull: fetching from lists");
+
+  // Fetch tasks from all lists in parallel
+  const perListResults = await Promise.allSettled(allListIds.map(id => getListTasks(creds.token, id)));
+  const cuTasks = perListResults.flatMap((r, i) => {
+    if (r.status === "fulfilled") return r.value;
+    logger.warn({ listId: allListIds[i], err: (r.reason as any)?.message }, "ClickUp pull: failed to fetch list");
+    return [];
+  });
+
+  logger.info({ total: cuTasks.length }, "ClickUp pull: total tasks fetched from ClickUp");
 
   // Build client name → id map for tag-based linking
   const allClients = await db.select({ id: clientsTable.id, name: clientsTable.name, contact_name: clientsTable.contact_name }).from(clientsTable);
@@ -427,7 +469,6 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
       const localId = linkedMap.get(cuTask.id);
 
       if (localId !== undefined) {
-        // Already linked — pull ClickUp changes into local record
         const newStatus = cuStatusToLocal(cuTask.status.status) as "Not Started" | "Pending" | "Confirmed" | "In Progress" | "Completed";
         const newDueDate = msToDate(cuTask.due_date);
         const newTags = (cuTask.tags ?? []).map(t => t.name).join(", ") || null;
@@ -441,11 +482,8 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
         }).where(eq(tasksTable.id, localId));
         updated++;
       } else {
-        // New task in ClickUp — create it locally
-        // Resolve client from tags
         let resolvedClientId: number | null = null;
-        const tagNames = (cuTask.tags ?? []).map(t => t.name.toLowerCase().trim());
-        for (const tag of tagNames) {
+        for (const tag of (cuTask.tags ?? []).map(t => t.name.toLowerCase().trim())) {
           const matched = clientNameMap.get(tag);
           if (matched !== undefined) { resolvedClientId = matched; break; }
         }
@@ -464,6 +502,7 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
           missive_conversation_id: missiveMatch?.[1] ?? null,
         });
         created++;
+        logger.info({ cuTaskId: cuTask.id, title: cuTask.name }, "ClickUp pull: created new local task");
       }
     } catch (err: any) {
       logger.warn({ cuTaskId: cuTask.id, err: err?.message }, "ClickUp pull: failed to sync task");
@@ -471,6 +510,7 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
     }
   }
 
+  logger.info({ updated, created, errors }, "ClickUp pull: complete");
   return { updated, created, errors };
 }
 
