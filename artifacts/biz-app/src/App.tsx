@@ -6,12 +6,13 @@ import { Layout } from "@/components/Layout";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { TimerProvider } from "@/contexts/TimerContext";
 import NotFound from "@/pages/not-found";
+import React, { Suspense } from "react";
 
 import Dashboard from "@/pages/dashboard";
 import TeamDashboard from "@/pages/team-dashboard";
 import Clients from "@/pages/clients";
 import ClientDetail from "@/pages/client-detail";
-import Tasks from "@/pages/tasks";
+const Tasks = React.lazy(() => import("@/pages/tasks"));
 import TimeTracking from "@/pages/time";
 import Leads from "@/pages/leads";
 import Invoices from "@/pages/invoices";
@@ -110,7 +111,11 @@ function Router() {
         {user.role === "admin" && <Route path="/dashboard" component={Dashboard} />}
         {user.role === "admin" && <Route path="/clients/:id" component={ClientDetail} />}
         {user.role === "admin" && <Route path="/clients" component={Clients} />}
-        <Route path="/tasks" component={Tasks} />
+        <Route path="/tasks">
+          <Suspense fallback={<div className="min-h-screen bg-[#f8fafc] flex items-center justify-center"><div className="text-slate-400 text-sm">Loading…</div></div>}>
+            <Tasks />
+          </Suspense>
+        </Route>
         <Route path="/time" component={TimeTracking} />
         <Route path="/invoices" component={Invoices} />
         <Route path="/leads" component={Leads} />
