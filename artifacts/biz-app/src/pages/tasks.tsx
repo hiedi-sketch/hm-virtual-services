@@ -1716,6 +1716,31 @@ export default function Tasks() {
     });
   }, []);
 
+  const handleBulkAddToQueue = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    const alreadyQueued = new Set(
+      tasks.filter(t => t.queue_position !== null && t.queue_position !== undefined).map(t => t.id)
+    );
+    const toAdd = Array.from(selectedIds).filter(id => !alreadyQueued.has(id));
+    if (toAdd.length === 0) {
+      toast({ title: "All selected tasks are already in the queue" });
+      return;
+    }
+    const maxPos = Math.max(0, ...tasks
+      .filter(t => t.queue_position !== null && t.queue_position !== undefined)
+      .map(t => t.queue_position as number));
+    setIsBulkActing(true);
+    try {
+      await Promise.all(toAdd.map((id, i) => patchTask(id, { queue_position: maxPos + i + 1 })));
+      setSelectedIds(new Set());
+      toast({ title: `${toAdd.length} task${toAdd.length !== 1 ? "s" : ""} added to queue` });
+    } catch {
+      toast({ title: "Failed to add to queue", variant: "destructive" });
+    } finally {
+      setIsBulkActing(false);
+    }
+  }, [selectedIds, tasks, patchTask, toast]);
+
   const handleBulkAction = useCallback(async (
     action: "delete" | "update_status" | "update_client",
   ) => {
@@ -2235,6 +2260,16 @@ export default function Tasks() {
                 Apply
               </button>
             </div>
+
+            {/* Add to Queue */}
+            <button
+              onClick={handleBulkAddToQueue}
+              disabled={isBulkActing}
+              className="flex items-center gap-1.5 text-xs font-medium bg-sky-500/80 hover:bg-sky-500 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {isBulkActing ? <Loader2 className="w-3 h-3 animate-spin" /> : <ListOrdered className="w-3 h-3" />}
+              Add to Queue
+            </button>
 
             {/* Delete */}
             <button
