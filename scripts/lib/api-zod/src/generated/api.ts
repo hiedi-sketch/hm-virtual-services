@@ -319,6 +319,8 @@ export const UpdateTaskResponse = zod.object({
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
   clickup_task_id: zod.string().nullish(),
   tags: zod.string().nullish(),
+  is_pinned: zod.boolean().optional().default(false),
+  queue_position: zod.number().nullable().optional(),
 });
 
 /**
