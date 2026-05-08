@@ -2045,15 +2045,63 @@ export default function Tasks() {
               {queued.map((task, idx) => {
                 const isSaving = saving.has(task.id);
                 const done = task.status === "Completed";
+                const isThisTask = timerState.taskId === task.id;
+                const isRunning  = isThisTask && timerState.status === "running";
+                const isPaused   = isThisTask && timerState.status === "paused";
                 return (
-                  <div key={task.id} className={cn("bg-white border border-sky-100 rounded-lg px-3 py-2 flex items-center gap-2.5 shadow-sm", done && "opacity-60")}>
+                  <div key={task.id} className={cn("bg-white border border-sky-100 rounded-lg px-3 py-2 flex items-center gap-2 shadow-sm transition-opacity", done && "opacity-60")}>
+                    {/* Position badge */}
                     <span className="w-5 h-5 rounded-full bg-sky-100 text-sky-700 text-[10px] font-bold flex items-center justify-center shrink-0">{idx + 1}</span>
+
+                    {/* Done toggle */}
+                    <button
+                      onClick={() => patchTask(task.id, { status: done ? "Not Started" : "Completed" })}
+                      disabled={isSaving}
+                      className={cn("w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors",
+                        done ? "bg-emerald-500 border-emerald-500 text-white" : "border-slate-300 hover:border-emerald-400")}
+                      title={done ? "Mark not started" : "Mark complete"}
+                    >
+                      {done && <Check className="w-3 h-3" />}
+                    </button>
+
+                    {/* Title + timer readout */}
                     <div className="flex-1 min-w-0">
                       <button onClick={() => scrollToTask(task)} className="w-full text-left group">
                         <p className={cn("text-xs font-medium text-slate-800 truncate group-hover:text-[#266b75] group-hover:underline transition-colors", done && "line-through text-slate-400")}>{task.title}</p>
                         {task.client_name && <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>}
                       </button>
+                      {isThisTask && timerState.status !== "idle" && (
+                        <span className={cn("font-mono text-[10px] font-semibold tabular-nums", isRunning ? "text-[#266b75]" : "text-amber-600")}>
+                          {String(Math.floor(elapsedMs / 3600000)).padStart(2,"0")}:{String(Math.floor((elapsedMs % 3600000) / 60000)).padStart(2,"0")}:{String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2,"0")}
+                        </span>
+                      )}
                     </div>
+
+                    {/* Timer buttons */}
+                    {isRunning ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => handleTimerClick(task)} disabled={isSaving}
+                          title="Pause timer"
+                          className="w-6 h-6 rounded-full flex items-center justify-center bg-amber-500 text-white shadow-sm transition-all disabled:opacity-40 hover:bg-amber-600">
+                          <Pause className="w-3 h-3" />
+                        </button>
+                        <button onClick={() => saveAndStop()} disabled={isSaving}
+                          title="Stop & save timer"
+                          className="w-6 h-6 rounded-full flex items-center justify-center bg-red-500 text-white shadow-sm transition-all disabled:opacity-40 hover:bg-red-600">
+                          <Square className="w-3 h-3 fill-current" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => handleTimerClick(task)} disabled={isSaving || done}
+                        title={isPaused ? "Resume timer" : "Start timer"}
+                        className={cn("shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-all disabled:opacity-40",
+                          isPaused ? "bg-amber-500 text-white shadow-sm hover:bg-amber-600"
+                            : "bg-slate-700 text-white hover:bg-slate-500")}>
+                        <Play className="w-3 h-3" />
+                      </button>
+                    )}
+
+                    {/* Reorder + remove */}
                     <div className="flex items-center gap-0.5 shrink-0">
                       <button onClick={() => moveInQueue(task, "up")} disabled={idx === 0 || isSaving}
                         className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-sky-600 disabled:opacity-30 transition-colors" title="Move up">

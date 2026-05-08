@@ -382,6 +382,8 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
     if (existing?.recurrence) {
       extraFields["last_generated_at"] = todayStr();
     }
+    // Auto-remove from queue when completed
+    extraFields["queue_position"] = null;
   } else if (body.status && body.status !== "Completed" && !("completed_date" in body)) {
     extraFields["completed_date"] = null;
   }
