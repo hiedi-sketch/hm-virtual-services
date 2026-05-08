@@ -1505,6 +1505,7 @@ export default function Tasks() {
   const queryClient = useQueryClient();
   const { startForTask, pause, stop, saveAndStop, state: timerState, elapsedMs } = useTimer();
 
+  const [searchQuery, setSearchQuery] = useState("");
   const [clientFilter, setClientFilter] = useState("all");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("incomplete");
@@ -1781,7 +1782,9 @@ export default function Tasks() {
   );
 
   const displayed = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
     const filtered = tasks.filter(t => {
+      if (q && !t.title.toLowerCase().includes(q)) return false;
       if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
       if (serviceFilter !== "all" && t.service_type !== serviceFilter) return false;
       if (statusFilter === "incomplete" && t.status === "Completed") return false;
@@ -2035,6 +2038,24 @@ export default function Tasks() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
+        {/* Search */}
+        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-sm min-w-[180px]">
+          <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search tasks…"
+            className="bg-transparent border-none outline-none text-sm text-slate-700 placeholder-slate-400 w-full"
+          />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery("")} className="text-slate-400 hover:text-slate-600 transition-colors shrink-0">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 shadow-sm">
           <Filter className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <select value={clientFilter} onChange={e => setClientFilter(e.target.value)}
