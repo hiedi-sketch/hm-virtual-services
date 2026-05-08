@@ -453,12 +453,12 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
     if (c.contact_name?.trim()) clientNameMap.set(c.contact_name.toLowerCase().trim(), c.id);
   }
 
-  // Load all locally linked task IDs for fast lookup
+  // Load all locally linked task IDs for fast lookup (include due_date so we can preserve it)
   const localLinked = await db
-    .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id })
+    .select({ id: tasksTable.id, clickup_task_id: tasksTable.clickup_task_id, due_date: tasksTable.due_date })
     .from(tasksTable)
     .where(isNotNull(tasksTable.clickup_task_id));
-  const linkedMap = new Map(localLinked.map(t => [t.clickup_task_id!, t.id]));
+  const linkedMap = new Map(localLinked.map(t => [t.clickup_task_id!, { id: t.id, due_date: t.due_date }]));
 
   let updated = 0;
   let created = 0;
@@ -466,20 +466,23 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
 
   for (const cuTask of cuTasks) {
     try {
-      const localId = linkedMap.get(cuTask.id);
+      const local = linkedMap.get(cuTask.id);
 
-      if (localId !== undefined) {
+      if (local !== undefined) {
         const newStatus = cuStatusToLocal(cuTask.status.status) as "Not Started" | "Pending" | "Confirmed" | "In Progress" | "Completed";
-        const newDueDate = msToDate(cuTask.due_date);
         const newTags = (cuTask.tags ?? []).map(t => t.name).join(", ") || null;
+
+        // App's due date wins — only fill in from ClickUp if local has none
+        const remoteDueDate = msToDate(cuTask.due_date);
+        const keepDueDate = local.due_date ?? remoteDueDate;
 
         await db.update(tasksTable).set({
           title: cuTask.name,
           status: newStatus,
-          due_date: newDueDate,
+          due_date: keepDueDate,
           tags: newTags,
           assigned_to: cuTask.assignees?.[0]?.username ?? undefined,
-        }).where(eq(tasksTable.id, localId));
+        }).where(eq(tasksTable.id, local.id));
         updated++;
       } else {
         let resolvedClientId: number | null = null;
@@ -752,9 +755,12 @@ router.post("/clickup/webhook", async (req: Request, res: Response) => {
     }
 
     case "taskDueDateUpdated": {
-      const afterMs = event.history_items?.[0]?.after as string | number | null | undefined;
-      const newDate = msToDate(afterMs);
-      if (newDate !== localTask.due_date) updates.due_date = newDate;
+      // App's due date wins — only apply ClickUp's date if local has none
+      if (!localTask.due_date) {
+        const afterMs = event.history_items?.[0]?.after as string | number | null | undefined;
+        const newDate = msToDate(afterMs);
+        if (newDate !== localTask.due_date) updates.due_date = newDate;
+      }
       break;
     }
 
@@ -770,9 +776,7 @@ router.post("/clickup/webhook", async (req: Request, res: Response) => {
             updates.status = cuStatusToLocal(afterObj.status) as typeof updates.status;
           }
         }
-        if (item.field === "due_date") {
-          updates.due_date = msToDate(item.after as string | number | null);
-        }
+        // Skip due_date — app's date always wins over ClickUp's
       }
       break;
     }
