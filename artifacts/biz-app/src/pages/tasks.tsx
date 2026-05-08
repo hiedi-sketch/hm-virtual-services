@@ -1967,20 +1967,40 @@ export default function Tasks() {
                         )}
                       </div>
                     </div>
-                    {/* Timer button */}
-                    <button
-                      onClick={() => handleTimerClick(task)}
-                      disabled={isSaving}
-                      title={isRunning ? "Pause timer" : isPaused ? "Resume timer" : "Start timer"}
-                      className={cn(
-                        "shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all disabled:opacity-40",
-                        isRunning ? "bg-[#266b75] text-white shadow-sm"
-                          : isPaused  ? "bg-amber-500 text-white shadow-sm"
-                          : "bg-slate-800 text-white hover:bg-slate-600"
-                      )}
-                    >
-                      {isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                    </button>
+                    {/* Timer buttons */}
+                    {isRunning ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleTimerClick(task)}
+                          disabled={isSaving}
+                          title="Pause timer"
+                          className="w-7 h-7 rounded-full flex items-center justify-center bg-amber-500 text-white shadow-sm transition-all disabled:opacity-40 hover:bg-amber-600"
+                        >
+                          <Pause className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => saveAndStop()}
+                          disabled={isSaving}
+                          title="Stop & save timer"
+                          className="w-7 h-7 rounded-full flex items-center justify-center bg-red-500 text-white shadow-sm transition-all disabled:opacity-40 hover:bg-red-600"
+                        >
+                          <Square className="w-3 h-3 fill-current" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleTimerClick(task)}
+                        disabled={isSaving}
+                        title={isPaused ? "Resume timer" : "Start timer"}
+                        className={cn(
+                          "shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all disabled:opacity-40",
+                          isPaused ? "bg-amber-500 text-white shadow-sm hover:bg-amber-600"
+                            : "bg-slate-800 text-white hover:bg-slate-600"
+                        )}
+                      >
+                        <Play className="w-3 h-3" />
+                      </button>
+                    )}
                     {/* Unpin */}
                     <button
                       onClick={() => patchTask(task.id, { is_pinned: false })}
