@@ -1597,6 +1597,25 @@ export default function Tasks() {
   // ── Inline edit trigger ────────────────────────────────────────────────────
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
 
+  // ── Pinned task drag-order ─────────────────────────────────────────────────
+  const [pinnedOrder, setPinnedOrder] = useState<number[]>(() => {
+    try { return JSON.parse(localStorage.getItem("pinned_task_order") ?? "[]"); } catch { return []; }
+  });
+  const dragPinnedSrc = useRef<number | null>(null);
+  const dragPinnedOver = useRef<number | null>(null);
+
+  // Keep order in sync as tasks are pinned/unpinned
+  useEffect(() => {
+    const pinnedIds = tasks.filter(t => t.is_pinned).map(t => t.id);
+    setPinnedOrder(prev => {
+      const kept = prev.filter(id => pinnedIds.includes(id));
+      const added = pinnedIds.filter(id => !kept.includes(id));
+      const next = [...kept, ...added];
+      localStorage.setItem("pinned_task_order", JSON.stringify(next));
+      return next;
+    });
+  }, [tasks]);
+
   // ── Bulk selection state ───────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isBulkActing, setIsBulkActing] = useState(false);
@@ -1951,8 +1970,30 @@ export default function Tasks() {
 
       {/* ── Pinned Daily Tasks ─────────────────────────────────────────── */}
       {(() => {
-        const pinned = tasks.filter(t => t.is_pinned);
+        const pinnedMap = new Map(tasks.filter(t => t.is_pinned).map(t => [t.id, t]));
+        const pinned = pinnedOrder.map(id => pinnedMap.get(id)).filter(Boolean) as typeof tasks;
         if (pinned.length === 0) return null;
+
+        const handleDragStart = (id: number) => { dragPinnedSrc.current = id; };
+        const handleDragEnter = (id: number) => { dragPinnedOver.current = id; };
+        const handleDragEnd = () => {
+          const src = dragPinnedSrc.current;
+          const over = dragPinnedOver.current;
+          if (src === null || over === null || src === over) { dragPinnedSrc.current = null; dragPinnedOver.current = null; return; }
+          setPinnedOrder(prev => {
+            const next = [...prev];
+            const fromIdx = next.indexOf(src);
+            const toIdx = next.indexOf(over);
+            if (fromIdx === -1 || toIdx === -1) return prev;
+            next.splice(fromIdx, 1);
+            next.splice(toIdx, 0, src);
+            localStorage.setItem("pinned_task_order", JSON.stringify(next));
+            return next;
+          });
+          dragPinnedSrc.current = null;
+          dragPinnedOver.current = null;
+        };
+
         return (
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2">
@@ -1975,7 +2016,19 @@ export default function Tasks() {
                 };
                 const done = task.status === "Completed";
                 return (
-                  <div key={task.id} className={cn("bg-white border rounded-lg px-3 py-2.5 flex items-start gap-2.5 shadow-sm transition-opacity", done && "opacity-60")}>
+                  <div
+                    key={task.id}
+                    draggable
+                    onDragStart={() => handleDragStart(task.id)}
+                    onDragEnter={() => handleDragEnter(task.id)}
+                    onDragEnd={handleDragEnd}
+                    onDragOver={e => e.preventDefault()}
+                    className={cn("bg-white border rounded-lg px-3 py-2.5 flex items-start gap-2.5 shadow-sm transition-opacity cursor-default", done && "opacity-60")}
+                  >
+                    {/* Drag handle */}
+                    <div className="shrink-0 mt-1 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing transition-colors" title="Drag to reorder">
+                      <GripVertical className="w-3.5 h-3.5" />
+                    </div>
                     {/* Done toggle */}
                     <button
                       onClick={() => patchTask(task.id, { status: done ? "Not Started" : "Completed" })}
