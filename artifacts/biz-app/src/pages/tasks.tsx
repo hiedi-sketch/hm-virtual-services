@@ -2075,6 +2075,17 @@ export default function Tasks() {
               <ListOrdered className="w-4 h-4 text-sky-600" />
               <h3 className="text-sm font-semibold text-sky-800">Queue — Next Up</h3>
               <span className="text-xs text-sky-600 bg-sky-100 rounded-full px-2 py-0.5">{queued.length}</span>
+              <button
+                onClick={async () => {
+                  if (!window.confirm("Remove all tasks from the queue?")) return;
+                  await Promise.all(queued.map(t => patchTask(t.id, { queue_position: null })));
+                  toast({ title: "Queue cleared" });
+                }}
+                className="ml-auto text-xs text-slate-400 hover:text-red-500 transition-colors"
+                title="Clear queue"
+              >
+                Clear all
+              </button>
             </div>
             <div className="space-y-1.5">
               {queued.map((task, idx) => {
