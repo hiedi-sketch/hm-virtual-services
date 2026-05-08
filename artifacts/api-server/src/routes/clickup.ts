@@ -17,6 +17,7 @@
 
 import crypto from "crypto";
 import { Router, type IRouter, type Request, type Response } from "express";
+import { logger } from "../lib/logger";
 import { db } from "@workspace/db";
 import { appSettingsTable, tasksTable, taskCommentsTable, clientsTable } from "@workspace/db";
 import { eq, isNotNull, and, sql } from "drizzle-orm";
