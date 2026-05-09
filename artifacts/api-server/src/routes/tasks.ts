@@ -266,13 +266,15 @@ router.post("/tasks/spawn-recurring", requireAuth, async (req, res) => {
 
 // ── POST /api/tasks/bulk ─────────────────────────────────────────────────────
 // Performs a bulk action on a list of task IDs.
-// Supported actions: "delete" | "update_status" | "update_client"
+// Supported actions: "delete" | "update_status" | "update_client" | "update_service_type" | "update_assigned"
 router.post("/tasks/bulk", requireRole("admin"), async (req, res) => {
   const schema = z.object({
-    action:    z.enum(["delete", "update_status", "update_client"]),
-    ids:       z.array(z.number().int().positive()).min(1).max(500),
-    status:    z.string().optional(),
-    client_id: z.number().int().positive().optional(),
+    action:       z.enum(["delete", "update_status", "update_client", "update_service_type", "update_assigned"]),
+    ids:          z.array(z.number().int().positive()).min(1).max(500),
+    status:       z.string().optional(),
+    client_id:    z.number().int().positive().optional(),
+    service_type: z.enum(["Bookkeeping", "Virtual Assistant"]).optional(),
+    assigned_to:  z.string().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -281,7 +283,7 @@ router.post("/tasks/bulk", requireRole("admin"), async (req, res) => {
     return;
   }
 
-  const { action, ids, status, client_id } = parsed.data;
+  const { action, ids, status, client_id, service_type, assigned_to } = parsed.data;
   const actor = req.session.user;
 
   if (action === "delete") {
@@ -323,6 +325,22 @@ router.post("/tasks/bulk", requireRole("admin"), async (req, res) => {
     if (!client_id) { res.status(400).json({ error: "client_id is required" }); return; }
     await db.update(tasksTable).set({ client_id }).where(inArray(tasksTable.id, ids));
     logAudit("task", 0, "bulk_client", `${ids.length} tasks → client ${client_id}`, { id: actor?.id, name: actor?.name });
+    res.json({ affected: ids.length });
+    return;
+  }
+
+  if (action === "update_service_type") {
+    if (!service_type) { res.status(400).json({ error: "service_type is required" }); return; }
+    await db.update(tasksTable).set({ service_type }).where(inArray(tasksTable.id, ids));
+    logAudit("task", 0, "bulk_service_type", `${ids.length} tasks → service_type "${service_type}"`, { id: actor?.id, name: actor?.name });
+    res.json({ affected: ids.length });
+    return;
+  }
+
+  if (action === "update_assigned") {
+    if (!assigned_to) { res.status(400).json({ error: "assigned_to is required" }); return; }
+    await db.update(tasksTable).set({ assigned_to }).where(inArray(tasksTable.id, ids));
+    logAudit("task", 0, "bulk_assigned", `${ids.length} tasks → assigned_to "${assigned_to}"`, { id: actor?.id, name: actor?.name });
     res.json({ affected: ids.length });
     return;
   }

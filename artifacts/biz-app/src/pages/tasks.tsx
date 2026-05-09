@@ -1653,6 +1653,8 @@ export default function Tasks() {
   const [isBulkActing, setIsBulkActing] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("Not Started");
   const [bulkClientId, setBulkClientId] = useState("");
+  const [bulkServiceType, setBulkServiceType] = useState("");
+  const [bulkAssigned, setBulkAssigned] = useState("");
 
   const today = new Date().toLocaleDateString("sv-SE");
 
@@ -1773,7 +1775,7 @@ export default function Tasks() {
   }, [selectedIds, tasks, patchTask, toast]);
 
   const handleBulkAction = useCallback(async (
-    action: "delete" | "update_status" | "update_client",
+    action: "delete" | "update_status" | "update_client" | "update_service_type" | "update_assigned",
   ) => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
@@ -1785,8 +1787,10 @@ export default function Tasks() {
     setIsBulkActing(true);
     try {
       const body: Record<string, unknown> = { action, ids };
-      if (action === "update_status") body.status = bulkStatus;
-      if (action === "update_client") body.client_id = Number(bulkClientId);
+      if (action === "update_status")       body.status       = bulkStatus;
+      if (action === "update_client")       body.client_id    = Number(bulkClientId);
+      if (action === "update_service_type") body.service_type = bulkServiceType;
+      if (action === "update_assigned")     body.assigned_to  = bulkAssigned;
 
       const res = await fetch("/api/tasks/bulk", {
         method: "POST",
@@ -1804,7 +1808,7 @@ export default function Tasks() {
     } finally {
       setIsBulkActing(false);
     }
-  }, [selectedIds, bulkStatus, bulkClientId, refetch, toast]);
+  }, [selectedIds, bulkStatus, bulkClientId, bulkServiceType, bulkAssigned, refetch, toast]);
 
   // ── Timer ─────────────────────────────────────────────────────────────────
 
@@ -2333,6 +2337,47 @@ export default function Tasks() {
               <button
                 onClick={() => { if (!bulkClientId) return; handleBulkAction("update_client"); }}
                 disabled={isBulkActing || !bulkClientId}
+                className="text-xs font-medium bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </div>
+
+            {/* Service Type update */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-white/70 font-medium">Service:</span>
+              <select
+                value={bulkServiceType}
+                onChange={e => setBulkServiceType(e.target.value)}
+                className="text-xs text-slate-800 bg-white border-0 rounded px-2 py-1 outline-none"
+              >
+                <option value="">— pick —</option>
+                <option value="Bookkeeping">Bookkeeping</option>
+                <option value="Virtual Assistant">Virtual Assistant</option>
+              </select>
+              <button
+                onClick={() => { if (!bulkServiceType) return; handleBulkAction("update_service_type"); }}
+                disabled={isBulkActing || !bulkServiceType}
+                className="text-xs font-medium bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                Apply
+              </button>
+            </div>
+
+            {/* Assigned update */}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-white/70 font-medium">Assigned:</span>
+              <select
+                value={bulkAssigned}
+                onChange={e => setBulkAssigned(e.target.value)}
+                className="text-xs text-slate-800 bg-white border-0 rounded px-2 py-1 outline-none"
+              >
+                <option value="">— pick —</option>
+                {assigneeOptions.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
+              <button
+                onClick={() => { if (!bulkAssigned) return; handleBulkAction("update_assigned"); }}
+                disabled={isBulkActing || !bulkAssigned}
                 className="text-xs font-medium bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
               >
                 Apply
