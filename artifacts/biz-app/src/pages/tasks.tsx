@@ -1594,37 +1594,7 @@ export default function Tasks() {
 
   useEffect(() => { refreshCuSettings(); }, []);
 
-  // ── Inline edit trigger ────────────────────────────────────────────────────
-  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
-
-  // ── Pinned task drag-order ─────────────────────────────────────────────────
-  const [pinnedOrder, setPinnedOrder] = useState<number[]>(() => {
-    try { return JSON.parse(localStorage.getItem("pinned_task_order") ?? "[]"); } catch { return []; }
-  });
-  const dragPinnedSrc = useRef<number | null>(null);
-  const dragPinnedOver = useRef<number | null>(null);
-
-  // Keep order in sync as tasks are pinned/unpinned
-  useEffect(() => {
-    const pinnedIds = tasks.filter(t => t.is_pinned).map(t => t.id);
-    setPinnedOrder(prev => {
-      const kept = prev.filter(id => pinnedIds.includes(id));
-      const added = pinnedIds.filter(id => !kept.includes(id));
-      const next = [...kept, ...added];
-      localStorage.setItem("pinned_task_order", JSON.stringify(next));
-      return next;
-    });
-  }, [tasks]);
-
-  // ── Bulk selection state ───────────────────────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [isBulkActing, setIsBulkActing] = useState(false);
-  const [bulkStatus, setBulkStatus] = useState("Not Started");
-  const [bulkClientId, setBulkClientId] = useState("");
-
-  const today = new Date().toLocaleDateString("sv-SE");
-
-  // ── Data ──────────────────────────────────────────────────────────────────
+  // ── Data (must come before any useEffect/state that references these) ────────
 
   const { data: tasks = [], isLoading, refetch } = useQuery<ApiTask[]>({
     queryKey: ["api-tasks"],
@@ -1653,6 +1623,36 @@ export default function Tasks() {
       return res.json();
     },
   });
+
+  // ── Inline edit trigger ────────────────────────────────────────────────────
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+
+  // ── Pinned task drag-order ─────────────────────────────────────────────────
+  const [pinnedOrder, setPinnedOrder] = useState<number[]>(() => {
+    try { return JSON.parse(localStorage.getItem("pinned_task_order") ?? "[]"); } catch { return []; }
+  });
+  const dragPinnedSrc = useRef<number | null>(null);
+  const dragPinnedOver = useRef<number | null>(null);
+
+  // Keep order in sync as tasks are pinned/unpinned (tasks must be declared above)
+  useEffect(() => {
+    const pinnedIds = tasks.filter(t => t.is_pinned).map(t => t.id);
+    setPinnedOrder(prev => {
+      const kept = prev.filter(id => pinnedIds.includes(id));
+      const added = pinnedIds.filter(id => !kept.includes(id));
+      const next = [...kept, ...added];
+      localStorage.setItem("pinned_task_order", JSON.stringify(next));
+      return next;
+    });
+  }, [tasks]);
+
+  // ── Bulk selection state ───────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [isBulkActing, setIsBulkActing] = useState(false);
+  const [bulkStatus, setBulkStatus] = useState("Not Started");
+  const [bulkClientId, setBulkClientId] = useState("");
+
+  const today = new Date().toLocaleDateString("sv-SE");
 
   // Combined assignee options: team members first, then client contact names
   const assigneeOptions = useMemo(() => {
