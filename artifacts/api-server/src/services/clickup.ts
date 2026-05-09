@@ -103,6 +103,23 @@ export async function getSpaceLists(token: string, spaceId: string): Promise<CUL
 
 // ── Tasks ─────────────────────────────────────────────────────────────────────
 
+export interface CUCustomFieldOption {
+  id: string;
+  name: string;
+  color?: string;
+  orderindex: number;
+}
+
+export interface CUCustomField {
+  id: string;
+  name: string;
+  type: string;
+  value?: unknown;
+  type_config?: {
+    options?: CUCustomFieldOption[];
+  };
+}
+
 export interface CUTask {
   id: string;
   name: string;
@@ -113,6 +130,7 @@ export interface CUTask {
   tags?: Array<{ name: string }>;
   date_created?: string;
   date_updated?: string;
+  custom_fields?: CUCustomField[];
 }
 
 export async function getListTasks(token: string, listId: string): Promise<CUTask[]> {
@@ -187,6 +205,47 @@ export async function updateTask(token: string, taskId: string, input: UpdateCUT
     } catch { /* tag sync is best-effort */ }
   }
   return data;
+}
+
+/** Fetch all custom field definitions for a list */
+export async function getListCustomFields(token: string, listId: string): Promise<CUCustomField[]> {
+  const data = (await fetchCU(token, "GET", `/list/${listId}/field`)) as { fields: CUCustomField[] };
+  return data.fields ?? [];
+}
+
+/** Set a custom field value on a task */
+export async function setTaskCustomField(token: string, taskId: string, fieldId: string, value: unknown): Promise<void> {
+  await fetchCU(token, "POST", `/task/${taskId}/field/${fieldId}`, { value });
+}
+
+/** Find the "Service Type" field config from a list's custom fields */
+export function findServiceTypeField(fields: CUCustomField[]): { fieldId: string; options: CUCustomFieldOption[] } | null {
+  const field = fields.find(f => f.name.toLowerCase().replace(/[_\s]+/g, " ").trim() === "service type");
+  if (!field) return null;
+  return { fieldId: field.id, options: field.type_config?.options ?? [] };
+}
+
+/** Extract local service_type value from a task's custom_fields array */
+export function cuCustomFieldToServiceType(customFields?: CUCustomField[]): "Bookkeeping" | "Virtual Assistant" | null {
+  if (!customFields) return null;
+  const field = customFields.find(f => f.name.toLowerCase().replace(/[_\s]+/g, " ").trim() === "service type");
+  if (!field || field.value === null || field.value === undefined || field.value === "") return null;
+  // For drop_down fields, value is the orderindex (number) of the selected option
+  const orderindex = typeof field.value === "number" ? field.value : parseInt(String(field.value), 10);
+  if (isNaN(orderindex)) return null;
+  const option = field.type_config?.options?.find(o => o.orderindex === orderindex);
+  const name = (option?.name ?? "").toLowerCase().trim();
+  if (name.includes("bookkeeping")) return "Bookkeeping";
+  if (name.includes("virtual") || name.includes("va")) return "Virtual Assistant";
+  return null;
+}
+
+/** Map a local service_type to the ClickUp dropdown option orderindex for a list's field */
+export function serviceTypeToOrderindex(serviceType: string | null | undefined, options: CUCustomFieldOption[]): number | null {
+  if (!serviceType) return null;
+  const normalized = serviceType.toLowerCase().trim();
+  const option = options.find(o => o.name.toLowerCase().trim() === normalized);
+  return option?.orderindex ?? null;
 }
 
 // ── Comments ──────────────────────────────────────────────────────────────────

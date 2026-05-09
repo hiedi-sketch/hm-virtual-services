@@ -30,6 +30,11 @@ import {
   getSpaceLists,
   getListTasks,
   getListStatuses,
+  getListCustomFields,
+  setTaskCustomField,
+  findServiceTypeField,
+  cuCustomFieldToServiceType,
+  serviceTypeToOrderindex,
   createTask,
   updateTask,
   getTaskComments,
@@ -244,6 +249,7 @@ router.get("/clickup/import/preview", requireAuth, requireRole("admin"), async (
         due_date: msToDate(t.due_date),
         assignee_name: t.assignees?.[0]?.username ?? null,
         tags: (t.tags ?? []).map(tag => tag.name).join(", "),
+        service_type: cuCustomFieldToServiceType(t.custom_fields),
       })),
     });
   } catch (err: any) {
@@ -263,6 +269,7 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
       due_date: z.string().nullable().optional(),
       assignee_name: z.string().nullable().optional(),
       tags: z.string().optional(),
+      service_type: z.enum(["Bookkeeping", "Virtual Assistant"]).nullable().optional(),
     })),
   });
 
@@ -341,6 +348,7 @@ router.post("/clickup/import", requireAuth, requireRole("admin"), async (req, re
       assigned_to: t.assignee_name ?? null,
       tags: t.tags ?? null,
       missive_conversation_id: missiveConversationId,
+      ...(t.service_type ? { service_type: t.service_type } : {}),
     });
     created++;
   }
@@ -381,14 +389,25 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
       tags: tasksTable.tags,
       client_id: tasksTable.client_id,
       client_name: clientsTable.name,
+      service_type: tasksTable.service_type,
     })
     .from(tasksTable)
     .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
     .where(isNotNull(tasksTable.clickup_task_id));
 
-  // Fetch the actual statuses for the default list so we can map correctly
-  const cuStatuses = await getListStatuses(creds.token, creds.listId).catch(() => []);
+  // Fetch the actual statuses and custom fields for the default list
+  const [cuStatuses, cuFields] = await Promise.all([
+    getListStatuses(creds.token, creds.listId).catch(() => []),
+    getListCustomFields(creds.token, creds.listId).catch(() => []),
+  ]);
   logger.info({ statusCount: cuStatuses.length, statuses: cuStatuses.map(s => `${s.status}(${s.type})`) }, "ClickUp push: fetched list statuses");
+
+  const serviceTypeField = findServiceTypeField(cuFields);
+  if (serviceTypeField) {
+    logger.info({ fieldId: serviceTypeField.fieldId, options: serviceTypeField.options.map(o => o.name) }, "ClickUp push: found Service Type field");
+  } else {
+    logger.info("ClickUp push: no Service Type custom field found in list");
+  }
 
   let pushed = 0;
   let errors = 0;
@@ -411,6 +430,17 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
         ...(mappedStatus !== undefined ? { status: mappedStatus } : {}),
         tags,
       });
+
+      // Push service_type as a custom field if the list has one configured
+      if (serviceTypeField && task.service_type) {
+        const orderindex = serviceTypeToOrderindex(task.service_type, serviceTypeField.options);
+        if (orderindex !== null) {
+          await setTaskCustomField(creds.token, task.clickup_task_id!, serviceTypeField.fieldId, orderindex).catch(err => {
+            logger.warn({ taskId: task.id, err: err?.message }, "ClickUp push: failed to set Service Type custom field");
+          });
+        }
+      }
+
       pushed++;
     } catch (err: any) {
       logger.warn({ taskId: task.id, clickup_task_id: task.clickup_task_id, err: err?.message }, "ClickUp push: failed to update task");
@@ -471,6 +501,7 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
       if (local !== undefined) {
         const newStatus = cuStatusToLocal(cuTask.status.status) as "Not Started" | "Pending" | "Confirmed" | "In Progress" | "Completed";
         const newTags = (cuTask.tags ?? []).map(t => t.name).join(", ") || null;
+        const newServiceType = cuCustomFieldToServiceType(cuTask.custom_fields);
 
         // App's due date wins — only fill in from ClickUp if local has none
         const remoteDueDate = msToDate(cuTask.due_date);
@@ -482,6 +513,7 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
           due_date: keepDueDate,
           tags: newTags,
           assigned_to: cuTask.assignees?.[0]?.username ?? undefined,
+          ...(newServiceType !== null ? { service_type: newServiceType } : {}),
         }).where(eq(tasksTable.id, local.id));
         updated++;
       } else {
@@ -492,6 +524,7 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
         }
 
         const missiveMatch = cuTask.description?.match(/Missive ID:\s*([a-f0-9-]{36})/i);
+        const newServiceType = cuCustomFieldToServiceType(cuTask.custom_fields);
 
         await db.insert(tasksTable).values({
           title: cuTask.name,
@@ -503,6 +536,7 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
           assigned_to: cuTask.assignees?.[0]?.username ?? null,
           tags: (cuTask.tags ?? []).map(t => t.name).join(", ") || null,
           missive_conversation_id: missiveMatch?.[1] ?? null,
+          ...(newServiceType !== null ? { service_type: newServiceType } : {}),
         });
         created++;
         logger.info({ cuTaskId: cuTask.id, title: cuTask.name }, "ClickUp pull: created new local task");
