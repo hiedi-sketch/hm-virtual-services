@@ -2381,6 +2381,7 @@ export default function Tasks() {
                       className="w-3.5 h-3.5 rounded border-slate-300 accent-[#266b75] cursor-pointer"
                     />
                   </th>
+                  <th className="px-2 py-2 w-8" />
                   <th className="px-1 py-2 w-8" />
                   <th className="px-2 py-2 w-12" />
                   {(["status", "client_name", null, null, null, null, "due_date", null, null] as const).map((field, i) => {
@@ -2454,6 +2455,22 @@ export default function Tasks() {
                             onChange={() => toggleSelect(task.id)}
                             className="w-3.5 h-3.5 rounded border-slate-300 accent-[#266b75] cursor-pointer"
                           />
+                        </td>
+                        {/* Quick-complete button */}
+                        <td className="px-2 py-2">
+                          <button
+                            onClick={() => patchTask(task.id, { status: task.status === "Completed" ? "Not Started" : "Completed" })}
+                            disabled={isSaving}
+                            title={task.status === "Completed" ? "Mark not started" : "Mark complete"}
+                            className={cn(
+                              "w-6 h-6 rounded-full border-2 flex items-center justify-center shrink-0 transition-all disabled:opacity-40",
+                              task.status === "Completed"
+                                ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-600"
+                                : "border-slate-300 hover:border-emerald-400 hover:bg-emerald-50"
+                            )}
+                          >
+                            {task.status === "Completed" && <Check className="w-3.5 h-3.5" />}
+                          </button>
                         </td>
                         {/* Expand toggle */}
                         <td className="px-2 py-2">

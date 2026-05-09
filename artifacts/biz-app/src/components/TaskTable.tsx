@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Play, Pause, ChevronDown, MessageSquare, Trash2 } from "lucide-react";
+import { Play, Pause, ChevronDown, MessageSquare, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SubtaskList } from "@/components/SubtaskList";
 import { TaskCommentPanel } from "@/components/TaskCommentPanel";
@@ -249,12 +249,26 @@ export default function TaskTable({
                       {/* Checkbox */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
                         {readOnly ? (
-                          <span className="text-lg leading-none">
-                            {task.status === "Completed" ? "✅" : "⬜"}
+                          <span className={cn(
+                            "w-6 h-6 rounded-full border-2 flex items-center justify-center",
+                            task.status === "Completed"
+                              ? "bg-emerald-500 border-emerald-500 text-white"
+                              : "border-slate-300"
+                          )}>
+                            {task.status === "Completed" && <Check className="w-3.5 h-3.5" />}
                           </span>
                         ) : (
-                          <button onClick={() => onToggleStatus?.(task)} className="text-lg leading-none">
-                            {task.status === "Completed" ? "✅" : "⬜"}
+                          <button
+                            onClick={() => onToggleStatus?.(task)}
+                            title={task.status === "Completed" ? "Mark not started" : "Mark complete"}
+                            className={cn(
+                              "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                              task.status === "Completed"
+                                ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-600"
+                                : "border-slate-300 hover:border-emerald-400 hover:bg-emerald-50"
+                            )}
+                          >
+                            {task.status === "Completed" && <Check className="w-3.5 h-3.5" />}
                           </button>
                         )}
                       </td>
