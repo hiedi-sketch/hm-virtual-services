@@ -78,15 +78,44 @@ app.post(
         res.status(400).json({ error: "Missing Square webhook signature" });
         return;
       }
-      // Use the canonical registered URL — req.headers.host is the internal
-      // Replit proxy hostname and won't match what Square signed against.
-      const notificationUrl = `https://${process.env.REPLIT_DOMAINS?.split(",")[0] ?? req.headers.host}/api/webhooks/square`;
-      const valid = verifySquareWebhookSignature({ signatureKey, notificationUrl, rawBody, signature });
+
+      // Build a list of all candidate notification URLs to try.
+      // Square signs against the exact URL registered in the dashboard.
+      // We try every domain we know about so the signature check works regardless
+      // of whether the webhook is registered under the .replit.app domain or a
+      // custom domain — and survives domain changes without code deploys.
+      const candidateDomains: string[] = [];
+
+      // 1. Explicit override — set SQUARE_WEBHOOK_URL to the exact registered URL
+      if (process.env.SQUARE_WEBHOOK_URL) {
+        candidateDomains.push(process.env.SQUARE_WEBHOOK_URL);
+      }
+
+      // 2. All domains in REPLIT_DOMAINS (comma-separated)
+      const replitDomains = (process.env.REPLIT_DOMAINS ?? "").split(",").map(d => d.trim()).filter(Boolean);
+      for (const d of replitDomains) {
+        const url = `https://${d}/api/webhooks/square`;
+        if (!candidateDomains.includes(url)) candidateDomains.push(url);
+      }
+
+      // 3. Hardcoded known production domain as final fallback
+      const knownDomains = ["hmvirtualservices.com", "hmvirtualservices.replit.app"];
+      for (const d of knownDomains) {
+        const url = `https://${d}/api/webhooks/square`;
+        if (!candidateDomains.includes(url)) candidateDomains.push(url);
+      }
+
+      const valid = candidateDomains.some(notificationUrl =>
+        verifySquareWebhookSignature({ signatureKey, notificationUrl, rawBody, signature })
+      );
+
       if (!valid) {
-        logger.warn("[Square webhook] Invalid signature");
+        logger.warn({ candidateDomains }, "[Square webhook] Invalid signature — tried all candidate URLs");
         res.status(401).json({ error: "Invalid Square webhook signature" });
         return;
       }
+
+      logger.info("[Square webhook] Signature verified OK");
     } else {
       logger.warn("[Square webhook] SQUARE_WEBHOOK_SIGNATURE_KEY not set — skipping signature verification");
     }
