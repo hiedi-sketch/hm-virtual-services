@@ -158,6 +158,8 @@ const normalizeTaskStatus = (v: unknown) => {
     pending: "Pending", confirmed: "Confirmed",
     "in progress": "In Progress", in_progress: "In Progress",
     completed: "Completed",
+    "needs smr review": "Needs SMR Review", needs_smr_review: "Needs SMR Review",
+    "to discuss": "To Discuss", to_discuss: "To Discuss",
   };
   return map[v.toLowerCase()] ?? v;
 };
@@ -181,7 +183,7 @@ export const ListTasksResponseItem = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number().nullable(),
   assigned_to: zod.string().nullish(),
-  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"])),
+  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss"])),
   due_date: zod.string().nullish(),
   completed_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
@@ -207,7 +209,7 @@ export const CreateTaskBody = zod.object({
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
   due_date: zod.string().nullish(),
-  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"])).optional(),
+  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss"])).optional(),
   recurrence: recurrenceZod,
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
 });
@@ -221,7 +223,7 @@ export const SpawnRecurringTasksResponseItem = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number().nullable(),
   assigned_to: zod.string().nullish(),
-  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed"])),
+  status: zod.preprocess(normalizeTaskStatus, zod.enum(["Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss"])),
   due_date: zod.string().nullish(),
   client_name: zod.string().nullish(),
   recurrence: recurrenceZod,
@@ -296,7 +298,7 @@ export const UpdateTaskBody = zod.object({
   client_id: zod.number().optional(),
   client_name: zod.string().nullish(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"]).optional(),
+  status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss"]).optional(),
   due_date: zod.string().nullish(),
   completed_date: zod.string().nullish(),
   recurrence: recurrenceZod,
@@ -311,7 +313,7 @@ export const UpdateTaskResponse = zod.object({
   description: zod.string().nullish(),
   client_id: zod.number(),
   assigned_to: zod.string().nullish(),
-  status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed"]),
+  status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss"]),
   due_date: zod.string().nullish(),
   completed_date: zod.string().nullish(),
   client_name: zod.string().nullish(),

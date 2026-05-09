@@ -54,7 +54,7 @@ router.post("/zapier-webhook", async (req: Request, res: Response) => {
   const statusRaw  = typeof body.status   === "string" ? body.status.trim()   : null;
 
   // Accepted status values — default to "Not Started" if absent or unrecognised
-  const VALID_STATUSES = ["Not Started", "In Progress", "Completed", "Blocked"];
+  const VALID_STATUSES = ["Not Started", "To Discuss", "Pending", "In Progress", "Needs SMR Review", "Confirmed", "Completed", "Blocked"];
   const status = statusRaw && VALID_STATUSES.includes(statusRaw) ? statusRaw : "Not Started";
 
   // Basic YYYY-MM-DD validation

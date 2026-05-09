@@ -57,7 +57,7 @@ interface ApiClient {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const STATUS_OPTIONS = ["Not Started", "Pending", "In Progress", "Confirmed", "Completed"];
+const STATUS_OPTIONS = ["Not Started", "To Discuss", "Pending", "In Progress", "Needs SMR Review", "Confirmed", "Completed"];
 const SERVICE_OPTIONS = ["Bookkeeping", "Virtual Assistant"];
 const FREQ_OPTIONS = ["Daily", "Weekdays", "Weekly", "Monthly", "Annually"];
 const WEEKDAY_OPTIONS = [
@@ -109,10 +109,12 @@ function buildRecurrence(freq: string, days: string[], monthDay: string): string
 // ── UI helpers ───────────────────────────────────────────────────────────────
 
 function statusBadgeCls(s: string) {
-  if (s === "Completed")   return "bg-emerald-50 text-emerald-700 border border-emerald-200";
-  if (s === "In Progress") return "bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/30";
-  if (s === "Confirmed")   return "bg-blue-50 text-blue-700 border border-blue-200";
-  if (s === "Pending")     return "bg-amber-50 text-amber-700 border border-amber-200";
+  if (s === "Completed")        return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+  if (s === "In Progress")      return "bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/30";
+  if (s === "Confirmed")        return "bg-blue-50 text-blue-700 border border-blue-200";
+  if (s === "Pending")          return "bg-amber-50 text-amber-700 border border-amber-200";
+  if (s === "Needs SMR Review") return "bg-orange-50 text-orange-700 border border-orange-200";
+  if (s === "To Discuss")       return "bg-violet-50 text-violet-700 border border-violet-200";
   return "bg-slate-100 text-slate-500 border border-slate-200";
 }
 
@@ -1865,7 +1867,7 @@ export default function Tasks() {
     if (!sortField) return filtered;
 
     const STATUS_ORDER: Record<string, number> = {
-      "Not Started": 0, "Pending": 1, "In Progress": 2, "Completed": 3,
+      "Not Started": 0, "To Discuss": 1, "Pending": 2, "In Progress": 3, "Needs SMR Review": 4, "Confirmed": 5, "Completed": 6,
     };
 
     return [...filtered].sort((a, b) => {
@@ -2009,10 +2011,12 @@ export default function Tasks() {
                 const isThisTask = timerState.taskId === task.id;
                 const statusColors: Record<string, string> = {
                   "Completed": "bg-emerald-100 text-emerald-700",
-                  "In Progress": "bg-blue-100 text-blue-700",
+                  "In Progress": "bg-[#266b75]/10 text-[#266b75]",
                   "Pending": "bg-yellow-100 text-yellow-700",
-                  "Confirmed": "bg-purple-100 text-purple-700",
+                  "Confirmed": "bg-blue-100 text-blue-700",
                   "Not Started": "bg-slate-100 text-slate-600",
+                  "Needs SMR Review": "bg-orange-100 text-orange-700",
+                  "To Discuss": "bg-violet-100 text-violet-700",
                 };
                 const done = task.status === "Completed";
                 return (

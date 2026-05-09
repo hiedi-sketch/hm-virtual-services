@@ -18,10 +18,12 @@ type Task = {
 };
 
 const TASK_STATUS_OPTIONS = [
-  { value: "Pending",     label: "Pending" },
-  { value: "Confirmed",   label: "Confirmed" },
-  { value: "In Progress", label: "In Progress" },
-  { value: "Completed",   label: "Completed" },
+  { value: "Pending",          label: "Pending" },
+  { value: "To Discuss",       label: "To Discuss" },
+  { value: "Confirmed",        label: "Confirmed" },
+  { value: "In Progress",      label: "In Progress" },
+  { value: "Needs SMR Review", label: "Needs SMR Review" },
+  { value: "Completed",        label: "Completed" },
 ] as const;
 
 const SERVICE_TYPE_OPTIONS = [
@@ -31,9 +33,12 @@ const SERVICE_TYPE_OPTIONS = [
 ] as const;
 
 function statusBadge(status: string) {
-  if (status === "Completed")   return "text-xs border rounded px-2 py-1 bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (status === "In Progress") return "text-xs border rounded px-2 py-1 bg-[#266b75]/10 text-[#266b75] border-[#266b75]/30";
-  if (status === "Confirmed")   return "text-xs border rounded px-2 py-1 bg-blue-50 text-blue-700 border-blue-200";
+  if (status === "Completed")        return "text-xs border rounded px-2 py-1 bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (status === "In Progress")      return "text-xs border rounded px-2 py-1 bg-[#266b75]/10 text-[#266b75] border-[#266b75]/30";
+  if (status === "Confirmed")        return "text-xs border rounded px-2 py-1 bg-blue-50 text-blue-700 border-blue-200";
+  if (status === "Pending")          return "text-xs border rounded px-2 py-1 bg-amber-50 text-amber-700 border-amber-200";
+  if (status === "Needs SMR Review") return "text-xs border rounded px-2 py-1 bg-orange-50 text-orange-700 border-orange-200";
+  if (status === "To Discuss")       return "text-xs border rounded px-2 py-1 bg-violet-50 text-violet-700 border-violet-200";
   return "text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-600";
 }
 

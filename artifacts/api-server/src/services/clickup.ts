@@ -252,11 +252,13 @@ export async function getListStatuses(token: string, listId: string): Promise<CU
  *  Use localStatusToCUActual when you have the list's real statuses available. */
 export function localStatusToCU(localStatus: string): string {
   switch (localStatus) {
-    case "Completed":   return "complete";
-    case "In Progress": return "in progress";
-    case "Pending":     return "pending";
-    case "Confirmed":   return "confirmed";
-    default:            return "open";
+    case "Completed":        return "complete";
+    case "In Progress":      return "in progress";
+    case "Pending":          return "pending";
+    case "Confirmed":        return "confirmed";
+    case "Needs SMR Review": return "needs smr review";
+    case "To Discuss":       return "to discuss";
+    default:                 return "open";
   }
 }
 
@@ -267,6 +269,8 @@ export function cuStatusToLocal(cuStatus: string): string {
   if (["in progress", "inprogress", "active", "in review", "review"].includes(s)) return "In Progress";
   if (["pending", "waiting", "on hold", "blocked", "deferred"].includes(s)) return "Pending";
   if (["confirmed", "approved", "accepted"].includes(s)) return "Confirmed";
+  if (["needs smr review", "smr review", "needs review"].includes(s)) return "Needs SMR Review";
+  if (["to discuss", "discuss"].includes(s)) return "To Discuss";
   return "Not Started";
 }
 
@@ -277,11 +281,13 @@ export function localStatusToCUActual(localStatus: string, cuStatuses: CUStatus[
 
   // Build keyword candidates in priority order
   const candidates: string[][] = {
-    "Completed":  [["complete", "done", "closed", "resolved", "finished"]],
-    "In Progress":[["in progress", "inprogress", "active", "started", "in review"]],
-    "Pending":    [["pending", "waiting", "on hold", "blocked"]],
-    "Confirmed":  [["confirmed", "approved", "accepted"]],
-    "Not Started":[["open", "not started", "to do", "todo", "backlog", "new"]],
+    "Completed":        [["complete", "done", "closed", "resolved", "finished"]],
+    "In Progress":      [["in progress", "inprogress", "active", "started", "in review"]],
+    "Pending":          [["pending", "waiting", "on hold", "blocked"]],
+    "Confirmed":        [["confirmed", "approved", "accepted"]],
+    "Not Started":      [["open", "not started", "to do", "todo", "backlog", "new"]],
+    "Needs SMR Review": [["needs smr review", "smr review", "needs review"]],
+    "To Discuss":       [["to discuss", "discuss"]],
   }[localStatus] ?? [[]];
 
   const keywords = candidates[0] ?? [];

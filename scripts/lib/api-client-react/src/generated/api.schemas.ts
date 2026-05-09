@@ -168,7 +168,7 @@ export interface CreateTaskInput {
   client_id: number;
   assigned_to?: string | null;
   due_date?: string | null;
-  status?: "Pending" | "Confirmed" | "In Progress" | "Completed";
+  status?: "Pending" | "Confirmed" | "In Progress" | "Completed" | "Needs SMR Review" | "To Discuss";
   recurrence?: CreateTaskInputRecurrence;
   service_type?: "Bookkeeping" | "Virtual Assistant" | null;
 }
