@@ -57,7 +57,7 @@ interface ApiClient {
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
-const STATUS_OPTIONS = ["Not Started", "To Discuss", "Pending", "In Progress", "Needs SMR Review", "Confirmed", "Completed"];
+const STATUS_OPTIONS = ["Not Started", "To Discuss", "Pending", "Awaiting Reply", "In Progress", "Needs SMR Review", "Confirmed", "Completed"];
 const SERVICE_OPTIONS = ["Bookkeeping", "Virtual Assistant"];
 const FREQ_OPTIONS = ["Daily", "Weekdays", "Weekly", "Monthly", "Annually"];
 const WEEKDAY_OPTIONS = [
@@ -115,6 +115,7 @@ function statusBadgeCls(s: string) {
   if (s === "Pending")          return "bg-amber-50 text-amber-700 border border-amber-200";
   if (s === "Needs SMR Review") return "bg-orange-50 text-orange-700 border border-orange-200";
   if (s === "To Discuss")       return "bg-violet-50 text-violet-700 border border-violet-200";
+  if (s === "Awaiting Reply")   return "bg-sky-50 text-sky-700 border border-sky-200";
   return "bg-slate-100 text-slate-500 border border-slate-200";
 }
 
@@ -1871,7 +1872,7 @@ export default function Tasks() {
     if (!sortField) return filtered;
 
     const STATUS_ORDER: Record<string, number> = {
-      "Not Started": 0, "To Discuss": 1, "Pending": 2, "In Progress": 3, "Needs SMR Review": 4, "Confirmed": 5, "Completed": 6,
+      "Not Started": 0, "To Discuss": 1, "Pending": 2, "Awaiting Reply": 3, "In Progress": 4, "Needs SMR Review": 5, "Confirmed": 6, "Completed": 7,
     };
 
     return [...filtered].sort((a, b) => {
@@ -2021,6 +2022,7 @@ export default function Tasks() {
                   "Not Started": "bg-slate-100 text-slate-600",
                   "Needs SMR Review": "bg-orange-100 text-orange-700",
                   "To Discuss": "bg-violet-100 text-violet-700",
+                  "Awaiting Reply": "bg-sky-100 text-sky-700",
                 };
                 const done = task.status === "Completed";
                 return (

@@ -317,6 +317,7 @@ export function localStatusToCU(localStatus: string): string {
     case "Confirmed":        return "confirmed";
     case "Needs SMR Review": return "needs smr review";
     case "To Discuss":       return "to discuss";
+    case "Awaiting Reply":   return "awaiting reply";
     default:                 return "open";
   }
 }
@@ -330,6 +331,7 @@ export function cuStatusToLocal(cuStatus: string): string {
   if (["confirmed", "approved", "accepted"].includes(s)) return "Confirmed";
   if (["needs smr review", "smr review", "needs review"].includes(s)) return "Needs SMR Review";
   if (["to discuss", "discuss"].includes(s)) return "To Discuss";
+  if (["awaiting reply", "awaiting", "waiting for reply"].includes(s)) return "Awaiting Reply";
   return "Not Started";
 }
 
@@ -347,6 +349,7 @@ export function localStatusToCUActual(localStatus: string, cuStatuses: CUStatus[
     "Not Started":      [["open", "not started", "to do", "todo", "backlog", "new"]],
     "Needs SMR Review": [["needs smr review", "smr review", "needs review"]],
     "To Discuss":       [["to discuss", "discuss"]],
+    "Awaiting Reply":   [["awaiting reply", "awaiting", "waiting for reply"]],
   }[localStatus] ?? [[]];
 
   const keywords = candidates[0] ?? [];

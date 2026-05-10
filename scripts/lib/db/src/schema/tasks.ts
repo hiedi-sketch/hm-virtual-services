@@ -8,7 +8,7 @@ export const tasksTable = pgTable("tasks", {
   description: text("description"),
   client_id: integer("client_id"),
   assigned_to: text("assigned_to"),
-  status: text("status", { enum: ["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss"] }).notNull().default("Not Started"),
+  status: text("status", { enum: ["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss", "Awaiting Reply"] }).notNull().default("Not Started"),
   due_date: text("due_date"),
   completed_date: text("completed_date"),
   recurrence: text("recurrence"),

@@ -20,6 +20,7 @@ type Task = {
 const TASK_STATUS_OPTIONS = [
   { value: "Pending",          label: "Pending" },
   { value: "To Discuss",       label: "To Discuss" },
+  { value: "Awaiting Reply",   label: "Awaiting Reply" },
   { value: "Confirmed",        label: "Confirmed" },
   { value: "In Progress",      label: "In Progress" },
   { value: "Needs SMR Review", label: "Needs SMR Review" },
@@ -39,6 +40,7 @@ function statusBadge(status: string) {
   if (status === "Pending")          return "text-xs border rounded px-2 py-1 bg-amber-50 text-amber-700 border-amber-200";
   if (status === "Needs SMR Review") return "text-xs border rounded px-2 py-1 bg-orange-50 text-orange-700 border-orange-200";
   if (status === "To Discuss")       return "text-xs border rounded px-2 py-1 bg-violet-50 text-violet-700 border-violet-200";
+  if (status === "Awaiting Reply")   return "text-xs border rounded px-2 py-1 bg-sky-50 text-sky-700 border-sky-200";
   return "text-xs border border-slate-200 rounded px-2 py-1 bg-slate-50 text-slate-600";
 }
 
