@@ -1865,7 +1865,12 @@ export default function Tasks() {
       if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
       if (serviceFilter !== "all" && t.service_type !== serviceFilter) return false;
       if (statusFilter === "incomplete" && t.status === "Completed") return false;
-      if (statusFilter !== "all" && statusFilter !== "incomplete" && t.status !== statusFilter) return false;
+      if (statusFilter === "overdue") {
+        if (t.status === "Completed") return false;
+        if (!t.due_date || t.due_date >= today) return false;
+      } else if (statusFilter === "due_today") {
+        if (t.due_date !== today) return false;
+      } else if (statusFilter !== "all" && statusFilter !== "incomplete" && t.status !== statusFilter) return false;
       return true;
     });
 
@@ -1892,7 +1897,7 @@ export default function Tasks() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [tasks, clientFilter, serviceFilter, statusFilter, sortField, sortDir]);
+  }, [tasks, clientFilter, serviceFilter, statusFilter, sortField, sortDir, today]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2275,6 +2280,8 @@ export default function Tasks() {
             className="text-slate-700 bg-transparent border-none outline-none cursor-pointer text-sm">
             <option value="all">All Statuses</option>
             <option value="incomplete">Incomplete</option>
+            <option value="overdue">Overdue</option>
+            <option value="due_today">Due Today</option>
             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
