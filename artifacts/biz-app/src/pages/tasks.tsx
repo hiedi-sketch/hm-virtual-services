@@ -1515,6 +1515,7 @@ export default function Tasks() {
   const [statusFilter, setStatusFilter] = useState("incomplete");
   const [sortField, setSortField] = useState<"due_date" | "status" | "client_name" | null>("due_date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [dueDateFilter, setDueDateFilter] = useState("all");
   const [highlightedTaskId, setHighlightedTaskId] = useState<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
 
@@ -1865,12 +1866,13 @@ export default function Tasks() {
       if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
       if (serviceFilter !== "all" && t.service_type !== serviceFilter) return false;
       if (statusFilter === "incomplete" && t.status === "Completed") return false;
-      if (statusFilter === "overdue") {
+      if (statusFilter !== "all" && statusFilter !== "incomplete" && t.status !== statusFilter) return false;
+      if (dueDateFilter === "overdue") {
         if (t.status === "Completed") return false;
         if (!t.due_date || t.due_date >= today) return false;
-      } else if (statusFilter === "due_today") {
+      } else if (dueDateFilter === "due_today") {
         if (t.due_date !== today) return false;
-      } else if (statusFilter !== "all" && statusFilter !== "incomplete" && t.status !== statusFilter) return false;
+      }
       return true;
     });
 
@@ -1897,7 +1899,7 @@ export default function Tasks() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [tasks, clientFilter, serviceFilter, statusFilter, sortField, sortDir, today]);
+  }, [tasks, clientFilter, serviceFilter, statusFilter, dueDateFilter, sortField, sortDir, today]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2280,9 +2282,19 @@ export default function Tasks() {
             className="text-slate-700 bg-transparent border-none outline-none cursor-pointer text-sm">
             <option value="all">All Statuses</option>
             <option value="incomplete">Incomplete</option>
+            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className={cn(
+          "flex items-center gap-2 border rounded-lg px-2.5 py-1.5 shadow-sm",
+          dueDateFilter !== "all" ? "bg-red-50 border-red-200" : "bg-white border-slate-200"
+        )}>
+          <Filter className={cn("w-3.5 h-3.5 shrink-0", dueDateFilter !== "all" ? "text-red-400" : "text-slate-400")} />
+          <select value={dueDateFilter} onChange={e => setDueDateFilter(e.target.value)}
+            className={cn("bg-transparent border-none outline-none cursor-pointer text-sm", dueDateFilter !== "all" ? "text-red-700 font-medium" : "text-slate-700")}>
+            <option value="all">All Due Dates</option>
             <option value="overdue">Overdue</option>
             <option value="due_today">Due Today</option>
-            {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         {displayed.length !== tasks.length && (
