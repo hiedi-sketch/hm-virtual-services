@@ -62,74 +62,103 @@ app.post(
 );
 
 // ── Square webhook: must be registered BEFORE express.json() ─────────────
-// Square sends a raw body; express.json() would break HMAC-SHA256 verification.
+// type: "*/*" ensures the raw body is captured regardless of Square's exact
+// Content-Type header (e.g. "application/json; charset=utf-8" would have
+// silently skipped parsing with the narrower "application/json" filter).
 app.post(
   "/api/webhooks/square",
-  express.raw({ type: "application/json" }),
+  express.raw({ type: "*/*" }),
   async (req, res) => {
     const rawBody = req.body as Buffer;
+    const contentType = req.headers["content-type"] ?? "(none)";
+    const bodyLen = Buffer.isBuffer(rawBody) ? rawBody.length : 0;
     const signature = req.headers["x-square-hmacsha256-signature"];
     const signatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
+
+    logger.info(
+      { contentType, bodyLen, hasSignature: !!signature, hasKey: !!signatureKey },
+      "[Square webhook] Request received"
+    );
+
+    // If body is empty, something intercepted it — still return 200 so Square
+    // doesn't disable the webhook while we debug.
+    if (!bodyLen) {
+      logger.error({ contentType }, "[Square webhook] Empty body — body parser did not capture raw bytes");
+      res.status(200).json({ received: true, warning: "empty_body" });
+      return;
+    }
 
     // Verify signature if key is configured
     if (signatureKey) {
       if (!signature || typeof signature !== "string") {
-        logger.warn("[Square webhook] Missing signature header");
-        res.status(400).json({ error: "Missing Square webhook signature" });
+        logger.warn("[Square webhook] Missing x-square-hmacsha256-signature header");
+        // Return 200 so Square doesn't disable the webhook
+        res.status(200).json({ received: true, warning: "missing_signature" });
         return;
       }
 
       // Build a list of all candidate notification URLs to try.
-      // Square signs against the exact URL registered in the dashboard.
-      // We try every domain we know about so the signature check works regardless
-      // of whether the webhook is registered under the .replit.app domain or a
-      // custom domain — and survives domain changes without code deploys.
-      const candidateDomains: string[] = [];
+      // Square signs against the exact URL it has on file in the dashboard.
+      const candidateUrls: string[] = [];
 
-      // 1. Explicit override — set SQUARE_WEBHOOK_URL to the exact registered URL
+      // 1. Explicit override via env var (set SQUARE_WEBHOOK_URL to bypass all guessing)
       if (process.env.SQUARE_WEBHOOK_URL) {
-        candidateDomains.push(process.env.SQUARE_WEBHOOK_URL);
+        candidateUrls.push(process.env.SQUARE_WEBHOOK_URL);
       }
 
-      // 2. All domains in REPLIT_DOMAINS (comma-separated)
+      // 2. All domains from REPLIT_DOMAINS (comma-separated, populated at runtime)
       const replitDomains = (process.env.REPLIT_DOMAINS ?? "").split(",").map(d => d.trim()).filter(Boolean);
       for (const d of replitDomains) {
         const url = `https://${d}/api/webhooks/square`;
-        if (!candidateDomains.includes(url)) candidateDomains.push(url);
+        if (!candidateUrls.includes(url)) candidateUrls.push(url);
       }
 
-      // 3. Hardcoded known production domain as final fallback
-      const knownDomains = ["hmvirtualservices.com", "hmvirtualservices.replit.app"];
-      for (const d of knownDomains) {
+      // 3. Known production domains as final fallback
+      for (const d of ["hmvirtualservices.com", "hmvirtualservices.replit.app"]) {
         const url = `https://${d}/api/webhooks/square`;
-        if (!candidateDomains.includes(url)) candidateDomains.push(url);
+        if (!candidateUrls.includes(url)) candidateUrls.push(url);
       }
 
-      const valid = candidateDomains.some(notificationUrl =>
-        verifySquareWebhookSignature({ signatureKey, notificationUrl, rawBody, signature })
-      );
+      let matchedUrl: string | null = null;
+      for (const notificationUrl of candidateUrls) {
+        if (verifySquareWebhookSignature({ signatureKey, notificationUrl, rawBody, signature })) {
+          matchedUrl = notificationUrl;
+          break;
+        }
+      }
 
-      if (!valid) {
-        logger.warn({ candidateDomains }, "[Square webhook] Invalid signature — tried all candidate URLs");
-        res.status(401).json({ error: "Invalid Square webhook signature" });
+      if (!matchedUrl) {
+        // Log enough detail to diagnose the mismatch, but don't block Square
+        // from delivering — return 200 and skip processing unverified events.
+        logger.warn(
+          {
+            candidateUrls,
+            signaturePrefix: signature.substring(0, 16),
+            bodyLenBytes: bodyLen,
+            bodyPreview: rawBody.toString("utf-8").substring(0, 120),
+          },
+          "[Square webhook] Signature invalid — skipping event processing"
+        );
+        res.status(200).json({ received: true, warning: "signature_invalid" });
         return;
       }
 
-      logger.info("[Square webhook] Signature verified OK");
+      logger.info({ matchedUrl }, "[Square webhook] Signature verified OK");
     } else {
-      logger.warn("[Square webhook] SQUARE_WEBHOOK_SIGNATURE_KEY not set — skipping signature verification");
+      logger.warn("[Square webhook] SQUARE_WEBHOOK_SIGNATURE_KEY not set — skipping verification");
     }
 
     let event: any;
     try {
       event = JSON.parse(rawBody.toString("utf-8"));
     } catch {
-      res.status(400).json({ error: "Invalid JSON body" });
+      logger.error("[Square webhook] Could not parse JSON body");
+      res.status(200).json({ received: true, warning: "invalid_json" });
       return;
     }
 
     const eventType: string = event.type ?? "";
-    logger.info({ eventType }, "[Square webhook] Received event");
+    logger.info({ eventType }, "[Square webhook] Processing event");
 
     try {
       // ── payment.completed — fired when a payment link or checkout is paid ──
@@ -139,7 +168,6 @@ app.post(
         const status: string | undefined = payment?.status;
 
         if (status === "COMPLETED" && orderId) {
-          // Find the invoice that stored this order_id in square_invoice_id
           const rows = await db.execute(
             sql`SELECT id, status FROM invoices WHERE square_invoice_id = ${orderId} LIMIT 1`
           );
@@ -181,7 +209,8 @@ app.post(
       }
     } catch (err: any) {
       logger.error({ err, eventType }, "[Square webhook] Error processing event");
-      res.status(500).json({ error: "Webhook processing error" });
+      // Still return 200 — the event was received, processing just failed
+      res.status(200).json({ received: true, warning: "processing_error" });
       return;
     }
 
