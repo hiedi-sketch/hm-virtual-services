@@ -208,6 +208,14 @@ export default function ClientDetail() {
   const [sendingInvite, setSendingInvite] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
 
+  // Budget adjustment state
+  const [showAdjustBudget, setShowAdjustBudget] = useState(false);
+  const [adjustType, setAdjustType] = useState<"add" | "subtract">("add");
+  const [adjustHours, setAdjustHours] = useState("");
+  const [adjustReason, setAdjustReason] = useState("");
+  const [adjustSaving, setAdjustSaving] = useState(false);
+  const [showAdjustHistory, setShowAdjustHistory] = useState(false);
+
   // Subclients sort state
   const [subclientSort, setSubclientSort] = useState<{ col: "name" | "hours_remaining" | "next_reset_date"; dir: "asc" | "desc" }>({ col: "name", dir: "asc" });
 
@@ -216,6 +224,48 @@ export default function ClientDetail() {
   const { data: dashboard } = useGetDashboard();
   const { data: allServices = [] } = useListServices();
   const { data: clientServices = [] } = useListClientServices(clientId);
+
+  type BudgetAdjustment = {
+    id: number; client_id: number; service_id: number | null;
+    hours: number; reason: string; created_by: string | null; created_at: string;
+  };
+  const { data: budgetAdjustments = [], refetch: refetchAdjustments } = useQuery<BudgetAdjustment[]>({
+    queryKey: ["budget-adjustments", clientId],
+    queryFn: async () => {
+      const res = await fetch(`/api/clients/${clientId}/budget-adjustments`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!clientId,
+  });
+
+  const handleAdjustBudgetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const hrs = parseFloat(adjustHours);
+    if (!hrs || isNaN(hrs) || hrs <= 0) return;
+    if (!adjustReason.trim()) return;
+    setAdjustSaving(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/budget-adjustments`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hours: adjustType === "add" ? hrs : -hrs, reason: adjustReason.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      await refetchAdjustments();
+      queryClient.invalidateQueries({ queryKey: ["services-hours", clientId] });
+      toast({ title: `Budget ${adjustType === "add" ? "increased" : "decreased"} by ${hrs}h` });
+      setShowAdjustBudget(false);
+      setAdjustHours("");
+      setAdjustReason("");
+      setAdjustType("add");
+    } catch {
+      toast({ title: "Failed to save adjustment", variant: "destructive" });
+    } finally {
+      setAdjustSaving(false);
+    }
+  };
 
   const { data: servicesHours = [] } = useQuery<Array<{
     service_id: number;
@@ -846,11 +896,32 @@ export default function ClientDetail() {
 
       {/* Hours Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Budget</p>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5 relative">
+          <div className="flex items-start justify-between mb-1">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Budget</p>
+            <button
+              onClick={() => setShowAdjustBudget(true)}
+              className="text-[10px] font-semibold text-[#266b75] border border-[#266b75]/30 bg-[#266b75]/5 hover:bg-[#266b75]/10 rounded px-1.5 py-0.5 transition-colors"
+            >
+              Adjust
+            </button>
+          </div>
           <p className="text-2xl font-bold text-slate-900">{budget} <span className="text-base font-medium text-slate-400">hrs/mo</span></p>
           {rolloverHours > 0 && (
             <p className="text-xs font-medium text-emerald-600 mt-1">↩ +{rolloverHours}h rollover included ({baseBudget}h base)</p>
+          )}
+          {vaServiceHours && (vaServiceHours as any).adjustment_hours !== 0 && (vaServiceHours as any).adjustment_hours != null && (
+            <p className={`text-xs font-medium mt-0.5 ${(vaServiceHours as any).adjustment_hours > 0 ? "text-blue-600" : "text-red-500"}`}>
+              {(vaServiceHours as any).adjustment_hours > 0 ? "+" : ""}{(vaServiceHours as any).adjustment_hours}h adjustment applied
+            </p>
+          )}
+          {budgetAdjustments.length > 0 && (
+            <button
+              onClick={() => setShowAdjustHistory(v => !v)}
+              className="mt-1 text-[10px] text-slate-400 hover:text-slate-600 underline"
+            >
+              {showAdjustHistory ? "Hide" : "View"} history ({budgetAdjustments.length})
+            </button>
           )}
         </div>
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-5">
@@ -891,6 +962,29 @@ export default function ClientDetail() {
               This client has exceeded their VA hour budget.
             </div>
           )}
+        </div>
+      )}
+
+      {/* Budget Adjustment History */}
+      {showAdjustHistory && budgetAdjustments.length > 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+          <p className="text-sm font-semibold text-slate-800 mb-3">Budget Adjustment History</p>
+          <div className="divide-y divide-slate-100">
+            {budgetAdjustments.map(adj => (
+              <div key={adj.id} className="py-2.5 flex items-start gap-3">
+                <span className={`mt-0.5 text-xs font-bold px-1.5 py-0.5 rounded ${adj.hours > 0 ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                  {adj.hours > 0 ? "+" : ""}{adj.hours}h
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-slate-700">{adj.reason}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {adj.created_by ? `${adj.created_by} · ` : ""}
+                    {new Date(adj.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -977,6 +1071,79 @@ export default function ClientDetail() {
           activeCommentTaskId={commentTaskId}
         />
       </div>
+
+      {/* Adjust Budget Modal */}
+      {showAdjustBudget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAdjustBudget(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-slate-900">Adjust Monthly Budget</h2>
+              <button onClick={() => setShowAdjustBudget(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAdjustBudgetSubmit} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-2">Adjustment Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdjustType("add")}
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${adjustType === "add" ? "bg-emerald-50 border-emerald-400 text-emerald-700" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                  >
+                    <Plus className="w-4 h-4" /> Add Hours
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjustType("subtract")}
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-semibold transition-colors ${adjustType === "subtract" ? "bg-red-50 border-red-400 text-red-700" : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"}`}
+                  >
+                    <span className="text-base leading-none">−</span> Subtract Hours
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1.5">Hours</label>
+                <input
+                  type="number"
+                  min="0.25"
+                  step="0.25"
+                  required
+                  value={adjustHours}
+                  onChange={e => setAdjustHours(e.target.value)}
+                  placeholder="e.g. 2"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-600 uppercase tracking-wide block mb-1.5">
+                  Reason <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={adjustReason}
+                  onChange={e => setAdjustReason(e.target.value)}
+                  placeholder="Explain why the budget is being adjusted…"
+                  className={inputCls + " resize-none"}
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setShowAdjustBudget(false)} className="px-4 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={adjustSaving || !adjustHours || !adjustReason.trim()}
+                  className={`px-4 py-2 text-sm rounded-lg font-semibold text-white transition-colors disabled:opacity-50 ${adjustType === "add" ? "bg-emerald-600 hover:bg-emerald-700" : "bg-red-600 hover:bg-red-700"}`}
+                >
+                  {adjustSaving ? "Saving…" : adjustType === "add" ? `+ Add ${adjustHours || "0"}h` : `− Subtract ${adjustHours || "0"}h`}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Comment Panel */}
       {commentTaskId !== null && (

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { servicesTable, clientServicesTable, timeEntriesTable, tasksTable } from "@workspace/db";
-import { eq, and, gte, lt, or, sql } from "drizzle-orm";
+import { servicesTable, clientServicesTable, timeEntriesTable, tasksTable, budgetAdjustmentsTable } from "@workspace/db";
+import { eq, and, gte, lt, or, sql, desc } from "drizzle-orm";
 import { z } from "zod";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
@@ -307,13 +307,22 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
     rolloverByServiceId[svc.service_id] = Math.round(capped * 100) / 100;
   }
 
+  // Sum budget adjustments for this client
+  const adjustmentRows = await db
+    .select({ hours: budgetAdjustmentsTable.hours, service_id: budgetAdjustmentsTable.service_id })
+    .from(budgetAdjustmentsTable)
+    .where(eq(budgetAdjustmentsTable.client_id, clientId));
+  const totalClientAdjustments = adjustmentRows.reduce((s, r) => s + r.hours, 0);
+
   const result = assignedServices.map(svc => {
     const svcResetDay = svc.service_type === "Virtual Assistant" ? vaResetDay : null;
     const nextReset = svc.service_type === "Virtual Assistant" ? vaNextReset : null;
     const daysUntilReset = svc.service_type === "Virtual Assistant" ? vaDaysUntilReset : null;
     const rolloverHours = rolloverByServiceId[svc.service_id] ?? 0;
     const baseBudget = svc.custom_budgeted_hours ?? svc.budgeted_hours ?? null;
-    const effectiveBudget = baseBudget != null ? baseBudget + rolloverHours : null;
+    // Apply adjustments to VA services (client-level adjustments added to VA budget)
+    const adjustmentHours = svc.service_type === "Virtual Assistant" ? totalClientAdjustments : 0;
+    const effectiveBudget = baseBudget != null ? baseBudget + rolloverHours + adjustmentHours : null;
 
     return {
       service_id: svc.service_id,
@@ -324,6 +333,7 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
       budgeted_hours: effectiveBudget,
       base_budgeted_hours: baseBudget,
       rollover_hours: rolloverHours,
+      adjustment_hours: adjustmentHours,
       allow_rollover: svc.allow_rollover,
       rollover_cap_hours: svc.rollover_cap_hours,
       price: svc.custom_price ?? svc.price,
@@ -335,6 +345,48 @@ router.get("/clients/:clientId/services-hours", requireAuth, async (req, res) =>
   });
 
   res.json(result);
+});
+
+// ── List budget adjustments for a client ──────────────────────────────────
+router.get("/clients/:clientId/budget-adjustments", requireAuth, async (req, res) => {
+  const clientId = Number(req.params["clientId"]);
+  if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid clientId" }); return; }
+  const rows = await db
+    .select()
+    .from(budgetAdjustmentsTable)
+    .where(eq(budgetAdjustmentsTable.client_id, clientId))
+    .orderBy(desc(budgetAdjustmentsTable.id));
+  res.json(rows);
+});
+
+// ── Create a budget adjustment ─────────────────────────────────────────────
+const CreateBudgetAdjustmentBody = z.object({
+  hours: z.number().refine(v => v !== 0, { message: "Hours cannot be zero" }),
+  reason: z.string().min(1),
+  service_id: z.number().int().nullable().optional(),
+});
+
+router.post("/clients/:clientId/budget-adjustments", requireAdmin, async (req, res) => {
+  const clientId = Number(req.params["clientId"]);
+  if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid clientId" }); return; }
+
+  const body = CreateBudgetAdjustmentBody.parse(req.body);
+  const actor = req.session.user;
+  const createdAt = new Date().toISOString();
+
+  const [row] = await db.insert(budgetAdjustmentsTable).values({
+    client_id: clientId,
+    service_id: body.service_id ?? null,
+    hours: body.hours,
+    reason: body.reason,
+    created_by: actor?.name ?? null,
+    created_at: createdAt,
+  }).returning();
+
+  res.status(201).json(row);
+  logAudit("client", clientId, "budget_adjustment",
+    `Budget ${body.hours > 0 ? "increased" : "decreased"} by ${Math.abs(body.hours)}h — ${body.reason}`,
+    { id: actor?.id, name: actor?.name });
 });
 
 // ── Helper export for dashboard route ─────────────────────────────────────
