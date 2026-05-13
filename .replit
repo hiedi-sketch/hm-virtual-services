@@ -55,3 +55,4 @@ channel = "stable-25_05"
 [userenv.shared]
 SHEETS_TASKS_PORT = "5000"
 SQUARE_ENVIRONMENT = "production"
+SQUARE_WEBHOOK_URL = "https://hmvirtualservices.replit.app/api/webhooks/square"
