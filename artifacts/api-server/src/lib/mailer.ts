@@ -28,7 +28,8 @@ export async function sendMail(
     return;
   }
   const transport = createTransport();
-  const from = process.env.SMTP_FROM ?? process.env.SMTP_USER;
+  const fromAddr = process.env.SMTP_FROM ?? process.env.SMTP_USER;
+  const from = `"HM Virtual Services" <${fromAddr}>`;
   await transport.sendMail({
     from, to, subject, html,
     attachments: attachments?.map(a => ({
