@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Raleway', sans-serif;
+  }
+  body {
+    background-color: #EDE9E3;
+    color: #1a1a1a;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #B0B5BC #EDE9E3;
+  }
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-track { background: #EDE9E3; }
+  *::-webkit-scrollbar-thumb { background-color: #B0B5BC; border-radius: 3px; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply bg-white text-primary border border-primary px-4 py-2 rounded-lg font-semibold text-sm hover:bg-linen transition-colors;
+  }
+  .btn-ghost {
+    @apply text-primary px-4 py-2 rounded-lg font-semibold text-sm hover:bg-linen transition-colors;
+  }
+  .btn-danger {
+    @apply bg-red-500 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-red-600 transition-colors;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-card p-6;
+  }
+  .input {
+    @apply w-full border border-greige rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors bg-white;
+  }
+  .label {
+    @apply block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .sidebar-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-all;
+  }
+  .sidebar-link.active {
+    @apply bg-white/15 text-white;
+  }
+}
