@@ -85,16 +85,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
           className="relative shrink-0 flex flex-col items-center pt-3 pb-2 px-2"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
         >
-          <img
-            src="/hm-logo-full.png"
-            alt="HM Virtual Services"
+          <div
             style={{
-              width: collapsed ? 40 : "100%",
-              height: collapsed ? 40 : "auto",
-              objectFit: "contain",
-              transition: "width 0.22s ease, height 0.22s ease",
+              backgroundColor: "#ffffff",
+              borderRadius: 8,
+              padding: collapsed ? 4 : 8,
+              width: collapsed ? 44 : "100%",
+              transition: "width 0.22s ease, padding 0.22s ease",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
-          />
+          >
+            <img
+              src="/hm-logo-full.png"
+              alt="HM Virtual Services"
+              style={{
+                width: collapsed ? 32 : "100%",
+                height: collapsed ? 32 : "auto",
+                objectFit: "contain",
+                transition: "width 0.22s ease, height 0.22s ease",
+                display: "block",
+              }}
+            />
+          </div>
           {!collapsed && (
             <div
               className="mt-1.5 text-white font-semibold text-sm whitespace-nowrap tracking-tight"
