@@ -80,41 +80,34 @@ export function Layout({ children }: { children: React.ReactNode }) {
         }}
         className="flex flex-col h-full z-30 overflow-hidden"
       >
-        {/* Logo + toggle */}
+        {/* Logo block */}
         <div
-          className="relative flex items-center h-14 shrink-0 px-3"
+          className="relative shrink-0 flex flex-col items-center pt-3 pb-2 px-2"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
         >
-          <div
-            className="shrink-0 flex items-center justify-center rounded-lg font-bold text-white text-sm select-none"
+          <img
+            src="/hm-logo-full.png"
+            alt="HM Virtual Services"
             style={{
-              width: 36,
-              height: 36,
-              minWidth: 36,
-              backgroundColor: "rgba(255,255,255,0.18)",
+              width: collapsed ? 40 : "100%",
+              height: collapsed ? 40 : "auto",
+              objectFit: "contain",
+              transition: "width 0.22s ease, height 0.22s ease",
             }}
-          >
-            HM
-          </div>
-
+          />
           {!collapsed && (
-            <div className="ml-2.5 overflow-hidden">
-              <div className="text-white font-bold text-sm leading-tight whitespace-nowrap">
-                HM Virtual
-              </div>
-              <div
-                className="text-xs leading-tight whitespace-nowrap"
-                style={{ color: "rgba(255,255,255,0.55)" }}
-              >
-                Services
-              </div>
+            <div
+              className="mt-1.5 text-white font-semibold text-sm whitespace-nowrap tracking-tight"
+            >
+              HM Virtual Services
             </div>
           )}
 
+          {/* Collapse toggle */}
           <button
             onClick={() => setCollapsed((c) => !c)}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="absolute right-1.5 flex items-center justify-center w-6 h-6 rounded transition-colors"
+            className="absolute top-2 right-1.5 flex items-center justify-center w-6 h-6 rounded transition-colors"
             style={{ color: "rgba(255,255,255,0.65)" }}
             onMouseEnter={(e) =>
               (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.12)")
