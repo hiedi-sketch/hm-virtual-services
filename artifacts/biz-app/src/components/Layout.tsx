@@ -98,7 +98,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             }}
           >
             <img
-              src="/hm-logo-full.png"
+              src="/hm-logo-cropped.png"
               alt="HM Virtual Services"
               style={{
                 width: collapsed ? 32 : "100%",
