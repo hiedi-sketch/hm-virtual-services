@@ -203,6 +203,18 @@ function createSchema() {
     try { db.exec(sql); } catch {}
   }
 
+  // Create default admin on fresh database
+  const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+  if (userCount === 0) {
+    const bcrypt = require('bcryptjs');
+    const initialPassword = process.env.ADMIN_PASSWORD || 'Password123';
+    const hash = bcrypt.hashSync(initialPassword, 10);
+    db.prepare("INSERT INTO users (email, password_hash, role, name) VALUES (?, ?, 'admin', ?)").run(
+      'hiedi@hmvirtualservices.com', hash, 'Hiedi Moorman'
+    );
+    console.log('✅ Default admin created: hiedi@hmvirtualservices.com');
+  }
+
   console.log('Schema created successfully');
 }
 

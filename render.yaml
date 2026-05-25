@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: hm-virtual-services
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: JWT_ACCESS_EXPIRES
+        value: 15m
+      - key: JWT_REFRESH_EXPIRES
+        value: 7d
+      - key: DB_PATH
+        value: /var/data/hm_virtual_services.sqlite
+      - key: UPLOAD_PATH
+        value: /var/data/uploads
+      - key: CLIENT_URL
+        value: https://hm-virtual-services.onrender.com
+    disk:
+      name: hm-data
+      mountPath: /var/data
+      sizeGB: 1

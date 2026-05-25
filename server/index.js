@@ -9,7 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: process.env.NODE_ENV === 'production'
+    ? process.env.CLIENT_URL
+    : (process.env.CLIENT_URL || 'http://localhost:5173'),
   credentials: true,
 }));
 app.use(express.json());
@@ -30,6 +32,16 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/integrations/asana', require('./routes/integrations/asana'));
 app.use('/api/integrations/clickup', require('./routes/integrations/clickup'));
 app.use('/api/integrations/qbo', require('./routes/integrations/qbo'));
+
+// ── Serve React build in production ──────────────────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  const clientBuild = path.join(__dirname, '../client/dist');
+  app.use(express.static(clientBuild));
+  // Any non-API route returns the React app (for client-side routing)
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientBuild, 'index.html'));
+  });
+}
 
 app.use((err, req, res, next) => {
   console.error(err.stack);
