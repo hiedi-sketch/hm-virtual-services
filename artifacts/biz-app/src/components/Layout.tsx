@@ -109,13 +109,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               }}
             />
           </div>
-          {!collapsed && (
-            <div
-              className="mt-1.5 text-white font-semibold text-sm whitespace-nowrap tracking-tight"
-            >
-              HM Virtual Services
-            </div>
-          )}
 
           {/* Collapse toggle */}
           <button
