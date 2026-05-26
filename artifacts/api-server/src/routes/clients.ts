@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
 import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable, usersTable, passwordResetTokensTable, clientOnboardingDataTable } from "@workspace/db";
-import { eq, and, gte, lt, sql, inArray, or, isNull } from "drizzle-orm";
+import { eq, and, gte, lt, sql, inArray, or, isNull, not, ilike } from "drizzle-orm";
 import {
   CreateClientBody,
   GetClientParams,
@@ -381,7 +381,11 @@ router.get("/dashboard", requireAdmin, async (req, res) => {
 
   const clients = activeClientIds.length > 0
     ? await db.select().from(clientsTable)
-        .where(and(isNull(clientsTable.parent_id), inArray(clientsTable.id, activeClientIds)))
+        .where(and(
+          isNull(clientsTable.parent_id),
+          inArray(clientsTable.id, activeClientIds),
+          not(ilike(clientsTable.name, "%HM Virtual Services%")),
+        ))
         .orderBy(clientsTable.name)
     : [];
 
