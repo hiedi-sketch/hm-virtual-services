@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { timeEntriesTable, clientsTable, tasksTable, usersTable } from "@workspace/db";
-import { eq, isNull, and, isNotNull } from "drizzle-orm";
+import { eq, isNull, and, isNotNull, sql } from "drizzle-orm";
 import {
   CreateTimeEntryBody,
   ListTimeEntriesQueryParams,
@@ -27,7 +27,8 @@ const withJoins = {
   service_type: timeEntriesTable.service_type,
   notes: timeEntriesTable.notes,
   is_invoiced: timeEntriesTable.is_invoiced,
-  client_name: clientsTable.name,
+  // Use contact_name when set (person's name), fall back to business name
+  client_name: sql<string | null>`COALESCE(NULLIF(TRIM(${clientsTable.contact_name}), ''), ${clientsTable.name})`,
   task_title: tasksTable.title,
   logged_by: usersTable.name,
 };

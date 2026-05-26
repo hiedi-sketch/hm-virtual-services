@@ -49,8 +49,10 @@ export function GlobalTimerBar() {
     if (state.status === "idle") return;
     if (state.clientId != null) return;           // already fine
     if (!state.clientName || !clients?.length) return;
-    const match = clients.find(c => c.name === state.clientName);
-    if (match) assignClient(match.id, match.name);
+    const match = clients.find(c =>
+      (c.contact_name?.trim() || c.name) === state.clientName || c.name === state.clientName
+    );
+    if (match) assignClient(match.id, match.contact_name?.trim() || match.name);
   }, [state.status, state.clientId, state.clientName, clients, assignClient]);
 
   const [saving, setSaving] = useState(false);
@@ -68,7 +70,9 @@ export function GlobalTimerBar() {
     // Resolve clientId — fall back to name lookup if ID was lost (e.g. old localStorage state)
     let resolvedClientId: number | "" = state.clientId ?? "";
     if (!resolvedClientId && state.clientName && clients) {
-      const match = clients.find(c => c.name === state.clientName);
+      const match = clients.find(c =>
+        (c.contact_name?.trim() || c.name) === state.clientName || c.name === state.clientName
+      );
       if (match) resolvedClientId = match.id;
     }
     setPromptClientId(resolvedClientId);
@@ -260,7 +264,7 @@ export function GlobalTimerBar() {
                       className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
                     >
                       <option value="">No client</option>
-                      {clients?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      {clients?.map((c) => <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>)}
                     </select>
                   </div>
 
