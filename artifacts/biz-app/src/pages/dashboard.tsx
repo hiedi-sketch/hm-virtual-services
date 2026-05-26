@@ -357,10 +357,10 @@ export default function Dashboard() {
     0,
   );
 
-  const totalPaid = invoices
-    .filter((i) => i.status === "paid")
-    .reduce((s, i) => s + i.amount, 0);
   const _outstandingMonth = new Date().toISOString().slice(0, 7);
+  const totalPaid = invoices
+    .filter((i) => i.status === "paid" && ((i as any).paid_at ?? i.due_date ?? "").startsWith(_outstandingMonth))
+    .reduce((s, i) => s + i.amount, 0);
   const totalUnpaid = invoices
     .filter((i) => {
       if (i.status === "paid" || i.status === "void") return false;
@@ -1515,7 +1515,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {dashClients.map((client) => {
+            {dashClients.filter(c => (c as any).is_active !== false).map((client) => {
               const percentage = Math.min(
                 100,
                 Math.round(
