@@ -1281,10 +1281,10 @@ export default function TimeTracking() {
                               </button>
                             );
                           })()}
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex items-center gap-0.5">
                             <button
                               onClick={() => setEditingEntry(entry)}
-                              className="p-1.5 text-slate-300 hover:text-blue-500 transition-colors rounded"
+                              className="p-1.5 text-slate-400 hover:text-blue-500 transition-colors rounded"
                               title="Edit entry"
                             >
                               <Pencil className="w-3.5 h-3.5" />
@@ -1292,7 +1292,7 @@ export default function TimeTracking() {
                             <button
                               onClick={() => deleteMutation.mutate({ id: entry.id })}
                               disabled={deleteMutation.isPending}
-                              className="p-1.5 text-slate-300 hover:text-red-500 transition-colors rounded"
+                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors rounded"
                               title="Delete entry"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
