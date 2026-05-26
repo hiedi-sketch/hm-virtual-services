@@ -69,7 +69,11 @@ function ClientRow({ client, onClick }: { client: any; onClick: () => void }) {
           {(client.service_type === "va" || client.service_type === "hybrid") && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/20">
               <Clock className="w-3 h-3" />
-              VA{client.va_hourly_rate != null ? ` · ${formatCurrency(client.va_hourly_rate)}/hr` : ""}
+              {client.va_hourly_rate != null
+                ? `VA · ${formatCurrency(client.va_hourly_rate)}/hr`
+                : (client as any).va_is_package
+                  ? "VA Package"
+                  : "VA"}
             </span>
           )}
         </div>

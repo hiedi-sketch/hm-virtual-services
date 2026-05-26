@@ -42,10 +42,10 @@ router.get("/clients", requireAdmin, async (req, res) => {
     : [];
 
   // Build per-client fee + service_type map from assigned services
-  const feeByClient = new Map<number, { monthly_fee: number; bk_fee: number | null; hasBK: boolean; hasVA: boolean }>();
+  const feeByClient = new Map<number, { monthly_fee: number; bk_fee: number | null; hasBK: boolean; hasVA: boolean; vaHourlyRate: number | null; vaIsPackage: boolean }>();
   for (const svc of assignedServices) {
     const clientId = svc.client_id;
-    const cur = feeByClient.get(clientId) ?? { monthly_fee: 0, bk_fee: null, hasBK: false, hasVA: false };
+    const cur = feeByClient.get(clientId) ?? { monthly_fee: 0, bk_fee: null, hasBK: false, hasVA: false, vaHourlyRate: null, vaIsPackage: false };
 
     const effPrice = svc.custom_price ?? svc.price ?? 0;
     const effRate = svc.custom_hourly_rate ?? svc.hourly_rate;
@@ -63,7 +63,14 @@ router.get("/clients", requireAdmin, async (req, res) => {
       cur.bk_fee = (cur.bk_fee ?? 0) + svcValue;
       cur.hasBK = true;
     }
-    if (svc.service_type === "Virtual Assistant") cur.hasVA = true;
+    if (svc.service_type === "Virtual Assistant") {
+      cur.hasVA = true;
+      if (isHourly && effRate != null) {
+        cur.vaHourlyRate = effRate;
+      } else if (isFlat) {
+        cur.vaIsPackage = true;
+      }
+    }
     feeByClient.set(clientId, cur);
   }
 
@@ -83,6 +90,12 @@ router.get("/clients", requireAdmin, async (req, res) => {
       monthly_fee: svcData ? svcData.monthly_fee : c.monthly_fee,
       bk_fee: svcData ? (svcData.bk_fee ?? null) : c.bk_fee,
       service_type: svcData ? deriveServiceType(svcData) : c.service_type,
+      // Override stale stored va_hourly_rate with the live billing config:
+      // null when the VA service is flat-rate (package), actual rate when hourly
+      va_hourly_rate: svcData?.hasVA
+        ? (svcData.vaIsPackage ? null : (svcData.vaHourlyRate ?? c.va_hourly_rate))
+        : c.va_hourly_rate,
+      va_is_package: svcData?.vaIsPackage ?? false,
     };
   });
 
