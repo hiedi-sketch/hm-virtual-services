@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   useListClients,
   useCreateClient,
+  useGetDashboard,
   getListClientsQueryKey,
   getGetDashboardQueryKey,
 } from "@workspace/api-client-react";
@@ -13,8 +14,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
-  Plus, Building2, Mail, ChevronRight, Clock, Phone, Globe, User,
+  Plus, Building2, Mail, ChevronRight, Clock, Phone, Globe,
   DollarSign, Monitor, TrendingUp, ChevronDown, ChevronUp, Send, ClipboardList,
+  Users2, Package, Timer,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -102,6 +104,7 @@ async function sendPortalInvite(clientId: number) {
 
 export default function Clients() {
   const { data: clients, isLoading } = useListClients();
+  const { data: dashboard } = useGetDashboard();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -172,6 +175,11 @@ export default function Clients() {
     .reduce((sum, c) => sum + (c.bk_fee ?? 0), 0);
   const vaMonthlyTotal = runningMonthlyTotal - bkMonthlyTotal;
 
+  const vaClients = activeClients.filter(c => c.service_type === "va" || c.service_type === "hybrid");
+  const totalVaHoursBudgeted = vaClients.reduce((sum, c) => sum + (c.monthly_hour_budget ?? 0), 0);
+  const totalVaHoursUsed = (dashboard ?? []).reduce((sum, c) => sum + (c.hours_used_this_month ?? 0), 0);
+  const totalActiveCount = Math.max(0, activeClients.length - 1);
+
   const tableHeader = (
     <thead>
       <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider font-semibold">
@@ -203,39 +211,37 @@ export default function Clients() {
         </div>
       </div>
 
-      {/* Running Monthly Total Card — active clients only */}
-      {activeClients.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex items-center gap-3 flex-1">
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#266b75" }}>
-              <TrendingUp className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Running Monthly Total</p>
-              <p className="text-3xl font-bold text-slate-900 leading-tight">{formatCurrency(runningMonthlyTotal)}</p>
-              <p className="text-xs text-slate-400 mt-0.5">across {Math.max(0, activeClients.length - 1)} active client{(activeClients.length - 1) !== 1 ? "s" : ""}</p>
-            </div>
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Users2 className="w-4 h-4 text-slate-400" />
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Active Clients</p>
           </div>
-          <div className="flex gap-6 sm:gap-8 sm:border-l sm:border-slate-100 sm:pl-6">
-            {bkMonthlyTotal > 0 && (
-              <div className="flex flex-col items-start">
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-600 mb-0.5">
-                  <DollarSign className="w-3 h-3" /> Bookkeeping
-                </span>
-                <span className="text-lg font-semibold text-slate-700">{formatCurrency(bkMonthlyTotal)}</span>
-              </div>
-            )}
-            {vaMonthlyTotal > 0 && (
-              <div className="flex flex-col items-start">
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: "#266b75" }}>
-                  <Monitor className="w-3 h-3" /> Virtual Assistant
-                </span>
-                <span className="text-lg font-semibold text-slate-700">{formatCurrency(vaMonthlyTotal)}</span>
-              </div>
-            )}
-          </div>
+          <p className="text-3xl font-bold text-slate-900">{totalActiveCount}</p>
         </div>
-      )}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+          <div className="flex items-center gap-2 mb-2">
+            <DollarSign className="w-4 h-4 text-slate-400" />
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Monthly Recurring Revenue</p>
+          </div>
+          <p className="text-3xl font-bold text-slate-900">{formatCurrency(runningMonthlyTotal)}</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Package className="w-4 h-4 text-slate-400" />
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Monthly Budgeted VA Hours</p>
+          </div>
+          <p className="text-3xl font-bold text-slate-900">{totalVaHoursBudgeted > 0 ? `${totalVaHoursBudgeted} hrs` : "—"}</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Timer className="w-4 h-4 text-slate-400" />
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">VA Hours Used This Month</p>
+          </div>
+          <p className="text-3xl font-bold text-slate-900">{totalVaHoursUsed > 0 ? `${totalVaHoursUsed} hrs` : "0 hrs"}</p>
+        </div>
+      </div>
 
       {/* Active Clients Table */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
