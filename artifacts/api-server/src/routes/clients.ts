@@ -385,6 +385,7 @@ router.get("/dashboard", requireAdmin, async (req, res) => {
           isNull(clientsTable.parent_id),
           inArray(clientsTable.id, activeClientIds),
           not(ilike(clientsTable.name, "%HM Virtual Services%")),
+          eq(clientsTable.is_active, true),
         ))
         .orderBy(clientsTable.name)
     : [];
