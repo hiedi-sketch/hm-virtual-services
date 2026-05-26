@@ -346,7 +346,9 @@ export default function Dashboard() {
   }
 
   const dashClients = dashboard || [];
-  const totalClients = dashClients.length;
+  // Count active clients the same way the client hub does: all active clients minus the owner (HM Virtual Services)
+  const allActiveClients = (clients ?? []).filter(c => (c as any).is_active !== false);
+  const totalClients = Math.max(0, allActiveClients.length - 1);
   const totalRevenue = dashClients.reduce((acc, c) => acc + c.monthly_fee, 0);
   const totalHoursBudgeted = dashClients.reduce(
     (acc, c) => acc + c.monthly_hour_budget,
