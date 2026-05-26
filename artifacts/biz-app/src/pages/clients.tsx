@@ -209,7 +209,7 @@ export default function Clients() {
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Running Monthly Total</p>
               <p className="text-3xl font-bold text-slate-900 leading-tight">{formatCurrency(runningMonthlyTotal)}</p>
-              <p className="text-xs text-slate-400 mt-0.5">across {activeClients.length} active client{activeClients.length !== 1 ? "s" : ""}</p>
+              <p className="text-xs text-slate-400 mt-0.5">across {Math.max(0, activeClients.length - 1)} active client{(activeClients.length - 1) !== 1 ? "s" : ""}</p>
             </div>
           </div>
           <div className="flex gap-6 sm:gap-8 sm:border-l sm:border-slate-100 sm:pl-6">

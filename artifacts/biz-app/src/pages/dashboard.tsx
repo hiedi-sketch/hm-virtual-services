@@ -346,7 +346,7 @@ export default function Dashboard() {
   }
 
   const dashClients = dashboard || [];
-  const totalClients = dashClients.length;
+  const totalClients = Math.max(0, dashClients.length - 1);
   const totalRevenue = dashClients.reduce((acc, c) => acc + c.monthly_fee, 0);
   const totalHoursBudgeted = dashClients.reduce(
     (acc, c) => acc + c.monthly_hour_budget,
