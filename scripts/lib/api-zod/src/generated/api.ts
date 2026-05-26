@@ -312,7 +312,7 @@ export const UpdateTaskResponse = zod.object({
   id: zod.number(),
   title: zod.string(),
   description: zod.string().nullish(),
-  client_id: zod.number(),
+  client_id: zod.number().nullable(),
   assigned_to: zod.string().nullish(),
   status: zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss", "Awaiting Reply"]),
   due_date: zod.string().nullish(),
