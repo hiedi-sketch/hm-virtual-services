@@ -273,21 +273,12 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
   }
 
   if (!client) {
-    logger.warn({
+    logger.info({
       subject,
       fromAddress,
       toAddresses,
       structuredClient: structured.client ?? null,
-    }, "Missive webhook: no client match found — task NOT created. Add 'Client: Name' to the email body, or ensure sender email is in your client records.");
-
-    // Still return 200 so Missive doesn't retry
-    res.status(200).json({
-      ok: true,
-      skipped: true,
-      reason: "no_client_match",
-      hint: "Ensure sender email matches a client record, or add 'Client: <name>' to the email body.",
-    });
-    return;
+    }, "Missive webhook: no client match found — task will be created without a client for manual assignment");
   }
 
   // ── 7. Find admin user to assign task to ─────────────────────────────
