@@ -499,7 +499,6 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
       const local = linkedMap.get(cuTask.id);
 
       if (local !== undefined) {
-        const newStatus = cuStatusToLocal(cuTask.status.status) as "Not Started" | "Pending" | "Confirmed" | "In Progress" | "Completed";
         const newTags = (cuTask.tags ?? []).map(t => t.name).join(", ") || null;
         const newServiceType = cuCustomFieldToServiceType(cuTask.custom_fields);
 
@@ -507,9 +506,10 @@ export async function runClickUpPull(): Promise<{ updated: number; created: numb
         const remoteDueDate = msToDate(cuTask.due_date);
         const keepDueDate = local.due_date ?? remoteDueDate;
 
+        // Dashboard is master — title, tags, and metadata update from ClickUp;
+        // due_date and status are never overwritten by a pull (only pushed out)
         await db.update(tasksTable).set({
           title: cuTask.name,
-          status: newStatus,
           due_date: keepDueDate,
           tags: newTags,
           assigned_to: cuTask.assignees?.[0]?.username ?? undefined,
@@ -780,11 +780,7 @@ router.post("/clickup/webhook", async (req: Request, res: Response) => {
     }
 
     case "taskStatusUpdated": {
-      const afterObj = event.history_items?.[0]?.after as { status: string } | undefined;
-      if (afterObj?.status) {
-        const mapped = cuStatusToLocal(afterObj.status) as typeof updates.status;
-        if (mapped !== localTask.status) updates.status = mapped;
-      }
+      // Dashboard is master — status changes in ClickUp do not overwrite local
       break;
     }
 
@@ -799,18 +795,12 @@ router.post("/clickup/webhook", async (req: Request, res: Response) => {
     }
 
     case "taskUpdated": {
-      // Generic update — look through all history items
+      // Generic update — only sync title; due_date and status are dashboard-master
       for (const item of event.history_items ?? []) {
         if (item.field === "name" && typeof item.after === "string") {
           updates.title = item.after;
         }
-        if (item.field === "status") {
-          const afterObj = item.after as { status: string } | null;
-          if (afterObj?.status) {
-            updates.status = cuStatusToLocal(afterObj.status) as typeof updates.status;
-          }
-        }
-        // Skip due_date — app's date always wins over ClickUp's
+        // Skip status and due_date — dashboard is master for both
       }
       break;
     }
