@@ -1886,6 +1886,8 @@ export default function Tasks() {
   const displayed = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const filtered = tasks.filter(t => {
+      // Tasks missing client or service live in "Tasks to Process", not the main table
+      if (t.status !== "Completed" && (!t.client_id || !t.service_type)) return false;
       if (q && !t.title.toLowerCase().includes(q)) return false;
       if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
       if (serviceFilter !== "all" && t.service_type !== serviceFilter) return false;
@@ -2268,7 +2270,7 @@ export default function Tasks() {
       {(() => {
         const toProcess = tasks.filter(t =>
           t.status !== "Completed" &&
-          (!t.client_id || !t.service_type || !t.due_date)
+          (!t.client_id || !t.service_type)
         );
         if (toProcess.length === 0) return null;
         return (
