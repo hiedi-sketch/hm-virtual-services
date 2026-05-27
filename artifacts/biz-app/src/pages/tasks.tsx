@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Filter, Plus, Play, Pause, Square, Loader2, Pencil,
-  ChevronRight, ChevronDown, Check, X, Trash2, ClipboardList,
+  ChevronRight, ChevronDown, Check, CheckCheck, X, Trash2, ClipboardList,
   ArrowUpDown, ArrowUp, ArrowDown, Download, ExternalLink, RefreshCw,
   Pin, PinOff, ListOrdered, GripVertical,
 } from "lucide-react";
@@ -2427,7 +2427,7 @@ export default function Tasks() {
                           />
                         </td>
 
-                        {/* Process button + delete */}
+                        {/* Process button + complete + delete */}
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-1.5">
                             <button
@@ -2443,6 +2443,22 @@ export default function Tasks() {
                             >
                               <Check className="w-3 h-3" />
                               Process
+                            </button>
+                            <button
+                              onClick={() => {
+                                patchTask(task.id, { status: "Completed" });
+                                setPendingProcessing(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(task.id);
+                                  return next;
+                                });
+                                toast({ title: "Task marked complete", description: task.title });
+                              }}
+                              disabled={isSaving}
+                              className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors disabled:opacity-40"
+                              title="Mark complete"
+                            >
+                              <CheckCheck className="w-3.5 h-3.5" />
                             </button>
                             <button
                               onClick={() => deleteTask(task.id)}
