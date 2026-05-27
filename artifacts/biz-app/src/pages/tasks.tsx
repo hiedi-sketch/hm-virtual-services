@@ -1543,6 +1543,24 @@ export default function Tasks() {
   const [highlightedTaskId, setHighlightedTaskId] = useState<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
 
+  // Track which tasks are "held" in Tasks to Process until Process is clicked.
+  const [pendingProcessing, setPendingProcessing] = useState<Set<number>>(new Set());
+  useEffect(() => {
+    if (!tasks.length) return;
+    const incompleteIds = tasks
+      .filter(t => t.status !== "Completed" && (!t.client_id || !t.service_type))
+      .map(t => t.id);
+    if (!incompleteIds.length) return;
+    setPendingProcessing(prev => {
+      const next = new Set(prev);
+      let changed = false;
+      for (const id of incompleteIds) {
+        if (!next.has(id)) { next.add(id); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [tasks]);
+
   const scrollToTask = useCallback((task: ApiTask) => {
     setSearchQuery("");
     setClientFilter("all");
@@ -1886,7 +1904,8 @@ export default function Tasks() {
   const displayed = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const filtered = tasks.filter(t => {
-      // Tasks missing client or service live in "Tasks to Process", not the main table
+      // Tasks held in "Tasks to Process" (pending the Process button) stay out of the main table
+      if (pendingProcessing.has(t.id)) return false;
       if (t.status !== "Completed" && (!t.client_id || !t.service_type)) return false;
       if (q && !t.title.toLowerCase().includes(q)) return false;
       if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
@@ -1925,7 +1944,7 @@ export default function Tasks() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [tasks, clientFilter, serviceFilter, statusFilter, dueDateFilter, sortField, sortDir, today]);
+  }, [tasks, pendingProcessing, clientFilter, serviceFilter, statusFilter, dueDateFilter, sortField, sortDir, today]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -2270,7 +2289,7 @@ export default function Tasks() {
       {(() => {
         const toProcess = tasks.filter(t =>
           t.status !== "Completed" &&
-          (!t.client_id || !t.service_type)
+          (pendingProcessing.has(t.id) || !t.client_id || !t.service_type)
         );
         if (toProcess.length === 0) return null;
 
@@ -2286,6 +2305,11 @@ export default function Tasks() {
             });
             return;
           }
+          setPendingProcessing(prev => {
+            const next = new Set(prev);
+            next.delete(task.id);
+            return next;
+          });
           toast({ title: "Task moved to main list", description: task.title });
         };
 
@@ -2364,11 +2388,7 @@ export default function Tasks() {
                               options={SERVICE_OPTIONS}
                               saving={isSaving}
                               placeholder="— Required —"
-                              onSave={v => {
-                                const willMove = !!task.client_id && !!v;
-                                patchTask(task.id, { service_type: v });
-                                if (willMove) toast({ title: "Task moved to main list", description: `"${task.title}" now has both client and service set.` });
-                              }}
+                              onSave={v => patchTask(task.id, { service_type: v })}
                               renderValue={v => v ? (
                                 <span className={cn(
                                   "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
