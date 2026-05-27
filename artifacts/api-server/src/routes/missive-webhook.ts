@@ -274,13 +274,15 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
     }, "Missive webhook: no client match found — task will be created without a client for manual assignment");
   }
 
-  // ── 7. Find admin user to assign task to ─────────────────────────────
+  // ── 7. Find admin user for comment authoring ─────────────────────────
   const admins = await db
     .select({ id: usersTable.id, name: usersTable.name })
     .from(usersTable)
     .where(eq(usersTable.role, "admin"))
     .limit(1);
   const adminUser = admins[0] ?? null;
+  // Tasks from Missive are always assigned to Hiedi Moorman by default
+  const defaultAssignee = "Hiedi Moorman";
 
   // ── 8. Build task description ─────────────────────────────────────────
   const metaLines: string[] = [];
@@ -301,7 +303,7 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
       title: taskTitle,
       description,
       client_id: client?.id ?? null,
-      assigned_to: adminUser?.name ?? null,
+      assigned_to: defaultAssignee,
       status: "Not Started",
       due_date: dueDate ?? undefined,
       missive_conversation_id: conversation.id ?? null,
@@ -334,7 +336,7 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
     ok: true,
     task_id: created?.id,
     task_title: taskTitle,
-    client: client.name,
+    client: client?.name ?? null,
   });
 });
 

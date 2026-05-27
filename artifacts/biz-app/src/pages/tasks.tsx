@@ -405,7 +405,8 @@ function WeekdayMultiSelect({
 
 // ── Subtask expand panel ─────────────────────────────────────────────────────
 
-function SubtaskPanel({ taskId }: { taskId: number }) {
+function SubtaskPanel({ taskId, description }: { taskId: number; description?: string | null }) {
+  const [bodyExpanded, setBodyExpanded] = useState(true);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newTitle, setNewTitle] = useState("");
@@ -484,6 +485,29 @@ function SubtaskPanel({ taskId }: { taskId: number }) {
   return (
     <tr className="bg-[#266b75]/5 border-b border-[#266b75]/10">
       <td colSpan={12} className="px-4 py-3">
+
+        {/* ── Email / Message body ── */}
+        {description && (
+          <div className="mb-4 border border-sky-200 rounded-lg bg-sky-50 overflow-hidden">
+            <button
+              onClick={() => setBodyExpanded(v => !v)}
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-sky-100 transition-colors"
+            >
+              <span className="text-[10px] font-semibold text-sky-700 uppercase tracking-wider">Message Body</span>
+              {bodyExpanded
+                ? <ChevronDown className="w-3.5 h-3.5 text-sky-500" />
+                : <ChevronRight className="w-3.5 h-3.5 text-sky-500" />}
+            </button>
+            {bodyExpanded && (
+              <div className="px-3 pb-3">
+                <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
+                  {description}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* ── Subtasks ── */}
@@ -2240,6 +2264,68 @@ export default function Tasks() {
         );
       })()}
 
+      {/* ── Tasks to Process ─────────────────────────────────────────────── */}
+      {(() => {
+        const toProcess = tasks.filter(t =>
+          t.status !== "Completed" &&
+          (!t.client_id || !t.service_type || !t.due_date)
+        );
+        if (toProcess.length === 0) return null;
+        return (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="w-4 h-4 text-rose-600" />
+              <h3 className="text-sm font-semibold text-rose-800">Tasks to Process</h3>
+              <span className="text-xs text-rose-600 bg-rose-100 rounded-full px-2 py-0.5">{toProcess.length}</span>
+              <span className="text-xs text-rose-500 ml-1">— missing client, service, or due date</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {toProcess.map(task => {
+                const isSaving = saving.has(task.id);
+                const missing: string[] = [];
+                if (!task.client_id) missing.push("client");
+                if (!task.service_type) missing.push("service");
+                if (!task.due_date) missing.push("due date");
+                return (
+                  <div key={task.id} className="bg-white border border-rose-100 rounded-lg px-3 py-2.5 flex items-start gap-2.5 shadow-sm">
+                    <button
+                      onClick={() => patchTask(task.id, { status: "Completed" })}
+                      disabled={isSaving}
+                      className="mt-0.5 w-5 h-5 rounded-full border-2 border-slate-300 hover:border-emerald-400 flex items-center justify-center shrink-0 transition-colors"
+                      title="Mark complete"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <button onClick={() => scrollToTask(task)} className="w-full text-left group">
+                        <p className="text-xs font-medium text-slate-800 truncate group-hover:text-[#266b75] group-hover:underline transition-colors">
+                          {task.title}
+                        </p>
+                        {task.client_name && (
+                          <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>
+                        )}
+                      </button>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {missing.map(m => (
+                          <span key={m} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-700 border border-rose-200">
+                            No {m}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => scrollToTask(task)}
+                      className="shrink-0 mt-0.5 text-slate-400 hover:text-[#266b75] transition-colors"
+                      title="Jump to task in table"
+                    >
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
         {/* Search */}
@@ -2847,7 +2933,7 @@ export default function Tasks() {
                       </tr>
 
                       {/* Subtask expand panel */}
-                      {isExpanded && <SubtaskPanel taskId={task.id} />}
+                      {isExpanded && <SubtaskPanel taskId={task.id} description={task.description} />}
                     </React.Fragment>
                   );
                 })}
