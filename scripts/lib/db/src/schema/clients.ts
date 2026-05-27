@@ -38,6 +38,12 @@ export const clientsTable = pgTable("clients", {
   billing_method: text("billing_method"),
   /** Internal notes about the client */
   notes: text("notes"),
+  /** QuickBooks Online Realm ID (company ID) from QBOA firm list */
+  qbo_realm_id: text("qbo_realm_id"),
+  /** Preferred task channel: dashboard | asana | clickup */
+  preferred_channel: text("preferred_channel", { enum: ["dashboard", "asana", "clickup"] }),
+  /** Channel config JSON: e.g. Asana project GID or ClickUp list ID */
+  channel_config: text("channel_config"),
 });
 
 export const insertClientSchema = createInsertSchema(clientsTable).omit({ id: true });
