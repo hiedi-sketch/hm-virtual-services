@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { db } from "@workspace/db";
-import { transactionsTable, transactionImportsTable } from "@workspace/db";
+import { transactionsTable, transactionImportsTable, clientsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAdmin } from "../middleware/auth";
 
@@ -65,6 +65,56 @@ router.get("/api/transactions", requireAdmin, async (req, res) => {
   res.json({ imports, transactions: txs });
 });
 
+// PATCH /api/transactions/:id  — update status, notes, flag, resolve
+router.patch("/api/transactions/:id", requireAdmin, async (req, res) => {
+  const txId = Number(req.params.id);
+  if (!txId) return res.status(400).json({ error: "Invalid id" });
+
+  const { status, internal_notes, question_text, send_question, resolve } = req.body as {
+    status?: string;
+    internal_notes?: string;
+    question_text?: string;
+    send_question?: boolean;
+    resolve?: boolean;
+  };
+
+  const updates: Record<string, any> = {};
+
+  if (status !== undefined) updates.status = status;
+  if (internal_notes !== undefined) updates.internal_notes = internal_notes;
+  if (question_text !== undefined) updates.question_text = question_text;
+
+  if (send_question) {
+    // Fetch client preferred_channel
+    const [tx] = await db.select({ client_id: transactionsTable.client_id })
+      .from(transactionsTable).where(eq(transactionsTable.id, txId));
+    if (tx) {
+      const [client] = await db.select({ preferred_channel: clientsTable.preferred_channel })
+        .from(clientsTable).where(eq(clientsTable.id, tx.client_id));
+      updates.question_channel = client?.preferred_channel ?? "dashboard";
+    }
+    updates.question_sent_at = new Date().toISOString();
+    updates.status = "awaiting_response";
+  }
+
+  if (resolve) {
+    updates.status = "resolved";
+    updates.resolved_at = new Date().toISOString();
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ error: "No fields to update" });
+  }
+
+  const [updated] = await db
+    .update(transactionsTable)
+    .set(updates)
+    .where(eq(transactionsTable.id, txId))
+    .returning();
+
+  res.json(updated);
+});
+
 // POST /api/transactions/upload
 router.post("/api/transactions/upload", requireAdmin, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
@@ -84,9 +134,7 @@ router.post("/api/transactions/upload", requireAdmin, upload.single("file"), asy
   if (rows.length === 0) return res.status(422).json({ error: "File contains no rows" });
 
   // Determine date range from the data
-  const dates = rows
-    .map(r => pick(r, COL_DATE))
-    .filter(Boolean) as string[];
+  const dates = rows.map(r => pick(r, COL_DATE)).filter(Boolean) as string[];
   const datesSorted = [...dates].sort();
   const dateRangeStart = datesSorted[0] ?? null;
   const dateRangeEnd   = datesSorted[datesSorted.length - 1] ?? null;
@@ -111,7 +159,6 @@ router.post("/api/transactions/upload", requireAdmin, upload.single("file"), asy
     });
   }
 
-  // Delete existing imports+transactions for this client+range if overwriting
   if (existing.length > 0 && overwrite) {
     for (const imp of existing) {
       await db.delete(transactionsTable).where(eq(transactionsTable.import_id, imp.id));
@@ -119,7 +166,6 @@ router.post("/api/transactions/upload", requireAdmin, upload.single("file"), asy
     }
   }
 
-  // Create import record
   const [importRecord] = await db
     .insert(transactionImportsTable)
     .values({
@@ -132,7 +178,6 @@ router.post("/api/transactions/upload", requireAdmin, upload.single("file"), asy
     })
     .returning();
 
-  // Insert transactions
   const txRows = rows.map(r => {
     const account = pick(r, COL_ACCT);
     return {
@@ -146,6 +191,7 @@ router.post("/api/transactions/upload", requireAdmin, upload.single("file"), asy
       account:          account,
       amount:           parseAmount(pick(r, COL_AMT)),
       is_uncategorized: !account,
+      status:           "uncategorized",
     };
   });
 
