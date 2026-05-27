@@ -155,21 +155,25 @@ async function findClientByName(name: string): Promise<{ id: number; name: strin
 router.post("/missive-webhook", async (req: Request, res: Response) => {
 
   // ── 1. Security: verify secret ────────────────────────────────────────
-  // Missive sends the secret in the Authorization header as: "Bearer <secret>"
-  // We also support x-webhook-secret for flexibility / manual testing.
+  // Missive webhook automation does not support custom request headers.
+  // Supported methods (in priority order):
+  //   1. Query param:  POST /api/missive-webhook?secret=<value>  ← recommended for Missive
+  //   2. Header:       Authorization: Bearer <value>             ← for manual testing
+  //   3. Header:       x-webhook-secret: <value>                 ← legacy / curl testing
   const secret = process.env.MISSIVE_WEBHOOK_SECRET;
   if (secret) {
-    const authHeader = req.headers["authorization"] ?? "";
+    const querySecret = req.query["secret"] as string | undefined;
+    const authHeader  = req.headers["authorization"] ?? "";
     const bearerToken = authHeader.startsWith("Bearer ")
       ? authHeader.slice("Bearer ".length).trim()
       : null;
-    const xSecret = req.headers["x-webhook-secret"];
-    const provided = bearerToken ?? xSecret;
+    const xSecret  = req.headers["x-webhook-secret"];
+    const provided = querySecret ?? bearerToken ?? xSecret;
 
     if (!provided || provided !== secret) {
       logger.warn(
-        { ip: req.ip, hasAuth: !!authHeader, hasXSecret: !!xSecret },
-        "Missive webhook: rejected — invalid or missing secret (expected Authorization: Bearer <secret>)"
+        { ip: req.ip, hasQuerySecret: !!querySecret, hasAuth: !!authHeader, hasXSecret: !!xSecret },
+        "Missive webhook: rejected — invalid or missing secret (expected ?secret=, Authorization: Bearer, or x-webhook-secret)"
       );
       res.status(401).json({ error: "Unauthorized" });
       return;
