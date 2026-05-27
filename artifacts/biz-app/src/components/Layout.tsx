@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   ChevronRight,
   BookOpen,
+  ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -38,6 +39,7 @@ const ADMIN_NAV = [
   { href: "/backup", label: "Backup", icon: HardDriveDownload },
   { href: "/asana", label: "Asana Sync", icon: Link2 },
   { href: "/quickbooks", label: "QuickBooks", icon: BookOpen },
+  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
 ];
 
 const TEAM_MEMBER_NAV = [

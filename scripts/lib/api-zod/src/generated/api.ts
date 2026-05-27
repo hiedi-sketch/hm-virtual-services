@@ -689,3 +689,32 @@ export const DeleteRecurringInvoiceParams = zod.object({
 export const GenerateRecurringInvoiceParams = zod.object({
   id: zod.coerce.number(),
 });
+
+export const TransactionImport = zod.object({
+  id: zod.number(),
+  client_id: zod.number(),
+  filename: zod.string(),
+  date_range_start: zod.string().nullable().optional(),
+  date_range_end: zod.string().nullable().optional(),
+  imported_at: zod.string(),
+  row_count: zod.number(),
+});
+
+export const TransactionItem = zod.object({
+  id: zod.number(),
+  client_id: zod.number(),
+  import_id: zod.number(),
+  date: zod.string().nullable().optional(),
+  transaction_type: zod.string().nullable().optional(),
+  num: zod.string().nullable().optional(),
+  name: zod.string().nullable().optional(),
+  memo: zod.string().nullable().optional(),
+  account: zod.string().nullable().optional(),
+  amount: zod.number().nullable().optional(),
+  is_uncategorized: zod.boolean(),
+});
+
+export const ListTransactionsResponse = zod.object({
+  imports: zod.array(TransactionImport),
+  transactions: zod.array(TransactionItem),
+});
