@@ -1545,17 +1545,6 @@ export default function Tasks() {
 
   // Track which tasks are "held" in Tasks to Process until Process is clicked.
   const [pendingProcessing, setPendingProcessing] = useState<number[]>([]);
-  useEffect(() => {
-    if (!tasks.length) return;
-    const incompleteIds = tasks
-      .filter(t => t.status !== "Completed" && (!t.client_id || !t.service_type))
-      .map(t => t.id);
-    if (!incompleteIds.length) return;
-    setPendingProcessing(prev => {
-      const toAdd = incompleteIds.filter(id => !prev.includes(id));
-      return toAdd.length ? [...prev, ...toAdd] : prev;
-    });
-  }, [tasks]);
 
   const scrollToTask = useCallback((task: ApiTask) => {
     setSearchQuery("");
@@ -1636,7 +1625,7 @@ export default function Tasks() {
 
   useEffect(() => { refreshCuSettings(); }, []);
 
-  // ── Data (must come before any useEffect/state that references these) ────────
+  // ── Data ──────────────────────────────────────────────────────────────────
 
   const { data: tasks = [], isLoading, refetch } = useQuery<ApiTask[]>({
     queryKey: ["api-tasks"],
@@ -1647,6 +1636,19 @@ export default function Tasks() {
     },
     refetchInterval: 60_000,
   });
+
+  // Populate pendingProcessing when tasks load (must be after `tasks` is declared)
+  useEffect(() => {
+    if (!tasks.length) return;
+    const incompleteIds = tasks
+      .filter(t => t.status !== "Completed" && (!t.client_id || !t.service_type))
+      .map(t => t.id);
+    if (!incompleteIds.length) return;
+    setPendingProcessing(prev => {
+      const toAdd = incompleteIds.filter(id => !prev.includes(id));
+      return toAdd.length ? [...prev, ...toAdd] : prev;
+    });
+  }, [tasks]);
 
   const { data: clients = [] } = useQuery<ApiClient[]>({
     queryKey: ["clients"],
