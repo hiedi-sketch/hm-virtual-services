@@ -65,40 +65,57 @@ router.get("/api/transactions", requireAdmin, async (req, res) => {
   res.json({ imports, transactions: txs });
 });
 
-// PATCH /api/transactions/:id  — update status, notes, flag, resolve
+// PATCH /api/transactions/:id
 router.patch("/api/transactions/:id", requireAdmin, async (req, res) => {
   const txId = Number(req.params.id);
   if (!txId) return res.status(400).json({ error: "Invalid id" });
 
-  const { status, internal_notes, question_text, send_question, resolve } = req.body as {
+  const {
+    status,
+    internal_notes,
+    flagged_question,
+    send_question,
+    client_response,
+    resolve,
+  } = req.body as {
     status?: string;
     internal_notes?: string;
-    question_text?: string;
+    flagged_question?: string;
     send_question?: boolean;
+    client_response?: string;
     resolve?: boolean;
   };
 
   const updates: Record<string, any> = {};
 
-  if (status !== undefined) updates.status = status;
+  if (status !== undefined)         updates.status = status;
   if (internal_notes !== undefined) updates.internal_notes = internal_notes;
-  if (question_text !== undefined) updates.question_text = question_text;
+  if (flagged_question !== undefined) updates.flagged_question = flagged_question;
 
   if (send_question) {
-    // Fetch client preferred_channel
-    const [tx] = await db.select({ client_id: transactionsTable.client_id })
-      .from(transactionsTable).where(eq(transactionsTable.id, txId));
+    const [tx] = await db
+      .select({ client_id: transactionsTable.client_id })
+      .from(transactionsTable)
+      .where(eq(transactionsTable.id, txId));
     if (tx) {
-      const [client] = await db.select({ preferred_channel: clientsTable.preferred_channel })
-        .from(clientsTable).where(eq(clientsTable.id, tx.client_id));
-      updates.question_channel = client?.preferred_channel ?? "dashboard";
+      const [client] = await db
+        .select({ preferred_channel: clientsTable.preferred_channel })
+        .from(clientsTable)
+        .where(eq(clientsTable.id, tx.client_id));
+      updates.routed_to_channel = client?.preferred_channel ?? "dashboard";
     }
-    updates.question_sent_at = new Date().toISOString();
-    updates.status = "awaiting_response";
+    updates.question_sent_at   = new Date().toISOString();
+    updates.status             = "awaiting_response";
+  }
+
+  if (client_response !== undefined) {
+    updates.client_response      = client_response;
+    updates.response_received_at = new Date().toISOString();
+    updates.status               = "responded";
   }
 
   if (resolve) {
-    updates.status = "resolved";
+    updates.status      = "resolved";
     updates.resolved_at = new Date().toISOString();
   }
 
@@ -133,13 +150,11 @@ router.post("/api/transactions/upload", requireAdmin, upload.single("file"), asy
 
   if (rows.length === 0) return res.status(422).json({ error: "File contains no rows" });
 
-  // Determine date range from the data
   const dates = rows.map(r => pick(r, COL_DATE)).filter(Boolean) as string[];
   const datesSorted = [...dates].sort();
   const dateRangeStart = datesSorted[0] ?? null;
   const dateRangeEnd   = datesSorted[datesSorted.length - 1] ?? null;
 
-  // Check for existing import for this client + date range
   const existing = await db
     .select()
     .from(transactionImportsTable)
@@ -181,14 +196,14 @@ router.post("/api/transactions/upload", requireAdmin, upload.single("file"), asy
   const txRows = rows.map(r => {
     const account = pick(r, COL_ACCT);
     return {
-      client_id: clientId,
-      import_id: importRecord.id,
+      client_id:        clientId,
+      import_id:        importRecord.id,
       date:             pick(r, COL_DATE),
       transaction_type: pick(r, COL_TYPE),
       num:              pick(r, COL_NUM),
       name:             pick(r, COL_NAME),
       memo:             pick(r, COL_MEMO),
-      account:          account,
+      account,
       amount:           parseAmount(pick(r, COL_AMT)),
       is_uncategorized: !account,
       status:           "uncategorized",

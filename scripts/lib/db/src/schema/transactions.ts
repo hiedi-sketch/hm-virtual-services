@@ -16,6 +16,7 @@ export const transactionsTable = pgTable("transactions", {
   id: serial("id").primaryKey(),
   client_id: integer("client_id").notNull(),
   import_id: integer("import_id").notNull(),
+  // Core QBO fields
   date: text("date"),
   transaction_type: text("transaction_type"),
   num: text("num"),
@@ -24,17 +25,14 @@ export const transactionsTable = pgTable("transactions", {
   account: text("account"),
   amount: real("amount"),
   is_uncategorized: boolean("is_uncategorized").notNull().default(false),
-  /** Review workflow status */
+  // Review workflow
   status: text("status").notNull().default("uncategorized"),
-  /** Question typed to send to the client */
-  question_text: text("question_text"),
-  /** ISO timestamp when question was sent */
+  flagged_question: text("flagged_question"),
   question_sent_at: text("question_sent_at"),
-  /** Channel the question was routed to */
-  question_channel: text("question_channel"),
-  /** Internal notes (admin only) */
+  routed_to_channel: text("routed_to_channel"),
+  client_response: text("client_response"),
+  response_received_at: text("response_received_at"),
   internal_notes: text("internal_notes"),
-  /** ISO timestamp when marked resolved */
   resolved_at: text("resolved_at"),
 });
 

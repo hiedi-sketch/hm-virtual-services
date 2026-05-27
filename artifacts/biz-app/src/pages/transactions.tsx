@@ -22,8 +22,12 @@ type Tx = {
   name: string | null; memo: string | null; account: string | null;
   amount: number | null; is_uncategorized: boolean;
   status: string;
-  question_text: string | null; question_sent_at: string | null;
-  question_channel: string | null; internal_notes: string | null;
+  flagged_question: string | null;
+  question_sent_at: string | null;
+  routed_to_channel: string | null;
+  client_response: string | null;
+  response_received_at: string | null;
+  internal_notes: string | null;
   resolved_at: string | null;
 };
 
@@ -106,7 +110,7 @@ function FlagPanel({
   onSend: (question: string) => Promise<void>;
   onSetNeedsInfo: () => void;
 }) {
-  const [question, setQuestion] = useState(tx.question_text ?? "");
+  const [question, setQuestion] = useState(tx.flagged_question ?? "");
   const [sending, setSending] = useState(false);
   const isAlreadySent = tx.status === "awaiting_response" || tx.status === "responded" || tx.status === "resolved";
 
@@ -167,7 +171,7 @@ function FlagPanel({
             </label>
             {isAlreadySent ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700 whitespace-pre-wrap">
-                {tx.question_text || <span className="text-slate-400 italic">No question recorded</span>}
+                {tx.flagged_question || <span className="text-slate-400 italic">No question recorded</span>}
               </div>
             ) : (
               <textarea
@@ -187,7 +191,7 @@ function FlagPanel({
               </p>
               <p className="text-xs text-blue-600">
                 {fmtDate(tx.question_sent_at)} via{" "}
-                <span className="font-semibold">{CHANNEL_LABELS[tx.question_channel ?? ""] ?? tx.question_channel ?? "Dashboard"}</span>
+                <span className="font-semibold">{CHANNEL_LABELS[tx.routed_to_channel ?? ""] ?? tx.routed_to_channel ?? "Dashboard"}</span>
               </p>
             </div>
           )}
@@ -391,9 +395,9 @@ export default function TransactionsPage() {
   };
 
   const handleSendQuestion = async (txId: number, question: string) => {
-    await apiPatch(txId, { send_question: true, question_text: question }, {
+    await apiPatch(txId, { send_question: true, flagged_question: question }, {
       status: "awaiting_response",
-      question_text: question,
+      flagged_question: question,
       question_sent_at: new Date().toISOString(),
     });
     toast({ title: "Question recorded", description: "Status updated to Awaiting Response." });
