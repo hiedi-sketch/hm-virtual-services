@@ -2273,56 +2273,166 @@ export default function Tasks() {
           (!t.client_id || !t.service_type)
         );
         if (toProcess.length === 0) return null;
+
+        const handleProcess = (task: ApiTask) => {
+          const missing: string[] = [];
+          if (!task.client_id) missing.push("client");
+          if (!task.service_type) missing.push("service");
+          if (missing.length > 0) {
+            toast({
+              title: "Cannot process — missing required fields",
+              description: `Please set a ${missing.join(" and ")} before processing.`,
+              variant: "destructive",
+            });
+            return;
+          }
+          toast({ title: "Task moved to main list", description: task.title });
+        };
+
         return (
-          <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-rose-600" />
+          <div className="bg-rose-50 border border-rose-200 rounded-xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-rose-200">
+              <ClipboardList className="w-4 h-4 text-rose-600 shrink-0" />
               <h3 className="text-sm font-semibold text-rose-800">Tasks to Process</h3>
-              <span className="text-xs text-rose-600 bg-rose-100 rounded-full px-2 py-0.5">{toProcess.length}</span>
-              <span className="text-xs text-rose-500 ml-1">— missing client, service, or due date</span>
+              <span className="text-xs text-rose-600 bg-rose-100 border border-rose-200 rounded-full px-2 py-0.5">{toProcess.length}</span>
+              <span className="text-xs text-rose-400 ml-1">— set client &amp; service to move to main list</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {toProcess.map(task => {
-                const isSaving = saving.has(task.id);
-                const missing: string[] = [];
-                if (!task.client_id) missing.push("client");
-                if (!task.service_type) missing.push("service");
-                if (!task.due_date) missing.push("due date");
-                return (
-                  <div key={task.id} className="bg-white border border-rose-100 rounded-lg px-3 py-2.5 flex items-start gap-2.5 shadow-sm">
-                    <button
-                      onClick={() => patchTask(task.id, { status: "Completed" })}
-                      disabled={isSaving}
-                      className="mt-0.5 w-5 h-5 rounded-full border-2 border-slate-300 hover:border-emerald-400 flex items-center justify-center shrink-0 transition-colors"
-                      title="Mark complete"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <button onClick={() => scrollToTask(task)} className="w-full text-left group">
-                        <p className="text-xs font-medium text-slate-800 truncate group-hover:text-[#266b75] group-hover:underline transition-colors">
-                          {task.title}
-                        </p>
-                        {task.client_name && (
-                          <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>
-                        )}
-                      </button>
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {missing.map(m => (
-                          <span key={m} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-100 text-rose-700 border border-rose-200">
-                            No {m}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => scrollToTask(task)}
-                      className="shrink-0 mt-0.5 text-slate-400 hover:text-[#266b75] transition-colors"
-                      title="Jump to task in table"
-                    >
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-rose-200 bg-rose-100/60">
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider min-w-[200px]">Task</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Client</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Service</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Assigned</th>
+                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Due Date</th>
+                    <th className="px-3 py-2 w-28" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rose-100">
+                  {toProcess.map(task => {
+                    const isSaving = saving.has(task.id);
+                    const canProcess = !!task.client_id && !!task.service_type;
+                    return (
+                      <tr key={task.id} className="bg-white hover:bg-rose-50/40 transition-colors">
+                        {/* Title */}
+                        <td className="px-3 py-2.5 min-w-[200px]">
+                          <EditableText
+                            value={task.title}
+                            saving={isSaving}
+                            placeholder="Task description"
+                            onSave={v => patchTask(task.id, { title: v })}
+                          />
+                          {task.missive_conversation_id && (
+                            <a
+                              href={`https://mail.missiveapp.com/#conversations/${task.missive_conversation_id}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-600 border border-sky-200 hover:bg-sky-100 transition-colors"
+                            >
+                              Missive <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </td>
+
+                        {/* Client */}
+                        <td className="px-3 py-2.5">
+                          <div className={cn("rounded px-1.5 py-0.5", !task.client_id && "bg-rose-100 border border-rose-200")}>
+                            <EditableSelect
+                              value={task.client_name}
+                              options={clients.map(c => c.contact_name?.trim() || c.name)}
+                              saving={isSaving}
+                              placeholder="— Required —"
+                              onSave={v => {
+                                const c = clients.find(cl => (cl.contact_name?.trim() || cl.name) === v);
+                                if (c) patchTask(task.id, { client_id: c.id, client_name: c.contact_name?.trim() || c.name });
+                              }}
+                              renderValue={v => v
+                                ? <span className="text-slate-700 text-xs">{v}</span>
+                                : <span className="text-rose-600 italic text-xs font-medium">Required</span>}
+                            />
+                          </div>
+                        </td>
+
+                        {/* Service */}
+                        <td className="px-3 py-2.5">
+                          <div className={cn("rounded px-1.5 py-0.5", !task.service_type && "bg-rose-100 border border-rose-200")}>
+                            <EditableSelect
+                              value={task.service_type}
+                              options={SERVICE_OPTIONS}
+                              saving={isSaving}
+                              placeholder="— Required —"
+                              onSave={v => patchTask(task.id, { service_type: v })}
+                              renderValue={v => v ? (
+                                <span className={cn(
+                                  "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                                  v === "Bookkeeping"
+                                    ? "bg-violet-50 text-violet-700 border border-violet-200"
+                                    : "bg-sky-50 text-sky-700 border border-sky-200"
+                                )}>{v}</span>
+                              ) : <span className="text-rose-600 italic text-xs font-medium">Required</span>}
+                            />
+                          </div>
+                        </td>
+
+                        {/* Assigned */}
+                        <td className="px-3 py-2.5">
+                          <EditableSelect
+                            value={task.assigned_to}
+                            options={assigneeOptions}
+                            saving={isSaving}
+                            placeholder="Unassigned"
+                            onSave={v => patchTask(task.id, { assigned_to: v || null })}
+                            renderValue={v => v
+                              ? <span className="text-slate-700 text-xs">{v}</span>
+                              : <span className="text-slate-400 italic text-xs">Unassigned</span>}
+                          />
+                        </td>
+
+                        {/* Due date */}
+                        <td className="px-3 py-2.5">
+                          <EditableDate
+                            value={task.due_date}
+                            saving={isSaving}
+                            isOverdue={false}
+                            onSave={v => patchTask(task.id, { due_date: v })}
+                          />
+                        </td>
+
+                        {/* Process button + delete */}
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleProcess(task)}
+                              disabled={isSaving}
+                              className={cn(
+                                "flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50",
+                                canProcess
+                                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                                  : "bg-rose-200 hover:bg-rose-300 text-rose-800"
+                              )}
+                              title={canProcess ? "Move to main task list" : "Set client and service first"}
+                            >
+                              <Check className="w-3 h-3" />
+                              Process
+                            </button>
+                            <button
+                              onClick={() => deleteTask(task.id)}
+                              disabled={isSaving}
+                              className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40"
+                              title="Delete task"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         );
