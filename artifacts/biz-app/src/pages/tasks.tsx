@@ -2332,6 +2332,9 @@ export default function Tasks() {
                   {toProcess.map(task => {
                     const isSaving = saving.has(task.id);
                     const canProcess = !!task.client_id && !!task.service_type;
+                    const isThisTask = timerState.taskId === task.id;
+                    const isRunning = isThisTask && timerState.status === "running";
+                    const isPaused = isThisTask && timerState.status === "paused";
                     return (
                       <tr key={task.id} className="bg-white hover:bg-rose-50/40 transition-colors">
                         {/* Title */}
@@ -2419,9 +2422,21 @@ export default function Tasks() {
                           />
                         </td>
 
-                        {/* Process button + complete + delete */}
+                        {/* Process button + timer + complete + delete */}
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={() => handleTimerClick(task)}
+                              title={isRunning ? "Pause timer" : isPaused ? "Resume timer" : "Start timer"}
+                              className={cn(
+                                "w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                                isRunning ? "bg-[#266b75] text-white shadow-sm"
+                                  : isPaused ? "bg-amber-500 text-white shadow-sm"
+                                  : "bg-slate-800 text-white hover:bg-slate-600"
+                              )}
+                            >
+                              {isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                            </button>
                             <button
                               onClick={() => handleProcess(task)}
                               disabled={isSaving}
