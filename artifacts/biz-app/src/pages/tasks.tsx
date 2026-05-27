@@ -2215,7 +2215,6 @@ export default function Tasks() {
               })}
             </div>
           </div>
-        </div>
       )}
 
       {/* ── Queue (Next Up) ─────────────────────────────────────────────── */}
@@ -2317,7 +2316,6 @@ export default function Tasks() {
               })}
             </div>
           </div>
-        </div>
       )}
 
       {/* ── Tasks to Process ─────────────────────────────────────────────── */}
@@ -2682,7 +2680,6 @@ export default function Tasks() {
               Delete {selectedIds.size}
             </button>
           </div>
-        </div>
       )}
 
       {/* Table */}
