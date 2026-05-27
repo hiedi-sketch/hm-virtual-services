@@ -18,6 +18,7 @@ import {
   Link2,
   ChevronLeft,
   ChevronRight,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -36,6 +37,7 @@ const ADMIN_NAV = [
   { href: "/api-keys", label: "API Keys", icon: KeyRound },
   { href: "/backup", label: "Backup", icon: HardDriveDownload },
   { href: "/asana", label: "Asana Sync", icon: Link2 },
+  { href: "/quickbooks", label: "QuickBooks", icon: BookOpen },
 ];
 
 const TEAM_MEMBER_NAV = [

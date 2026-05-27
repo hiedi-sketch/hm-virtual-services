@@ -36,6 +36,9 @@ export const ListClientsResponseItem = zod.object({
   billing_date: zod.string().nullable().optional(),
   billing_method: zod.string().nullable().optional(),
   notes: zod.string().nullable().optional(),
+  qbo_realm_id: zod.string().nullable().optional(),
+  preferred_channel: zod.enum(["dashboard", "asana", "clickup"]).nullable().optional(),
+  channel_config: zod.string().nullable().optional(),
 });
 export const ListClientsResponse = zod.array(ListClientsResponseItem);
 
@@ -110,6 +113,9 @@ export const UpdateClientBody = zod.object({
   billing_date: zod.string().nullable().optional(),
   billing_method: zod.string().nullable().optional(),
   notes: zod.string().nullable().optional(),
+  qbo_realm_id: zod.string().nullable().optional(),
+  preferred_channel: zod.enum(["dashboard", "asana", "clickup"]).nullable().optional(),
+  channel_config: zod.string().nullable().optional(),
 });
 
 export const UpdateClientResponse = zod.object({

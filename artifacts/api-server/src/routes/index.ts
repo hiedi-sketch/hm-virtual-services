@@ -30,6 +30,7 @@ import missiveWebhookRouter from "./missive-webhook";
 import zapierWebhookRouter from "./zapier-webhook";
 import estimateResponseRouter from "./estimate-response";
 import payRouter from "./pay";
+import qboRouter from "./qbo";
 
 const router: IRouter = Router();
 
@@ -64,5 +65,6 @@ router.use(missiveWebhookRouter);
 router.use(zapierWebhookRouter);
 router.use(estimateResponseRouter);
 router.use(payRouter);
+router.use(qboRouter);
 
 export default router;
