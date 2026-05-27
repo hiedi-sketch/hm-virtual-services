@@ -196,7 +196,7 @@ export const ListTasksResponseItem = zod.object({
   client_name: zod.string().nullish(),
   recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
-  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
   incomplete_subtask_count: zod.number().optional().default(0),
   asana_gid: zod.string().nullish(),
   clickup_task_id: zod.string().nullish(),
@@ -218,7 +218,7 @@ export const CreateTaskBody = zod.object({
   due_date: zod.string().nullish(),
   status: zod.preprocess(normalizeTaskStatus, zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss", "Awaiting Reply"])).optional(),
   recurrence: recurrenceZod,
-  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
 });
 
 /**
@@ -309,7 +309,7 @@ export const UpdateTaskBody = zod.object({
   due_date: zod.string().nullish(),
   completed_date: zod.string().nullish(),
   recurrence: recurrenceZod,
-  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
   is_pinned: zod.boolean().optional(),
   queue_position: zod.number().nullable().optional(),
 });
@@ -326,7 +326,7 @@ export const UpdateTaskResponse = zod.object({
   client_name: zod.string().nullish(),
   recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
-  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
   clickup_task_id: zod.string().nullish(),
   tags: zod.string().nullish(),
   is_pinned: zod.boolean().optional().default(false),
@@ -353,7 +353,7 @@ export const ListTimeEntriesResponseItem = zod.object({
   ended_at: zod.string().nullish(),
   client_name: zod.string().nullish(),
   task_title: zod.string().nullish(),
-  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
   notes: zod.string().nullish(),
   is_invoiced: zod.boolean().nullish(),
 });
@@ -369,7 +369,7 @@ export const CreateTimeEntryBody = zod.object({
   date: zod.string(),
   started_at: zod.string().nullish(),
   ended_at: zod.string().nullish(),
-  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
   notes: zod.string().nullish(),
 });
 
@@ -387,7 +387,7 @@ export const UpdateTimeEntryBody = zod.object({
   date: zod.string().optional(),
   started_at: zod.string().nullish(),
   ended_at: zod.string().nullish(),
-  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
   notes: zod.string().nullish(),
   is_invoiced: zod.boolean().optional(),
 });
@@ -402,7 +402,7 @@ export const UpdateTimeEntryResponse = zod.object({
   ended_at: zod.string().nullish(),
   client_name: zod.string().nullish(),
   task_title: zod.string().nullish(),
-  service_type: zod.enum(["Bookkeeping", "Virtual Assistant"]).nullish(),
+  service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
   notes: zod.string().nullish(),
   is_invoiced: zod.boolean().nullish(),
 });

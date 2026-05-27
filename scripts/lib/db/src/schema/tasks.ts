@@ -13,7 +13,7 @@ export const tasksTable = pgTable("tasks", {
   completed_date: text("completed_date"),
   recurrence: text("recurrence"),
   last_generated_at: text("last_generated_at"),
-  service_type: text("service_type", { enum: ["Bookkeeping", "Virtual Assistant"] }),
+  service_type: text("service_type", { enum: ["Bookkeeping", "Virtual Assistant", "Family"] }),
   asana_gid: text("asana_gid"),
   clickup_task_id: text("clickup_task_id"),
   tags: text("tags"),

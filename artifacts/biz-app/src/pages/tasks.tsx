@@ -58,7 +58,7 @@ interface ApiClient {
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS = ["Not Started", "To Discuss", "Pending", "Awaiting Reply", "In Progress", "Needs SMR Review", "Confirmed", "Completed"];
-const SERVICE_OPTIONS = ["Bookkeeping", "Virtual Assistant"];
+const SERVICE_OPTIONS = ["Bookkeeping", "Virtual Assistant", "Family"];
 const FREQ_OPTIONS = ["Daily", "Weekdays", "Weekly", "Monthly", "Annually"];
 const WEEKDAY_OPTIONS = [
   { value: "sun", label: "Sunday",  short: "Sun" },
@@ -2364,13 +2364,19 @@ export default function Tasks() {
                               options={SERVICE_OPTIONS}
                               saving={isSaving}
                               placeholder="— Required —"
-                              onSave={v => patchTask(task.id, { service_type: v })}
+                              onSave={v => {
+                                const willMove = !!task.client_id && !!v;
+                                patchTask(task.id, { service_type: v });
+                                if (willMove) toast({ title: "Task moved to main list", description: `"${task.title}" now has both client and service set.` });
+                              }}
                               renderValue={v => v ? (
                                 <span className={cn(
                                   "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
                                   v === "Bookkeeping"
                                     ? "bg-violet-50 text-violet-700 border border-violet-200"
-                                    : "bg-sky-50 text-sky-700 border border-sky-200"
+                                    : v === "Family"
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      : "bg-sky-50 text-sky-700 border border-sky-200"
                                 )}>{v}</span>
                               ) : <span className="text-rose-600 italic text-xs font-medium">Required</span>}
                             />
@@ -2573,6 +2579,7 @@ export default function Tasks() {
                 <option value="">— pick —</option>
                 <option value="Bookkeeping">Bookkeeping</option>
                 <option value="Virtual Assistant">Virtual Assistant</option>
+                <option value="Family">Family</option>
               </select>
               <button
                 onClick={() => { if (!bulkServiceType) return; handleBulkAction("update_service_type"); }}
@@ -2845,7 +2852,9 @@ export default function Tasks() {
                                 "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
                                 v === "Bookkeeping"
                                   ? "bg-violet-50 text-violet-700 border border-violet-200"
-                                  : "bg-sky-50 text-sky-700 border border-sky-200"
+                                  : v === "Family"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : "bg-sky-50 text-sky-700 border border-sky-200"
                               )}>
                                 {v}
                               </span>

@@ -273,7 +273,7 @@ router.post("/tasks/bulk", requireRole("admin"), async (req, res) => {
     ids:          z.array(z.number().int().positive()).min(1).max(500),
     status:       z.string().optional(),
     client_id:    z.number().int().positive().optional(),
-    service_type: z.enum(["Bookkeeping", "Virtual Assistant"]).optional(),
+    service_type: z.enum(["Bookkeeping", "Virtual Assistant", "Family"]).optional(),
     assigned_to:  z.string().optional(),
   });
 
