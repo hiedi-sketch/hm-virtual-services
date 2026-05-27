@@ -185,18 +185,14 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
   // ── 2. Parse & log payload ────────────────────────────────────────────
   const payload = req.body as MissivePayload;
 
+  // Log full payload at INFO so we can trace the exact Missive structure
   logger.info({
     rule: payload.rule?.name ?? "(no rule)",
     conversationId: payload.conversation?.id,
     subject: payload.conversation?.subject,
     labels: payload.conversation?.labels?.map(l => l.name) ?? [],
+    rawPayload: JSON.stringify(payload).slice(0, 3000),
   }, "Missive webhook: received");
-
-  // Full payload at debug level — useful for tracing new webhook formats
-  logger.debug(
-    { payload: JSON.stringify(payload).slice(0, 3000) },
-    "Missive webhook: full payload (truncated to 3000 chars)"
-  );
 
   const conversation = payload.conversation;
   if (!conversation) {
@@ -205,18 +201,11 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
     return;
   }
 
-  // ── 3. Gate on "Task" label ───────────────────────────────────────────
-  const labels = conversation.labels ?? [];
-  const hasTaskLabel = labels.some(l => l.name.toLowerCase() === "task");
-
-  if (!hasTaskLabel) {
-    logger.info(
-      { conversationId: conversation.id, labels: labels.map(l => l.name) },
-      "Missive webhook: conversation does not have 'Task' label — skipping"
-    );
-    res.status(200).json({ ok: true, skipped: true, reason: "no_task_label" });
-    return;
-  }
+  // ── 3. (Label gate removed) ───────────────────────────────────────────
+  // Missive does not include labels in the webhook payload when triggered
+  // via the shared-label webhook feature (labels array comes through empty).
+  // The endpoint is already protected by the secret in the URL, so every
+  // authenticated request should create a task.
 
   // ── 4. Extract message fields ─────────────────────────────────────────
   const msg = conversation.latest_message;
