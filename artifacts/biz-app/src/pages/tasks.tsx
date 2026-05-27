@@ -1544,7 +1544,7 @@ export default function Tasks() {
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
 
   // Track which tasks are "held" in Tasks to Process until Process is clicked.
-  const [pendingProcessing, setPendingProcessing] = useState<Set<number>>(new Set());
+  const [pendingProcessing, setPendingProcessing] = useState<number[]>([]);
   useEffect(() => {
     if (!tasks.length) return;
     const incompleteIds = tasks
@@ -1552,12 +1552,8 @@ export default function Tasks() {
       .map(t => t.id);
     if (!incompleteIds.length) return;
     setPendingProcessing(prev => {
-      const next = new Set(prev);
-      let changed = false;
-      for (const id of incompleteIds) {
-        if (!next.has(id)) { next.add(id); changed = true; }
-      }
-      return changed ? next : prev;
+      const toAdd = incompleteIds.filter(id => !prev.includes(id));
+      return toAdd.length ? [...prev, ...toAdd] : prev;
     });
   }, [tasks]);
 
@@ -1905,7 +1901,7 @@ export default function Tasks() {
     const q = searchQuery.trim().toLowerCase();
     const filtered = tasks.filter(t => {
       // Tasks held in "Tasks to Process" (pending the Process button) stay out of the main table
-      if (pendingProcessing.has(t.id)) return false;
+      if (pendingProcessing.includes(t.id)) return false;
       if (t.status !== "Completed" && (!t.client_id || !t.service_type)) return false;
       if (q && !t.title.toLowerCase().includes(q)) return false;
       if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
@@ -2289,7 +2285,7 @@ export default function Tasks() {
       {(() => {
         const toProcess = tasks.filter(t =>
           t.status !== "Completed" &&
-          (pendingProcessing.has(t.id) || !t.client_id || !t.service_type)
+          (pendingProcessing.includes(t.id) || !t.client_id || !t.service_type)
         );
         if (toProcess.length === 0) return null;
 
@@ -2305,11 +2301,7 @@ export default function Tasks() {
             });
             return;
           }
-          setPendingProcessing(prev => {
-            const next = new Set(prev);
-            next.delete(task.id);
-            return next;
-          });
+          setPendingProcessing(prev => prev.filter(id => id !== task.id));
           toast({ title: "Task moved to main list", description: task.title });
         };
 
@@ -2447,11 +2439,7 @@ export default function Tasks() {
                             <button
                               onClick={() => {
                                 patchTask(task.id, { status: "Completed" });
-                                setPendingProcessing(prev => {
-                                  const next = new Set(prev);
-                                  next.delete(task.id);
-                                  return next;
-                                });
+                                setPendingProcessing(prev => prev.filter(id => id !== task.id));
                                 toast({ title: "Task marked complete", description: task.title });
                               }}
                               disabled={isSaving}
