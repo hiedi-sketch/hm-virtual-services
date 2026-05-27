@@ -31,7 +31,14 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
+const CHANNEL_LABELS: Record<string, { label: string; color: string }> = {
+  dashboard: { label: "Dashboard", color: "bg-slate-100 text-slate-600 border-slate-200" },
+  asana:     { label: "Asana",     color: "bg-purple-50 text-purple-700 border-purple-100" },
+  clickup:   { label: "ClickUp",   color: "bg-pink-50 text-pink-700 border-pink-100" },
+};
+
 function ClientRow({ client, onClick }: { client: any; onClick: () => void }) {
+  const channel = CHANNEL_LABELS[client.preferred_channel ?? ""];
   return (
     <tr
       onClick={onClick}
@@ -79,6 +86,15 @@ function ClientRow({ client, onClick }: { client: any; onClick: () => void }) {
             </span>
           )}
         </div>
+      </td>
+      <td className="px-6 py-4">
+        {channel ? (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${channel.color}`}>
+            {channel.label}
+          </span>
+        ) : (
+          <span className="text-slate-300 text-xs">—</span>
+        )}
       </td>
       <td className="px-6 py-4 text-slate-600">
         {client.monthly_hour_budget > 0
@@ -185,6 +201,7 @@ export default function Clients() {
       <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider font-semibold">
         <th className="px-6 py-4">Client</th>
         <th className="px-6 py-4">Services</th>
+        <th className="px-6 py-4">Channel</th>
         <th className="px-6 py-4">Hour Budget</th>
         <th className="px-6 py-4 text-right">Monthly Fee</th>
         <th className="px-4 py-4" />

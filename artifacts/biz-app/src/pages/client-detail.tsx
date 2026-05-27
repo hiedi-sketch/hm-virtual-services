@@ -204,6 +204,9 @@ export default function ClientDetail() {
   const [editBillingDate, setEditBillingDate] = useState("");
   const [editBillingMethod, setEditBillingMethod] = useState("");
   const [editNotes, setEditNotes] = useState("");
+  const [editPreferredChannel, setEditPreferredChannel] = useState<"dashboard" | "asana" | "clickup" | "">("");
+  const [editChannelConfig, setEditChannelConfig] = useState("");
+  const [editQboRealmId, setEditQboRealmId] = useState("");
 
   const [sendingInvite, setSendingInvite] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -473,6 +476,9 @@ export default function ClientDetail() {
     setEditBillingDate((client as any).billing_date ?? "");
     setEditBillingMethod((client as any).billing_method ?? "");
     setEditNotes((client as any).notes ?? "");
+    setEditPreferredChannel((client as any).preferred_channel ?? "");
+    setEditChannelConfig((client as any).channel_config ?? "");
+    setEditQboRealmId((client as any).qbo_realm_id ?? "");
     setShowEditProfile(true);
   };
 
@@ -492,6 +498,9 @@ export default function ClientDetail() {
         billing_date: editBillingDate || null,
         billing_method: editBillingMethod || null,
         notes: editNotes.trim() || null,
+        preferred_channel: (editPreferredChannel || null) as any,
+        channel_config: editChannelConfig.trim() || null,
+        qbo_realm_id: editQboRealmId.trim() || null,
       } as any,
     });
   };
@@ -706,6 +715,57 @@ export default function ClientDetail() {
                 value={editNotes}
                 onChange={e => setEditNotes(e.target.value)}
                 placeholder="Internal notes about this client…"
+              />
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Task Channel</p>
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {([
+                  { value: "", label: "Not set" },
+                  { value: "dashboard", label: "Dashboard" },
+                  { value: "asana", label: "Asana" },
+                  { value: "clickup", label: "ClickUp" },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setEditPreferredChannel(opt.value as any)}
+                    className={cn(
+                      "py-2 px-3 rounded-lg text-sm font-medium border transition-colors",
+                      editPreferredChannel === opt.value
+                        ? "bg-[#266b75] text-white border-[#266b75]"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              {(editPreferredChannel === "asana" || editPreferredChannel === "clickup") && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">
+                    {editPreferredChannel === "asana" ? "Asana Project GID" : "ClickUp List ID"}
+                  </label>
+                  <input
+                    className={inputCls}
+                    value={editChannelConfig}
+                    onChange={e => setEditChannelConfig(e.target.value)}
+                    placeholder={editPreferredChannel === "asana" ? "1234567890123456" : "abc123def"}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">
+                QBO Realm ID <span className="font-normal text-slate-400">(optional — for future sync)</span>
+              </label>
+              <input
+                className={inputCls}
+                value={editQboRealmId}
+                onChange={e => setEditQboRealmId(e.target.value)}
+                placeholder="Leave blank for now"
               />
             </div>
 
