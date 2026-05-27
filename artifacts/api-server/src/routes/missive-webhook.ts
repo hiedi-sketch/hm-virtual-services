@@ -300,7 +300,7 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
     .values({
       title: taskTitle,
       description,
-      client_id: client.id,
+      client_id: client?.id ?? null,
       assigned_to: adminUser?.name ?? null,
       status: "Not Started",
       due_date: dueDate ?? undefined,
@@ -309,7 +309,7 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
     .returning({ id: tasksTable.id });
 
   logger.info(
-    { taskId: created?.id, taskTitle, clientId: client.id, clientName: client.name },
+    { taskId: created?.id, taskTitle, clientId: client?.id ?? null, clientName: client?.name ?? null },
     "Missive webhook: task created"
   );
 

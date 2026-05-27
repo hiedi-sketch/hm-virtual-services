@@ -1,0 +1,116 @@
+2026-05-27 10:24:58.89
+bc5deba6
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+2026-05-27 10:24:58.89
+bc5deba6
+User
+at <anonymous> (/home/runner/workspace/artifacts/api-server/src/routes/missive-webhook.ts:303:25)
+2026-05-27 10:24:58.89
+bc5deba6
+User
+TypeError: Cannot read properties of null (reading 'id')
+2026-05-27 10:24:59.79
+bc5deba6
+User
+labels: []
+2026-05-27 10:24:59.79
+bc5deba6
+User
+rule: "(no rule)"
+2026-05-27 10:24:59.79
+bc5deba6
+User
+subject: null
+2026-05-27 10:24:59.79
+bc5deba6
+User
+conversationId: "bcdf74e5-bbd7-4657-b8f8-0234967af1fd"
+2026-05-27 10:24:59.79
+bc5deba6
+User
+rawPayload: "{\"rule\":{\"id\":\"95fb4ef9-64ea-4572-be05-8ccc5b2a368b\",\"description\":\"Tasks\",\"type\":\"label_change\"},\"conversation\":{\"id\":\"bcdf74e5-bbd7-4657-b8f8-0234967af1fd\",\"created_at\":1779628826,\"subject\":null,\"latest_message_subject\":\"1 new notification since 8:16 am (May 23, 2026)\",\"organization\":{\"id\":\"01b75e40-0813-4c32-a364-d21ac1cd18fd\",\"name\":\"HM Virtual Services\"},\"color\":null,\"authors\":[{\"name\":\"PI's Hustle Hive (Skool)\",\"address\":\"noreply@skool.com\"}],\"external_authors\":[{\"name\":\"PI's Hustle Hive (Skool)\",\"address\":\"noreply@skool.com\"}],\"messages_count\":1,\"drafts_count\":0,\"send_later_messages_count\":0,\"attachments_count\":0,\"tasks_count\":0,\"completed_tasks_count\":0,\"users\":[{\"id\":\"4adfc7ea-e2b4-4fac-bb3a-fb2736e820ba\",\"name\":\"Hiedi Moorman\",\"email\":\"hiedi@hmvirtualservices.com\",\"unassigned\":false,\"closed\":false,\"archived\":false,\"trashed\":false,\"junked\":false,\"assigned\":true,\"flagged\":false,\"snoozed\":false}],\"assignees\":[{\"id\":\"4adfc7ea-e2b4-4fac-bb3a-fb2736e820ba\",\"name\":\"Hiedi Moorman\",\"email\":\"hiedi@hmvirtualservices.com\",\"unassigned\":false,\"closed\":false,\"archived\":false,\"trashed\":false,\"junked\":false,\"assigned\":true,\"flagged\":false,\"snoozed\":false}],\"assignee_names\":\"Hiedi Moorman\",\"assignee_emails\":\"hiedi@hmvirtualservices.com\",\"shared_label_names\":\"Hiedi, TASK\",\"web_url\":\"https://mail.missiveapp.com/#inbox/conversations/bcdf74e5-bbd7-4657-b8f8-0234967af1fd\",\"app_url\":\"missive://mail.missiveapp.com/#inbox/conversations/bcdf74e5-bbd7-4657-b8f8-0234967af1fd\",\"closed_at\":null,\"team\":{\"id\":\"733e2e70-f707-4fbb-9e22-641957942d82\",\"name\":\"HM Virtual Services\",\"organization\":\"01b75e40-0813-4c32-a364-d21ac1cd18fd\",\"active_members\":[\"4adfc7ea-e2b4-4fac-bb3a-fb2736e820ba\"],\"observers\":[]},\"shared_labels\":[{\"id\":\"c70316f9-d16c-4e4f-8b38-da70cd5bd2e1\",\"name\":\"Hiedi\",\"name_with_parent_names\":\"Hiedi\",\"organization\":\"01b75e40-0813-4c32-a364-d21ac1cd18fd\",\"color\":\"#14B8A6\",\"parent\":null,\"share_with_organization\":null,\"share_with_users\":[],\"share_with_team\":\"733e2e70-f707-4fbb-9e22-641957942d82\",\"visibility\":\"delegates\"},{\"id\":\"f543d659-4327-472c-9188-902f726f9dc8\",\"name\":\"TASK\",\"name_with_parent_names\":\"TASK\",\"organization\":\"01b75e40-0813-4c32-a364-d21ac1cd18fd\",\"color\":\"#BE185D\",\"parent\":null,\"share_with_organization\":false,\"share_with_users\":[\"4adfc7ea-e2b4-4fac-bb3a-fb2736e820ba\"],\"share_with_team\":null,\"visibility\":\"organization\"}]},\"latest_message\":{\"id\":\"7b1a475f-836b-4366-7513-2486fdc528fc\",\"subject\":\"1 new notification since 8:16 am (May 23, 2026)\",\"preview\":\"PI's Hustle Hive\",\"type\":\"email\",\"delivered_at\":1779628609,\"updated_at\":1779628826,\"created_at\":1779628826,\"email_message_id\":\"<ELrH2lfrSVWlbKhQ2zwy8w@geopod-ismtpd-7>\",\"in_reply_to\":[],\"references\":[],\"from_field\":{\"name\":\"PI's Hustle Hive (Skool)\",\"address\":\"noreply@skool.com\"},\"to_fields\":[{\"name\":\"Hiedi Moorman\",\"address\":\"whitedaisyiowa@gmail.com\"}],\"cc_fields\":[],\"bcc_fields\":[],\"reply_to_fields\":[],\"attachments\":[],\"author\":null}}"
+2026-05-27 10:24:59.79
+bc5deba6
+User
+[15:24:58.612] INFO (22): Missive webhook: received
+2026-05-27 10:25:01.19
+bc5deba6
+User
+[15:24:58.612] INFO (22): Missive webhook: no client match found — task will be created without a client for manual assignment
+2026-05-27 10:25:01.19
+bc5deba6
+User
+fromAddress: ""
+2026-05-27 10:25:01.19
+bc5deba6
+User
+subject: "(no subject)"
+2026-05-27 10:25:01.19
+bc5deba6
+User
+"url": "/api/missive-webhook"
+2026-05-27 10:25:01.19
+bc5deba6
+User
+responseTime: 279
+2026-05-27 10:25:01.19
+bc5deba6
+User
+req: {
+2026-05-27 10:25:01.19
+bc5deba6
+User
+toAddresses: []
+2026-05-27 10:25:01.19
+bc5deba6
+User
+[15:24:58.612] INFO (22): Missive webhook: fields extracted
+2026-05-27 10:25:01.19
+bc5deba6
+User
+subject: "(no subject)"
+2026-05-27 10:25:01.19
+bc5deba6
+User
+fromAddress: ""
+2026-05-27 10:25:01.19
+bc5deba6
+User
+[15:24:58.890] INFO (22): request errored
+2026-05-27 10:25:01.19
+bc5deba6
+User
+res: {
+2026-05-27 10:25:01.19
+bc5deba6
+User
+bodyLength: 0
+2026-05-27 10:25:01.19
+bc5deba6
+User
+}
+2026-05-27 10:25:01.19
+bc5deba6
+User
+toAddresses: []
+2026-05-27 10:25:01.19
+bc5deba6
+User
+"statusCode": 500
+2026-05-27 10:25:01.19
+bc5deba6
+User
+structuredClient: null
+2026-05-27 10:25:01.19
+bc5deba6
+User
+}
+2026-05-27 10:25:01.19
+bc5deba6
+User
+"id": 21,
+2026-05-27 10:25:01.19
+bc5deba6
+User
+"method": "POST",
