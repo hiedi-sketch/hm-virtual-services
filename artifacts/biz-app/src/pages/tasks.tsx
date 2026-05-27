@@ -1966,6 +1966,61 @@ export default function Tasks() {
     toast({ title: "Task moved to main list", description: task.title });
   }, [toast, setPendingProcessing]);
 
+  // Pinned / Daily tasks
+  const pinnedTasks = useMemo(() => {
+    const pinnedMap = new Map(tasks.filter(t => t.is_pinned).map(t => [t.id, t]));
+    return pinnedOrder.map(id => pinnedMap.get(id)).filter(Boolean) as ApiTask[];
+  }, [tasks, pinnedOrder]);
+
+  const handleDragStart = useCallback((id: number) => { dragPinnedSrc.current = id; }, []);
+  const handleDragEnter = useCallback((id: number) => { dragPinnedOver.current = id; }, []);
+  const handleDragEnd = useCallback(() => {
+    const src = dragPinnedSrc.current;
+    const over = dragPinnedOver.current;
+    if (src === null || over === null || src === over) {
+      dragPinnedSrc.current = null;
+      dragPinnedOver.current = null;
+      return;
+    }
+    setPinnedOrder(prev => {
+      const next = [...prev];
+      const fromIdx = next.indexOf(src);
+      const toIdx = next.indexOf(over);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, src);
+      localStorage.setItem("pinned_task_order", JSON.stringify(next));
+      return next;
+    });
+    dragPinnedSrc.current = null;
+    dragPinnedOver.current = null;
+  }, []);
+
+  // Queued tasks
+  const queuedTasks = useMemo(() =>
+    tasks
+      .filter(t => t.queue_position !== null && t.queue_position !== undefined)
+      .sort((a, b) => (a.queue_position ?? 0) - (b.queue_position ?? 0)),
+    [tasks]
+  );
+
+  const moveInQueue = useCallback(async (task: ApiTask, direction: "up" | "down") => {
+    const idx = queuedTasks.findIndex(t => t.id === task.id);
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= queuedTasks.length) return;
+    const other = queuedTasks[swapIdx];
+    await Promise.all([
+      patchTask(task.id, { queue_position: other.queue_position }),
+      patchTask(other.id, { queue_position: task.queue_position }),
+    ]);
+  }, [queuedTasks, patchTask]);
+
+  // Bulk selection
+  const allSelected = useMemo(
+    () => displayed.length > 0 && displayed.every(t => selectedIds.has(t.id)),
+    [displayed, selectedIds]
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -2048,40 +2103,15 @@ export default function Tasks() {
       )}
 
       {/* ── Pinned Daily Tasks ─────────────────────────────────────────── */}
-      {(() => {
-        const pinnedMap = new Map(tasks.filter(t => t.is_pinned).map(t => [t.id, t]));
-        const pinned = pinnedOrder.map(id => pinnedMap.get(id)).filter(Boolean) as typeof tasks;
-        if (pinned.length === 0) return null;
-
-        const handleDragStart = (id: number) => { dragPinnedSrc.current = id; };
-        const handleDragEnter = (id: number) => { dragPinnedOver.current = id; };
-        const handleDragEnd = () => {
-          const src = dragPinnedSrc.current;
-          const over = dragPinnedOver.current;
-          if (src === null || over === null || src === over) { dragPinnedSrc.current = null; dragPinnedOver.current = null; return; }
-          setPinnedOrder(prev => {
-            const next = [...prev];
-            const fromIdx = next.indexOf(src);
-            const toIdx = next.indexOf(over);
-            if (fromIdx === -1 || toIdx === -1) return prev;
-            next.splice(fromIdx, 1);
-            next.splice(toIdx, 0, src);
-            localStorage.setItem("pinned_task_order", JSON.stringify(next));
-            return next;
-          });
-          dragPinnedSrc.current = null;
-          dragPinnedOver.current = null;
-        };
-
-        return (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Pin className="w-4 h-4 text-amber-600" />
-              <h3 className="text-sm font-semibold text-amber-800">Daily Tasks</h3>
-              <span className="text-xs text-amber-600 bg-amber-100 rounded-full px-2 py-0.5">{pinned.length}</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {pinned.map(task => {
+      {pinnedTasks.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Pin className="w-4 h-4 text-amber-600" />
+            <h3 className="text-sm font-semibold text-amber-800">Daily Tasks</h3>
+            <span className="text-xs text-amber-600 bg-amber-100 rounded-full px-2 py-0.5">{pinnedTasks.length}</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {pinnedTasks.map(task => {
                 const isSaving = saving.has(task.id);
                 const isRunning = timerState.taskId === task.id && timerState.status === "running";
                 const isPaused  = timerState.taskId === task.id && timerState.status === "paused";
@@ -2185,35 +2215,20 @@ export default function Tasks() {
               })}
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* ── Queue (Next Up) ─────────────────────────────────────────────── */}
-      {(() => {
-        const queued = tasks.filter(t => t.queue_position !== null && t.queue_position !== undefined)
-          .sort((a, b) => (a.queue_position ?? 0) - (b.queue_position ?? 0));
-        if (queued.length === 0) return null;
-        const moveInQueue = async (task: ApiTask, direction: "up" | "down") => {
-          const sorted = [...queued];
-          const idx = sorted.findIndex(t => t.id === task.id);
-          const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-          if (swapIdx < 0 || swapIdx >= sorted.length) return;
-          const other = sorted[swapIdx];
-          await Promise.all([
-            patchTask(task.id, { queue_position: other.queue_position }),
-            patchTask(other.id, { queue_position: task.queue_position }),
-          ]);
-        };
-        return (
-          <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <ListOrdered className="w-4 h-4 text-sky-600" />
-              <h3 className="text-sm font-semibold text-sky-800">Queue — Next Up</h3>
-              <span className="text-xs text-sky-600 bg-sky-100 rounded-full px-2 py-0.5">{queued.length}</span>
+      {queuedTasks.length > 0 && (
+        <div className="bg-sky-50 border border-sky-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <ListOrdered className="w-4 h-4 text-sky-600" />
+            <h3 className="text-sm font-semibold text-sky-800">Queue — Next Up</h3>
+            <span className="text-xs text-sky-600 bg-sky-100 rounded-full px-2 py-0.5">{queuedTasks.length}</span>
               <button
                 onClick={async () => {
                   if (!window.confirm("Remove all tasks from the queue?")) return;
-                  await Promise.all(queued.map(t => patchTask(t.id, { queue_position: null })));
+                  await Promise.all(queuedTasks.map(t => patchTask(t.id, { queue_position: null })));
                   toast({ title: "Queue cleared" });
                 }}
                 className="ml-auto text-xs text-slate-400 hover:text-red-500 transition-colors"
@@ -2223,7 +2238,7 @@ export default function Tasks() {
               </button>
             </div>
             <div className="space-y-1.5">
-              {queued.map((task, idx) => {
+              {queuedTasks.map((task, idx) => {
                 const isSaving = saving.has(task.id);
                 const done = task.status === "Completed";
                 const isThisTask = timerState.taskId === task.id;
@@ -2288,7 +2303,7 @@ export default function Tasks() {
                         className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-sky-600 disabled:opacity-30 transition-colors" title="Move up">
                         <ArrowUp className="w-3 h-3" />
                       </button>
-                      <button onClick={() => moveInQueue(task, "down")} disabled={idx === queued.length - 1 || isSaving}
+                      <button onClick={() => moveInQueue(task, "down")} disabled={idx === queuedTasks.length - 1 || isSaving}
                         className="w-5 h-5 flex items-center justify-center text-slate-400 hover:text-sky-600 disabled:opacity-30 transition-colors" title="Move down">
                         <ArrowDown className="w-3 h-3" />
                       </button>
@@ -2302,8 +2317,8 @@ export default function Tasks() {
               })}
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* ── Tasks to Process ─────────────────────────────────────────────── */}
       {toProcess.length > 0 && (
@@ -2546,10 +2561,8 @@ export default function Tasks() {
       </div>
 
       {/* Bulk action bar */}
-      {selectedIds.size > 0 && (() => {
-        const allSel = displayed.every(t => selectedIds.has(t.id));
-        return (
-          <div className="flex flex-wrap items-center gap-3 bg-[#266b75] text-white rounded-xl px-4 py-3 shadow-md">
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-3 bg-[#266b75] text-white rounded-xl px-4 py-3 shadow-md">
             <div className="flex items-center gap-2 mr-2">
               <span className="font-semibold text-sm">{selectedIds.size} selected</span>
               <button
@@ -2558,7 +2571,7 @@ export default function Tasks() {
               >
                 Clear
               </button>
-              {!allSel && (
+              {!allSelected && (
                 <button
                   onClick={() => setSelectedIds(new Set(displayed.map(t => t.id)))}
                   className="text-white/70 hover:text-white transition-colors text-xs underline"
@@ -2669,8 +2682,8 @@ export default function Tasks() {
               Delete {selectedIds.size}
             </button>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
