@@ -1942,6 +1942,30 @@ export default function Tasks() {
     });
   }, [tasks, pendingProcessing, clientFilter, serviceFilter, statusFilter, dueDateFilter, sortField, sortDir, today]);
 
+  const toProcess = useMemo(() =>
+    tasks.filter(t =>
+      t.status !== "Completed" &&
+      (pendingProcessing.includes(t.id) || !t.client_id || !t.service_type)
+    ),
+    [tasks, pendingProcessing]
+  );
+
+  const handleProcess = useCallback((task: ApiTask) => {
+    const missing: string[] = [];
+    if (!task.client_id) missing.push("client");
+    if (!task.service_type) missing.push("service");
+    if (missing.length > 0) {
+      toast({
+        title: "Cannot process — missing required fields",
+        description: `Please set a ${missing.join(" and ")} before processing.`,
+        variant: "destructive",
+      });
+      return;
+    }
+    setPendingProcessing(prev => prev.filter(id => id !== task.id));
+    toast({ title: "Task moved to main list", description: task.title });
+  }, [toast, setPendingProcessing]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -2282,206 +2306,182 @@ export default function Tasks() {
       })()}
 
       {/* ── Tasks to Process ─────────────────────────────────────────────── */}
-      {(() => {
-        const toProcess = tasks.filter(t =>
-          t.status !== "Completed" &&
-          (pendingProcessing.includes(t.id) || !t.client_id || !t.service_type)
-        );
-        if (toProcess.length === 0) return null;
+      {toProcess.length > 0 && (
+        <div className="bg-rose-50 border border-rose-200 rounded-xl overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-rose-200">
+            <ClipboardList className="w-4 h-4 text-rose-600 shrink-0" />
+            <h3 className="text-sm font-semibold text-rose-800">Tasks to Process</h3>
+            <span className="text-xs text-rose-600 bg-rose-100 border border-rose-200 rounded-full px-2 py-0.5">{toProcess.length}</span>
+            <span className="text-xs text-rose-400 ml-1">— set client &amp; service to move to main list</span>
+          </div>
 
-        const handleProcess = (task: ApiTask) => {
-          const missing: string[] = [];
-          if (!task.client_id) missing.push("client");
-          if (!task.service_type) missing.push("service");
-          if (missing.length > 0) {
-            toast({
-              title: "Cannot process — missing required fields",
-              description: `Please set a ${missing.join(" and ")} before processing.`,
-              variant: "destructive",
-            });
-            return;
-          }
-          setPendingProcessing(prev => prev.filter(id => id !== task.id));
-          toast({ title: "Task moved to main list", description: task.title });
-        };
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-rose-200 bg-rose-100/60">
+                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider min-w-[200px]">Task</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Client</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Service</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Assigned</th>
+                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Due Date</th>
+                  <th className="px-3 py-2 w-28" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-rose-100">
+                {toProcess.map(task => {
+                  const isSaving = saving.has(task.id);
+                  const canProcess = !!task.client_id && !!task.service_type;
+                  const tpIsThisTask = timerState.taskId === task.id;
+                  const tpIsRunning = tpIsThisTask && timerState.status === "running";
+                  const tpIsPaused = tpIsThisTask && timerState.status === "paused";
+                  return (
+                    <tr key={task.id} className="bg-white hover:bg-rose-50/40 transition-colors">
+                      {/* Title */}
+                      <td className="px-3 py-2.5 min-w-[200px]">
+                        <EditableText
+                          value={task.title}
+                          saving={isSaving}
+                          placeholder="Task description"
+                          onSave={v => patchTask(task.id, { title: v })}
+                        />
+                        {task.missive_conversation_id && (
+                          <a
+                            href={`https://mail.missiveapp.com/#conversations/${task.missive_conversation_id}`}
+                            target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-600 border border-sky-200 hover:bg-sky-100 transition-colors"
+                          >
+                            Missive <ExternalLink className="w-2.5 h-2.5" />
+                          </a>
+                        )}
+                      </td>
 
-        return (
-          <div className="bg-rose-50 border border-rose-200 rounded-xl overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-rose-200">
-              <ClipboardList className="w-4 h-4 text-rose-600 shrink-0" />
-              <h3 className="text-sm font-semibold text-rose-800">Tasks to Process</h3>
-              <span className="text-xs text-rose-600 bg-rose-100 border border-rose-200 rounded-full px-2 py-0.5">{toProcess.length}</span>
-              <span className="text-xs text-rose-400 ml-1">— set client &amp; service to move to main list</span>
-            </div>
-
-            {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-rose-200 bg-rose-100/60">
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider min-w-[200px]">Task</th>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Client</th>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Service</th>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Assigned</th>
-                    <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Due Date</th>
-                    <th className="px-3 py-2 w-28" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-rose-100">
-                  {toProcess.map(task => {
-                    const isSaving = saving.has(task.id);
-                    const canProcess = !!task.client_id && !!task.service_type;
-                    const isThisTask = timerState.taskId === task.id;
-                    const isRunning = isThisTask && timerState.status === "running";
-                    const isPaused = isThisTask && timerState.status === "paused";
-                    return (
-                      <tr key={task.id} className="bg-white hover:bg-rose-50/40 transition-colors">
-                        {/* Title */}
-                        <td className="px-3 py-2.5 min-w-[200px]">
-                          <EditableText
-                            value={task.title}
-                            saving={isSaving}
-                            placeholder="Task description"
-                            onSave={v => patchTask(task.id, { title: v })}
-                          />
-                          {task.missive_conversation_id && (
-                            <a
-                              href={`https://mail.missiveapp.com/#conversations/${task.missive_conversation_id}`}
-                              target="_blank" rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-600 border border-sky-200 hover:bg-sky-100 transition-colors"
-                            >
-                              Missive <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
-                          )}
-                        </td>
-
-                        {/* Client */}
-                        <td className="px-3 py-2.5">
-                          <div className={cn("rounded px-1.5 py-0.5", !task.client_id && "bg-rose-100 border border-rose-200")}>
-                            <EditableSelect
-                              value={task.client_name}
-                              options={clients.map(c => c.contact_name?.trim() || c.name)}
-                              saving={isSaving}
-                              placeholder="— Required —"
-                              onSave={v => {
-                                const c = clients.find(cl => (cl.contact_name?.trim() || cl.name) === v);
-                                if (c) patchTask(task.id, { client_id: c.id, client_name: c.contact_name?.trim() || c.name });
-                              }}
-                              renderValue={v => v
-                                ? <span className="text-slate-700 text-xs">{v}</span>
-                                : <span className="text-rose-600 italic text-xs font-medium">Required</span>}
-                            />
-                          </div>
-                        </td>
-
-                        {/* Service */}
-                        <td className="px-3 py-2.5">
-                          <div className={cn("rounded px-1.5 py-0.5", !task.service_type && "bg-rose-100 border border-rose-200")}>
-                            <EditableSelect
-                              value={task.service_type}
-                              options={SERVICE_OPTIONS}
-                              saving={isSaving}
-                              placeholder="— Required —"
-                              onSave={v => patchTask(task.id, { service_type: v })}
-                              renderValue={v => v ? (
-                                <span className={cn(
-                                  "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
-                                  v === "Bookkeeping"
-                                    ? "bg-violet-50 text-violet-700 border border-violet-200"
-                                    : v === "Family"
-                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                      : "bg-sky-50 text-sky-700 border border-sky-200"
-                                )}>{v}</span>
-                              ) : <span className="text-rose-600 italic text-xs font-medium">Required</span>}
-                            />
-                          </div>
-                        </td>
-
-                        {/* Assigned */}
-                        <td className="px-3 py-2.5">
+                      {/* Client */}
+                      <td className="px-3 py-2.5">
+                        <div className={cn("rounded px-1.5 py-0.5", !task.client_id && "bg-rose-100 border border-rose-200")}>
                           <EditableSelect
-                            value={task.assigned_to}
-                            options={assigneeOptions}
+                            value={task.client_name}
+                            options={clients.map(c => c.contact_name?.trim() || c.name)}
                             saving={isSaving}
-                            placeholder="Unassigned"
-                            onSave={v => patchTask(task.id, { assigned_to: v || null })}
+                            placeholder="— Required —"
+                            onSave={v => {
+                              const c = clients.find(cl => (cl.contact_name?.trim() || cl.name) === v);
+                              if (c) patchTask(task.id, { client_id: c.id, client_name: c.contact_name?.trim() || c.name });
+                            }}
                             renderValue={v => v
                               ? <span className="text-slate-700 text-xs">{v}</span>
-                              : <span className="text-slate-400 italic text-xs">Unassigned</span>}
+                              : <span className="text-rose-600 italic text-xs font-medium">Required</span>}
                           />
-                        </td>
+                        </div>
+                      </td>
 
-                        {/* Due date */}
-                        <td className="px-3 py-2.5">
-                          <EditableDate
-                            value={task.due_date}
+                      {/* Service */}
+                      <td className="px-3 py-2.5">
+                        <div className={cn("rounded px-1.5 py-0.5", !task.service_type && "bg-rose-100 border border-rose-200")}>
+                          <EditableSelect
+                            value={task.service_type}
+                            options={SERVICE_OPTIONS}
                             saving={isSaving}
-                            isOverdue={false}
-                            onSave={v => patchTask(task.id, { due_date: v })}
+                            placeholder="— Required —"
+                            onSave={v => patchTask(task.id, { service_type: v })}
+                            renderValue={v => v ? (
+                              <span className={cn(
+                                "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium",
+                                v === "Bookkeeping"
+                                  ? "bg-violet-50 text-violet-700 border border-violet-200"
+                                  : v === "Family"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    : "bg-sky-50 text-sky-700 border border-sky-200"
+                              )}>{v}</span>
+                            ) : <span className="text-rose-600 italic text-xs font-medium">Required</span>}
                           />
-                        </td>
+                        </div>
+                      </td>
 
-                        {/* Process button + timer + complete + delete */}
-                        <td className="px-3 py-2.5">
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => handleTimerClick(task)}
-                              title={isRunning ? "Pause timer" : isPaused ? "Resume timer" : "Start timer"}
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center transition-all",
-                                isRunning ? "bg-[#266b75] text-white shadow-sm"
-                                  : isPaused ? "bg-amber-500 text-white shadow-sm"
-                                  : "bg-slate-800 text-white hover:bg-slate-600"
-                              )}
-                            >
-                              {isRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-                            </button>
-                            <button
-                              onClick={() => handleProcess(task)}
-                              disabled={isSaving}
-                              className={cn(
-                                "flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50",
-                                canProcess
-                                  ? "bg-emerald-500 hover:bg-emerald-600 text-white"
-                                  : "bg-rose-200 hover:bg-rose-300 text-rose-800"
-                              )}
-                              title={canProcess ? "Move to main task list" : "Set client and service first"}
-                            >
-                              <Check className="w-3 h-3" />
-                              Process
-                            </button>
-                            <button
-                              onClick={() => {
-                                patchTask(task.id, { status: "Completed" });
-                                setPendingProcessing(prev => prev.filter(id => id !== task.id));
-                                toast({ title: "Task marked complete", description: task.title });
-                              }}
-                              disabled={isSaving}
-                              className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors disabled:opacity-40"
-                              title="Mark complete"
-                            >
-                              <CheckCheck className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => deleteTask(task.id)}
-                              disabled={isSaving}
-                              className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40"
-                              title="Delete task"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      {/* Assigned */}
+                      <td className="px-3 py-2.5">
+                        <EditableSelect
+                          value={task.assigned_to}
+                          options={assigneeOptions}
+                          saving={isSaving}
+                          placeholder="Unassigned"
+                          onSave={v => patchTask(task.id, { assigned_to: v || null })}
+                          renderValue={v => v
+                            ? <span className="text-slate-700 text-xs">{v}</span>
+                            : <span className="text-slate-400 italic text-xs">Unassigned</span>}
+                        />
+                      </td>
+
+                      {/* Due date */}
+                      <td className="px-3 py-2.5">
+                        <EditableDate
+                          value={task.due_date}
+                          saving={isSaving}
+                          isOverdue={false}
+                          onSave={v => patchTask(task.id, { due_date: v })}
+                        />
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-3 py-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleTimerClick(task)}
+                            title={tpIsRunning ? "Pause timer" : tpIsPaused ? "Resume timer" : "Start timer"}
+                            className={cn(
+                              "w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                              tpIsRunning ? "bg-[#266b75] text-white shadow-sm"
+                                : tpIsPaused ? "bg-amber-500 text-white shadow-sm"
+                                : "bg-slate-800 text-white hover:bg-slate-600"
+                            )}
+                          >
+                            {tpIsRunning ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
+                          </button>
+                          <button
+                            onClick={() => handleProcess(task)}
+                            disabled={isSaving}
+                            className={cn(
+                              "flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50",
+                              canProcess
+                                ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                                : "bg-rose-200 hover:bg-rose-300 text-rose-800"
+                            )}
+                            title={canProcess ? "Move to main task list" : "Set client and service first"}
+                          >
+                            <Check className="w-3 h-3" />
+                            Process
+                          </button>
+                          <button
+                            onClick={() => {
+                              patchTask(task.id, { status: "Completed" });
+                              setPendingProcessing(prev => prev.filter(id => id !== task.id));
+                              toast({ title: "Task marked complete", description: task.title });
+                            }}
+                            disabled={isSaving}
+                            className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors disabled:opacity-40"
+                            title="Mark complete"
+                          >
+                            <CheckCheck className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => deleteTask(task.id)}
+                            disabled={isSaving}
+                            className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-40"
+                            title="Delete task"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2">
