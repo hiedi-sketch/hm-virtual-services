@@ -44,10 +44,10 @@ router.get("/clients", requireAdmin, async (req, res) => {
     : [];
 
   // Build per-client fee + service_type map from assigned services
-  const feeByClient = new Map<number, { monthly_fee: number; bk_fee: number | null; hasBK: boolean; hasVA: boolean; vaHourlyRate: number | null; vaIsPackage: boolean }>();
+  const feeByClient = new Map<number, { monthly_fee: number; bk_fee: number | null; hasBK: boolean; hasVA: boolean; vaHourlyRate: number | null; vaIsPackage: boolean; vaHourBudget: number }>();
   for (const svc of assignedServices) {
     const clientId = svc.client_id;
-    const cur = feeByClient.get(clientId) ?? { monthly_fee: 0, bk_fee: null, hasBK: false, hasVA: false, vaHourlyRate: null, vaIsPackage: false };
+    const cur = feeByClient.get(clientId) ?? { monthly_fee: 0, bk_fee: null, hasBK: false, hasVA: false, vaHourlyRate: null, vaIsPackage: false, vaHourBudget: 0 };
 
     const effPrice = svc.custom_price ?? svc.price ?? 0;
     const effRate = svc.custom_hourly_rate ?? svc.hourly_rate;
@@ -67,6 +67,7 @@ router.get("/clients", requireAdmin, async (req, res) => {
     }
     if (svc.service_type === "Virtual Assistant") {
       cur.hasVA = true;
+      cur.vaHourBudget += effHours ?? 0;
       if (isHourly && effRate != null) {
         cur.vaHourlyRate = effRate;
       } else if (isFlat) {
@@ -92,6 +93,11 @@ router.get("/clients", requireAdmin, async (req, res) => {
       monthly_fee: svcData ? svcData.monthly_fee : c.monthly_fee,
       bk_fee: svcData ? (svcData.bk_fee ?? null) : c.bk_fee,
       service_type: svcData ? deriveServiceType(svcData) : c.service_type,
+      // Compute VA hour budget live from assigned services so it always reflects
+      // whatever is set on the service template or client-specific override
+      monthly_hour_budget: svcData?.hasVA && svcData.vaHourBudget > 0
+        ? svcData.vaHourBudget
+        : c.monthly_hour_budget,
       // Override stale stored va_hourly_rate with the live billing config:
       // null when the VA service is flat-rate (package), actual rate when hourly
       va_hourly_rate: svcData?.hasVA
@@ -235,6 +241,7 @@ router.get("/clients/:id", requireAuth, async (req, res) => {
 
   let computedFee = 0;
   let computedBkFee: number | null = null;
+  let vaHourBudget = 0;
   let hasBK = false;
   let hasVA = false;
   for (const s of svcs) {
@@ -247,7 +254,10 @@ router.get("/clients/:id", requireAuth, async (req, res) => {
     const svcValue = isFlat ? effPrice : hourlyComputed > 0 ? hourlyComputed : effPrice;
     computedFee += svcValue;
     if (s.service_type === "Bookkeeping") { computedBkFee = (computedBkFee ?? 0) + svcValue; hasBK = true; }
-    if (s.service_type === "Virtual Assistant") hasVA = true;
+    if (s.service_type === "Virtual Assistant") {
+      hasVA = true;
+      vaHourBudget += effHours ?? 0;
+    }
   }
 
   const derivedServiceType = svcs.length > 0
@@ -259,6 +269,7 @@ router.get("/clients/:id", requireAuth, async (req, res) => {
     monthly_fee: svcs.length > 0 ? computedFee : client.monthly_fee,
     bk_fee: svcs.length > 0 ? computedBkFee : client.bk_fee,
     service_type: derivedServiceType,
+    monthly_hour_budget: hasVA && vaHourBudget > 0 ? vaHourBudget : client.monthly_hour_budget,
   });
 });
 
