@@ -2361,15 +2361,35 @@ export default function Tasks() {
                           placeholder="Task description"
                           onSave={v => patchTask(task.id, { title: v })}
                         />
-                        {task.missive_conversation_id && (
-                          <a
-                            href={`https://mail.missiveapp.com/#conversations/${task.missive_conversation_id}`}
-                            target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-600 border border-sky-200 hover:bg-sky-100 transition-colors"
-                          >
-                            Missive <ExternalLink className="w-2.5 h-2.5" />
-                          </a>
-                        )}
+                        <div className="flex flex-wrap gap-1 mt-0.5">
+                          {task.missive_conversation_id && (
+                            <a
+                              href={`https://mail.missiveapp.com/#conversations/${task.missive_conversation_id}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-600 border border-sky-200 hover:bg-sky-100 transition-colors"
+                            >
+                              Missive <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                          {task.asana_gid && (
+                            <a
+                              href={`https://app.asana.com/0/0/${task.asana_gid}/f`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-pink-50 text-pink-600 border border-pink-200 hover:bg-pink-100 transition-colors"
+                            >
+                              Asana <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                          {task.clickup_task_id && (
+                            <a
+                              href={`https://app.clickup.com/t/${task.clickup_task_id}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100 transition-colors"
+                            >
+                              ClickUp <ExternalLink className="w-2.5 h-2.5" />
+                            </a>
+                          )}
+                        </div>
                       </td>
 
                       {/* Client */}
