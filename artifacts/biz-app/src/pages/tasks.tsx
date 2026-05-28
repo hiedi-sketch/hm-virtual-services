@@ -486,29 +486,32 @@ function SubtaskPanel({ taskId, description }: { taskId: number; description?: s
     <tr className="bg-[#266b75]/5 border-b border-[#266b75]/10">
       <td colSpan={12} className="px-4 py-3">
 
-        {/* ── Email / Message body ── */}
-        {description && (
-          <div className="mb-4 border border-sky-200 rounded-lg bg-sky-50 overflow-hidden">
-            <button
-              onClick={() => setBodyExpanded(v => !v)}
-              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-sky-100 transition-colors"
-            >
-              <span className="text-[10px] font-semibold text-sky-700 uppercase tracking-wider">Message Body</span>
-              {bodyExpanded
-                ? <ChevronDown className="w-3.5 h-3.5 text-sky-500" />
-                : <ChevronRight className="w-3.5 h-3.5 text-sky-500" />}
-            </button>
-            {bodyExpanded && (
-              <div className="px-3 pb-3">
-                <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed max-h-48 overflow-y-auto">
-                  {description}
-                </pre>
-              </div>
-            )}
-          </div>
-        )}
+        <div className={`grid gap-6 ${description ? "grid-cols-1 lg:grid-cols-3" : "grid-cols-1 lg:grid-cols-2"}`}>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* ── Email body (left column, only when present) ── */}
+          {description && (
+            <div className="flex flex-col min-w-0">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] text-sky-700 font-semibold uppercase tracking-wider">Email Body</p>
+                <button
+                  onClick={() => setBodyExpanded(v => !v)}
+                  className="text-sky-400 hover:text-sky-600 transition-colors"
+                  title={bodyExpanded ? "Collapse" : "Expand"}
+                >
+                  {bodyExpanded
+                    ? <ChevronDown className="w-3.5 h-3.5" />
+                    : <ChevronRight className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+              {bodyExpanded && (
+                <div className="border border-sky-200 rounded-lg bg-sky-50 px-3 py-2.5 flex-1">
+                  <pre className="text-xs text-slate-700 whitespace-pre-wrap font-sans leading-relaxed max-h-56 overflow-y-auto">
+                    {description}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── Subtasks ── */}
           <div>

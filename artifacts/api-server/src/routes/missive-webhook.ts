@@ -284,17 +284,10 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
   // Tasks from Missive are always assigned to Hiedi Moorman by default
   const defaultAssignee = "Hiedi Moorman";
 
-  // ── 8. Build task description ─────────────────────────────────────────
-  const metaLines: string[] = [];
-  if (fromAddress) metaLines.push(`From: ${fromName} <${fromAddress}>`);
-  if (toAddresses.length > 0) metaLines.push(`To: ${toAddresses.join(", ")}`);
-  if (payload.rule?.name) metaLines.push(`Rule: ${payload.rule.name}`);
-
-  const descriptionParts = [
-    metaLines.join("\n"),
-    bodyText || null,
-  ].filter(Boolean);
-  const description = descriptionParts.join("\n\n") || null;
+  // ── 8. Build task description (clean email body only) ────────────────
+  // description = clean email body text only (shown in the task expand panel)
+  // From / To / Rule metadata goes into the comment only, not the description
+  const description = bodyText || null;
 
   // ── 9. Insert task ────────────────────────────────────────────────────
   const [created] = await db
@@ -315,17 +308,28 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
     "Missive webhook: task created"
   );
 
-  // ── 10. Add email body as initial comment ─────────────────────────────
-  // Stores the raw message preview as a visible comment on the task
-  if (created?.id && bodyText && bodyText.length > 10) {
+  // ── 10. Add email metadata + body as initial comment ──────────────────
+  // The comment stores sender/recipient context; the description holds the body.
+  if (created?.id) {
     try {
-      await db.insert(taskCommentsTable).values({
-        task_id: created.id,
-        user_id: adminUser?.id ?? null,
-        author_name: adminUser?.name ?? "Missive",
-        author_role: "admin",
-        comment: `📧 From Missive (${fromName} <${fromAddress}>):\n\n${bodyText.slice(0, 1500)}`,
-      });
+      const metaLines: string[] = [];
+      if (fromAddress) metaLines.push(`From: ${fromName} <${fromAddress}>`);
+      if (toAddresses.length > 0) metaLines.push(`To: ${toAddresses.join(", ")}`);
+      if (payload.rule?.name) metaLines.push(`Rule: ${payload.rule.name}`);
+      const commentBody = [
+        metaLines.join("\n"),
+        bodyText ? bodyText.slice(0, 1500) : null,
+      ].filter(Boolean).join("\n\n");
+
+      if (commentBody.length > 10) {
+        await db.insert(taskCommentsTable).values({
+          task_id: created.id,
+          user_id: adminUser?.id ?? null,
+          author_name: adminUser?.name ?? "Missive",
+          author_role: "admin",
+          comment: `📧 Email via Missive\n\n${commentBody}`,
+        });
+      }
     } catch (commentErr) {
       logger.warn({ commentErr }, "Missive webhook: could not save email body as comment — continuing");
     }
