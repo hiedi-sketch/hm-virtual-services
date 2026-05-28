@@ -4,6 +4,8 @@ import cron from "node-cron";
 import { runPush } from "./routes/asana";
 import { runClickUpPush } from "./routes/clickup";
 import { db } from "@workspace/db";
+import { tasksTable } from "@workspace/db";
+import { eq, and, ne } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 const rawPort = process.env["PORT"];
@@ -73,5 +75,27 @@ cron.schedule("5 0 * * *", async () => {
     logger.info(result, "Midnight ClickUp sync: complete");
   } catch (err) {
     logger.error({ err }, "Midnight ClickUp sync: failed (ClickUp may not be configured)");
+  }
+});
+
+// ── Daily task reset ──────────────────────────────────────────────────────
+// Runs at 12:01am every day. Resets all pinned (daily) tasks that are not
+// already "Not Started" back to "Not Started" so they appear fresh each day.
+cron.schedule("1 0 * * *", async () => {
+  logger.info("Daily task reset: starting");
+  try {
+    const result = await db
+      .update(tasksTable)
+      .set({ status: "Not Started" })
+      .where(
+        and(
+          eq(tasksTable.is_pinned, true),
+          ne(tasksTable.status, "Not Started"),
+        )
+      )
+      .returning({ id: tasksTable.id });
+    logger.info({ count: result.length }, "Daily task reset: complete");
+  } catch (err) {
+    logger.error({ err }, "Daily task reset: failed");
   }
 });
