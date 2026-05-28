@@ -25,6 +25,9 @@ import { logger } from "../lib/logger";
 const router: IRouter = Router();
 
 // ── Missive payload types ─────────────────────────────────────────────────────
+// NOTE: Missive's label_change webhook sends conversation-level fields only —
+// individual message from_field / body / preview are usually absent.
+// Subject lives in latest_message_subject; senders in external_authors / authors.
 
 interface MissiveLabel {
   id: string;
@@ -42,21 +45,28 @@ interface MissiveMessage {
   from_field?: MissiveContact;
   to_fields?: MissiveContact[];
   cc_fields?: MissiveContact[];
-  preview?: string;   // First ~500 chars of plain text (no HTML)
-  body?: string;      // Full HTML body
+  preview?: string;
+  body?: string;
   subject?: string;
 }
 
 interface MissiveConversation {
   id: string;
-  subject?: string;
+  subject?: string | null;
+  /** Populated by label_change webhooks — the subject of the most recent message */
+  latest_message_subject?: string | null;
   labels?: MissiveLabel[];
   latest_message?: MissiveMessage;
   messages?: MissiveMessage[];
+  /** All participants (internal + external) */
+  authors?: MissiveContact[];
+  /** External (non-team) participants — the actual client/sender */
+  external_authors?: MissiveContact[];
 }
 
 interface MissivePayload {
-  rule?: { id: string; name: string };
+  /** Missive sends rule.description (not rule.name) for label_change webhooks */
+  rule?: { id: string; name?: string; description?: string };
   conversation?: MissiveConversation;
 }
 
@@ -187,9 +197,9 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
 
   // Log full payload at INFO so we can trace the exact Missive structure
   logger.info({
-    rule: payload.rule?.name ?? "(no rule)",
+    rule: payload.rule?.name ?? payload.rule?.description ?? "(no rule)",
     conversationId: payload.conversation?.id,
-    subject: payload.conversation?.subject,
+    subject: payload.conversation?.latest_message_subject ?? payload.conversation?.subject,
     labels: payload.conversation?.labels?.map(l => l.name) ?? [],
     rawPayload: JSON.stringify(payload).slice(0, 3000),
   }, "Missive webhook: received");
@@ -208,18 +218,41 @@ router.post("/missive-webhook", async (req: Request, res: Response) => {
   // authenticated request should create a task.
 
   // ── 4. Extract message fields ─────────────────────────────────────────
+  // Missive label_change webhooks put the subject in latest_message_subject
+  // (conversation.subject is null). Sender info is in external_authors, not
+  // latest_message.from_field (which is often absent in this webhook type).
   const msg = conversation.latest_message;
 
-  const subject: string = (conversation.subject ?? msg?.subject ?? "").trim() || "(no subject)";
-  const fromAddress: string = (msg?.from_field?.address ?? "").toLowerCase();
-  const fromName: string = msg?.from_field?.name ?? fromAddress;
-  const toAddresses: string[] = (msg?.to_fields ?? []).map(t => t.address.toLowerCase());
+  const subject: string = (
+    conversation.latest_message_subject ??
+    conversation.subject ??
+    msg?.subject ?? ""
+  ).trim() || "(no subject)";
 
-  // Plain text body: prefer preview (already plain text), fall back to stripping HTML
+  // External authors = the non-team participants (the actual client/sender)
+  const externalSender = conversation.external_authors?.[0] ?? null;
+  const fromAddress: string = (
+    externalSender?.address ?? msg?.from_field?.address ?? ""
+  ).toLowerCase();
+  const fromName: string =
+    externalSender?.name ?? msg?.from_field?.name ?? fromAddress;
+
+  // Recipients: internal team members from authors that aren't in external_authors
+  const externalAddrs = new Set(
+    (conversation.external_authors ?? []).map(a => a.address.toLowerCase())
+  );
+  const internalAuthors = (conversation.authors ?? []).filter(
+    a => !externalAddrs.has(a.address.toLowerCase())
+  );
+  const toAddresses: string[] = msg?.to_fields
+    ? msg.to_fields.map(t => t.address.toLowerCase())
+    : internalAuthors.map(a => a.address.toLowerCase());
+
+  // Plain text body: prefer message preview/body; label_change payloads often omit it
   const rawBodyText = msg?.preview ?? (msg?.body ? stripHtml(msg.body) : "");
   const bodyText = cleanBody(rawBodyText);
 
-  logger.info({ subject, fromAddress, toAddresses, bodyLength: bodyText.length },
+  logger.info({ subject, fromAddress, fromName, toAddresses, bodyLength: bodyText.length },
     "Missive webhook: fields extracted");
 
   // ── 5. Parse structured data from body ───────────────────────────────
