@@ -19,7 +19,9 @@ import { sendMail, template, isMailConfigured } from "../lib/mailer";
 const router: IRouter = Router();
 
 router.get("/clients", requireAdmin, async (req, res) => {
-  const clients = await db.select().from(clientsTable).orderBy(clientsTable.name);
+  const clients = await db.select().from(clientsTable)
+    .where(eq(clientsTable.is_active, true))
+    .orderBy(clientsTable.name);
 
   // Compute monthly fees from assigned services so the list stays in sync with the detail page
   const clientIds = clients.map(c => c.id);
