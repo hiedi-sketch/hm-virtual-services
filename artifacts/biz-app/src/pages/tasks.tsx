@@ -1545,6 +1545,9 @@ export default function Tasks() {
 
   // Track which tasks are "held" in Tasks to Process until Process is clicked.
   const [pendingProcessing, setPendingProcessing] = useState<number[]>([]);
+  const [tpSelectedIds, setTpSelectedIds] = useState<Set<number>>(new Set());
+  const [tpBulkClientId, setTpBulkClientId] = useState<string>("");
+  const [tpBulkService, setTpBulkService] = useState<string>("");
 
   const scrollToTask = useCallback((task: ApiTask) => {
     setSearchQuery("");
@@ -1968,6 +1971,56 @@ export default function Tasks() {
     toast({ title: "Task moved to main list", description: task.title });
   }, [toast, setPendingProcessing]);
 
+  const tpAllSelected = useMemo(
+    () => toProcess.length > 0 && toProcess.every(t => tpSelectedIds.has(t.id)),
+    [toProcess, tpSelectedIds]
+  );
+
+  const handleTpToggle = useCallback((id: number) => {
+    setTpSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleTpToggleAll = useCallback(() => {
+    setTpSelectedIds(prev =>
+      prev.size === toProcess.length ? new Set() : new Set(toProcess.map(t => t.id))
+    );
+  }, [toProcess]);
+
+  const handleTpBulkClientApply = useCallback(() => {
+    if (!tpBulkClientId) return;
+    const c = clients.find(cl => String(cl.id) === tpBulkClientId);
+    if (!c) return;
+    tpSelectedIds.forEach(id => patchTask(id, { client_id: c.id, client_name: c.contact_name?.trim() || c.name }));
+    setTpBulkClientId("");
+  }, [tpBulkClientId, tpSelectedIds, clients, patchTask]);
+
+  const handleTpBulkServiceApply = useCallback(() => {
+    if (!tpBulkService) return;
+    tpSelectedIds.forEach(id => patchTask(id, { service_type: tpBulkService }));
+    setTpBulkService("");
+  }, [tpBulkService, tpSelectedIds, patchTask]);
+
+  const handleTpBulkProcess = useCallback(() => {
+    const selected = toProcess.filter(t => tpSelectedIds.has(t.id));
+    selected.forEach(t => handleProcess(t));
+    setTpSelectedIds(new Set());
+  }, [toProcess, tpSelectedIds, handleProcess]);
+
+  const handleTpBulkComplete = useCallback(() => {
+    const ids = [...tpSelectedIds];
+    ids.forEach(id => {
+      const t = toProcess.find(x => x.id === id);
+      patchTask(id, { status: "Completed" });
+      setPendingProcessing(prev => prev.filter(p => p !== id));
+      if (t) toast({ title: "Task marked complete", description: t.title });
+    });
+    setTpSelectedIds(new Set());
+  }, [tpSelectedIds, toProcess, patchTask, setPendingProcessing, toast]);
+
   // Pinned / Daily tasks
   const pinnedTasks = useMemo(() => {
     const pinnedMap = new Map(tasks.filter(t => t.is_pinned).map(t => [t.id, t]));
@@ -2331,11 +2384,92 @@ export default function Tasks() {
             <span className="text-xs text-rose-400 ml-1">— set client &amp; service to move to main list</span>
           </div>
 
+          {/* Bulk action bar */}
+          {tpSelectedIds.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 bg-rose-100 border-b border-rose-200">
+              <span className="text-xs font-semibold text-rose-700 shrink-0">
+                {tpSelectedIds.size} selected
+              </span>
+              <button
+                onClick={() => setTpSelectedIds(new Set())}
+                className="text-xs text-rose-500 hover:text-rose-700 underline shrink-0"
+              >
+                Clear
+              </button>
+              <div className="w-px h-4 bg-rose-300 mx-1 shrink-0" />
+              {/* Bulk client */}
+              <div className="flex items-center gap-1">
+                <select
+                  value={tpBulkClientId}
+                  onChange={e => setTpBulkClientId(e.target.value)}
+                  className="text-xs border border-rose-300 rounded px-1.5 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                >
+                  <option value="">Set client…</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={String(c.id)}>{c.contact_name?.trim() || c.name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleTpBulkClientApply}
+                  disabled={!tpBulkClientId}
+                  className="text-xs px-2 py-1 bg-rose-600 text-white rounded hover:bg-rose-700 disabled:opacity-40 transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+              {/* Bulk service */}
+              <div className="flex items-center gap-1">
+                <select
+                  value={tpBulkService}
+                  onChange={e => setTpBulkService(e.target.value)}
+                  className="text-xs border border-rose-300 rounded px-1.5 py-1 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-rose-400"
+                >
+                  <option value="">Set service…</option>
+                  {SERVICE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+                <button
+                  onClick={handleTpBulkServiceApply}
+                  disabled={!tpBulkService}
+                  className="text-xs px-2 py-1 bg-rose-600 text-white rounded hover:bg-rose-700 disabled:opacity-40 transition-colors"
+                >
+                  Apply
+                </button>
+              </div>
+              <div className="w-px h-4 bg-rose-300 mx-1 shrink-0" />
+              {/* Bulk process */}
+              <button
+                onClick={handleTpBulkProcess}
+                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white transition-colors"
+                title="Move selected tasks (with client + service set) to main list"
+              >
+                <Check className="w-3 h-3" />
+                Process {tpSelectedIds.size > 1 ? `(${toProcess.filter(t => tpSelectedIds.has(t.id) && t.client_id && t.service_type).length} ready)` : ""}
+              </button>
+              {/* Bulk complete */}
+              <button
+                onClick={handleTpBulkComplete}
+                className="flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 text-white transition-colors"
+              >
+                <CheckCheck className="w-3 h-3" />
+                Complete all
+              </button>
+            </div>
+          )}
+
           {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-rose-200 bg-rose-100/60">
+                  <th className="px-3 py-2 w-8">
+                    <input
+                      type="checkbox"
+                      checked={tpAllSelected}
+                      onChange={handleTpToggleAll}
+                      className="w-3.5 h-3.5 rounded accent-rose-600 cursor-pointer"
+                      title="Select all"
+                    />
+                  </th>
                   <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider min-w-[200px]">Task</th>
                   <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Client</th>
                   <th className="text-left px-3 py-2 text-[10px] font-semibold text-rose-700 uppercase tracking-wider">Service</th>
@@ -2351,8 +2485,19 @@ export default function Tasks() {
                   const tpIsThisTask = timerState.taskId === task.id;
                   const tpIsRunning = tpIsThisTask && timerState.status === "running";
                   const tpIsPaused = tpIsThisTask && timerState.status === "paused";
+                  const isSelected = tpSelectedIds.has(task.id);
                   return (
-                    <tr key={task.id} className="bg-white hover:bg-rose-50/40 transition-colors">
+                    <tr key={task.id} className={cn("transition-colors", isSelected ? "bg-rose-50" : "bg-white hover:bg-rose-50/40")}>
+                      {/* Checkbox */}
+                      <td className="px-3 py-2.5 w-8">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleTpToggle(task.id)}
+                          className="w-3.5 h-3.5 rounded accent-rose-600 cursor-pointer"
+                        />
+                      </td>
+
                       {/* Title */}
                       <td className="px-3 py-2.5 min-w-[200px]">
                         <EditableText
