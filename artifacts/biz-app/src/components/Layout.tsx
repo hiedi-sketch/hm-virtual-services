@@ -86,7 +86,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       >
         {/* Logo block */}
         <div
-          className="relative shrink-0 flex flex-col items-center pt-3 pb-2 px-2"
+          className="shrink-0 flex flex-col items-center pt-3 pb-2 px-2"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
         >
           <div
@@ -113,26 +113,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
               }}
             />
           </div>
-
-          {/* Collapse toggle */}
-          <button
-            onClick={() => setCollapsed((c) => !c)}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="absolute top-2 right-1.5 flex items-center justify-center w-6 h-6 rounded transition-colors"
-            style={{ color: "rgba(255,255,255,0.65)" }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.12)")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.backgroundColor = "transparent")
-            }
-          >
-            {collapsed ? (
-              <ChevronRight className="w-3.5 h-3.5" />
-            ) : (
-              <ChevronLeft className="w-3.5 h-3.5" />
-            )}
-          </button>
         </div>
 
         {/* Nav links */}
@@ -176,6 +156,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        {/* Collapse toggle */}
+        <div className="shrink-0 px-2 pb-1">
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "w-full flex items-center rounded-lg py-2 transition-colors",
+              collapsed ? "justify-center px-0" : "gap-2 px-3"
+            )}
+            style={{ color: "rgba(255,255,255,0.55)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)";
+              e.currentTarget.style.color = "rgba(255,255,255,0.9)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.color = "rgba(255,255,255,0.55)";
+            }}
+          >
+            {collapsed ? (
+              <ChevronRight style={{ width: 16, height: 16, flexShrink: 0 }} />
+            ) : (
+              <>
+                <ChevronLeft style={{ width: 16, height: 16, flexShrink: 0 }} />
+                <span className="text-xs font-medium">Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Bottom: notification bell + user email + logout */}
         <div
