@@ -363,6 +363,18 @@ function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: 
   return sortDir === "asc" ? <ArrowUp className="w-3.5 h-3.5 text-[#266b75]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#266b75]" />;
 }
 
+function ThBtn({ field, label, sortField, sortDir, onToggle }: {
+  field: SortField; label: string;
+  sortField: SortField; sortDir: SortDir;
+  onToggle: (field: SortField) => void;
+}) {
+  return (
+    <button onClick={() => onToggle(field)} className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors">
+      {label}<SortIcon field={field} sortField={sortField} sortDir={sortDir} />
+    </button>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ClientTransactionsSection({ client }: { client: any }) {
@@ -494,12 +506,6 @@ export function ClientTransactionsSection({ client }: { client: any }) {
   const displayed = showAll ? ordered : ordered.slice(0, PAGE_SIZE);
   const thCls = "px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap select-none";
 
-  const ThBtn = ({ field, label }: { field: SortField; label: string }) => (
-    <button onClick={() => toggleSort(field)} className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors">
-      {label}<SortIcon field={field} sortField={sortField} sortDir={sortDir} />
-    </button>
-  );
-
   return (
     <div className="mt-8">
       <div className="flex items-center gap-2 mb-4 flex-wrap">
@@ -598,13 +604,13 @@ export function ClientTransactionsSection({ client }: { client: any }) {
                 <table className="w-full text-left text-sm border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className={thCls}><ThBtn field="date" label="Date" /></th>
-                      <th className={thCls}><ThBtn field="name" label="Vendor / Name" /></th>
+                      <th className={thCls}><ThBtn field="date" label="Date" sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
+                      <th className={thCls}><ThBtn field="name" label="Vendor / Name" sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
                       <th className={thCls}>Type</th>
-                      <th className={thCls}><ThBtn field="amount" label="Amount" /></th>
-                      <th className={thCls}><ThBtn field="account" label="Category" /></th>
+                      <th className={thCls}><ThBtn field="amount" label="Amount" sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
+                      <th className={thCls}><ThBtn field="account" label="Category" sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
                       <th className={thCls}>Memo</th>
-                      <th className={thCls}><ThBtn field="status" label="Status" /></th>
+                      <th className={thCls}><ThBtn field="status" label="Status" sortField={sortField} sortDir={sortDir} onToggle={toggleSort} /></th>
                       <th className="px-4 py-2.5" />
                     </tr>
                   </thead>

@@ -292,6 +292,7 @@ export default function TransactionsPage() {
   const [txData, setTxData] = useState<TxData | null>(null);
   const [txMap, setTxMap] = useState<Map<number, Tx>>(new Map());
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [conflictInfo, setConflictInfo] = useState<{ file: File; existing: TxImport; message: string } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
@@ -308,6 +309,7 @@ export default function TransactionsPage() {
 
   const loadTransactions = useCallback(async (clientId: number) => {
     setLoading(true);
+    setLoadError(null);
     try {
       const data: TxData = await apiFetch(`/api/transactions?client_id=${clientId}`);
       setTxData(data);
@@ -315,6 +317,7 @@ export default function TransactionsPage() {
       data.transactions.forEach(t => m.set(t.id, t));
       setTxMap(m);
     } catch (err: any) {
+      setLoadError(err.message ?? "Failed to load transactions");
       toast({ title: "Failed to load transactions", description: err.message, variant: "destructive" });
     } finally {
       setLoading(false);
@@ -323,7 +326,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     if (selectedClientId) { loadTransactions(selectedClientId as number); setFilterStatus("all"); }
-    else { setTxData(null); setTxMap(new Map()); }
+    else { setTxData(null); setTxMap(new Map()); setLoadError(null); }
   }, [selectedClientId, loadTransactions]);
 
   // Optimistic update helper
@@ -576,7 +579,20 @@ export default function TransactionsPage() {
           Loading transactions…
         </div>
       )}
-      {selectedClientId && !loading && txData && allTx.length === 0 && (
+      {selectedClientId && !loading && loadError && (
+        <div className="bg-white rounded-2xl border border-red-200 shadow-sm px-6 py-10 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-300 mx-auto mb-3" />
+          <p className="text-slate-700 font-medium">Could not load transactions</p>
+          <p className="text-slate-400 text-sm mt-1 mb-4">{loadError}</p>
+          <button
+            onClick={() => loadTransactions(selectedClientId as number)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#266b75] text-white text-sm font-semibold hover:bg-[#1f545d] transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+      {selectedClientId && !loading && !loadError && txData && allTx.length === 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-16 text-center">
           <Upload className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-700 font-medium">No transactions imported yet</p>
