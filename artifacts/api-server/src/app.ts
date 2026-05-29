@@ -242,6 +242,15 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Disable HTTP caching for all API routes — responses are session-scoped and
+// must never be served from a proxy or browser cache.
+app.use("/api", (_req, res, next) => {
+  res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  next();
+});
+
 const PgSession = connectPgSimple(session);
 
 app.use(
