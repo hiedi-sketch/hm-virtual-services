@@ -79,18 +79,23 @@ cron.schedule("5 0 * * *", async () => {
 });
 
 // ── Daily task reset ──────────────────────────────────────────────────────
-// Runs at 12:01am every day. Resets all pinned (daily) tasks that are not
-// already "Not Started" back to "Not Started" so they appear fresh each day.
+// Runs at 12:01am every day. Resets pinned tasks that are in an active/interim
+// state back to "Not Started" with today's due date so they appear fresh and
+// are never shown as past-due. Explicitly excludes already-"Not Started" and
+// "Completed" tasks — completed pinned tasks are left alone until the user or
+// recurring-spawn logic handles them.
 cron.schedule("1 0 * * *", async () => {
   logger.info("Daily task reset: starting");
   try {
+    const today = new Date().toISOString().split("T")[0]!;
     const result = await db
       .update(tasksTable)
-      .set({ status: "Not Started" })
+      .set({ status: "Not Started", due_date: today })
       .where(
         and(
           eq(tasksTable.is_pinned, true),
           ne(tasksTable.status, "Not Started"),
+          ne(tasksTable.status, "Completed"),
         )
       )
       .returning({ id: tasksTable.id });

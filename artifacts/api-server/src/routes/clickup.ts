@@ -566,10 +566,10 @@ router.get("/clickup/sync/status", requireAuth, requireRole("admin"), async (_re
 
 router.post("/clickup/sync", requireAuth, requireRole("admin"), async (_req, res) => {
   try {
-    const [pushResult, pullResult] = await Promise.all([
-      runClickUpPush(),
-      runClickUpPull(),
-    ]);
+    // Push first so local statuses (including completions) reach ClickUp before
+    // we read back — prevents a race where the pull sees stale ClickUp data.
+    const pushResult = await runClickUpPush();
+    const pullResult = await runClickUpPull();
 
     const syncedAt = new Date().toISOString();
     await setSetting("clickup_last_sync_at", syncedAt);
