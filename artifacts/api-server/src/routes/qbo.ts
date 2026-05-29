@@ -148,7 +148,7 @@ router.get("/qbo/connect", requireAuth, requireRole("admin"), (_req, res) => {
     client_id: INTUIT_CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: "code",
-    scope: "com.intuit.quickbooks.accounting",
+    scope: "com.intuit.quickbooks.accounting openid profile email",
     state,
   });
 
@@ -251,6 +251,7 @@ async function fetchFirms(accessToken: string): Promise<any[]> {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
+      "Content-Type": "application/json",
     },
   });
 
