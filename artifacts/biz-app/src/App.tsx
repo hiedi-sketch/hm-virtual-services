@@ -33,6 +33,7 @@ import TimerPopout from "@/pages/timer-popout";
 import AsanaPage from "@/pages/asana";
 import QuickBooksPage from "@/pages/quickbooks";
 import TransactionsPage from "@/pages/transactions";
+import AppDevTracker from "@/pages/app-tracker";
 // Public-facing marketing pages
 import PublicHome from "@/pages/public-home";
 import PublicAbout from "@/pages/public-about";
@@ -132,6 +133,7 @@ function Router() {
         {user.role === "admin" && <Route path="/asana" component={AsanaPage} />}
         {user.role === "admin" && <Route path="/quickbooks" component={QuickBooksPage} />}
         {user.role === "admin" && <Route path="/transactions" component={TransactionsPage} />}
+        {user.role === "admin" && <Route path="/app-tracker" component={AppDevTracker} />}
         <Route path="/notifications" component={NotificationsPage} />
         <Route component={NotFound} />
       </Switch>
