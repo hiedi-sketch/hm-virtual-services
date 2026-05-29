@@ -25,7 +25,7 @@ const INTUIT_BASE          = "https://appcenter.intuit.com/connect/oauth2";
 const TOKEN_URL            = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 const REVOKE_URL           = "https://developer.api.intuit.com/v2/oauth2/tokens/revoke";
 const DISCOVERY_URL        = "https://accounts.platform.intuit.com/v1/openid_connect/userinfo";
-const FIRMS_URL            = "https://qboapp.api.intuit.com/v1/account/list/V2";
+const FIRMS_URL            = "https://appcenter.intuit.com/api/v1/Account/List";
 
 // ─── Settings helpers ─────────────────────────────────────────────────────────
 
@@ -260,12 +260,12 @@ async function fetchFirms(accessToken: string): Promise<any[]> {
   }
 
   const data = await res.json() as any;
-  // Response shape: { AccountList: [{ CompanyName, RealmId, ... }] }
-  const list: any[] = data?.AccountList ?? data?.accounts ?? data ?? [];
+  // Response shape: { qboAccountList: [{ name, realmId, country, ... }] }
+  const list: any[] = data?.qboAccountList ?? data?.AccountList ?? data?.accounts ?? [];
   return list.map((f: any) => ({
-    realmId: f.RealmId ?? f.realmId ?? f.Id ?? "",
-    companyName: f.CompanyName ?? f.companyName ?? f.name ?? "",
-    country: f.Country ?? f.country ?? "",
+    realmId: f.realmId ?? f.RealmId ?? f.Id ?? "",
+    companyName: f.name ?? f.CompanyName ?? f.companyName ?? "",
+    country: f.country ?? f.Country ?? "",
   }));
 }
 
