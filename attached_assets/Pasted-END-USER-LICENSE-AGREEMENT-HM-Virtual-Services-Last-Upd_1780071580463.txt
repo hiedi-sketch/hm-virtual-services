@@ -1,0 +1,79 @@
+END-USER LICENSE AGREEMENT — HM Virtual Services
+
+Last Updated: May 29, 2026
+1. Agreement
+This End-User License Agreement ("EULA") is a legal agreement between you ("User") and HM Virtual Services ("we," "us," "our") governing your use of the HM Virtual Services bookkeeping and client management platform ("the App"). By accessing or using the App, you agree to be bound by this EULA.
+2. License Grant
+We grant you a limited, non-exclusive, non-transferable, revocable license to access and use the App solely for your internal business purposes in connection with bookkeeping and virtual assistant services provided by HM Virtual Services.
+3. Restrictions
+You may not:
+
+Copy, modify, or distribute the App or its content
+Reverse engineer or attempt to extract the source code
+Use the App for any unlawful purpose
+Share your login credentials with any third party
+Access the App to build a competing product or service
+
+4. Ownership
+The App and all its content, features, and functionality are and will remain the exclusive property of HM Virtual Services. This EULA does not grant you any ownership rights.
+5. Your Data
+You retain ownership of all data you upload to the App, including transaction data, receipts, and documents. You grant HM Virtual Services a limited license to use that data solely to provide the services described.
+6. Third-Party Integrations
+The App integrates with third-party services including QuickBooks Online (Intuit), Square, Asana, and ClickUp. Your use of those services is governed by their respective terms and privacy policies. HM Virtual Services is not responsible for third-party service availability or conduct.
+7. Termination
+We may terminate or suspend your access to the App at any time with reasonable notice. Upon termination, your right to use the App ceases immediately. You may request deletion of your data within 90 days of termination.
+8. Disclaimer of Warranties
+The App is provided "as is" without warranties of any kind, express or implied. We do not warrant that the App will be error-free or uninterrupted.
+9. Limitation of Liability
+To the fullest extent permitted by law, HM Virtual Services shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of the App.
+10. Governing Law
+This EULA is governed by the laws of the State of Iowa, without regard to conflict of law principles.
+11. Contact
+HM Virtual Services
+hiedi@hmvirtualservices.com
+
+
+TERMS OF SERVICE — HM Virtual Services
+
+Last Updated: May 29, 2026
+1. Acceptance of Terms
+By accessing or using the HM Virtual Services platform ("the App"), you agree to these Terms of Service ("Terms"). If you do not agree, do not use the App.
+2. Description of Service
+HM Virtual Services provides a private bookkeeping and client management platform for use by clients of HM Virtual Services exclusively. The App is not a public service and access is by invitation only.
+3. Eligibility
+You must be at least 18 years of age and a current client of HM Virtual Services to use the App. Access is granted solely at our discretion.
+4. Account Responsibilities
+You are responsible for:
+
+Maintaining the confidentiality of your login credentials
+All activity that occurs under your account
+Notifying us immediately at hiedi@hmvirtualservices.com if you suspect unauthorized access
+Providing accurate information when using the App
+
+5. Acceptable Use
+You agree to use the App only for legitimate bookkeeping and business review purposes. You may not:
+
+Upload false, misleading, or fraudulent documents or transaction data
+Attempt to access another client's data
+Interfere with or disrupt the App or its servers
+Use the App in violation of any applicable law
+
+6. Transaction Data and Receipts
+You are responsible for the accuracy of any transaction data, receipts, or documents you upload to the App. HM Virtual Services processes this information solely to provide bookkeeping services and is not responsible for errors in data you provide.
+7. Payment for Services
+Fees for HM Virtual Services bookkeeping and virtual assistant services are invoiced separately and processed through Square. Use of the App does not itself constitute a billable service unless otherwise agreed in your client contract.
+8. Confidentiality
+All financial data, transaction information, and business documents shared through the App are treated as confidential. HM Virtual Services will not disclose your information to third parties except as described in our Privacy Policy.
+9. Availability
+We will make reasonable efforts to keep the App available and operational. We do not guarantee uninterrupted access and are not liable for downtime caused by maintenance, technical issues, or third-party service outages.
+10. Modifications to Terms
+We reserve the right to update these Terms at any time. We will notify active users of material changes via email. Continued use of the App after changes constitutes acceptance of the updated Terms.
+11. Termination
+We may suspend or terminate your access to the App at any time for violation of these Terms or at the end of your client engagement with HM Virtual Services.
+12. Dispute Resolution
+Any disputes arising from these Terms or your use of the App shall be resolved through good faith negotiation. If unresolved, disputes shall be subject to the jurisdiction of the courts of the State of Iowa.
+13. Governing Law
+These Terms are governed by the laws of the State of Iowa.
+14. Contact
+HM Virtual Services
+hiedi@hmvirtualservices.com

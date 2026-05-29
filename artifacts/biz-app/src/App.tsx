@@ -41,6 +41,8 @@ import PublicContact from "@/pages/public-contact";
 import PublicBookkeeping from "@/pages/public-bookkeeping";
 import PublicAdministration from "@/pages/public-administration";
 import PrivacyPolicy from "@/pages/public-privacy-policy";
+import Eula from "@/pages/public-eula";
+import Terms from "@/pages/public-terms";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -74,6 +76,8 @@ function Router() {
   if (location === "/estimate-response") return <EstimateResponsePage />;
   if (location.startsWith("/pay/")) return <PayPage />;
   if (location === "/privacy-policy") return <PrivacyPolicy />;
+  if (location === "/eula") return <Eula />;
+  if (location === "/terms") return <Terms />;
 
   // Public marketing pages — accessible without login
   if (location === "/" && !user) return <PublicHome />;
