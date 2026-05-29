@@ -151,6 +151,7 @@ router.get("/qbo/connect", requireAuth, requireRole("admin"), (_req, res) => {
     response_type: "code",
     scope: "com.intuit.quickbooks.accounting openid profile email",
     state,
+    prompt: "login",  // always show the Intuit login screen so a different account can be chosen
   });
 
   res.redirect(`${INTUIT_BASE}?${params.toString()}`);
