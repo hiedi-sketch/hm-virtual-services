@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   RefreshCw, BookOpen, AlertCircle, ChevronDown, ChevronUp,
-  ArrowUpDown, ArrowUp, ArrowDown,
+  ArrowUpDown, ArrowUp, ArrowDown, Flag, X, Send, MessageSquare,
+  Mail, CheckCircle2,
 } from "lucide-react";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,16 +22,25 @@ type Tx = {
   amount: number | null;
   is_uncategorized: boolean;
   status: string;
+  flagged_question: string | null;
+  question_sent_at: string | null;
+  routed_to_channel: string | null;
 };
 
 type StatusKey = "uncategorized" | "needs_info" | "awaiting_response" | "responded" | "resolved";
 
 const STATUS_CONFIG: Record<StatusKey, { label: string; badge: string; dot: string }> = {
-  uncategorized:     { label: "Uncategorized",    badge: "bg-red-50 text-red-700 border-red-200",          dot: "bg-red-500" },
-  needs_info:        { label: "Needs Info",        badge: "bg-amber-50 text-amber-700 border-amber-200",    dot: "bg-amber-500" },
-  awaiting_response: { label: "Awaiting Response", badge: "bg-blue-50 text-blue-700 border-blue-200",       dot: "bg-blue-500" },
-  responded:         { label: "Responded",         badge: "bg-purple-50 text-purple-700 border-purple-200", dot: "bg-purple-500" },
+  uncategorized:     { label: "Uncategorized",    badge: "bg-red-50 text-red-700 border-red-200",             dot: "bg-red-500" },
+  needs_info:        { label: "Needs Info",        badge: "bg-amber-50 text-amber-700 border-amber-200",       dot: "bg-amber-500" },
+  awaiting_response: { label: "Awaiting Response", badge: "bg-blue-50 text-blue-700 border-blue-200",          dot: "bg-blue-500" },
+  responded:         { label: "Responded",         badge: "bg-purple-50 text-purple-700 border-purple-200",    dot: "bg-purple-500" },
   resolved:          { label: "Resolved",          badge: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  dashboard: "Dashboard",
+  asana: "Asana",
+  clickup: "ClickUp",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,6 +71,12 @@ function fmtSyncTime(iso: string) {
   } catch { return iso; }
 }
 
+function fmtAmount(amount: number | null | undefined): string {
+  if (amount == null) return "—";
+  const neg = amount < 0;
+  return neg ? `-$${Math.abs(amount).toFixed(2)}` : `$${amount.toFixed(2)}`;
+}
+
 function AmountCell({ amount }: { amount: number | null | undefined }) {
   if (amount == null) return <span className="text-slate-300">—</span>;
   const neg = amount < 0;
@@ -81,10 +97,295 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Flag Modal ───────────────────────────────────────────────────────────────
+
+function FlagModal({
+  tx, onClose, onSave,
+}: {
+  tx: Tx;
+  onClose: () => void;
+  onSave: (question: string) => Promise<void>;
+}) {
+  const [question, setQuestion] = useState(tx.flagged_question ?? "");
+  const [saving, setSaving] = useState(false);
+  const alreadySent = tx.status === "awaiting_response" || tx.status === "responded" || tx.status === "resolved";
+
+  const handleSave = async () => {
+    if (!question.trim()) return;
+    setSaving(true);
+    try { await onSave(question.trim()); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Flag className="w-4 h-4 text-amber-500" />
+            <span className="font-semibold text-slate-900">Flag for Client</span>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Transaction summary */}
+        <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 space-y-1">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900 truncate">{tx.name || "Unknown Payee"}</p>
+              <p className="text-xs text-slate-500">{fmtDateShort(tx.date)} · {tx.transaction_type || "—"}</p>
+            </div>
+            <AmountCell amount={tx.amount} />
+          </div>
+          {tx.account && (
+            <p className="text-xs text-slate-500"><span className="font-medium">Category:</span> {tx.account}</p>
+          )}
+          {tx.memo && (
+            <p className="text-xs text-slate-500"><span className="font-medium">Memo:</span> {tx.memo}</p>
+          )}
+        </div>
+
+        <div className="px-5 py-4 space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              Question for Client
+            </label>
+            {alreadySent ? (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
+                {tx.flagged_question || <span className="text-slate-400 italic">No question recorded</span>}
+              </div>
+            ) : (
+              <textarea
+                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 resize-none"
+                rows={4}
+                value={question}
+                onChange={e => setQuestion(e.target.value)}
+                placeholder="What would you like to ask the client about this transaction?"
+                autoFocus
+              />
+            )}
+          </div>
+
+          {alreadySent && tx.question_sent_at && (
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-2.5 flex items-center gap-2">
+              <MessageSquare className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <p className="text-xs text-blue-700">
+                Sent {fmtSyncTime(tx.question_sent_at)} via{" "}
+                <span className="font-semibold">{CHANNEL_LABELS[tx.routed_to_channel ?? ""] ?? "Dashboard"}</span>
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-5 pb-5 flex gap-2">
+          {!alreadySent ? (
+            <>
+              <button
+                onClick={handleSave}
+                disabled={!question.trim() || saving}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors disabled:opacity-40"
+              >
+                <Flag className="w-4 h-4" />
+                {saving ? "Saving…" : tx.flagged_question ? "Update Question" : "Flag & Add Question"}
+              </button>
+              <button onClick={onClose} className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
+              Close
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Send Summary Panel ───────────────────────────────────────────────────────
+
+function SendPanel({
+  client,
+  flaggedTxs,
+  onClose,
+  onSend,
+}: {
+  client: any;
+  flaggedTxs: Tx[];
+  onClose: () => void;
+  onSend: (note: string) => Promise<void>;
+}) {
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const clientName = client.contact_name || client.name;
+  const channel = client.preferred_channel ?? "dashboard";
+
+  const handleSend = async () => {
+    setSending(true);
+    try { await onSend(note.trim()); }
+    finally { setSending(false); }
+  };
+
+  const emailPreview = [
+    note.trim() ? `${note.trim()}\n` : null,
+    `Hi ${clientName},`,
+    "",
+    `We have a few questions about ${flaggedTxs.length} transaction${flaggedTxs.length === 1 ? "" : "s"} from your QuickBooks account. Please review and reply at your earliest convenience.`,
+    "",
+    "─────────────────────────────────────────",
+    ...flaggedTxs.flatMap((tx, i) => [
+      `${i + 1}. ${tx.name || "Unknown Payee"} — ${fmtAmount(tx.amount)} on ${fmtDateShort(tx.date)}`,
+      tx.account ? `   Category: ${tx.account}` : "   Category: Uncategorized",
+      tx.flagged_question ? `   Question: ${tx.flagged_question}` : "   Question: (no question added)",
+      "",
+    ]),
+    "─────────────────────────────────────────",
+    "",
+    "Thank you,",
+    "HM Virtual Services",
+  ].filter(l => l !== null).join("\n");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
+      <div className="bg-white w-full sm:rounded-2xl sm:shadow-xl sm:max-w-2xl max-h-[95dvh] flex flex-col">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2">
+            <Send className="w-4 h-4 text-[#266b75]" />
+            <span className="font-bold text-slate-900">Send to Client</span>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
+          {/* Summary banner */}
+          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
+            <p className="text-sm font-medium text-amber-800">
+              You are about to send{" "}
+              <span className="font-bold">{flaggedTxs.length} flagged {flaggedTxs.length === 1 ? "transaction" : "transactions"}</span>{" "}
+              to <span className="font-bold">{clientName}</span>.
+            </p>
+          </div>
+
+          {/* Channel */}
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Delivery channel:</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#266b75]/10 text-[#266b75] text-xs font-semibold border border-[#266b75]/20">
+              {CHANNEL_LABELS[channel] ?? channel}
+            </span>
+            <span className="text-xs text-slate-400">· actual delivery in Phase 4</span>
+          </div>
+
+          {/* Flagged transactions list */}
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Flagged Transactions</p>
+            <div className="space-y-2">
+              {flaggedTxs.map((tx, i) => (
+                <div key={tx.id} className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 space-y-1.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className="text-xs font-bold text-slate-400 shrink-0">{i + 1}</span>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900 truncate text-sm">{tx.name || "Unknown Payee"}</p>
+                        <p className="text-xs text-slate-500">{fmtDateShort(tx.date)}{tx.transaction_type ? ` · ${tx.transaction_type}` : ""}</p>
+                      </div>
+                    </div>
+                    <AmountCell amount={tx.amount} />
+                  </div>
+                  {tx.account && (
+                    <p className="text-xs text-slate-500 pl-5"><span className="font-medium">Category:</span> {tx.account}</p>
+                  )}
+                  {tx.flagged_question ? (
+                    <div className="ml-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
+                      <MessageSquare className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-amber-800">{tx.flagged_question}</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-red-500 pl-5 italic flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> No question added — consider adding one before sending.
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Optional general note */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+              General Note <span className="font-normal text-slate-400 normal-case">(optional — appears at top of email)</span>
+            </label>
+            <textarea
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 resize-none"
+              rows={2}
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="e.g. Hi! Hope you're doing well. We had a few questions from your last month's bookkeeping…"
+            />
+          </div>
+
+          {/* Email preview */}
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Email Preview</p>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-200">
+                <Mail className="w-4 h-4 text-slate-400" />
+                <div className="text-xs text-slate-500">
+                  <span className="font-medium">To:</span> {clientName}{client.email ? ` <${client.email}>` : ""}
+                </div>
+              </div>
+              <pre className="text-xs text-slate-600 font-sans whitespace-pre-wrap leading-relaxed">
+                {emailPreview}
+              </pre>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-100 flex gap-3 shrink-0">
+          <button
+            onClick={handleSend}
+            disabled={sending}
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-60"
+            style={{ background: "#266b75" }}
+          >
+            {sending ? (
+              <><RefreshCw className="w-4 h-4 animate-spin" /> Sending…</>
+            ) : (
+              <><Send className="w-4 h-4" /> Send {flaggedTxs.length} {flaggedTxs.length === 1 ? "Transaction" : "Transactions"} to Client</>
+            )}
+          </button>
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Sort icon ────────────────────────────────────────────────────────────────
+
 type SortField = "date" | "name" | "amount" | "account" | "status";
 type SortDir = "asc" | "desc";
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
+  if (sortField !== field) return <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />;
+  return sortDir === "asc"
+    ? <ArrowUp className="w-3.5 h-3.5 text-[#266b75]" />
+    : <ArrowDown className="w-3.5 h-3.5 text-[#266b75]" />;
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ClientTransactionsSection({ client }: { client: any }) {
   const { toast } = useToast();
@@ -108,6 +409,8 @@ export function ClientTransactionsSection({ client }: { client: any }) {
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [showAll, setShowAll] = useState(false);
+  const [flaggingTx, setFlaggingTx] = useState<Tx | null>(null);
+  const [sendPanelOpen, setSendPanelOpen] = useState(false);
 
   const loadTransactions = useCallback(async () => {
     if (!hasQbo) return;
@@ -148,6 +451,52 @@ export function ClientTransactionsSection({ client }: { client: any }) {
     }
   };
 
+  // Flag a transaction: set status=needs_info + flagged_question
+  const handleFlagSave = async (question: string) => {
+    if (!flaggingTx) return;
+    const res = await fetch(`/api/transactions/${flaggingTx.id}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ flagged_question: question, status: "needs_info" }),
+    });
+    if (!res.ok) {
+      toast({ title: "Failed to flag transaction", variant: "destructive" });
+      return;
+    }
+    const updated = await res.json();
+    setTransactions(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
+    setFlaggingTx(null);
+    toast({ title: "Transaction flagged" });
+  };
+
+  // Send all needs_info transactions
+  const handleSend = async (note: string) => {
+    const flagged = transactions.filter(t => t.status === "needs_info");
+    if (flagged.length === 0) return;
+
+    const res = await fetch("/api/transactions/batch-send", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: client.id, transaction_ids: flagged.map(t => t.id), note }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Send failed");
+
+    setTransactions(prev =>
+      prev.map(t => {
+        const upd = (data.updated as Tx[]).find(u => u.id === t.id);
+        return upd ? { ...t, ...upd } : t;
+      })
+    );
+    setSendPanelOpen(false);
+    toast({
+      title: `Sent to ${client.contact_name || client.name}`,
+      description: `${flagged.length} ${flagged.length === 1 ? "transaction" : "transactions"} marked as Awaiting Response.`,
+    });
+  };
+
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -155,13 +504,6 @@ export function ClientTransactionsSection({ client }: { client: any }) {
       setSortField(field);
       setSortDir(field === "amount" ? "desc" : "asc");
     }
-  };
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />;
-    return sortDir === "asc"
-      ? <ArrowUp className="w-3.5 h-3.5 text-[#266b75]" />
-      : <ArrowDown className="w-3.5 h-3.5 text-[#266b75]" />;
   };
 
   const sorted = [...transactions].sort((a, b) => {
@@ -176,27 +518,29 @@ export function ClientTransactionsSection({ client }: { client: any }) {
     return 0;
   });
 
-  // Uncategorized always surfaces first
-  const uncategorized = sorted.filter(t => t.is_uncategorized || t.status === "uncategorized");
-  const categorized   = sorted.filter(t => !t.is_uncategorized && t.status !== "uncategorized");
-  const ordered = [...uncategorized, ...categorized];
+  const uncategorized  = sorted.filter(t => t.is_uncategorized || t.status === "uncategorized");
+  const categorized    = sorted.filter(t => !t.is_uncategorized && t.status !== "uncategorized");
+  const ordered        = [...uncategorized, ...categorized];
+  const needsInfoTxs   = transactions.filter(t => t.status === "needs_info");
 
   const PAGE_SIZE = 50;
   const displayed = showAll ? ordered : ordered.slice(0, PAGE_SIZE);
 
   const thCls = "px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap select-none";
-  const thBtn = (field: SortField) => (
+
+  const ThBtn = ({ field, label }: { field: SortField; label: string }) => (
     <button
       onClick={() => toggleSort(field)}
       className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors"
     >
-      {field === "date" ? "Date" : field === "name" ? "Vendor / Name" : field === "amount" ? "Amount" : field === "account" ? "Category" : "Status"}
-      <SortIcon field={field} />
+      {label}
+      <SortIcon field={field} sortField={sortField} sortDir={sortDir} />
     </button>
   );
 
   return (
     <div className="mt-8">
+      {/* Section header */}
       <div className="flex items-center gap-2 mb-4">
         <BookOpen className="w-5 h-5 text-slate-500" />
         <h2 className="text-lg font-semibold text-slate-900">Transactions</h2>
@@ -222,11 +566,11 @@ export function ClientTransactionsSection({ client }: { client: any }) {
         </div>
       ) : (
         <>
-          {/* Sync controls */}
+          {/* Sync controls + Send button */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-4">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <label className="font-medium text-slate-500 text-xs uppercase tracking-wider">From</label>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">From</label>
                 <input
                   type="date"
                   value={startDate}
@@ -234,8 +578,8 @@ export function ClientTransactionsSection({ client }: { client: any }) {
                   className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30"
                 />
               </div>
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <label className="font-medium text-slate-500 text-xs uppercase tracking-wider">To</label>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">To</label>
                 <input
                   type="date"
                   value={endDate}
@@ -243,15 +587,29 @@ export function ClientTransactionsSection({ client }: { client: any }) {
                   className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30"
                 />
               </div>
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="ml-auto flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-60"
-                style={{ background: "#266b75" }}
-              >
-                <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
-                {syncing ? "Syncing…" : "Sync from QuickBooks"}
-              </button>
+              <div className="ml-auto flex items-center gap-2">
+                {needsInfoTxs.length > 0 && (
+                  <button
+                    onClick={() => setSendPanelOpen(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border-2 border-[#266b75] text-[#266b75] hover:bg-[#266b75]/5 transition-colors"
+                  >
+                    <Send className="w-4 h-4" />
+                    Send to Client
+                    <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#266b75] text-white text-[11px] font-bold leading-none">
+                      {needsInfoTxs.length}
+                    </span>
+                  </button>
+                )}
+                <button
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-60"
+                  style={{ background: "#266b75" }}
+                >
+                  <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
+                  {syncing ? "Syncing…" : "Sync from QuickBooks"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -268,65 +626,116 @@ export function ClientTransactionsSection({ client }: { client: any }) {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              {/* Banners */}
               {uncategorized.length > 0 && (
                 <div className="px-4 py-2 bg-red-50 border-b border-red-100 flex items-center gap-2">
-                  <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                  <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
                   <span className="text-xs font-semibold text-red-700">
                     {uncategorized.length} uncategorized {uncategorized.length === 1 ? "transaction" : "transactions"} — review needed
                   </span>
                 </div>
               )}
+              {needsInfoTxs.length > 0 && (
+                <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
+                  <Flag className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span className="text-xs font-semibold text-amber-700">
+                    {needsInfoTxs.length} {needsInfoTxs.length === 1 ? "transaction" : "transactions"} flagged — ready to send to client
+                  </span>
+                  <button
+                    onClick={() => setSendPanelOpen(true)}
+                    className="ml-auto text-xs font-semibold text-amber-700 underline hover:no-underline"
+                  >
+                    Send now →
+                  </button>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className={thCls}>{thBtn("date")}</th>
-                      <th className={thCls}>{thBtn("name")}</th>
+                      <th className={thCls}><ThBtn field="date" label="Date" /></th>
+                      <th className={thCls}><ThBtn field="name" label="Vendor / Name" /></th>
                       <th className={thCls}>Type</th>
-                      <th className={thCls}>{thBtn("amount")}</th>
-                      <th className={thCls}>{thBtn("account")}</th>
+                      <th className={thCls}><ThBtn field="amount" label="Amount" /></th>
+                      <th className={thCls}><ThBtn field="account" label="Category" /></th>
                       <th className={thCls}>Memo</th>
-                      <th className={thCls}>{thBtn("status")}</th>
+                      <th className={thCls}><ThBtn field="status" label="Status" /></th>
+                      <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {displayed.map(tx => (
-                      <tr
-                        key={tx.id}
-                        className={cn(
-                          "hover:bg-slate-50/50 transition-colors",
-                          (tx.is_uncategorized || tx.status === "uncategorized") && "bg-red-50/40"
-                        )}
-                      >
-                        <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 text-xs">
-                          {fmtDateShort(tx.date)}
-                        </td>
-                        <td className="px-4 py-2.5 max-w-[180px]">
-                          <span className="font-medium text-slate-800 truncate block">{tx.name || <span className="text-slate-300">—</span>}</span>
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                          {tx.transaction_type || <span className="text-slate-300">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
-                          <AmountCell amount={tx.amount} />
-                        </td>
-                        <td className="px-4 py-2.5 max-w-[200px]">
-                          {tx.account ? (
-                            <span className="text-xs text-slate-600 truncate block">{tx.account}</span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium">
-                              <AlertCircle className="w-3 h-3" /> Uncategorized
-                            </span>
+                    {displayed.map(tx => {
+                      const isNeedsInfo = tx.status === "needs_info";
+                      const isUncatRow = tx.is_uncategorized || tx.status === "uncategorized";
+                      return (
+                        <tr
+                          key={tx.id}
+                          className={cn(
+                            "hover:bg-slate-50/50 transition-colors",
+                            isUncatRow && "bg-red-50/40",
+                            isNeedsInfo && "bg-amber-50/30"
                           )}
-                        </td>
-                        <td className="px-4 py-2.5 max-w-[200px]">
-                          <span className="text-xs text-slate-400 truncate block">{tx.memo || "—"}</span>
-                        </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
-                          <StatusBadge status={tx.status} />
-                        </td>
-                      </tr>
-                    ))}
+                        >
+                          <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 text-xs">
+                            {fmtDateShort(tx.date)}
+                          </td>
+                          <td className="px-4 py-2.5 max-w-[160px]">
+                            <span className="font-medium text-slate-800 truncate block">{tx.name || <span className="text-slate-300">—</span>}</span>
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">
+                            {tx.transaction_type || <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap">
+                            <AmountCell amount={tx.amount} />
+                          </td>
+                          <td className="px-4 py-2.5 max-w-[180px]">
+                            {tx.account ? (
+                              <span className="text-xs text-slate-600 truncate block">{tx.account}</span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium">
+                                <AlertCircle className="w-3 h-3" /> Uncategorized
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2.5 max-w-[180px]">
+                            <span className="text-xs text-slate-400 truncate block">{tx.memo || "—"}</span>
+                          </td>
+                          <td className="px-4 py-2.5 whitespace-nowrap">
+                            <div className="flex flex-col gap-1">
+                              <StatusBadge status={tx.status} />
+                              {isNeedsInfo && tx.flagged_question && (
+                                <p className="text-[10px] text-amber-600 italic truncate max-w-[140px]">"{tx.flagged_question}"</p>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                            {tx.status !== "awaiting_response" && tx.status !== "responded" && tx.status !== "resolved" ? (
+                              <button
+                                onClick={() => setFlaggingTx(tx)}
+                                className={cn(
+                                  "inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg transition-colors",
+                                  isNeedsInfo
+                                    ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                                    : "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                                )}
+                              >
+                                <Flag className="w-3 h-3" />
+                                {isNeedsInfo ? "Edit" : "Flag"}
+                              </button>
+                            ) : tx.status === "awaiting_response" ? (
+                              <button
+                                onClick={() => setFlaggingTx(tx)}
+                                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-blue-500 hover:bg-blue-50 transition-colors"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                View
+                              </button>
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -348,6 +757,25 @@ export function ClientTransactionsSection({ client }: { client: any }) {
             </div>
           )}
         </>
+      )}
+
+      {/* Flag modal */}
+      {flaggingTx && (
+        <FlagModal
+          tx={flaggingTx}
+          onClose={() => setFlaggingTx(null)}
+          onSave={handleFlagSave}
+        />
+      )}
+
+      {/* Send panel */}
+      {sendPanelOpen && (
+        <SendPanel
+          client={client}
+          flaggedTxs={needsInfoTxs}
+          onClose={() => setSendPanelOpen(false)}
+          onSend={handleSend}
+        />
       )}
     </div>
   );

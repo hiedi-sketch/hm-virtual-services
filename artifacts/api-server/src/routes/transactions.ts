@@ -132,6 +132,43 @@ router.patch("/api/transactions/:id", requireAdmin, async (req, res) => {
   res.json(updated);
 });
 
+// POST /api/transactions/batch-send
+// Marks all listed "needs_info" transactions as "awaiting_response" and stamps send metadata.
+router.post("/api/transactions/batch-send", requireAdmin, async (req, res) => {
+  const { client_id, transaction_ids } = req.body as {
+    client_id?: number;
+    transaction_ids?: number[];
+  };
+
+  if (!client_id || !Array.isArray(transaction_ids) || transaction_ids.length === 0) {
+    return res.status(400).json({ error: "client_id and transaction_ids required" });
+  }
+
+  const [client] = await db
+    .select({ preferred_channel: clientsTable.preferred_channel })
+    .from(clientsTable)
+    .where(eq(clientsTable.id, client_id));
+
+  const channel = client?.preferred_channel ?? "dashboard";
+  const sentAt  = new Date().toISOString();
+
+  const updated = [];
+  for (const txId of transaction_ids) {
+    const [row] = await db
+      .update(transactionsTable)
+      .set({
+        status:            "awaiting_response",
+        question_sent_at:  sentAt,
+        routed_to_channel: channel,
+      })
+      .where(and(eq(transactionsTable.id, txId), eq(transactionsTable.client_id, client_id)))
+      .returning();
+    if (row) updated.push(row);
+  }
+
+  res.json({ ok: true, updated, channel, sentAt });
+});
+
 // POST /api/transactions/upload
 router.post("/api/transactions/upload", requireAdmin, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
