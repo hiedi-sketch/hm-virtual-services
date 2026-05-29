@@ -215,10 +215,14 @@ router.get("/qbo/callback", async (req, res) => {
     }
   } catch { /* best effort */ }
 
-  // Build & cache firm list — try QBOA account list first, fall back to direct company info
+  // Build & cache firm list — try QBOA account list first, fall back to direct company info.
+  // Merges with any previously cached firms so multiple connected accounts accumulate.
   try {
     const firms = await fetchFirms(tokens.access_token, realmId ?? null);
-    await setSetting("qbo_firms_cache", JSON.stringify(firms));
+    if (firms.length > 0) {
+      const merged = await mergeFirmsCache(firms);
+      await setSetting("qbo_firms_cache", JSON.stringify(merged));
+    }
   } catch { /* best effort */ }
 
   res.redirect("/quickbooks?qbo=connected");
@@ -246,10 +250,26 @@ router.post("/qbo/disconnect", requireAuth, requireRole("admin"), async (_req, r
   await deleteSetting("qbo_tokens");
   await deleteSetting("qbo_connected_name");
   await deleteSetting("qbo_connected_email");
-  await deleteSetting("qbo_firms_cache");
+  // qbo_firms_cache and qbo_realm_id are intentionally kept so previously
+  // connected companies remain visible in the dropdown after reconnecting
+  // with a different account.
 
   res.json({ ok: true });
 });
+
+// ─── Firms cache helpers ──────────────────────────────────────────────────────
+
+/** Merge newly fetched firms into the existing cache, deduplicating by realmId. */
+async function mergeFirmsCache(newFirms: any[]): Promise<any[]> {
+  const existing: any[] = await getSetting("qbo_firms_cache")
+    .then(raw => (raw ? JSON.parse(raw) : []))
+    .catch(() => []);
+
+  const map = new Map<string, any>();
+  for (const f of existing) if (f.realmId) map.set(f.realmId, f);
+  for (const f of newFirms) if (f.realmId) map.set(f.realmId, f); // new data wins
+  return Array.from(map.values());
+}
 
 // ─── Firms fetcher ────────────────────────────────────────────────────────────
 
@@ -340,8 +360,9 @@ router.post("/qbo/refresh-firms", requireAuth, requireRole("admin"), async (_req
   try {
     const storedRealmId = await getSetting("qbo_realm_id");
     const firms = await fetchFirms(token, storedRealmId);
-    await setSetting("qbo_firms_cache", JSON.stringify(firms));
-    res.json({ firms, count: firms.length });
+    const merged = await mergeFirmsCache(firms);
+    await setSetting("qbo_firms_cache", JSON.stringify(merged));
+    res.json({ firms: merged, count: merged.length });
   } catch (err: any) {
     logger.error({ err }, "Failed to refresh QBO firms");
     res.status(502).json({ error: err.message ?? "Failed to fetch firms from QuickBooks" });
