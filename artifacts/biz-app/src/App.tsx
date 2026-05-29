@@ -138,7 +138,13 @@ function Router() {
         {user.role === "admin" && <Route path="/services" component={Services} />}
         {user.role === "admin" && <Route path="/asana" component={AsanaPage} />}
         {user.role === "admin" && <Route path="/quickbooks" component={QuickBooksPage} />}
-        {user.role === "admin" && <Route path="/transactions" component={TransactionsPage} />}
+        {user.role === "admin" && (
+          <Route path="/transactions">
+            <ErrorBoundary>
+              <TransactionsPage />
+            </ErrorBoundary>
+          </Route>
+        )}
         {user.role === "admin" && <Route path="/app-tracker" component={AppDevTracker} />}
         <Route path="/notifications" component={NotificationsPage} />
         <Route component={NotFound} />

@@ -305,13 +305,17 @@ export default function TransactionsPage() {
   const clientChannel = (selectedClient as any)?.preferred_channel ?? "dashboard";
 
   // Build live tx list from txMap (keeps optimistic updates)
-  const allTx: Tx[] = txData ? txData.transactions.map(t => txMap.get(t.id) ?? t) : [];
+  // Use optional chaining defensively in case the API returns an unexpected shape
+  const allTx: Tx[] = (txData?.transactions ?? []).map(t => txMap.get(t.id) ?? t);
 
   const loadTransactions = useCallback(async (clientId: number) => {
     setLoading(true);
     setLoadError(null);
     try {
       const data: TxData = await apiFetch(`/api/transactions?client_id=${clientId}`);
+      if (!Array.isArray(data?.transactions) || !Array.isArray(data?.imports)) {
+        throw new Error("Unexpected response from server — please try again.");
+      }
       setTxData(data);
       const m = new Map<number, Tx>();
       data.transactions.forEach(t => m.set(t.id, t));
