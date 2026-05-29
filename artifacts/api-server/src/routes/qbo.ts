@@ -376,16 +376,20 @@ router.patch("/qbo/clients/:id/realm", requireAuth, requireRole("admin"), async 
   const id = Number(req.params.id);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid client id" }); return; }
 
-  const { qbo_realm_id, preferred_channel, channel_config } = req.body as {
-    qbo_realm_id?: string | null;
+  const { qbo_realm_ids, preferred_channel, channel_config } = req.body as {
+    qbo_realm_ids?: string[] | null;
     preferred_channel?: string | null;
     channel_config?: string | null;
   };
 
+  // Derive primary realm_id from first item in array (backward compat)
+  const primaryRealmId = (qbo_realm_ids && qbo_realm_ids.length > 0) ? qbo_realm_ids[0] : null;
+
   const [updated] = await db
     .update(clientsTable)
     .set({
-      qbo_realm_id: qbo_realm_id ?? null,
+      qbo_realm_id: primaryRealmId,
+      qbo_realm_ids: qbo_realm_ids ? JSON.stringify(qbo_realm_ids) : null,
       preferred_channel: (preferred_channel as any) ?? null,
       channel_config: channel_config ?? null,
     })
@@ -397,7 +401,7 @@ router.patch("/qbo/clients/:id/realm", requireAuth, requireRole("admin"), async 
     return;
   }
 
-  res.json({ ok: true, qbo_realm_id: updated.qbo_realm_id, preferred_channel: updated.preferred_channel, channel_config: updated.channel_config });
+  res.json({ ok: true, qbo_realm_ids: updated.qbo_realm_ids, qbo_realm_id: updated.qbo_realm_id, preferred_channel: updated.preferred_channel, channel_config: updated.channel_config });
 });
 
 export default router;

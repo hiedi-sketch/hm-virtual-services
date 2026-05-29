@@ -38,8 +38,10 @@ export const clientsTable = pgTable("clients", {
   billing_method: text("billing_method"),
   /** Internal notes about the client */
   notes: text("notes"),
-  /** QuickBooks Online Realm ID (company ID) from QBOA firm list */
+  /** QuickBooks Online Realm ID (company ID) from QBOA firm list — kept for backward compat; prefer qbo_realm_ids */
   qbo_realm_id: text("qbo_realm_id"),
+  /** QuickBooks Online Realm IDs — JSON array of strings, supports multiple companies per client */
+  qbo_realm_ids: text("qbo_realm_ids"),
   /** Preferred task channel: dashboard | asana | clickup */
   preferred_channel: text("preferred_channel", { enum: ["dashboard", "asana", "clickup"] }),
   /** Channel config JSON: e.g. Asana project GID or ClickUp list ID */
