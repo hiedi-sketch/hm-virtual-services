@@ -11,7 +11,7 @@ import {
   Plus, X, User, Sparkles, LayoutDashboard, Send,
   KeyRound, ShieldCheck, Paperclip, DollarSign,
   MessageSquare, ChevronRight, Package, Eye, EyeOff,
-  Check, CreditCard, ThumbsDown,
+  Check, CreditCard, ThumbsDown, BookOpen, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentsTab } from "@/components/DocumentsTab";
@@ -89,7 +89,7 @@ const serviceSchema = z.object({
   message: z.string().min(10, "Please include some detail (at least 10 characters)"),
 });
 
-type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents" | "messages" | "time";
+type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents" | "messages" | "time" | "transactions";
 
 // ================================================================
 export default function ClientPortal() {
@@ -102,11 +102,17 @@ export default function ClientPortal() {
   const [declineEstimateId, setDeclineEstimateId] = useState<number | null>(null);
 
   // On mount: read ?onboard=ID or ?decline=ID from URL and auto-open the modal
+  // Also auto-open transactions tab if navigating from email link (/client/transactions or ?tab=transactions)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const onboard = params.get("onboard");
     const decline = params.get("decline");
-    if (onboard) {
+    const tabParam = params.get("tab");
+
+    if (window.location.pathname.includes("/client/transactions") || tabParam === "transactions") {
+      setActiveTab("transactions");
+      window.history.replaceState({}, "", "/portal");
+    } else if (onboard) {
       const id = Number(onboard);
       if (!isNaN(id) && id > 0) {
         setOnboardEstimateId(id);
@@ -187,6 +193,14 @@ export default function ClientPortal() {
   });
   const unreadMessages = messages.filter((m: any) => !m.is_read && m.sender_role !== "client").length;
 
+  const { data: flaggedTxsData } = useQuery<{ transactions: any[] }>({
+    queryKey: ["my-flagged-transactions"],
+    queryFn: () => fetch("/api/transactions/my-flagged", { credentials: "include" }).then(r => r.ok ? r.json() : { transactions: [] }),
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  });
+  const awaitingTxCount = flaggedTxsData?.transactions?.length ?? 0;
+
   const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "overview", label: "Overview", icon: <LayoutDashboard className="w-4 h-4" /> },
     { key: "tasks", label: "Your Tasks", icon: <CheckSquare className="w-4 h-4" />, badge: pendingTasks.length || undefined },
@@ -195,6 +209,7 @@ export default function ClientPortal() {
     { key: "services", label: "Your Services", icon: <Sparkles className="w-4 h-4" /> },
     { key: "messages", label: "Messages", icon: <MessageSquare className="w-4 h-4" />, badge: unreadMessages || undefined },
     { key: "documents", label: "Documents", icon: <Paperclip className="w-4 h-4" /> },
+    { key: "transactions", label: "Transactions", icon: <BookOpen className="w-4 h-4" />, badge: awaitingTxCount || undefined },
     { key: "profile", label: "My Profile", icon: <User className="w-4 h-4" /> },
   ];
 
@@ -303,6 +318,9 @@ export default function ClientPortal() {
         )}
         {activeTab === "documents" && (
           <DocumentsTab />
+        )}
+        {activeTab === "transactions" && (
+          <TransactionsPortalTab clientId={clientId} />
         )}
         {activeTab === "profile" && (
           <ProfileTab user={user} refreshUser={refreshUser} toast={toast} />
@@ -1954,6 +1972,186 @@ function SummaryCard({ label, value, color }: { label: string; value: string; co
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
       <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">{label}</p>
       <p className={`text-xl font-bold ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+// ================================================================
+// TRANSACTIONS PORTAL TAB
+// ================================================================
+type FlaggedTx = {
+  id: number;
+  date: string | null;
+  transaction_type: string | null;
+  name: string | null;
+  amount: number | null;
+  account: string | null;
+  flagged_question: string | null;
+  question_sent_at: string | null;
+  status: string;
+  client_response: string | null;
+  response_received_at: string | null;
+};
+
+function fmtTxDate(d: string | null) {
+  if (!d) return "—";
+  try {
+    return new Date(d.includes("T") ? d : d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch { return d; }
+}
+function fmtTxAmount(n: number | null) {
+  if (n == null) return "—";
+  const neg = n < 0;
+  return neg ? `-$${Math.abs(n).toFixed(2)}` : `$${n.toFixed(2)}`;
+}
+
+function TransactionsPortalTab({ clientId }: { clientId?: number }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [responses, setResponses] = useState<Record<number, string>>({});
+  const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
+  const [submitted, setSubmitted] = useState<Record<number, boolean>>({});
+
+  const { data, isLoading, refetch } = useQuery<{ transactions: FlaggedTx[] }>({
+    queryKey: ["my-flagged-transactions"],
+    queryFn: () => fetch("/api/transactions/my-flagged", { credentials: "include" }).then(r => r.ok ? r.json() : { transactions: [] }),
+    staleTime: 30 * 1000,
+  });
+
+  const transactions = data?.transactions ?? [];
+
+  const handleSubmit = async (tx: FlaggedTx) => {
+    const response = responses[tx.id]?.trim();
+    if (!response) { toast({ title: "Please enter a response before submitting", variant: "destructive" }); return; }
+    setSubmitting(prev => ({ ...prev, [tx.id]: true }));
+    try {
+      const res = await fetch(`/api/transactions/${tx.id}/respond`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ response }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error ?? "Failed to submit response");
+      }
+      setSubmitted(prev => ({ ...prev, [tx.id]: true }));
+      setResponses(prev => ({ ...prev, [tx.id]: "" }));
+      toast({ title: "Response submitted — thank you!" });
+      queryClient.invalidateQueries({ queryKey: ["my-flagged-transactions"] });
+    } catch (err: any) {
+      toast({ title: "Failed to submit", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmitting(prev => ({ ...prev, [tx.id]: false }));
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="py-16 text-center text-slate-400 text-sm">
+        <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-slate-300" />
+        Loading your transactions…
+      </div>
+    );
+  }
+
+  if (transactions.length === 0) {
+    return (
+      <div className="py-16 text-center">
+        <div className="w-16 h-16 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-900 mb-1">All caught up!</h3>
+        <p className="text-sm text-slate-400">You have no transactions waiting for your response right now.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-2">
+        <BookOpen className="w-5 h-5 text-slate-500" />
+        <h2 className="text-lg font-semibold text-slate-900">Transaction Review</h2>
+        <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+          {transactions.length} pending
+        </span>
+      </div>
+      <p className="text-sm text-slate-500 mb-4">
+        Your bookkeeper has a question about the following transactions. Please review and respond below.
+      </p>
+
+      {transactions.map(tx => {
+        const isDone = submitted[tx.id];
+        return (
+          <div key={tx.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isDone ? "border-emerald-200" : "border-slate-200"}`}>
+            {/* Transaction header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900 truncate">{tx.name || "Unknown Payee"}</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {fmtTxDate(tx.date)}{tx.transaction_type ? ` · ${tx.transaction_type}` : ""}
+                  {tx.account ? ` · ${tx.account}` : ""}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`font-bold text-base tabular-nums ${(tx.amount ?? 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                  {fmtTxAmount(tx.amount)}
+                </p>
+              </div>
+            </div>
+
+            {/* Question bubble */}
+            <div className="px-5 py-4 bg-[#266b75]/5 border-b border-[#266b75]/10">
+              <div className="flex items-start gap-3">
+                <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-white text-xs font-bold" style={{ background: "#266b75" }}>H</div>
+                <div className="bg-white rounded-2xl rounded-tl-sm border border-[#266b75]/20 px-4 py-3 shadow-sm flex-1">
+                  <p className="text-xs font-semibold mb-1" style={{ color: "#266b75" }}>Hiedi · HM Virtual Services</p>
+                  <p className="text-sm text-slate-800 leading-relaxed">
+                    {tx.flagged_question || "Could you please provide information about this transaction?"}
+                  </p>
+                  {tx.question_sent_at && (
+                    <p className="text-[10px] text-slate-400 mt-1.5">
+                      {new Date(tx.question_sent_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Response area */}
+            <div className="px-5 py-4">
+              {isDone ? (
+                <div className="flex items-center gap-2 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <p className="text-sm font-medium">Response submitted — thank you!</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Your Response</label>
+                  <textarea
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 resize-none"
+                    rows={3}
+                    value={responses[tx.id] ?? ""}
+                    onChange={e => setResponses(prev => ({ ...prev, [tx.id]: e.target.value }))}
+                    placeholder="Type your answer here…"
+                  />
+                  <button
+                    onClick={() => handleSubmit(tx)}
+                    disabled={!responses[tx.id]?.trim() || submitting[tx.id]}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
+                    style={{ background: "#266b75" }}
+                  >
+                    {submitting[tx.id] ? (
+                      <><RefreshCw className="w-4 h-4 animate-spin" /> Submitting…</>
+                    ) : (
+                      <><Send className="w-4 h-4" /> Submit Response</>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

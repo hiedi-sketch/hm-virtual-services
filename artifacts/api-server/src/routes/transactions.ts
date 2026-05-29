@@ -3,8 +3,9 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import { db } from "@workspace/db";
 import { transactionsTable, transactionImportsTable, clientsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
-import { requireAdmin } from "../middleware/auth";
+import { eq, and, inArray } from "drizzle-orm";
+import { requireAdmin, requireAuth } from "../middleware/auth";
+import { sendMail, template } from "../lib/mailer";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -133,11 +134,12 @@ router.patch("/api/transactions/:id", requireAdmin, async (req, res) => {
 });
 
 // POST /api/transactions/batch-send
-// Marks all listed "needs_info" transactions as "awaiting_response" and stamps send metadata.
+// Marks all listed "needs_info" transactions as "awaiting_response", stamps send metadata, and emails the client.
 router.post("/api/transactions/batch-send", requireAdmin, async (req, res) => {
-  const { client_id, transaction_ids } = req.body as {
+  const { client_id, transaction_ids, note } = req.body as {
     client_id?: number;
     transaction_ids?: number[];
+    note?: string;
   };
 
   if (!client_id || !Array.isArray(transaction_ids) || transaction_ids.length === 0) {
@@ -145,13 +147,30 @@ router.post("/api/transactions/batch-send", requireAdmin, async (req, res) => {
   }
 
   const [client] = await db
-    .select({ preferred_channel: clientsTable.preferred_channel })
+    .select({
+      preferred_channel: clientsTable.preferred_channel,
+      email:             clientsTable.email,
+      name:              clientsTable.name,
+      contact_name:      clientsTable.contact_name,
+    })
     .from(clientsTable)
     .where(eq(clientsTable.id, client_id));
 
-  const channel = client?.preferred_channel ?? "dashboard";
-  const sentAt  = new Date().toISOString();
+  const channel   = client?.preferred_channel ?? "dashboard";
+  const sentAt    = new Date().toISOString();
+  const now       = new Date();
+  const monthYear = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
+  // Fetch the transaction rows so we can include them in the email
+  const txRows = await db
+    .select()
+    .from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.client_id, client_id),
+      inArray(transactionsTable.id, transaction_ids),
+    ));
+
+  // Update all flagged transactions
   const updated = [];
   for (const txId of transaction_ids) {
     const [row] = await db
@@ -166,7 +185,131 @@ router.post("/api/transactions/batch-send", requireAdmin, async (req, res) => {
     if (row) updated.push(row);
   }
 
-  res.json({ ok: true, updated, channel, sentAt });
+  // ── Send email ────────────────────────────────────────────────────────────
+  let emailSent  = false;
+  let emailError = "";
+
+  if (client?.email) {
+    const firstName  = (client.contact_name ?? client.name ?? "").split(" ")[0] || "there";
+    const count      = txRows.length;
+    const portalLink = "https://hmvirtualservices.com/client/transactions";
+
+    const txListHtml = txRows.map(tx => {
+      const amt = tx.amount != null
+        ? `$${Math.abs(tx.amount).toFixed(2)}${tx.amount < 0 ? " (credit)" : ""}`
+        : "—";
+      const date = tx.date
+        ? new Date(tx.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+        : "—";
+      return `
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:14px;color:#475569;">${date}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:14px;color:#1e293b;font-weight:500;">${tx.name ?? "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:14px;color:#1e293b;font-weight:600;text-align:right;">${amt}</td>
+        </tr>`;
+    }).join("");
+
+    const noteHtml = note
+      ? `<p style="margin:0 0 20px;padding:14px 16px;background:#f1f5f9;border-left:3px solid #266b75;border-radius:4px;color:#475569;font-size:14px;">${note}</p>`
+      : "";
+
+    const body = `
+      ${noteHtml}
+      <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#1e293b;">Hi ${firstName},</p>
+      <p style="margin:0 0 20px;color:#475569;font-size:15px;line-height:1.6;">
+        We have <strong>${count} transaction${count === 1 ? "" : "s"}</strong> from your QuickBooks account that need your attention.
+        Please log in to your client portal to review and respond.
+      </p>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:24px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;border-bottom:1px solid #e2e8f0;">Date</th>
+            <th style="padding:10px 12px;text-align:left;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;border-bottom:1px solid #e2e8f0;">Vendor / Description</th>
+            <th style="padding:10px 12px;text-align:right;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#64748b;border-bottom:1px solid #e2e8f0;">Amount</th>
+          </tr>
+        </thead>
+        <tbody>${txListHtml}</tbody>
+      </table>
+      <p style="margin:0 0 24px;color:#64748b;font-size:14px;">
+        Log in to see our specific questions about each transaction and submit your responses.
+      </p>
+      <p style="margin:0 0 32px;text-align:center;">
+        <a href="${portalLink}" style="display:inline-block;background:#266b75;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;padding:14px 32px;border-radius:8px;letter-spacing:-0.2px;">
+          Review Transactions →
+        </a>
+      </p>
+      <p style="margin:0;color:#64748b;font-size:14px;line-height:1.6;">
+        Thank you,<br>
+        <strong style="color:#1e293b;">Hiedi</strong><br>
+        HM Virtual Services
+      </p>`;
+
+    try {
+      await sendMail(
+        client.email,
+        `Action Needed: Transaction Review — ${monthYear}`,
+        template(body),
+      );
+      emailSent = true;
+    } catch (err: any) {
+      emailError = err?.message ?? "Email send failed";
+    }
+  }
+
+  res.json({ ok: true, updated, channel, sentAt, emailSent, emailAddress: client?.email ?? null, emailError: emailError || undefined });
+});
+
+// GET /api/transactions/my-flagged
+// Client-facing: returns this client's "awaiting_response" transactions
+router.get("/api/transactions/my-flagged", requireAuth, async (req, res) => {
+  const user = req.session.user!;
+  if (user.role !== "client" || !user.client_id) {
+    return res.status(403).json({ error: "Client access only" });
+  }
+
+  const txs = await db
+    .select()
+    .from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.client_id, user.client_id),
+      eq(transactionsTable.status, "awaiting_response"),
+    ))
+    .orderBy(transactionsTable.date, transactionsTable.id);
+
+  res.json({ transactions: txs });
+});
+
+// PATCH /api/transactions/:id/respond
+// Client-facing: submit a response to a flagged transaction
+router.patch("/api/transactions/:id/respond", requireAuth, async (req, res) => {
+  const user = req.session.user!;
+  if (user.role !== "client" || !user.client_id) {
+    return res.status(403).json({ error: "Client access only" });
+  }
+
+  const txId = Number(req.params.id);
+  if (isNaN(txId)) return res.status(400).json({ error: "Invalid id" });
+
+  const { response } = req.body as { response?: string };
+  if (!response?.trim()) return res.status(400).json({ error: "Response text required" });
+
+  const [updated] = await db
+    .update(transactionsTable)
+    .set({
+      client_response:      response.trim(),
+      response_received_at: new Date().toISOString(),
+      status:               "responded",
+    })
+    .where(and(
+      eq(transactionsTable.id, txId),
+      eq(transactionsTable.client_id, user.client_id),
+      eq(transactionsTable.status, "awaiting_response"),
+    ))
+    .returning();
+
+  if (!updated) return res.status(404).json({ error: "Transaction not found or already responded" });
+
+  res.json(updated);
 });
 
 // POST /api/transactions/upload

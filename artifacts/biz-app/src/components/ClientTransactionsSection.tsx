@@ -3,7 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   RefreshCw, BookOpen, AlertCircle, ChevronDown, ChevronUp,
   ArrowUpDown, ArrowUp, ArrowDown, Flag, X, Send, MessageSquare,
-  Mail, CheckCircle2,
+  Mail, CheckCircle2, CheckCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +25,8 @@ type Tx = {
   flagged_question: string | null;
   question_sent_at: string | null;
   routed_to_channel: string | null;
+  client_response: string | null;
+  response_received_at: string | null;
 };
 
 type StatusKey = "uncategorized" | "needs_info" | "awaiting_response" | "responded" | "resolved";
@@ -45,15 +47,11 @@ const CHANNEL_LABELS: Record<string, string> = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
+function todayStr() { return new Date().toISOString().slice(0, 10); }
 function firstOfMonthStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
-
 function fmtDateShort(d: string | null | undefined) {
   if (!d) return "—";
   try {
@@ -61,7 +59,6 @@ function fmtDateShort(d: string | null | undefined) {
     return p.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   } catch { return d; }
 }
-
 function fmtSyncTime(iso: string) {
   try {
     return new Date(iso).toLocaleString("en-US", {
@@ -70,7 +67,6 @@ function fmtSyncTime(iso: string) {
     });
   } catch { return iso; }
 }
-
 function fmtAmount(amount: number | null | undefined): string {
   if (amount == null) return "—";
   const neg = amount < 0;
@@ -82,7 +78,7 @@ function AmountCell({ amount }: { amount: number | null | undefined }) {
   const neg = amount < 0;
   return (
     <span className={cn("font-mono text-sm font-semibold tabular-nums", neg ? "text-red-600" : "text-emerald-700")}>
-      {neg ? `-$${Math.abs(amount).toFixed(2)}` : `$${amount.toFixed(2)}`}
+      {fmtAmount(amount)}
     </span>
   );
 }
@@ -99,12 +95,8 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── Flag Modal ───────────────────────────────────────────────────────────────
 
-function FlagModal({
-  tx, onClose, onSave,
-}: {
-  tx: Tx;
-  onClose: () => void;
-  onSave: (question: string) => Promise<void>;
+function FlagModal({ tx, onClose, onSave }: {
+  tx: Tx; onClose: () => void; onSave: (question: string) => Promise<void>;
 }) {
   const [question, setQuestion] = useState(tx.flagged_question ?? "");
   const [saving, setSaving] = useState(false);
@@ -113,8 +105,7 @@ function FlagModal({
   const handleSave = async () => {
     if (!question.trim()) return;
     setSaving(true);
-    try { await onSave(question.trim()); }
-    finally { setSaving(false); }
+    try { await onSave(question.trim()); } finally { setSaving(false); }
   };
 
   return (
@@ -129,8 +120,6 @@ function FlagModal({
             <X className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Transaction summary */}
         <div className="px-5 py-3 bg-slate-50 border-b border-slate-100 space-y-1">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -139,19 +128,11 @@ function FlagModal({
             </div>
             <AmountCell amount={tx.amount} />
           </div>
-          {tx.account && (
-            <p className="text-xs text-slate-500"><span className="font-medium">Category:</span> {tx.account}</p>
-          )}
-          {tx.memo && (
-            <p className="text-xs text-slate-500"><span className="font-medium">Memo:</span> {tx.memo}</p>
-          )}
+          {tx.account && <p className="text-xs text-slate-500"><span className="font-medium">Category:</span> {tx.account}</p>}
         </div>
-
         <div className="px-5 py-4 space-y-3">
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-              Question for Client
-            </label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Question for Client</label>
             {alreadySent ? (
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
                 {tx.flagged_question || <span className="text-slate-400 italic">No question recorded</span>}
@@ -159,45 +140,44 @@ function FlagModal({
             ) : (
               <textarea
                 className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 resize-none"
-                rows={4}
-                value={question}
-                onChange={e => setQuestion(e.target.value)}
-                placeholder="What would you like to ask the client about this transaction?"
-                autoFocus
+                rows={4} value={question} onChange={e => setQuestion(e.target.value)}
+                placeholder="What would you like to ask the client about this transaction?" autoFocus
               />
             )}
           </div>
-
           {alreadySent && tx.question_sent_at && (
             <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-2.5 flex items-center gap-2">
               <MessageSquare className="w-3.5 h-3.5 text-blue-500 shrink-0" />
               <p className="text-xs text-blue-700">
-                Sent {fmtSyncTime(tx.question_sent_at)} via{" "}
-                <span className="font-semibold">{CHANNEL_LABELS[tx.routed_to_channel ?? ""] ?? "Dashboard"}</span>
+                Sent {fmtSyncTime(tx.question_sent_at)} via <span className="font-semibold">{CHANNEL_LABELS[tx.routed_to_channel ?? ""] ?? "Dashboard"}</span>
               </p>
             </div>
           )}
+          {/* Show client response if responded */}
+          {tx.status === "responded" && tx.client_response && (
+            <div className="rounded-xl border border-purple-100 bg-purple-50 px-4 py-2.5 space-y-1">
+              <p className="text-xs font-semibold text-purple-700">Client Response</p>
+              <p className="text-sm text-purple-900">{tx.client_response}</p>
+              {tx.response_received_at && (
+                <p className="text-[10px] text-purple-500">{fmtSyncTime(tx.response_received_at)}</p>
+              )}
+            </div>
+          )}
         </div>
-
         <div className="px-5 pb-5 flex gap-2">
           {!alreadySent ? (
             <>
               <button
-                onClick={handleSave}
-                disabled={!question.trim() || saving}
+                onClick={handleSave} disabled={!question.trim() || saving}
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors disabled:opacity-40"
               >
                 <Flag className="w-4 h-4" />
                 {saving ? "Saving…" : tx.flagged_question ? "Update Question" : "Flag & Add Question"}
               </button>
-              <button onClick={onClose} className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-                Cancel
-              </button>
+              <button onClick={onClose} className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
             </>
           ) : (
-            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors">
-              Close
-            </button>
+            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600 hover:bg-slate-50 transition-colors">Close</button>
           )}
         </div>
       </div>
@@ -207,51 +187,74 @@ function FlagModal({
 
 // ─── Send Summary Panel ───────────────────────────────────────────────────────
 
-function SendPanel({
-  client,
-  flaggedTxs,
-  onClose,
-  onSend,
-}: {
-  client: any;
-  flaggedTxs: Tx[];
-  onClose: () => void;
-  onSend: (note: string) => Promise<void>;
+function SendPanel({ client, flaggedTxs, onClose, onSend }: {
+  client: any; flaggedTxs: Tx[]; onClose: () => void;
+  onSend: (note: string) => Promise<{ emailSent: boolean; emailAddress: string | null }>;
 }) {
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<{ emailSent: boolean; emailAddress: string | null } | null>(null);
   const clientName = client.contact_name || client.name;
   const channel = client.preferred_channel ?? "dashboard";
 
   const handleSend = async () => {
     setSending(true);
-    try { await onSend(note.trim()); }
-    finally { setSending(false); }
+    try {
+      const result = await onSend(note.trim());
+      setSent(result);
+    } finally {
+      setSending(false);
+    }
   };
 
   const emailPreview = [
     note.trim() ? `${note.trim()}\n` : null,
-    `Hi ${clientName},`,
+    `Hi ${clientName.split(" ")[0]},`,
     "",
-    `We have a few questions about ${flaggedTxs.length} transaction${flaggedTxs.length === 1 ? "" : "s"} from your QuickBooks account. Please review and reply at your earliest convenience.`,
+    `We have ${flaggedTxs.length} transaction${flaggedTxs.length === 1 ? "" : "s"} that need your attention.`,
     "",
-    "─────────────────────────────────────────",
-    ...flaggedTxs.flatMap((tx, i) => [
-      `${i + 1}. ${tx.name || "Unknown Payee"} — ${fmtAmount(tx.amount)} on ${fmtDateShort(tx.date)}`,
-      tx.account ? `   Category: ${tx.account}` : "   Category: Uncategorized",
-      tx.flagged_question ? `   Question: ${tx.flagged_question}` : "   Question: (no question added)",
-      "",
-    ]),
-    "─────────────────────────────────────────",
+    ...flaggedTxs.map((tx, i) =>
+      `${i + 1}. ${tx.name || "Unknown"} — ${fmtAmount(tx.amount)} on ${fmtDateShort(tx.date)}`
+    ),
+    "",
+    "[ Review Transactions → ]",
     "",
     "Thank you,",
-    "HM Virtual Services",
+    "Hiedi — HM Virtual Services",
   ].filter(l => l !== null).join("\n");
+
+  if (sent) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
+        <div className="bg-white w-full sm:rounded-2xl sm:shadow-xl sm:max-w-md p-8 text-center">
+          <div className="w-14 h-14 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
+            <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-900 mb-1">Sent successfully</h3>
+          <p className="text-slate-500 text-sm mb-1">
+            {flaggedTxs.length} {flaggedTxs.length === 1 ? "transaction" : "transactions"} marked as Awaiting Response.
+          </p>
+          {sent.emailSent && sent.emailAddress && (
+            <p className="text-sm font-medium text-emerald-700 mb-6">
+              Email sent to {sent.emailAddress}
+            </p>
+          )}
+          {!sent.emailSent && (
+            <p className="text-xs text-slate-400 mb-6">Email delivery not configured — transactions updated.</p>
+          )}
+          <button
+            onClick={onClose}
+            className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors"
+            style={{ background: "#266b75" }}
+          >Done</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
       <div className="bg-white w-full sm:rounded-2xl sm:shadow-xl sm:max-w-2xl max-h-[95dvh] flex flex-col">
-        {/* Header */}
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
             <Send className="w-4 h-4 text-[#266b75]" />
@@ -263,7 +266,6 @@ function SendPanel({
         </div>
 
         <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
-          {/* Summary banner */}
           <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
             <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
             <p className="text-sm font-medium text-amber-800">
@@ -273,16 +275,16 @@ function SendPanel({
             </p>
           </div>
 
-          {/* Channel */}
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-slate-500 text-xs font-semibold uppercase tracking-wider">Delivery channel:</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Delivery:</span>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#266b75]/10 text-[#266b75] text-xs font-semibold border border-[#266b75]/20">
+              <Mail className="w-3 h-3" /> Email to {client.email || "client"}
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold border border-slate-200">
               {CHANNEL_LABELS[channel] ?? channel}
             </span>
-            <span className="text-xs text-slate-400">· actual delivery in Phase 4</span>
           </div>
 
-          {/* Flagged transactions list */}
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Flagged Transactions</p>
             <div className="space-y-2">
@@ -298,9 +300,6 @@ function SendPanel({
                     </div>
                     <AmountCell amount={tx.amount} />
                   </div>
-                  {tx.account && (
-                    <p className="text-xs text-slate-500 pl-5"><span className="font-medium">Category:</span> {tx.account}</p>
-                  )}
                   {tx.flagged_question ? (
                     <div className="ml-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
                       <MessageSquare className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
@@ -308,7 +307,7 @@ function SendPanel({
                     </div>
                   ) : (
                     <p className="text-xs text-red-500 pl-5 italic flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" /> No question added — consider adding one before sending.
+                      <AlertCircle className="w-3 h-3" /> No question added
                     </p>
                   )}
                 </div>
@@ -316,73 +315,52 @@ function SendPanel({
             </div>
           </div>
 
-          {/* Optional general note */}
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
               General Note <span className="font-normal text-slate-400 normal-case">(optional — appears at top of email)</span>
             </label>
             <textarea
               className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 resize-none"
-              rows={2}
-              value={note}
-              onChange={e => setNote(e.target.value)}
-              placeholder="e.g. Hi! Hope you're doing well. We had a few questions from your last month's bookkeeping…"
+              rows={2} value={note} onChange={e => setNote(e.target.value)}
+              placeholder="e.g. Hi! We had a few questions from last month's bookkeeping…"
             />
           </div>
 
-          {/* Email preview */}
           <div>
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Email Preview</p>
             <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
               <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-200">
                 <Mail className="w-4 h-4 text-slate-400" />
-                <div className="text-xs text-slate-500">
-                  <span className="font-medium">To:</span> {clientName}{client.email ? ` <${client.email}>` : ""}
-                </div>
+                <span className="text-xs text-slate-500"><span className="font-medium">To:</span> {clientName}{client.email ? ` <${client.email}>` : ""}</span>
               </div>
-              <pre className="text-xs text-slate-600 font-sans whitespace-pre-wrap leading-relaxed">
-                {emailPreview}
-              </pre>
+              <pre className="text-xs text-slate-600 font-sans whitespace-pre-wrap leading-relaxed">{emailPreview}</pre>
             </div>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="px-6 py-4 border-t border-slate-100 flex gap-3 shrink-0">
           <button
-            onClick={handleSend}
-            disabled={sending}
+            onClick={handleSend} disabled={sending}
             className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-60"
             style={{ background: "#266b75" }}
           >
-            {sending ? (
-              <><RefreshCw className="w-4 h-4 animate-spin" /> Sending…</>
-            ) : (
-              <><Send className="w-4 h-4" /> Send {flaggedTxs.length} {flaggedTxs.length === 1 ? "Transaction" : "Transactions"} to Client</>
-            )}
+            {sending ? <><RefreshCw className="w-4 h-4 animate-spin" /> Sending…</> : <><Send className="w-4 h-4" /> Send {flaggedTxs.length} {flaggedTxs.length === 1 ? "Transaction" : "Transactions"} to Client</>}
           </button>
-          <button
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            Cancel
-          </button>
+          <button onClick={onClose} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Sort icon ────────────────────────────────────────────────────────────────
+// ─── Sort ─────────────────────────────────────────────────────────────────────
 
 type SortField = "date" | "name" | "amount" | "account" | "status";
 type SortDir = "asc" | "desc";
 
 function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
   if (sortField !== field) return <ArrowUpDown className="w-3.5 h-3.5 text-slate-300" />;
-  return sortDir === "asc"
-    ? <ArrowUp className="w-3.5 h-3.5 text-[#266b75]" />
-    : <ArrowDown className="w-3.5 h-3.5 text-[#266b75]" />;
+  return sortDir === "asc" ? <ArrowUp className="w-3.5 h-3.5 text-[#266b75]" /> : <ArrowDown className="w-3.5 h-3.5 text-[#266b75]" />;
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -391,13 +369,10 @@ export function ClientTransactionsSection({ client }: { client: any }) {
   const { toast } = useToast();
 
   const realmIds: string[] = (() => {
-    if (client?.qbo_realm_ids) {
-      try { return JSON.parse(client.qbo_realm_ids); } catch {}
-    }
+    if (client?.qbo_realm_ids) { try { return JSON.parse(client.qbo_realm_ids); } catch {} }
     if (client?.qbo_realm_id) return [client.qbo_realm_id];
     return [];
   })();
-
   const hasQbo = realmIds.length > 0;
 
   const [startDate, setStartDate] = useState(firstOfMonthStr());
@@ -421,22 +396,17 @@ export function ClientTransactionsSection({ client }: { client: any }) {
       const data = await res.json();
       setTransactions(data.transactions ?? []);
       setLastSync(data.lastSync ?? null);
-    } catch {}
-    finally { setLoading(false); }
+    } catch {} finally { setLoading(false); }
   }, [client.id, hasQbo]);
 
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
 
   const handleSync = async () => {
-    if (!startDate || !endDate) {
-      toast({ title: "Please select a date range", variant: "destructive" });
-      return;
-    }
+    if (!startDate || !endDate) { toast({ title: "Please select a date range", variant: "destructive" }); return; }
     setSyncing(true);
     try {
       const res = await fetch(`/api/qbo/clients/${client.id}/sync-transactions`, {
-        method: "POST",
-        credentials: "include",
+        method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ startDate, endDate }),
       });
@@ -446,38 +416,41 @@ export function ClientTransactionsSection({ client }: { client: any }) {
       await loadTransactions();
     } catch (err: any) {
       toast({ title: "Sync failed", description: err.message, variant: "destructive" });
-    } finally {
-      setSyncing(false);
-    }
+    } finally { setSyncing(false); }
   };
 
-  // Flag a transaction: set status=needs_info + flagged_question
   const handleFlagSave = async (question: string) => {
     if (!flaggingTx) return;
     const res = await fetch(`/api/transactions/${flaggingTx.id}`, {
-      method: "PATCH",
-      credentials: "include",
+      method: "PATCH", credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ flagged_question: question, status: "needs_info" }),
     });
-    if (!res.ok) {
-      toast({ title: "Failed to flag transaction", variant: "destructive" });
-      return;
-    }
+    if (!res.ok) { toast({ title: "Failed to flag transaction", variant: "destructive" }); return; }
     const updated = await res.json();
     setTransactions(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
     setFlaggingTx(null);
     toast({ title: "Transaction flagged" });
   };
 
-  // Send all needs_info transactions
-  const handleSend = async (note: string) => {
+  const handleMarkResolved = async (txId: number) => {
+    const res = await fetch(`/api/transactions/${txId}`, {
+      method: "PATCH", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resolve: true }),
+    });
+    if (!res.ok) { toast({ title: "Failed to resolve", variant: "destructive" }); return; }
+    const updated = await res.json();
+    setTransactions(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t));
+    toast({ title: "Marked as resolved" });
+  };
+
+  const handleSend = async (note: string): Promise<{ emailSent: boolean; emailAddress: string | null }> => {
     const flagged = transactions.filter(t => t.status === "needs_info");
-    if (flagged.length === 0) return;
+    if (flagged.length === 0) return { emailSent: false, emailAddress: null };
 
     const res = await fetch("/api/transactions/batch-send", {
-      method: "POST",
-      credentials: "include",
+      method: "POST", credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ client_id: client.id, transaction_ids: flagged.map(t => t.id), note }),
     });
@@ -490,20 +463,13 @@ export function ClientTransactionsSection({ client }: { client: any }) {
         return upd ? { ...t, ...upd } : t;
       })
     );
-    setSendPanelOpen(false);
-    toast({
-      title: `Sent to ${client.contact_name || client.name}`,
-      description: `${flagged.length} ${flagged.length === 1 ? "transaction" : "transactions"} marked as Awaiting Response.`,
-    });
+
+    return { emailSent: data.emailSent ?? false, emailAddress: data.emailAddress ?? null };
   };
 
   const toggleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDir(d => d === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDir(field === "amount" ? "desc" : "asc");
-    }
+    if (sortField === field) { setSortDir(d => d === "asc" ? "desc" : "asc"); }
+    else { setSortField(field); setSortDir(field === "amount" ? "desc" : "asc"); }
   };
 
   const sorted = [...transactions].sort((a, b) => {
@@ -518,40 +484,34 @@ export function ClientTransactionsSection({ client }: { client: any }) {
     return 0;
   });
 
-  const uncategorized  = sorted.filter(t => t.is_uncategorized || t.status === "uncategorized");
-  const categorized    = sorted.filter(t => !t.is_uncategorized && t.status !== "uncategorized");
-  const ordered        = [...uncategorized, ...categorized];
-  const needsInfoTxs   = transactions.filter(t => t.status === "needs_info");
+  const uncategorized = sorted.filter(t => t.is_uncategorized || t.status === "uncategorized");
+  const categorized   = sorted.filter(t => !t.is_uncategorized && t.status !== "uncategorized");
+  const ordered       = [...uncategorized, ...categorized];
+  const needsInfoTxs  = transactions.filter(t => t.status === "needs_info");
+  const respondedTxs  = transactions.filter(t => t.status === "responded");
 
   const PAGE_SIZE = 50;
   const displayed = showAll ? ordered : ordered.slice(0, PAGE_SIZE);
-
   const thCls = "px-4 py-2.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap select-none";
 
   const ThBtn = ({ field, label }: { field: SortField; label: string }) => (
-    <button
-      onClick={() => toggleSort(field)}
-      className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors"
-    >
-      {label}
-      <SortIcon field={field} sortField={sortField} sortDir={sortDir} />
+    <button onClick={() => toggleSort(field)} className="inline-flex items-center gap-1 hover:text-slate-700 transition-colors">
+      {label}<SortIcon field={field} sortField={sortField} sortDir={sortDir} />
     </button>
   );
 
   return (
     <div className="mt-8">
-      {/* Section header */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <BookOpen className="w-5 h-5 text-slate-500" />
         <h2 className="text-lg font-semibold text-slate-900">Transactions</h2>
-        {transactions.length > 0 && (
-          <span className="text-xs text-slate-400">({transactions.length})</span>
-        )}
-        {lastSync && (
-          <span className="ml-auto text-xs text-slate-400">
-            Last synced {fmtSyncTime(lastSync)}
+        {transactions.length > 0 && <span className="text-xs text-slate-400">({transactions.length})</span>}
+        {respondedTxs.length > 0 && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-bold border border-purple-200">
+            <CheckCheck className="w-3 h-3" /> {respondedTxs.length} new {respondedTxs.length === 1 ? "response" : "responses"}
           </span>
         )}
+        {lastSync && <span className="ml-auto text-xs text-slate-400">Last synced {fmtSyncTime(lastSync)}</span>}
       </div>
 
       {!hasQbo ? (
@@ -566,26 +526,17 @@ export function ClientTransactionsSection({ client }: { client: any }) {
         </div>
       ) : (
         <>
-          {/* Sync controls + Send button */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">From</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30"
-                />
+                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30" />
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">To</label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30"
-                />
+                <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+                  className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30" />
               </div>
               <div className="ml-auto flex items-center gap-2">
                 {needsInfoTxs.length > 0 && (
@@ -595,17 +546,12 @@ export function ClientTransactionsSection({ client }: { client: any }) {
                   >
                     <Send className="w-4 h-4" />
                     Send to Client
-                    <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#266b75] text-white text-[11px] font-bold leading-none">
-                      {needsInfoTxs.length}
-                    </span>
+                    <span className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#266b75] text-white text-[11px] font-bold leading-none">{needsInfoTxs.length}</span>
                   </button>
                 )}
-                <button
-                  onClick={handleSync}
-                  disabled={syncing}
+                <button onClick={handleSync} disabled={syncing}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-60"
-                  style={{ background: "#266b75" }}
-                >
+                  style={{ background: "#266b75" }}>
                   <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
                   {syncing ? "Syncing…" : "Sync from QuickBooks"}
                 </button>
@@ -613,11 +559,8 @@ export function ClientTransactionsSection({ client }: { client: any }) {
             </div>
           </div>
 
-          {/* Table */}
           {loading ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center text-sm text-slate-400">
-              Loading transactions…
-            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center text-sm text-slate-400">Loading transactions…</div>
           ) : ordered.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 text-center">
               <BookOpen className="w-8 h-8 text-slate-200 mx-auto mb-2" />
@@ -626,7 +569,6 @@ export function ClientTransactionsSection({ client }: { client: any }) {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-              {/* Banners */}
               {uncategorized.length > 0 && (
                 <div className="px-4 py-2 bg-red-50 border-b border-red-100 flex items-center gap-2">
                   <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
@@ -639,17 +581,19 @@ export function ClientTransactionsSection({ client }: { client: any }) {
                 <div className="px-4 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
                   <Flag className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                   <span className="text-xs font-semibold text-amber-700">
-                    {needsInfoTxs.length} {needsInfoTxs.length === 1 ? "transaction" : "transactions"} flagged — ready to send to client
+                    {needsInfoTxs.length} {needsInfoTxs.length === 1 ? "transaction" : "transactions"} flagged — ready to send
                   </span>
-                  <button
-                    onClick={() => setSendPanelOpen(true)}
-                    className="ml-auto text-xs font-semibold text-amber-700 underline hover:no-underline"
-                  >
-                    Send now →
-                  </button>
+                  <button onClick={() => setSendPanelOpen(true)} className="ml-auto text-xs font-semibold text-amber-700 underline hover:no-underline">Send now →</button>
                 </div>
               )}
-
+              {respondedTxs.length > 0 && (
+                <div className="px-4 py-2 bg-purple-50 border-b border-purple-100 flex items-center gap-2">
+                  <CheckCheck className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                  <span className="text-xs font-semibold text-purple-700">
+                    {respondedTxs.length} client {respondedTxs.length === 1 ? "response" : "responses"} received — review and resolve
+                  </span>
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm border-collapse">
                   <thead>
@@ -666,70 +610,68 @@ export function ClientTransactionsSection({ client }: { client: any }) {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {displayed.map(tx => {
-                      const isNeedsInfo = tx.status === "needs_info";
-                      const isUncatRow = tx.is_uncategorized || tx.status === "uncategorized";
+                      const isNeedsInfo  = tx.status === "needs_info";
+                      const isResponded  = tx.status === "responded";
+                      const isUncatRow   = tx.is_uncategorized || tx.status === "uncategorized";
                       return (
-                        <tr
-                          key={tx.id}
-                          className={cn(
-                            "hover:bg-slate-50/50 transition-colors",
-                            isUncatRow && "bg-red-50/40",
-                            isNeedsInfo && "bg-amber-50/30"
-                          )}
-                        >
-                          <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 text-xs">
-                            {fmtDateShort(tx.date)}
-                          </td>
+                        <tr key={tx.id} className={cn(
+                          "hover:bg-slate-50/50 transition-colors",
+                          isUncatRow  && "bg-red-50/40",
+                          isNeedsInfo && "bg-amber-50/30",
+                          isResponded && "bg-purple-50/20",
+                        )}>
+                          <td className="px-4 py-2.5 whitespace-nowrap text-slate-600 text-xs">{fmtDateShort(tx.date)}</td>
                           <td className="px-4 py-2.5 max-w-[160px]">
                             <span className="font-medium text-slate-800 truncate block">{tx.name || <span className="text-slate-300">—</span>}</span>
                           </td>
-                          <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">
-                            {tx.transaction_type || <span className="text-slate-300">—</span>}
-                          </td>
-                          <td className="px-4 py-2.5 whitespace-nowrap">
-                            <AmountCell amount={tx.amount} />
-                          </td>
+                          <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{tx.transaction_type || <span className="text-slate-300">—</span>}</td>
+                          <td className="px-4 py-2.5 whitespace-nowrap"><AmountCell amount={tx.amount} /></td>
                           <td className="px-4 py-2.5 max-w-[180px]">
-                            {tx.account ? (
-                              <span className="text-xs text-slate-600 truncate block">{tx.account}</span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium">
-                                <AlertCircle className="w-3 h-3" /> Uncategorized
-                              </span>
-                            )}
+                            {tx.account
+                              ? <span className="text-xs text-slate-600 truncate block">{tx.account}</span>
+                              : <span className="inline-flex items-center gap-1 text-xs text-red-500 font-medium"><AlertCircle className="w-3 h-3" /> Uncategorized</span>}
                           </td>
                           <td className="px-4 py-2.5 max-w-[180px]">
                             <span className="text-xs text-slate-400 truncate block">{tx.memo || "—"}</span>
                           </td>
-                          <td className="px-4 py-2.5 whitespace-nowrap">
+                          <td className="px-4 py-2.5 max-w-[200px]">
                             <div className="flex flex-col gap-1">
                               <StatusBadge status={tx.status} />
                               {isNeedsInfo && tx.flagged_question && (
-                                <p className="text-[10px] text-amber-600 italic truncate max-w-[140px]">"{tx.flagged_question}"</p>
+                                <p className="text-[10px] text-amber-600 italic truncate max-w-[160px]">"{tx.flagged_question}"</p>
+                              )}
+                              {isResponded && tx.client_response && (
+                                <p className="text-[10px] text-purple-700 font-medium truncate max-w-[160px]">↩ {tx.client_response}</p>
                               )}
                             </div>
                           </td>
                           <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                            {tx.status !== "awaiting_response" && tx.status !== "responded" && tx.status !== "resolved" ? (
+                            {isResponded ? (
+                              <div className="flex items-center gap-1.5 justify-end">
+                                <button
+                                  onClick={() => setFlaggingTx(tx)}
+                                  className="text-xs font-medium px-2 py-1 rounded-lg text-purple-600 hover:bg-purple-50 transition-colors"
+                                >View</button>
+                                <button
+                                  onClick={() => handleMarkResolved(tx.id)}
+                                  className="text-xs font-medium px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors flex items-center gap-1"
+                                >
+                                  <CheckCheck className="w-3 h-3" /> Resolve
+                                </button>
+                              </div>
+                            ) : tx.status !== "awaiting_response" && tx.status !== "resolved" ? (
                               <button
                                 onClick={() => setFlaggingTx(tx)}
                                 className={cn(
                                   "inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg transition-colors",
-                                  isNeedsInfo
-                                    ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
-                                    : "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
+                                  isNeedsInfo ? "bg-amber-100 text-amber-700 hover:bg-amber-200" : "text-slate-400 hover:text-amber-600 hover:bg-amber-50"
                                 )}
                               >
-                                <Flag className="w-3 h-3" />
-                                {isNeedsInfo ? "Edit" : "Flag"}
+                                <Flag className="w-3 h-3" />{isNeedsInfo ? "Edit" : "Flag"}
                               </button>
                             ) : tx.status === "awaiting_response" ? (
-                              <button
-                                onClick={() => setFlaggingTx(tx)}
-                                className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-blue-500 hover:bg-blue-50 transition-colors"
-                              >
-                                <CheckCircle2 className="w-3 h-3" />
-                                View
+                              <button onClick={() => setFlaggingTx(tx)} className="inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-blue-500 hover:bg-blue-50 transition-colors">
+                                <CheckCircle2 className="w-3 h-3" /> View
                               </button>
                             ) : null}
                           </td>
@@ -739,18 +681,10 @@ export function ClientTransactionsSection({ client }: { client: any }) {
                   </tbody>
                 </table>
               </div>
-
               {ordered.length > PAGE_SIZE && (
                 <div className="px-4 py-3 border-t border-slate-100 text-center">
-                  <button
-                    onClick={() => setShowAll(v => !v)}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#266b75] hover:underline"
-                  >
-                    {showAll ? (
-                      <><ChevronUp className="w-3.5 h-3.5" /> Show less</>
-                    ) : (
-                      <><ChevronDown className="w-3.5 h-3.5" /> Show all {ordered.length} transactions</>
-                    )}
+                  <button onClick={() => setShowAll(v => !v)} className="inline-flex items-center gap-1.5 text-xs font-medium text-[#266b75] hover:underline">
+                    {showAll ? <><ChevronUp className="w-3.5 h-3.5" /> Show less</> : <><ChevronDown className="w-3.5 h-3.5" /> Show all {ordered.length} transactions</>}
                   </button>
                 </div>
               )}
@@ -759,22 +693,11 @@ export function ClientTransactionsSection({ client }: { client: any }) {
         </>
       )}
 
-      {/* Flag modal */}
-      {flaggingTx && (
-        <FlagModal
-          tx={flaggingTx}
-          onClose={() => setFlaggingTx(null)}
-          onSave={handleFlagSave}
-        />
-      )}
-
-      {/* Send panel */}
+      {flaggingTx && <FlagModal tx={flaggingTx} onClose={() => setFlaggingTx(null)} onSave={handleFlagSave} />}
       {sendPanelOpen && (
         <SendPanel
-          client={client}
-          flaggedTxs={needsInfoTxs}
-          onClose={() => setSendPanelOpen(false)}
-          onSend={handleSend}
+          client={client} flaggedTxs={needsInfoTxs}
+          onClose={() => setSendPanelOpen(false)} onSend={handleSend}
         />
       )}
     </div>
