@@ -41,7 +41,7 @@ const ADMIN_NAV = [
   { href: "/asana", label: "Asana Sync", icon: Link2 },
   { href: "/quickbooks", label: "QuickBooks", icon: BookOpen },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/app-tracker", label: "App Development Tracker", icon: MonitorSmartphone },
+  { href: "/app-tracker", label: "App Dev Tracker", icon: MonitorSmartphone },
 ];
 
 const TEAM_MEMBER_NAV = [

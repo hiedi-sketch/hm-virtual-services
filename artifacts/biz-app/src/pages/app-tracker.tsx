@@ -75,7 +75,7 @@ const Modal = ({ title, onClose, children }: { title: string; onClose: () => voi
     <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "16px", width: "100%", maxWidth: "560px", maxHeight: "85vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.12)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "24px 24px 16px", borderBottom: "1px solid #f1f5f9" }}>
         <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>{title}</span>
-        <button onClick={onClose} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px" }}><Icon name="x" /></button>
+        <button onClick={onClose} style={{ background: "none", border: "none", color: "#334155", cursor: "pointer", padding: "4px" }}><Icon name="x" /></button>
       </div>
       <div style={{ padding: "24px" }}>{children}</div>
     </div>
@@ -87,7 +87,7 @@ const inputStyle: React.CSSProperties = {
   color: "#0f172a", padding: "10px 12px", fontSize: "14px", fontFamily: "'Inter', sans-serif", boxSizing: "border-box",
 };
 const labelStyle: React.CSSProperties = {
-  display: "block", color: "#64748b", fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em",
+  display: "block", color: "#334155", fontSize: "12px", fontWeight: 600, letterSpacing: "0.08em",
   textTransform: "uppercase", marginBottom: "6px",
 };
 const btnPrimary: React.CSSProperties = {
@@ -97,7 +97,7 @@ const btnPrimary: React.CSSProperties = {
 };
 const btnSecondary: React.CSSProperties = {
   background: "transparent", border: "1px solid #e2e8f0", borderRadius: "8px",
-  color: "#64748b", padding: "10px 20px", fontSize: "14px", cursor: "pointer",
+  color: "#334155", padding: "10px 20px", fontSize: "14px", cursor: "pointer",
 };
 
 // ── App Tracker tab ──────────────────────────────────────────────────────────
@@ -122,7 +122,7 @@ const AppTrackerTab = ({ apps, setApps }: { apps: AppEntry[]; setApps: React.Dis
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
         <div>
           <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "22px", fontWeight: 700, color: "#0f172a", margin: 0 }}>App Pipeline</h2>
-          <p style={{ color: "#94a3b8", fontSize: "14px", margin: "4px 0 0" }}>{apps.length} app{apps.length !== 1 ? "s" : ""} tracked</p>
+          <p style={{ color: "#334155", fontSize: "14px", margin: "4px 0 0" }}>{apps.length} app{apps.length !== 1 ? "s" : ""} tracked</p>
         </div>
         <button style={btnPrimary} onClick={() => setShowModal(true)}><Icon name="plus" size={14} /> Add App</button>
       </div>
@@ -134,7 +134,7 @@ const AppTrackerTab = ({ apps, setApps }: { apps: AppEntry[]; setApps: React.Dis
       </div>
 
       <div style={{ display: "grid", gap: "12px" }}>
-        {apps.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8" }}>No apps yet — add your first one!</div>}
+        {apps.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: "#334155" }}>No apps yet — add your first one!</div>}
         {apps.map(app => (
           <div key={app.id} style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", display: "grid", gridTemplateColumns: "1fr auto", gap: "16px", alignItems: "start", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
             <div>
@@ -142,10 +142,10 @@ const AppTrackerTab = ({ apps, setApps }: { apps: AppEntry[]; setApps: React.Dis
                 <span style={{ background: STAGE_COLORS[app.stage] + "18", border: `1px solid ${STAGE_COLORS[app.stage]}66`, borderRadius: "20px", padding: "3px 12px", fontSize: "11px", color: STAGE_COLORS[app.stage], fontWeight: 700, letterSpacing: "0.06em" }}>{app.stage}</span>
                 <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "17px", fontWeight: 700, color: "#0f172a" }}>{app.name}</span>
               </div>
-              {app.description && <p style={{ color: "#64748b", fontSize: "14px", margin: "0 0 12px" }}>{app.description}</p>}
+              {app.description && <p style={{ color: "#334155", fontSize: "14px", margin: "0 0 12px" }}>{app.description}</p>}
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
-                {app.startDate && <span style={{ fontSize: "12px", color: "#94a3b8" }}>Started: <span style={{ color: "#475569" }}>{app.startDate}</span></span>}
-                {app.targetDate && <span style={{ fontSize: "12px", color: "#94a3b8" }}>Target: <span style={{ color: "#475569" }}>{app.targetDate}</span></span>}
+                {app.startDate && <span style={{ fontSize: "12px", color: "#334155" }}>Started: <span style={{ color: "#334155" }}>{app.startDate}</span></span>}
+                {app.targetDate && <span style={{ fontSize: "12px", color: "#334155" }}>Target: <span style={{ color: "#334155" }}>{app.targetDate}</span></span>}
               </div>
               <div style={{ marginTop: "12px" }}>
                 <label style={{ ...labelStyle, marginBottom: "4px" }}>Move to Stage</label>
@@ -154,7 +154,7 @@ const AppTrackerTab = ({ apps, setApps }: { apps: AppEntry[]; setApps: React.Dis
                 </select>
               </div>
             </div>
-            <button onClick={() => deleteApp(app.id)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#94a3b8", cursor: "pointer", padding: "8px", lineHeight: 0 }}><Icon name="trash" /></button>
+            <button onClick={() => deleteApp(app.id)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#334155", cursor: "pointer", padding: "8px", lineHeight: 0 }}><Icon name="trash" /></button>
           </div>
         ))}
       </div>
@@ -213,7 +213,7 @@ const ChangeTracker = ({ apps, changes, setChanges }: { apps: AppEntry[]; change
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
         <div>
           <h2 style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "22px", fontWeight: 700, color: "#0f172a", margin: 0 }}>Build Changes</h2>
-          <p style={{ color: "#94a3b8", fontSize: "14px", margin: "4px 0 0" }}>{changes.length} change request{changes.length !== 1 ? "s" : ""}</p>
+          <p style={{ color: "#334155", fontSize: "14px", margin: "4px 0 0" }}>{changes.length} change request{changes.length !== 1 ? "s" : ""}</p>
         </div>
         <button style={btnPrimary} onClick={() => setShowModal(true)}><Icon name="plus" size={14} /> Log Change</button>
       </div>
@@ -237,7 +237,7 @@ const ChangeTracker = ({ apps, changes, setChanges }: { apps: AppEntry[]; change
       </div>
 
       <div style={{ display: "grid", gap: "12px" }}>
-        {filtered.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8" }}>No changes match the current filters.</div>}
+        {filtered.length === 0 && <div style={{ textAlign: "center", padding: "60px 0", color: "#334155" }}>No changes match the current filters.</div>}
         {filtered.map(c => {
           const appName = apps.find(a => a.id === c.appId)?.name || "Unknown";
           return (
@@ -249,12 +249,12 @@ const ChangeTracker = ({ apps, changes, setChanges }: { apps: AppEntry[]; change
                     <span style={{ background: PRIORITY_COLORS[c.priority] + "18", border: `1px solid ${PRIORITY_COLORS[c.priority]}44`, borderRadius: "6px", padding: "2px 8px", fontSize: "11px", color: PRIORITY_COLORS[c.priority], fontWeight: 700 }}>{c.priority}</span>
                     <span style={{ fontWeight: 600, color: "#0f172a", fontSize: "15px" }}>{c.title}</span>
                   </div>
-                  {c.description && <p style={{ color: "#64748b", fontSize: "13px", margin: "0 0 10px" }}>{c.description}</p>}
+                  {c.description && <p style={{ color: "#334155", fontSize: "13px", margin: "0 0 10px" }}>{c.description}</p>}
                   <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
-                    {c.requestDate && <span style={{ fontSize: "12px", color: "#94a3b8" }}>Requested: <span style={{ color: "#475569" }}>{c.requestDate}</span></span>}
-                    {c.targetDate && <span style={{ fontSize: "12px", color: "#94a3b8" }}>Target: <span style={{ color: "#475569" }}>{c.targetDate}</span></span>}
+                    {c.requestDate && <span style={{ fontSize: "12px", color: "#334155" }}>Requested: <span style={{ color: "#334155" }}>{c.requestDate}</span></span>}
+                    {c.targetDate && <span style={{ fontSize: "12px", color: "#334155" }}>Target: <span style={{ color: "#334155" }}>{c.targetDate}</span></span>}
                     <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span style={{ fontSize: "12px", color: "#94a3b8" }}>Status:</span>
+                      <span style={{ fontSize: "12px", color: "#334155" }}>Status:</span>
                       <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)}
                         style={{ background: CHANGE_STATUS_COLORS[c.status] + "18", border: `1px solid ${CHANGE_STATUS_COLORS[c.status]}44`, borderRadius: "6px", color: CHANGE_STATUS_COLORS[c.status], padding: "3px 8px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>
                         {CHANGE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -262,7 +262,7 @@ const ChangeTracker = ({ apps, changes, setChanges }: { apps: AppEntry[]; change
                     </div>
                   </div>
                 </div>
-                <button onClick={() => deleteChange(c.id)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#94a3b8", cursor: "pointer", padding: "6px", lineHeight: 0, flexShrink: 0 }}><Icon name="trash" size={14} /></button>
+                <button onClick={() => deleteChange(c.id)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#334155", cursor: "pointer", padding: "6px", lineHeight: 0, flexShrink: 0 }}><Icon name="trash" size={14} /></button>
               </div>
             </div>
           );
@@ -316,8 +316,8 @@ const ChecklistItemRow = ({ item, checked, onToggle, isCustom, onDelete }: { ite
       {checked && <Icon name="check" size={12} />}
     </button>
     <span style={{ flex: 1, color: checked ? "#94a3b8" : "#334155", fontSize: "14px", textDecoration: checked ? "line-through" : "none" }}>{item.label}</span>
-    {item.freq && <span style={{ fontSize: "11px", color: "#94a3b8", background: "#f1f5f9", borderRadius: "4px", padding: "2px 6px" }}>{item.freq}</span>}
-    {isCustom && <button onClick={() => onDelete(item.id)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "2px", lineHeight: 0 }}><Icon name="trash" size={13} /></button>}
+    {item.freq && <span style={{ fontSize: "11px", color: "#334155", background: "#f1f5f9", borderRadius: "4px", padding: "2px 6px" }}>{item.freq}</span>}
+    {isCustom && <button onClick={() => onDelete(item.id)} style={{ background: "none", border: "none", color: "#334155", cursor: "pointer", padding: "2px", lineHeight: 0 }}><Icon name="trash" size={13} /></button>}
   </div>
 );
 
@@ -352,7 +352,7 @@ const ChecklistSection = ({ title, items, checkedMap, onToggle, onAddItem, onDel
           <button style={btnSecondary} onClick={() => setAdding(false)}>Cancel</button>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} style={{ marginTop: "10px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#94a3b8", padding: "8px 14px", cursor: "pointer", fontSize: "13px", width: "100%", display: "flex", alignItems: "center", gap: "6px", justifyContent: "center" }}>
+        <button onClick={() => setAdding(true)} style={{ marginTop: "10px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#334155", padding: "8px 14px", cursor: "pointer", fontSize: "13px", width: "100%", display: "flex", alignItems: "center", gap: "6px", justifyContent: "center" }}>
           <Icon name="plus" size={13} /> Add item
         </button>
       )}
@@ -406,7 +406,7 @@ const Checklists = ({ apps, checklists, setChecklists }: { apps: AppEntry[]; che
       </div>
 
       {!app ? (
-        <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8" }}>Add an app first to manage its checklists.</div>
+        <div style={{ textAlign: "center", padding: "60px 0", color: "#334155" }}>Add an app first to manage its checklists.</div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "24px" }}>
           <div>
@@ -457,7 +457,7 @@ export default function AppDevTracker() {
         <div style={{ maxWidth: "1100px", margin: "0 auto", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
           <div>
             <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: "22px", fontWeight: 700, color: "#0f172a", letterSpacing: "-0.3px" }}>App Development Tracker</div>
-            <div style={{ fontSize: "13px", color: "#94a3b8", marginTop: "2px" }}>HM Virtual Services</div>
+            <div style={{ fontSize: "13px", color: "#334155", marginTop: "2px" }}>HM Virtual Services</div>
           </div>
           {/* Tab switcher */}
           <div style={{ display: "flex", gap: "4px", background: "#f1f5f9", borderRadius: "10px", padding: "4px" }}>
@@ -488,7 +488,7 @@ export default function AppDevTracker() {
           ].map(s => (
             <div key={s.label} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <span style={{ fontSize: "22px", fontWeight: 700, color: s.color, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{s.value}</span>
-              <span style={{ fontSize: "12px", color: "#94a3b8" }}>{s.label}</span>
+              <span style={{ fontSize: "12px", color: "#334155" }}>{s.label}</span>
             </div>
           ))}
         </div>
