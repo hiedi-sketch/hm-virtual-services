@@ -40,6 +40,7 @@ import PublicAbout from "@/pages/public-about";
 import PublicContact from "@/pages/public-contact";
 import PublicBookkeeping from "@/pages/public-bookkeeping";
 import PublicAdministration from "@/pages/public-administration";
+import PrivacyPolicy from "@/pages/public-privacy-policy";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +73,7 @@ function Router() {
   if (location.startsWith("/reset-password")) return <ResetPassword />;
   if (location === "/estimate-response") return <EstimateResponsePage />;
   if (location.startsWith("/pay/")) return <PayPage />;
+  if (location === "/privacy-policy") return <PrivacyPolicy />;
 
   // Public marketing pages — accessible without login
   if (location === "/" && !user) return <PublicHome />;

@@ -1,0 +1,145 @@
+Add a public privacy policy page to the app at the 
+
+route /privacy-policy. This page must be accessible 
+
+without logging in — bypass any authentication 
+
+middleware for this route only.
+
+The page should display the HM Virtual Services 
+
+Privacy Policy with clean, readable formatting 
+
+matching the app's existing style. Use the following 
+
+content:
+
+Privacy Policy — HM Virtual Services
+
+Last Updated: May 29, 2026
+
+1. Introduction HM Virtual Services ("we," "us," or "our") operates a bookkeeping and virtual assistant management platform ("the App") accessible at [yourapp.replit.app]. This Privacy Policy explains how we collect, use, and protect information when you use our App.
+
+2. Information We Collect
+
+Account Information
+
+
+
+
+
+Name and email address
+
+
+
+Password (encrypted, never stored in plain text)
+
+Business & Financial Information
+
+
+
+
+
+Transaction data imported from QuickBooks Online for bookkeeping purposes
+
+
+
+Receipts and supporting documents you or your bookkeeper uploads
+
+
+
+Notes and responses related to transaction review
+
+Payment Information
+
+
+
+
+
+Invoices for services are processed through Square. We do not store your payment card details. Square's privacy policy applies to all payment processing. See square.com/legal/privacy
+
+Usage Information
+
+
+
+
+
+Login timestamps
+
+
+
+Actions taken within the App (for support and security purposes)
+
+3. How We Use Your Information We use collected information to:
+
+
+
+
+
+Provide bookkeeping and virtual assistant services
+
+
+
+Facilitate transaction review and client communication
+
+
+
+Process service invoices via Square
+
+
+
+Respond to your questions and support requests
+
+
+
+Improve the App's functionality
+
+4. How We Share Your Information We do not sell your personal information. We share data only with:
+
+
+
+
+
+Intuit/QuickBooks — to read and write transaction data on your behalf
+
+
+
+Square — to process service invoice payments
+
+
+
+Asana / ClickUp — if you have selected either as your preferred communication channel, task data is shared with that platform
+
+
+
+Law enforcement — if required by law
+
+5. Data Retention We retain your data for as long as you are an active client. Upon termination of services, your data is deleted within 90 days upon written request.
+
+6. International Users Our App is primarily intended for US-based users. We have one or more non-US clients whose data is processed and stored on US-based servers. By using the App, non-US users consent to their data being transferred to and processed in the United States.
+
+7. Data Security We implement reasonable technical and organizational measures to protect your information, including encrypted passwords and secure hosting via Replit. No method of transmission over the internet is 100% secure.
+
+8. Your Rights You may request access to, correction of, or deletion of your personal data at any time by contacting us at hiedi@hmvirtualservices.com.
+
+9. Cookies The App may use session cookies to maintain your logged-in state. We do not use tracking or advertising cookies.
+
+10. Changes to This Policy We may update this policy periodically. We will notify active users of material changes via email.
+
+11. Contact HM Virtual Services hiedi@hmvirtualservices.com
+
+The page should include:
+
+- HM Virtual Services logo or name at the top
+
+- Last updated date
+
+- Clean typography, no sidebar or navigation 
+
+  that requires login
+
+- A simple footer with hiedi@hmvirtualservices.com
+
+The URL should be:
+
+hmvirutalservices.com/privacy-policy
