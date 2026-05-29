@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { db } from "@workspace/db";
 import {
   clientsTable,
@@ -6,10 +6,45 @@ import {
   invoicesTable,
   timeEntriesTable,
   leadsTable,
+  apiKeysTable,
 } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { requireAdmin } from "../middleware/auth";
 
 const router: IRouter = Router();
+
+// ── Auth: admin session OR valid Bearer / X-API-Key token ────────────────────
+async function requireAdminOrApiKey(req: Request, res: Response, next: NextFunction) {
+  // 1. Valid admin session — let requireAdmin handle it
+  if (req.session?.user?.role === "admin") {
+    return requireAdmin(req, res, next);
+  }
+
+  // 2. Bearer token or X-API-Key header
+  const token =
+    (req.headers["authorization"]?.startsWith("Bearer ")
+      ? req.headers["authorization"].slice(7)
+      : undefined) ??
+    (req.headers["x-api-key"] as string | undefined);
+
+  if (!token) {
+    res.status(401).json({ error: "Requires admin session or API key (Authorization: Bearer <key> or X-API-Key header)." });
+    return;
+  }
+
+  const [row] = await db
+    .select({ id: apiKeysTable.id })
+    .from(apiKeysTable)
+    .where(eq(apiKeysTable.key, token))
+    .limit(1);
+
+  if (!row) {
+    res.status(401).json({ error: "Invalid API key." });
+    return;
+  }
+
+  next();
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +71,7 @@ function filename(label: string, ext: string): string {
 
 // ── JSON full export ──────────────────────────────────────────────────────────
 
-router.get("/backup/json", requireAdmin, async (req, res) => {
+router.get("/backup/json", requireAdminOrApiKey, async (req, res) => {
   const [clients, tasks, invoices, timeEntries, leads] = await Promise.all([
     db.select().from(clientsTable).orderBy(clientsTable.name),
     db.select().from(tasksTable).orderBy(tasksTable.id),
@@ -99,7 +134,7 @@ const CSV_TABLES: Record<string, () => Promise<Record<string, unknown>[]>> = {
   },
 };
 
-router.get("/backup/csv/:table", requireAdmin, async (req, res) => {
+router.get("/backup/csv/:table", requireAdminOrApiKey, async (req, res) => {
   const table = req.params.table;
   const builder = CSV_TABLES[table];
   if (!builder) {
