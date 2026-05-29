@@ -277,7 +277,7 @@ export default function QuickBooks() {
             )}
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             {status?.connected ? (
               <>
                 <button
@@ -287,6 +287,13 @@ export default function QuickBooks() {
                 >
                   <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
                   Refresh Firms
+                </button>
+                <button
+                  onClick={handleConnect}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#266b75] text-sm font-medium text-[#266b75] hover:bg-[#266b75]/5 transition-colors"
+                >
+                  <Link2 className="w-4 h-4" />
+                  Add Account
                 </button>
                 <button
                   onClick={handleDisconnect}
