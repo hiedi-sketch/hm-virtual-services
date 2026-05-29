@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useListClients } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import {
-  Upload, Trash2, AlertTriangle, CheckCircle2, ChevronDown,
-  FileSpreadsheet, Clock, Calendar, AlertCircle, X, Flag,
+  Trash2, AlertTriangle, CheckCircle2, ChevronDown,
+  Clock, Calendar, AlertCircle, X, Flag,
   MessageSquare, CheckCheck, StickyNote, Filter, ChevronRight,
+  RefreshCw, Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +14,7 @@ import { cn } from "@/lib/utils";
 type TxImport = {
   id: number; client_id: number; filename: string;
   date_range_start: string | null; date_range_end: string | null;
-  imported_at: string; row_count: number;
+  imported_at: string; row_count: number; source?: string | null;
 };
 
 type Tx = {
@@ -50,6 +51,17 @@ const STATUS_ORDER: StatusKey[] = ["uncategorized", "needs_info", "awaiting_resp
 const CHANNEL_LABELS: Record<string, string> = {
   dashboard: "Dashboard", asana: "Asana", clickup: "ClickUp",
 };
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+
+function todayIso() {
+  return new Date().toISOString().split("T")[0]!;
+}
+
+function firstOfMonthIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -123,12 +135,8 @@ function FlagPanel({
 
   return (
     <div className="fixed inset-y-0 right-0 z-50 flex">
-      {/* Backdrop */}
       <div className="fixed inset-0 bg-black/20 backdrop-blur-[1px]" onClick={onClose} />
-
-      {/* Panel */}
       <div className="relative ml-auto w-full max-w-md bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full">
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <Flag className="w-4 h-4 text-amber-500" />
@@ -139,7 +147,6 @@ function FlagPanel({
           </button>
         </div>
 
-        {/* Transaction detail */}
         <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -163,7 +170,6 @@ function FlagPanel({
           </div>
         </div>
 
-        {/* Question */}
         <div className="flex-1 flex flex-col px-5 py-4 gap-3 overflow-y-auto">
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -201,11 +207,10 @@ function FlagPanel({
             <p className="text-sm text-slate-700 font-medium">
               {CHANNEL_LABELS[clientChannel] ?? clientChannel ?? "Dashboard"}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">Set on client's profile · delivery wired in Phase 4</p>
+            <p className="text-xs text-slate-400 mt-0.5">Set on client's profile</p>
           </div>
         </div>
 
-        {/* Footer actions */}
         <div className="px-5 py-4 border-t border-slate-100 flex gap-2">
           {!isAlreadySent ? (
             <>
@@ -237,17 +242,17 @@ function FlagPanel({
 function NotesCell({ tx, onSave }: { tx: Tx; onSave: (notes: string) => void }) {
   const [value, setValue] = useState(tx.internal_notes ?? "");
   const [editing, setEditing] = useState(false);
-  const savedRef = useRef(tx.internal_notes ?? "");
+  const [savedValue, setSavedValue] = useState(tx.internal_notes ?? "");
 
   useEffect(() => {
     setValue(tx.internal_notes ?? "");
-    savedRef.current = tx.internal_notes ?? "";
+    setSavedValue(tx.internal_notes ?? "");
   }, [tx.internal_notes]);
 
   const handleBlur = () => {
     setEditing(false);
-    if (value !== savedRef.current) {
-      savedRef.current = value;
+    if (value !== savedValue) {
+      setSavedValue(value);
       onSave(value);
     }
   };
@@ -289,23 +294,24 @@ export default function TransactionsPage() {
   const { toast } = useToast();
 
   const [selectedClientId, setSelectedClientId] = useState<number | "">("");
+  const [startDate, setStartDate] = useState(firstOfMonthIso());
+  const [endDate, setEndDate] = useState(todayIso());
+
   const [txData, setTxData] = useState<TxData | null>(null);
   const [txMap, setTxMap] = useState<Map<number, Tx>>(new Map());
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [conflictInfo, setConflictInfo] = useState<{ file: File; existing: TxImport; message: string } | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncConflict, setSyncConflict] = useState<{ existing: TxImport; message: string } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [flagTxId, setFlagTxId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeClients = (clients ?? []).filter(c => (c as any).is_active !== false);
   const selectedClient = activeClients.find(c => c.id === selectedClientId);
   const clientChannel = (selectedClient as any)?.preferred_channel ?? "dashboard";
+  const hasQboRealm = !!(selectedClient as any)?.qbo_realm_id;
 
-  // Build live tx list from txMap (keeps optimistic updates)
-  // Use optional chaining defensively in case the API returns an unexpected shape
   const allTx: Tx[] = (txData?.transactions ?? []).map(t => txMap.get(t.id) ?? t);
 
   const loadTransactions = useCallback(async (clientId: number) => {
@@ -329,11 +335,17 @@ export default function TransactionsPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (selectedClientId) { loadTransactions(selectedClientId as number); setFilterStatus("all"); }
-    else { setTxData(null); setTxMap(new Map()); setLoadError(null); }
+    if (selectedClientId) {
+      loadTransactions(selectedClientId as number);
+      setFilterStatus("all");
+    } else {
+      setTxData(null);
+      setTxMap(new Map());
+      setLoadError(null);
+      setSyncConflict(null);
+    }
   }, [selectedClientId, loadTransactions]);
 
-  // Optimistic update helper
   const patchTx = useCallback((id: number, updates: Partial<Tx>) => {
     setTxMap(prev => {
       const m = new Map(prev);
@@ -354,7 +366,6 @@ export default function TransactionsPage() {
       patchTx(id, updated);
       return updated;
     } catch (err: any) {
-      // Roll back optimistic update
       if (optimistic && txData) {
         const original = txData.transactions.find(t => t.id === id);
         if (original) patchTx(id, original);
@@ -364,37 +375,42 @@ export default function TransactionsPage() {
     }
   }, [patchTx, txData, toast]);
 
-  const doUpload = async (file: File, overwrite = false) => {
+  const doSync = async (overwrite = false) => {
     if (!selectedClientId) return;
-    setUploading(true);
+    if (!startDate || !endDate) {
+      toast({ title: "Date range required", description: "Please select a start and end date.", variant: "destructive" });
+      return;
+    }
+    if (startDate > endDate) {
+      toast({ title: "Invalid date range", description: "Start date must be before end date.", variant: "destructive" });
+      return;
+    }
+
+    setSyncing(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("client_id", String(selectedClientId));
-      fd.append("overwrite", String(overwrite));
-      const result = await apiFetch("/api/transactions/upload", { method: "POST", body: fd });
-      setConflictInfo(null);
-      toast({ title: "Transactions imported", description: `${result.count} rows loaded.` });
+      const result = await apiFetch(`/api/qbo/clients/${selectedClientId}/sync-transactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate, endDate, overwrite }),
+      });
+      setSyncConflict(null);
+      toast({
+        title: "Sync complete",
+        description: `${result.synced} transaction${result.synced === 1 ? "" : "s"} synced from QuickBooks.`,
+      });
       await loadTransactions(selectedClientId as number);
     } catch (err: any) {
       if (err.status === 409 && err.body?.conflict) {
-        setConflictInfo({ file, existing: err.body.existing_import, message: err.body.message });
+        setSyncConflict({ existing: err.body.existing_import, message: err.body.message });
       } else {
-        toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+        toast({ title: "Sync failed", description: err.message, variant: "destructive" });
       }
     } finally {
-      setUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      setSyncing(false);
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) doUpload(file);
-  };
-
   const handleFlag = async (tx: Tx) => {
-    // Set to needs_info if currently uncategorized, then open panel
     if (tx.status === "uncategorized") {
       await apiPatch(tx.id, { status: "needs_info" }, { status: "needs_info" });
     }
@@ -423,7 +439,7 @@ export default function TransactionsPage() {
   const handleDeleteImport = async (importId: number) => {
     try {
       await apiFetch(`/api/transactions/import/${importId}`, { method: "DELETE" });
-      toast({ title: "Import deleted" });
+      toast({ title: "Sync record deleted" });
       if (selectedClientId) await loadTransactions(selectedClientId as number);
     } catch (err: any) {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });
@@ -432,16 +448,13 @@ export default function TransactionsPage() {
     }
   };
 
-  // Sorting + filtering
   const uncategorized = allTx.filter(t => t.is_uncategorized);
   const categorized = allTx.filter(t => !t.is_uncategorized);
   const sorted = [...uncategorized, ...categorized];
   const filtered = filterStatus === "all" ? sorted : sorted.filter(t => t.status === filterStatus);
 
-  const latestImport = txData?.imports.slice(-1)[0];
   const flagTx = flagTxId != null ? (txMap.get(flagTxId) ?? null) : null;
 
-  // Status counts for filter bar
   const counts = STATUS_ORDER.reduce((acc, s) => {
     acc[s] = allTx.filter(t => t.status === s).length;
     return acc;
@@ -452,23 +465,22 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-display font-bold text-slate-900">Transactions</h1>
-          <p className="text-slate-500 mt-1">Import and review QuickBooks transaction exports per client.</p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-display font-bold text-slate-900">Transactions</h1>
+        <p className="text-slate-500 mt-1">Sync and review QuickBooks transactions per client.</p>
       </div>
 
       {/* ── Controls bar ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
         <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+
           {/* Client selector */}
           <div className="relative flex-1 max-w-xs">
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Client</label>
             <div className="relative">
               <select
                 value={selectedClientId}
-                onChange={e => setSelectedClientId(e.target.value ? Number(e.target.value) : "")}
+                onChange={e => { setSelectedClientId(e.target.value ? Number(e.target.value) : ""); setSyncConflict(null); }}
                 className="w-full appearance-none border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] pr-8"
               >
                 <option value="">— Select a client —</option>
@@ -480,53 +492,70 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          {/* Date range label */}
-          <div className="flex-1">
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Date Range</label>
-            {latestImport ? (
-              <div className="flex items-center gap-2 text-sm text-slate-700 py-2.5">
-                <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
-                <span className="font-medium">{fmtDateShort(latestImport.date_range_start)}</span>
-                <span className="text-slate-400">–</span>
-                <span className="font-medium">{fmtDateShort(latestImport.date_range_end)}</span>
-              </div>
-            ) : (
-              <div className="text-sm text-slate-400 italic py-2.5">No data uploaded yet</div>
-            )}
+          {/* Date range pickers */}
+          <div className="flex items-end gap-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">From</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={e => { setStartDate(e.target.value); setSyncConflict(null); }}
+                className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+              />
+            </div>
+            <div className="pb-2.5 text-slate-400 text-sm">–</div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">To</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={e => { setEndDate(e.target.value); setSyncConflict(null); }}
+                className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+              />
+            </div>
           </div>
 
-          {/* Upload button */}
+          {/* Sync button */}
           <div className="shrink-0">
             <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={!selectedClientId || uploading}
+              onClick={() => doSync(false)}
+              disabled={!selectedClientId || syncing}
               className={cn(
                 "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors",
-                selectedClientId && !uploading
+                selectedClientId && !syncing
                   ? "bg-[#266b75] text-white hover:bg-[#1f545d]"
                   : "bg-slate-100 text-slate-400 cursor-not-allowed"
               )}
             >
-              <Upload className="w-4 h-4" />
-              {uploading ? "Uploading…" : "Upload Transactions"}
+              <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
+              {syncing ? "Syncing…" : "Sync from QuickBooks"}
             </button>
-            <input ref={fileInputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFileChange} />
           </div>
         </div>
 
-        {/* Upload history */}
+        {/* No QBO realm warning */}
+        {selectedClientId && !hasQboRealm && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-sm text-amber-700">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>No QuickBooks company linked to this client. Link one on the <span className="font-semibold">Clients</span> page under QuickBooks settings.</span>
+          </div>
+        )}
+
+        {/* Sync history */}
         {txData && txData.imports.length > 0 && (
           <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Upload History</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sync History</p>
             {txData.imports.map(imp => (
               <div key={imp.id} className="flex items-center justify-between gap-3 text-xs text-slate-600">
                 <div className="flex items-center gap-2 min-w-0">
-                  <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span className="font-medium text-slate-700 truncate max-w-[180px]">{imp.filename}</span>
+                  <Zap className="w-3.5 h-3.5 text-[#7dbdc6] shrink-0" />
+                  <span className="font-medium text-slate-700 shrink-0">
+                    {fmtDateShort(imp.date_range_start)} – {fmtDateShort(imp.date_range_end)}
+                  </span>
                   <span className="text-slate-400 shrink-0">·</span>
                   <span className="shrink-0">{imp.row_count} rows</span>
                   <span className="text-slate-400 shrink-0">·</span>
-                  <span className="flex items-center gap-1 shrink-0">
+                  <span className="flex items-center gap-1 text-slate-400 shrink-0">
                     <Clock className="w-3 h-3" /> {fmtDate(imp.imported_at)}
                   </span>
                 </div>
@@ -537,7 +566,7 @@ export default function TransactionsPage() {
                     <button onClick={() => setDeleteConfirmId(null)} className="px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200">Cancel</button>
                   </div>
                 ) : (
-                  <button onClick={() => setDeleteConfirmId(imp.id)} className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded shrink-0" title="Delete import">
+                  <button onClick={() => setDeleteConfirmId(imp.id)} className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded shrink-0" title="Delete sync">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -548,22 +577,25 @@ export default function TransactionsPage() {
       </div>
 
       {/* ── Conflict warning ── */}
-      {conflictInfo && (
+      {syncConflict && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex items-start gap-4">
           <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-amber-900">Duplicate Date Range</p>
-            <p className="text-sm text-amber-800 mt-1">{conflictInfo.message}</p>
+            <p className="font-semibold text-amber-900">Date Range Already Synced</p>
+            <p className="text-sm text-amber-800 mt-1">{syncConflict.message}</p>
             <p className="text-xs text-amber-700 mt-1">
-              Previously uploaded: <span className="font-medium">{conflictInfo.existing.filename}</span> on {fmtDate(conflictInfo.existing.imported_at)}
+              Last synced: <span className="font-medium">{fmtDate(syncConflict.existing.imported_at)}</span> · {syncConflict.existing.row_count} rows
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={() => doUpload(conflictInfo.file, true)} disabled={uploading}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-50">
-              <CheckCircle2 className="w-4 h-4" /> Overwrite
+            <button
+              onClick={() => doSync(true)}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4" /> Re-sync
             </button>
-            <button onClick={() => setConflictInfo(null)} className="p-2 rounded-xl text-amber-600 hover:bg-amber-100 transition-colors">
+            <button onClick={() => setSyncConflict(null)} className="p-2 rounded-xl text-amber-600 hover:bg-amber-100 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -573,9 +605,9 @@ export default function TransactionsPage() {
       {/* ── Empty states ── */}
       {!selectedClientId && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-16 text-center">
-          <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-700 font-medium">Select a client to view transactions</p>
-          <p className="text-slate-400 text-sm mt-1">Then upload a QuickBooks CSV or XLSX export.</p>
+          <p className="text-slate-400 text-sm mt-1">Then choose a date range and sync from QuickBooks.</p>
         </div>
       )}
       {selectedClientId && loading && (
@@ -590,7 +622,7 @@ export default function TransactionsPage() {
           <p className="text-slate-400 text-sm mt-1 mb-4">{loadError}</p>
           <button
             onClick={() => loadTransactions(selectedClientId as number)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#266b75] text-white text-sm font-semibold hover:bg-[#1f545d] transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#266b75] text-white text-sm font-semibold hover:bg-[#1f545d] transition-colors"
           >
             Try Again
           </button>
@@ -598,9 +630,9 @@ export default function TransactionsPage() {
       )}
       {selectedClientId && !loading && !loadError && txData && allTx.length === 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-16 text-center">
-          <Upload className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-700 font-medium">No transactions imported yet</p>
-          <p className="text-slate-400 text-sm mt-1">Upload a .csv or .xlsx export from QuickBooks above.</p>
+          <RefreshCw className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-700 font-medium">No transactions synced yet</p>
+          <p className="text-slate-400 text-sm mt-1">Select a date range and click "Sync from QuickBooks" above.</p>
         </div>
       )}
 
@@ -682,43 +714,34 @@ export default function TransactionsPage() {
                       tx.is_uncategorized && filterStatus === "all" && "bg-amber-50/30 hover:bg-amber-50/60"
                     )}
                   >
-                    {/* Date */}
                     <td className="px-4 py-3 text-slate-600 whitespace-nowrap text-xs">
                       {fmtDateShort(tx.date)}
                     </td>
-                    {/* Type */}
                     <td className="px-4 py-3">
                       {tx.transaction_type
                         ? <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">{tx.transaction_type}</span>
                         : <span className="text-slate-300">—</span>}
                     </td>
-                    {/* Vendor */}
                     <td className="px-4 py-3">
                       <div className="font-medium text-slate-800 max-w-[160px] truncate">{tx.name || <span className="text-slate-300">—</span>}</div>
                       {tx.memo && <div className="text-xs text-slate-400 truncate max-w-[160px] mt-0.5">{tx.memo}</div>}
                     </td>
-                    {/* Account */}
                     <td className="px-4 py-3 max-w-[160px]">
                       {tx.is_uncategorized
                         ? <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200"><AlertCircle className="w-3 h-3" /> Uncategorized</span>
                         : <span className="text-slate-600 text-xs truncate block">{tx.account}</span>}
                     </td>
-                    {/* Status */}
                     <td className="px-4 py-3">
                       <StatusBadge status={tx.status} />
                     </td>
-                    {/* Amount */}
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <AmountCell amount={tx.amount} />
                     </td>
-                    {/* Notes */}
                     <td className="px-4 py-3 min-w-[140px]">
                       <NotesCell tx={tx} onSave={notes => handleSaveNotes(tx.id, notes)} />
                     </td>
-                    {/* Actions */}
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-1.5">
-                        {/* Flag button */}
                         {tx.status !== "resolved" && (
                           <button
                             onClick={() => handleFlag(tx)}
@@ -735,7 +758,6 @@ export default function TransactionsPage() {
                             <Flag className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        {/* Resolve button */}
                         {tx.status === "responded" && (
                           <button
                             onClick={() => handleResolve(tx)}
@@ -750,7 +772,6 @@ export default function TransactionsPage() {
                             <CheckCheck className="w-3.5 h-3.5" />
                           </span>
                         )}
-                        {/* View flag panel when awaiting/responded */}
                         {(tx.status === "awaiting_response" || tx.status === "responded") && (
                           <button
                             onClick={() => setFlagTxId(tx.id)}

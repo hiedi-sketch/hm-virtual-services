@@ -441,11 +441,37 @@ router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admi
   const clientId = Number(req.params.id);
   if (isNaN(clientId)) { res.status(400).json({ error: "Invalid client id" }); return; }
 
-  const { startDate, endDate } = req.body as { startDate?: string; endDate?: string };
+  const { startDate, endDate, overwrite } = req.body as { startDate?: string; endDate?: string; overwrite?: boolean };
   if (!startDate || !endDate) { res.status(400).json({ error: "startDate and endDate required" }); return; }
 
   const accessToken = await getValidAccessToken();
-  if (!accessToken) { res.status(503).json({ error: "QuickBooks not connected" }); return; }
+  if (!accessToken) { res.status(503).json({ error: "QuickBooks not connected — please connect on the QuickBooks settings page." }); return; }
+
+  // Check for existing imports covering this date range
+  const existing = await db
+    .select()
+    .from(transactionImportsTable)
+    .where(and(
+      eq(transactionImportsTable.client_id, clientId),
+      eq(transactionImportsTable.date_range_start, startDate),
+      eq(transactionImportsTable.date_range_end, endDate),
+    ));
+
+  if (existing.length > 0 && !overwrite) {
+    res.status(409).json({
+      conflict: true,
+      existing_import: existing[0],
+      message: `Transactions for ${startDate} – ${endDate} have already been synced for this client. Click Re-sync to overwrite.`,
+    });
+    return;
+  }
+
+  if (existing.length > 0 && overwrite) {
+    for (const imp of existing) {
+      await db.delete(transactionsTable).where(eq(transactionsTable.import_id, imp.id));
+      await db.delete(transactionImportsTable).where(eq(transactionImportsTable.id, imp.id));
+    }
+  }
 
   // Get client's realm IDs
   const [clientRow] = await db.select().from(clientsTable).where(eq(clientsTable.id, clientId)).limit(1);
