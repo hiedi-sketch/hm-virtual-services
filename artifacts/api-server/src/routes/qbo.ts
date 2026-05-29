@@ -26,6 +26,7 @@ const TOKEN_URL            = "https://oauth.platform.intuit.com/oauth2/v1/tokens
 const REVOKE_URL           = "https://developer.api.intuit.com/v2/oauth2/tokens/revoke";
 const DISCOVERY_URL        = "https://accounts.platform.intuit.com/v1/openid_connect/userinfo";
 const FIRMS_URL            = "https://appcenter.intuit.com/api/v1/Account/List";
+const QBO_API_BASE         = "https://quickbooks.api.intuit.com/v3/company";
 
 // ─── Settings helpers ─────────────────────────────────────────────────────────
 
@@ -158,7 +159,7 @@ router.get("/qbo/connect", requireAuth, requireRole("admin"), (_req, res) => {
 // ─── GET /api/qbo/callback ────────────────────────────────────────────────────
 
 router.get("/qbo/callback", async (req, res) => {
-  const { code, error } = req.query as Record<string, string>;
+  const { code, error, realmId } = req.query as Record<string, string>;
 
   if (error || !code) {
     res.redirect("/?qbo=error");
@@ -196,6 +197,12 @@ router.get("/qbo/callback", async (req, res) => {
   };
   await saveTokens(tokens);
 
+  // Store the realmId returned by Intuit (identifies the connected QBO company)
+  if (realmId) {
+    await setSetting("qbo_realm_id", realmId);
+    logger.info({ realmId }, "QBO callback: stored realmId");
+  }
+
   // Fetch user info
   try {
     const userRes = await fetch(DISCOVERY_URL, {
@@ -208,9 +215,9 @@ router.get("/qbo/callback", async (req, res) => {
     }
   } catch { /* best effort */ }
 
-  // Fetch & cache firm list immediately
+  // Build & cache firm list — try QBOA account list first, fall back to direct company info
   try {
-    const firms = await fetchFirms(tokens.access_token);
+    const firms = await fetchFirms(tokens.access_token, realmId ?? null);
     await setSetting("qbo_firms_cache", JSON.stringify(firms));
   } catch { /* best effort */ }
 
@@ -246,28 +253,68 @@ router.post("/qbo/disconnect", requireAuth, requireRole("admin"), async (_req, r
 
 // ─── Firms fetcher ────────────────────────────────────────────────────────────
 
-async function fetchFirms(accessToken: string): Promise<any[]> {
-  const res = await fetch(FIRMS_URL, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  });
+/** Fetch the company name for a single realmId via the QBO CompanyInfo API */
+async function fetchCompanyInfo(accessToken: string, realmId: string): Promise<{ realmId: string; companyName: string; country: string } | null> {
+  try {
+    const url = `${QBO_API_BASE}/${realmId}/companyinfo/${realmId}?minorversion=65`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as any;
+    const info = data?.CompanyInfo ?? data?.companyInfo ?? data;
+    return {
+      realmId,
+      companyName: info?.CompanyName ?? info?.companyName ?? realmId,
+      country: info?.Country ?? info?.country ?? "",
+    };
+  } catch {
+    return null;
+  }
+}
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`QBOA firms API ${res.status}: ${text}`);
+/**
+ * Fetch the full list of QBOA-managed companies.
+ * Falls back to a single-company lookup using realmId when the QBOA
+ * Account List API is unavailable (e.g. standard QBO instead of Accountant).
+ */
+async function fetchFirms(accessToken: string, fallbackRealmId?: string | null): Promise<any[]> {
+  // Try QBOA account list first (only works for Accountant apps)
+  try {
+    const res = await fetch(FIRMS_URL, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json() as any;
+      const list: any[] = data?.qboAccountList ?? data?.AccountList ?? data?.accounts ?? [];
+      if (list.length > 0) {
+        return list.map((f: any) => ({
+          realmId: f.realmId ?? f.RealmId ?? f.Id ?? "",
+          companyName: f.name ?? f.CompanyName ?? f.companyName ?? "",
+          country: f.country ?? f.Country ?? "",
+        }));
+      }
+    }
+    // Non-OK (e.g. 403) — fall through to single-company lookup
+  } catch { /* fall through */ }
+
+  // Fall back: look up the specific company using the realmId from the callback
+  const realmId = fallbackRealmId ?? await getSetting("qbo_realm_id");
+  if (realmId) {
+    logger.info({ realmId }, "QBO firms: QBOA list unavailable, falling back to CompanyInfo lookup");
+    const company = await fetchCompanyInfo(accessToken, realmId);
+    if (company) return [company];
   }
 
-  const data = await res.json() as any;
-  // Response shape: { qboAccountList: [{ name, realmId, country, ... }] }
-  const list: any[] = data?.qboAccountList ?? data?.AccountList ?? data?.accounts ?? [];
-  return list.map((f: any) => ({
-    realmId: f.realmId ?? f.RealmId ?? f.Id ?? "",
-    companyName: f.name ?? f.CompanyName ?? f.companyName ?? "",
-    country: f.country ?? f.Country ?? "",
-  }));
+  return [];
 }
 
 // ─── GET /api/qbo/firms ───────────────────────────────────────────────────────
@@ -291,7 +338,8 @@ router.post("/qbo/refresh-firms", requireAuth, requireRole("admin"), async (_req
   }
 
   try {
-    const firms = await fetchFirms(token);
+    const storedRealmId = await getSetting("qbo_realm_id");
+    const firms = await fetchFirms(token, storedRealmId);
     await setSetting("qbo_firms_cache", JSON.stringify(firms));
     res.json({ firms, count: firms.length });
   } catch (err: any) {
