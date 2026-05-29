@@ -2489,8 +2489,10 @@ export default function Tasks() {
                   const tpIsRunning = tpIsThisTask && timerState.status === "running";
                   const tpIsPaused = tpIsThisTask && timerState.status === "paused";
                   const isSelected = tpSelectedIds.has(task.id);
+                  const isExpanded = expanded.has(task.id);
                   return (
-                    <tr key={task.id} className={cn("transition-colors", isSelected ? "bg-rose-50" : "bg-white hover:bg-rose-50/40")}>
+                    <React.Fragment key={task.id}>
+                    <tr className={cn("transition-colors", isExpanded ? "border-b-0" : "", isSelected ? "bg-rose-50" : "bg-white hover:bg-rose-50/40")}>
                       {/* Checkbox */}
                       <td className="px-3 py-2.5 w-8">
                         <input
@@ -2647,6 +2649,23 @@ export default function Tasks() {
                           >
                             <CheckCheck className="w-3.5 h-3.5" />
                           </button>
+                          {/* Expand subtasks / comments */}
+                          <button
+                            onClick={() => setExpanded(prev => {
+                              const n = new Set(prev);
+                              n.has(task.id) ? n.delete(task.id) : n.add(task.id);
+                              return n;
+                            })}
+                            className={cn(
+                              "w-6 h-6 flex items-center justify-center rounded transition-all",
+                              isExpanded
+                                ? "bg-[#266b75] text-white"
+                                : "text-slate-400 hover:text-[#266b75] hover:bg-[#266b75]/10"
+                            )}
+                            title={isExpanded ? "Collapse" : "Subtasks & comments"}
+                          >
+                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                          </button>
                           <button
                             onClick={() => deleteTask(task.id)}
                             disabled={isSaving}
@@ -2658,6 +2677,8 @@ export default function Tasks() {
                         </div>
                       </td>
                     </tr>
+                    {isExpanded && <SubtaskPanel taskId={task.id} description={task.description} />}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
