@@ -13,37 +13,31 @@ import { requireAdmin } from "../middleware/auth";
 
 const router: IRouter = Router();
 
-// ── Auth: admin session OR valid Bearer / X-API-Key token ────────────────────
+// ── Auth: Bearer API key first, then admin session fallback ──────────────────
 async function requireAdminOrApiKey(req: Request, res: Response, next: NextFunction) {
-  // 1. Valid admin session — let requireAdmin handle it
-  if (req.session?.user?.role === "admin") {
-    return requireAdmin(req, res, next);
-  }
+  // 1. Check for Authorization: Bearer <token> header first
+  const authHeader = req.headers["authorization"];
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
 
-  // 2. Bearer token or X-API-Key header
-  const token =
-    (req.headers["authorization"]?.startsWith("Bearer ")
-      ? req.headers["authorization"].slice(7)
-      : undefined) ??
-    (req.headers["x-api-key"] as string | undefined);
+    const [row] = await db
+      .select({ id: apiKeysTable.id })
+      .from(apiKeysTable)
+      .where(eq(apiKeysTable.key, token))
+      .limit(1);
 
-  if (!token) {
-    res.status(401).json({ error: "Requires admin session or API key (Authorization: Bearer <key> or X-API-Key header)." });
+    if (!row) {
+      res.status(401).json({ error: "Invalid or revoked API key." });
+      return;
+    }
+
+    // Valid active key — proceed
+    next();
     return;
   }
 
-  const [row] = await db
-    .select({ id: apiKeysTable.id })
-    .from(apiKeysTable)
-    .where(eq(apiKeysTable.key, token))
-    .limit(1);
-
-  if (!row) {
-    res.status(401).json({ error: "Invalid API key." });
-    return;
-  }
-
-  next();
+  // 2. No Bearer token present — fall through to session-based admin check
+  requireAdmin(req, res, next);
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
