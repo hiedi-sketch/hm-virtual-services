@@ -28,6 +28,7 @@ import {
   ClipboardList, Calendar, CreditCard, Receipt,
 } from "lucide-react";
 import { ClientOnboardingChecklist } from "@/components/ClientOnboardingChecklist";
+import { ClientTransactionsSection } from "@/components/ClientTransactionsSection";
 import { cn, formatCurrency, fmtHours } from "@/lib/utils";
 
 const MY_TZ = "America/Chicago";
@@ -1910,6 +1911,9 @@ export default function ClientDetail() {
         </div>
         <DocumentsTab clientId={client.id} />
       </div>
+
+      {/* Transactions */}
+      <ClientTransactionsSection client={client} />
 
       {/* Client Messages */}
       <ClientDetailMessages clientId={clientId} />

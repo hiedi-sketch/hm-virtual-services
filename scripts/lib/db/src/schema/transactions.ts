@@ -8,6 +8,14 @@ export const transactionImportsTable = pgTable("transaction_imports", {
   date_range_end: text("date_range_end"),
   imported_at: text("imported_at").notNull(),
   row_count: integer("row_count").notNull().default(0),
+  /** Source of import: 'csv_upload' or 'qbo_sync' */
+  source: text("source").default("csv_upload"),
+  /** QBO realm ID this sync came from (null for CSV uploads) */
+  realm_id: text("realm_id"),
+  /** QBO sync date range start */
+  sync_start: text("sync_start"),
+  /** QBO sync date range end */
+  sync_end: text("sync_end"),
 });
 
 export type TransactionImport = typeof transactionImportsTable.$inferSelect;

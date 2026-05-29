@@ -11,8 +11,8 @@
 
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { appSettingsTable, clientsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { appSettingsTable, clientsTable, transactionsTable, transactionImportsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { logger } from "../lib/logger";
 
@@ -368,6 +368,189 @@ router.post("/qbo/refresh-firms", requireAuth, requireRole("admin"), async (_req
     logger.error({ err }, "Failed to refresh QBO firms");
     res.status(502).json({ error: err.message ?? "Failed to fetch firms from QuickBooks" });
   }
+});
+
+// ─── Helper: parse QBO TransactionList report rows ────────────────────────────
+
+interface QboTxRow {
+  date: string | null;
+  transaction_type: string | null;
+  num: string | null;
+  name: string | null;
+  memo: string | null;
+  account: string | null;
+  split: string | null;
+  amount: number | null;
+}
+
+function extractTxRows(row: any, colCount: number): any[][] {
+  const results: any[][] = [];
+  if (row.ColData && Array.isArray(row.ColData)) {
+    results.push(row.ColData.map((c: any) => c.value ?? ""));
+  }
+  if (row.Rows?.Row) {
+    for (const r of row.Rows.Row) {
+      results.push(...extractTxRows(r, colCount));
+    }
+  }
+  return results;
+}
+
+function parseTransactionListReport(report: any): QboTxRow[] {
+  const columns: string[] = (report?.Columns?.Column ?? []).map((c: any) => c.ColTitle ?? "");
+  const dateIdx   = columns.findIndex(c => c === "Date");
+  const typeIdx   = columns.findIndex(c => c === "Transaction Type");
+  const numIdx    = columns.findIndex(c => c === "No.");
+  const nameIdx   = columns.findIndex(c => c === "Name");
+  const memoIdx   = columns.findIndex(c => c === "Memo/Description");
+  const acctIdx   = columns.findIndex(c => c === "Account");
+  const splitIdx  = columns.findIndex(c => c === "Split");
+  const amtIdx    = columns.findIndex(c => c === "Amount");
+
+  const rawRows: any[][] = [];
+  for (const row of (report?.Rows?.Row ?? [])) {
+    rawRows.push(...extractTxRows(row, columns.length));
+  }
+
+  return rawRows.map(cols => {
+    const get = (i: number) => (i >= 0 && cols[i] !== undefined ? String(cols[i]).trim() : null) || null;
+    const rawAmt = get(amtIdx);
+    const amount = rawAmt ? parseFloat(rawAmt.replace(/[$,]/g, "")) : null;
+    return {
+      date:             get(dateIdx),
+      transaction_type: get(typeIdx),
+      num:              get(numIdx),
+      name:             get(nameIdx),
+      memo:             get(memoIdx),
+      account:          get(acctIdx),
+      split:            get(splitIdx),
+      amount:           isNaN(amount as number) ? null : amount,
+    };
+  }).filter(r => r.date); // skip empty rows
+}
+
+function isUncategorized(account: string | null, split: string | null): boolean {
+  if (!account && !split) return true;
+  const check = [account, split].join(" ").toLowerCase();
+  return check.includes("uncategorized") || check.includes("ask my accountant") || check.includes("uncat");
+}
+
+// ─── POST /api/qbo/clients/:id/sync-transactions ──────────────────────────────
+
+router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admin"), async (req, res) => {
+  const clientId = Number(req.params.id);
+  if (isNaN(clientId)) { res.status(400).json({ error: "Invalid client id" }); return; }
+
+  const { startDate, endDate } = req.body as { startDate?: string; endDate?: string };
+  if (!startDate || !endDate) { res.status(400).json({ error: "startDate and endDate required" }); return; }
+
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) { res.status(503).json({ error: "QuickBooks not connected" }); return; }
+
+  // Get client's realm IDs
+  const [clientRow] = await db.select().from(clientsTable).where(eq(clientsTable.id, clientId)).limit(1);
+  if (!clientRow) { res.status(404).json({ error: "Client not found" }); return; }
+
+  let realmIds: string[] = [];
+  if ((clientRow as any).qbo_realm_ids) {
+    try { realmIds = JSON.parse((clientRow as any).qbo_realm_ids); } catch {}
+  }
+  if (realmIds.length === 0 && clientRow.qbo_realm_id) {
+    realmIds = [clientRow.qbo_realm_id];
+  }
+  if (realmIds.length === 0) {
+    res.status(400).json({ error: "No QuickBooks company linked to this client" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  let totalInserted = 0;
+  const importIds: number[] = [];
+
+  for (const realmId of realmIds) {
+    try {
+      const url = `${QBO_API_BASE}/${realmId}/reports/TransactionList?start_date=${startDate}&end_date=${endDate}&minorversion=65`;
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        logger.warn({ realmId, status: resp.status, errText }, "QBO TransactionList failed");
+        continue;
+      }
+
+      const report = await resp.json() as any;
+      const rows = parseTransactionListReport(report);
+
+      // Create import record
+      const [importRecord] = await db.insert(transactionImportsTable).values({
+        client_id:        clientId,
+        filename:         `QBO Sync: ${startDate} to ${endDate}`,
+        date_range_start: startDate,
+        date_range_end:   endDate,
+        imported_at:      now,
+        row_count:        rows.length,
+        source:           "qbo_sync",
+        realm_id:         realmId,
+        sync_start:       startDate,
+        sync_end:         endDate,
+      } as any).returning();
+
+      if (rows.length > 0) {
+        const txRows = rows.map(r => ({
+          client_id:        clientId,
+          import_id:        importRecord.id,
+          date:             r.date,
+          transaction_type: r.transaction_type,
+          num:              r.num,
+          name:             r.name,
+          memo:             r.memo,
+          account:          r.account,
+          amount:           r.amount,
+          is_uncategorized: isUncategorized(r.account, r.split),
+          status:           isUncategorized(r.account, r.split) ? "uncategorized" : "needs_info",
+        }));
+        await db.insert(transactionsTable).values(txRows);
+        totalInserted += rows.length;
+      }
+
+      importIds.push(importRecord.id);
+    } catch (err: any) {
+      logger.error({ realmId, err: err.message }, "QBO sync error for realm");
+    }
+  }
+
+  res.json({ ok: true, synced: totalInserted, importIds, syncedAt: now });
+});
+
+// ─── GET /api/qbo/clients/:id/transactions ────────────────────────────────────
+
+router.get("/qbo/clients/:id/transactions", requireAuth, requireRole("admin"), async (req, res) => {
+  const clientId = Number(req.params.id);
+  if (isNaN(clientId)) { res.status(400).json({ error: "Invalid client id" }); return; }
+
+  const imports = await db
+    .select()
+    .from(transactionImportsTable)
+    .where(and(
+      eq(transactionImportsTable.client_id, clientId),
+      eq(transactionImportsTable.source as any, "qbo_sync"),
+    ))
+    .orderBy(transactionImportsTable.imported_at);
+
+  const txs = await db
+    .select()
+    .from(transactionsTable)
+    .where(eq(transactionsTable.client_id, clientId))
+    .orderBy(transactionsTable.date, transactionsTable.id);
+
+  // Last sync timestamp across all imports for this client
+  const lastSync = imports.length > 0
+    ? imports.reduce((a, b) => (a.imported_at > b.imported_at ? a : b)).imported_at
+    : null;
+
+  res.json({ imports, transactions: txs, lastSync });
 });
 
 // ─── PATCH /api/qbo/clients/:id/realm ────────────────────────────────────────
