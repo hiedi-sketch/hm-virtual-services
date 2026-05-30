@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Upload, FileText, FileImage, File, Download, Trash2, AlertCircle, CloudUpload, Loader2, X, Eye,
 } from "lucide-react";
+import { PdfViewer } from "@/components/PdfViewer";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -94,13 +95,7 @@ function PreviewModal({ file, onClose }: { file: FileUploadRecord; onClose: () =
               className="max-w-full max-h-full object-contain rounded-lg"
             />
           )}
-          {isPdf && (
-            <iframe
-              src={previewUrl}
-              title={file.original_name}
-              className="w-full h-full border-0"
-            />
-          )}
+          {isPdf && <PdfViewer url={previewUrl} />}
         </div>
       </div>
     </div>

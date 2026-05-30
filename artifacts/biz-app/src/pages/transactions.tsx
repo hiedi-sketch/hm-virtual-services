@@ -8,6 +8,7 @@ import {
   Upload, FileSpreadsheet, Search, Mail, Plus, Eye, Download, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PdfViewer } from "@/components/PdfViewer";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -683,11 +684,7 @@ function TransactionEditPanel({
                 className="max-w-full max-h-full object-contain rounded-lg"
               />
             ) : (
-              <iframe
-                src={receiptPreviewUrl}
-                title="Receipt"
-                className="w-full h-full border-0"
-              />
+              <PdfViewer url={receiptPreviewUrl} />
             )}
           </div>
         </div>
