@@ -74,7 +74,7 @@ router.patch("/transactions/:id", requireAdmin, async (req, res) => {
   const {
     status,
     memo,
-    account,
+    category,
     qbo_account_id,
     internal_notes,
     flagged_question,
@@ -84,7 +84,7 @@ router.patch("/transactions/:id", requireAdmin, async (req, res) => {
   } = req.body as {
     status?: string;
     memo?: string;
-    account?: string;
+    category?: string;
     qbo_account_id?: string;
     internal_notes?: string;
     flagged_question?: string;
@@ -104,9 +104,9 @@ router.patch("/transactions/:id", requireAdmin, async (req, res) => {
     updates.memo = memo;
     updates.qbo_pending = true;
   }
-  if (account !== undefined) {
-    updates.account = account;
-    updates.is_uncategorized = !account;
+  if (category !== undefined) {
+    updates.category = category;
+    updates.is_uncategorized = !category;
     updates.qbo_pending = true;
   }
   if (qbo_account_id !== undefined) {

@@ -21,6 +21,7 @@ type Tx = {
   id: number; client_id: number; import_id: number;
   date: string | null; transaction_type: string | null; num: string | null;
   name: string | null; memo: string | null; account: string | null;
+  category: string | null;
   amount: number | null; is_uncategorized: boolean;
   status: string;
   flagged_question: string | null;
@@ -173,9 +174,9 @@ function MemoCell({ tx, onSave }: { tx: Tx; onSave: (memo: string) => void }) {
   );
 }
 
-// ─── Account Cell ─────────────────────────────────────────────────────────────
+// ─── Category Cell (editable dropdown from Chart of Accounts) ─────────────────
 
-function AccountCell({ tx, accounts, onSave }: {
+function CategoryCell({ tx, accounts, onSave }: {
   tx: Tx;
   accounts: QboAccount[];
   onSave: (accountId: string, accountName: string) => void;
@@ -212,7 +213,7 @@ function AccountCell({ tx, accounts, onSave }: {
   if (accounts.length === 0) {
     return (
       <span className={cn("text-xs", tx.is_uncategorized ? "text-amber-600 font-medium" : "text-slate-600")}>
-        {tx.is_uncategorized ? "Uncategorized" : (tx.account || "—")}
+        {tx.is_uncategorized ? "Uncategorized" : (tx.category || "—")}
       </span>
     );
   }
@@ -227,10 +228,10 @@ function AccountCell({ tx, accounts, onSave }: {
             ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
             : "text-slate-600 hover:bg-slate-100"
         )}
-        title="Click to change account"
+        title="Click to change category"
       >
         {tx.is_uncategorized && <AlertCircle className="w-3 h-3 shrink-0" />}
-        <span className="truncate flex-1">{tx.account || "Uncategorized"}</span>
+        <span className="truncate flex-1">{tx.category || "Uncategorized"}</span>
         <ChevronDown className="w-3 h-3 shrink-0 text-slate-400 group-hover:text-slate-600" />
       </button>
 
@@ -244,12 +245,12 @@ function AccountCell({ tx, accounts, onSave }: {
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="flex-1 text-sm focus:outline-none bg-transparent"
-              placeholder="Search accounts…"
+              placeholder="Search categories…"
             />
           </div>
           <div className="max-h-52 overflow-y-auto">
             {filtered.length === 0 ? (
-              <p className="px-3 py-3 text-xs text-slate-400 text-center">No matching accounts</p>
+              <p className="px-3 py-3 text-xs text-slate-400 text-center">No matching categories</p>
             ) : filtered.map(a => (
               <button
                 key={a.Id}
@@ -369,6 +370,11 @@ function FlagPanel({
           {tx.account && (
             <p className="text-xs text-slate-500">
               <span className="font-medium text-slate-600">Account:</span> {tx.account}
+            </p>
+          )}
+          {tx.category && (
+            <p className="text-xs text-slate-500">
+              <span className="font-medium text-slate-600">Category:</span> {tx.category}
             </p>
           )}
           {tx.memo && (
@@ -619,9 +625,9 @@ export default function TransactionsPage() {
     await apiPatch(txId, { memo }, { memo, qbo_pending: true });
   };
 
-  const handleSaveAccount = async (txId: number, accountId: string, accountName: string) => {
-    await apiPatch(txId, { account: accountName, qbo_account_id: accountId }, {
-      account: accountName,
+  const handleSaveCategory = async (txId: number, accountId: string, accountName: string) => {
+    await apiPatch(txId, { category: accountName, qbo_account_id: accountId }, {
+      category: accountName,
       qbo_account_id: accountId,
       is_uncategorized: false,
       qbo_pending: true,
@@ -929,7 +935,7 @@ export default function TransactionsPage() {
             <div className="flex items-center gap-2 px-5 py-2.5 bg-amber-50 border-b border-amber-100">
               <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
               <span className="text-sm text-amber-800 font-medium">
-                {uncategorized.length} transaction{uncategorized.length !== 1 ? "s" : ""} missing Account — shown at top
+                {uncategorized.length} transaction{uncategorized.length !== 1 ? "s" : ""} missing Category — shown at top
               </span>
             </div>
           )}
@@ -942,7 +948,8 @@ export default function TransactionsPage() {
                   <th className="px-4 py-3.5 w-28">Type</th>
                   <th className="px-4 py-3.5">Vendor / Payee</th>
                   <th className="px-4 py-3.5 w-48">Memo</th>
-                  <th className="px-4 py-3.5 w-52">Account / Category</th>
+                  <th className="px-4 py-3.5 w-40">Account</th>
+                  <th className="px-4 py-3.5 w-52">Category</th>
                   <th className="px-4 py-3.5 w-36">Status</th>
                   <th className="px-4 py-3.5 w-28 text-right">Amount</th>
                   <th className="px-4 py-3.5 w-36">Internal Notes</th>
@@ -952,7 +959,7 @@ export default function TransactionsPage() {
               <tbody className="divide-y divide-slate-100">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-6 py-10 text-center text-slate-400 text-sm">
+                    <td colSpan={10} className="px-6 py-10 text-center text-slate-400 text-sm">
                       No transactions match this filter.
                     </td>
                   </tr>
@@ -984,10 +991,15 @@ export default function TransactionsPage() {
                         <MemoCell tx={tx} onSave={memo => handleSaveMemo(tx.id, memo)} />
                       </td>
                       <td className="px-4 py-3">
-                        <AccountCell
+                        <span className="text-xs text-slate-600 truncate block max-w-[150px]" title={tx.account ?? undefined}>
+                          {tx.account || <span className="text-slate-300">—</span>}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <CategoryCell
                           tx={tx}
                           accounts={qboAccounts}
-                          onSave={(id, name) => handleSaveAccount(tx.id, id, name)}
+                          onSave={(id, name) => handleSaveCategory(tx.id, id, name)}
                         />
                       </td>
                       <td className="px-4 py-3">

@@ -423,7 +423,7 @@ interface QboTxRow {
   name: string | null;
   memo: string | null;
   account: string | null;
-  split: string | null;
+  category: string | null;
   amount: number | null;
 }
 
@@ -469,15 +469,15 @@ function parseTransactionListReport(report: any): QboTxRow[] {
       name:             get(nameIdx),
       memo:             get(memoIdx),
       account:          get(acctIdx),
-      split:            get(splitIdx),
+      category:         get(splitIdx),
       amount:           isNaN(amount as number) ? null : amount,
     };
   }).filter(r => r.date);
 }
 
-function isUncategorized(account: string | null, split: string | null): boolean {
-  if (!account && !split) return true;
-  const check = [account, split].join(" ").toLowerCase();
+function isUncategorized(category: string | null): boolean {
+  if (!category) return true;
+  const check = category.toLowerCase();
   return check.includes("uncategorized") || check.includes("ask my accountant") || check.includes("uncat");
 }
 
@@ -576,9 +576,10 @@ router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admi
           name:             r.name,
           memo:             r.memo,
           account:          r.account,
+          category:         r.category,
           amount:           r.amount,
-          is_uncategorized: isUncategorized(r.account, r.split),
-          status:           isUncategorized(r.account, r.split) ? "uncategorized" : "needs_info",
+          is_uncategorized: isUncategorized(r.category),
+          status:           isUncategorized(r.category) ? "uncategorized" : "needs_info",
           qbo_txn_id:       r.qbo_txn_id,
           qbo_txn_type:     r.transaction_type,
           qbo_pending:      false,
@@ -795,7 +796,7 @@ router.post("/qbo/transactions/:id/save", requireAuth, requireRole("admin"), asy
     (tx as any).qbo_txn_type,
     tx.memo ?? null,
     (tx as any).qbo_account_id ?? null,
-    tx.account ?? null,
+    (tx as any).category ?? null,
   );
 
   if (!result.ok) {
@@ -851,7 +852,7 @@ router.post("/qbo/transactions/bulk-save", requireAuth, requireRole("admin"), as
       (tx as any).qbo_txn_type,
       tx.memo ?? null,
       (tx as any).qbo_account_id ?? null,
-      tx.account ?? null,
+      (tx as any).category ?? null,
     );
 
     if (result.ok) {

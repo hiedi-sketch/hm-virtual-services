@@ -31,6 +31,7 @@ export const transactionsTable = pgTable("transactions", {
   name: text("name"),
   memo: text("memo"),
   account: text("account"),
+  category: text("category"),
   amount: real("amount"),
   is_uncategorized: boolean("is_uncategorized").notNull().default(false),
   // Review workflow
