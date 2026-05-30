@@ -778,7 +778,6 @@ export default function TransactionsPage() {
       activeClientIdRef.current = selectedClientId; // authoritative update for programmatic changes
       setTxData(null);
       setTxMap(new Map());
-      setUploadConflict(null);
       setEditTxId(null);
       setFlagTxId(null);
       setFilterStatus("all");
@@ -791,7 +790,6 @@ export default function TransactionsPage() {
       setTxData(null);
       setTxMap(new Map());
       setLoadError(null);
-      setUploadConflict(null);
       setEditTxId(null);
       setFlagTxId(null);
       setQboAccounts([]);
@@ -1054,7 +1052,6 @@ export default function TransactionsPage() {
                   setSelectedClientId(newId);
                   setTxData(null);
                   setTxMap(new Map());
-                  setUploadConflict(null);
                 }}
                 className="w-full appearance-none border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] pr-8"
               >
