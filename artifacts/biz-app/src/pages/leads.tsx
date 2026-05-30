@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   useListLeads,
   useListClients,
@@ -14,7 +14,7 @@ import { Modal } from "@/components/Modal";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Upload, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote, Calendar, FileSpreadsheet, AlertCircle, Link2, X, UserCheck } from "lucide-react";
+import { Plus, Upload, Target, Mail, TrendingUp, Users, CheckCircle, Trash2, ChevronRight, StickyNote, Calendar, FileSpreadsheet, AlertCircle, Link2, X, UserCheck, Phone, Globe, Building2, MapPin, ExternalLink, DollarSign, ChevronLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -373,11 +373,291 @@ function LeadClientLink({
   );
 }
 
+// ── Lead Detail Panel ─────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function LeadDetailPanel({ lead, clients, onClose, onSetStatus, isPending }: {
+  lead: any;
+  clients: ClientOption[];
+  onClose: () => void;
+  onSetStatus: (id: number, status: LeadStatus) => void;
+  isPending: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const updateMutation = useUpdateLead({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListLeadsQueryKey() }),
+      onError:   () => toast({ title: "Failed to save", variant: "destructive" }),
+    },
+  });
+
+  // Follow-up date inline edit
+  const [editingDate, setEditingDate] = useState(false);
+  const [dateDraft, setDateDraft] = useState<string>("");
+
+  // Escape key closes panel
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  if (!lead) return null;
+
+  const l = lead;
+  const col = STATUSES.find(s => s.value === l.status) ?? STATUSES[0];
+  const initials = (l.name as string).split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase();
+
+  const saveDate = (val: string) => {
+    updateMutation.mutate({ id: l.id, data: { follow_up_date: val || null } });
+    setEditingDate(false);
+  };
+
+  return (
+    <>
+      {/* Overlay */}
+      <div
+        className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div className="fixed left-0 top-0 h-full z-50 flex flex-col bg-white shadow-2xl border-r border-slate-200"
+        style={{ width: "clamp(320px, 28vw, 420px)", overflowY: "auto" }}
+      >
+        {/* ── Header ── */}
+        <div style={{ background: "linear-gradient(135deg, #266b75 0%, #1d5259 100%)" }}
+          className="p-5 pb-6 shrink-0"
+        >
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center text-white font-bold text-lg shrink-0">
+              {initials}
+            </div>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          </div>
+          <h2 className="text-xl font-bold text-white leading-snug">{l.name}</h2>
+          {l.business_name && (
+            <p className="text-white/75 text-sm mt-0.5 font-medium">{l.business_name}</p>
+          )}
+          {l.title && (
+            <p className="text-white/60 text-xs mt-0.5">{l.title}{l.management_level ? ` · ${l.management_level}` : ""}</p>
+          )}
+          {/* Status pill */}
+          <div className="mt-3 flex items-center gap-2">
+            <span className={cn("text-xs font-bold px-2.5 py-1 rounded-full border", col.pill)}>
+              {col.label}
+            </span>
+            {l.lead_source && (
+              <span className="text-xs text-white/50">via {l.lead_source}</span>
+            )}
+          </div>
+        </div>
+
+        {/* ── Body ── */}
+        <div className="flex-1 flex flex-col gap-5 p-5">
+
+          {/* Status timeline */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Pipeline Stage</p>
+            <StatusTimeline
+              currentStatus={l.status}
+              onSetStatus={(s) => onSetStatus(l.id, s)}
+              isPending={isPending}
+            />
+            <div className="flex justify-between mt-1">
+              {STATUSES.map(s => (
+                <span key={s.value}
+                  className={cn("text-[9px] font-medium flex-1 text-center",
+                    s.value === l.status ? "text-slate-700 font-bold" : "text-slate-300")}
+                >{s.label}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Est. Value */}
+          <div className={cn("rounded-xl px-4 py-3 border", l.estimated_value > 0 ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-slate-100")}>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <DollarSign className="w-3 h-3 text-slate-400" />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Estimated Value</span>
+            </div>
+            {l.estimated_value > 0
+              ? <p className="text-xl font-bold text-emerald-700">{formatCurrency(l.estimated_value)}</p>
+              : <p className="text-sm text-slate-400">Not set</p>
+            }
+          </div>
+
+          {/* Contact */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Contact</p>
+            <div className="flex flex-col gap-2">
+              {l.email && (
+                <a href={`mailto:${l.email}`}
+                  className="flex items-center gap-2 text-sm text-slate-700 hover:text-[#266b75] transition-colors group"
+                >
+                  <span className="p-1.5 rounded-lg bg-slate-100 group-hover:bg-[#266b75]/10 transition-colors shrink-0">
+                    <Mail className="w-3 h-3 text-slate-500" />
+                  </span>
+                  <span className="truncate">{l.email}</span>
+                </a>
+              )}
+              {l.phone && (
+                <a href={`tel:${l.phone}`}
+                  className="flex items-center gap-2 text-sm text-slate-700 hover:text-[#266b75] transition-colors group"
+                >
+                  <span className="p-1.5 rounded-lg bg-slate-100 group-hover:bg-[#266b75]/10 transition-colors shrink-0">
+                    <Phone className="w-3 h-3 text-slate-500" />
+                  </span>
+                  <span>{l.phone}</span>
+                </a>
+              )}
+              {l.cell_phone && l.cell_phone !== l.phone && (
+                <a href={`tel:${l.cell_phone}`}
+                  className="flex items-center gap-2 text-sm text-slate-700 hover:text-[#266b75] transition-colors group"
+                >
+                  <span className="p-1.5 rounded-lg bg-slate-100 group-hover:bg-[#266b75]/10 transition-colors shrink-0">
+                    <Phone className="w-3 h-3 text-slate-400" />
+                  </span>
+                  <span>{l.cell_phone} <span className="text-xs text-slate-400">(cell)</span></span>
+                </a>
+              )}
+              {/* Follow-up date */}
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-slate-100 shrink-0">
+                  <Calendar className="w-3 h-3 text-slate-500" />
+                </span>
+                {editingDate ? (
+                  <input
+                    type="date"
+                    autoFocus
+                    defaultValue={l.follow_up_date?.split("T")[0] ?? ""}
+                    onBlur={e => saveDate(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") saveDate((e.target as HTMLInputElement).value); if (e.key === "Escape") setEditingDate(false); }}
+                    className="flex-1 text-sm border border-[#266b75]/40 rounded-lg px-2 py-1 focus:outline-none focus:border-[#266b75]"
+                  />
+                ) : (
+                  <button
+                    onClick={() => { setDateDraft(l.follow_up_date?.split("T")[0] ?? ""); setEditingDate(true); }}
+                    className={cn("text-sm text-left hover:text-[#266b75] transition-colors",
+                      l.follow_up_date ? "text-slate-700" : "text-slate-400")}
+                  >
+                    {l.follow_up_date
+                      ? <>Follow up: <span className="font-medium">{new Date(l.follow_up_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span></>
+                      : "Set follow-up date…"
+                    }
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Company / Location */}
+          {(l.industry || l.city || l.state || l.company_size || l.revenue || l.founded_year) && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Company</p>
+              <div className="bg-slate-50 rounded-xl border border-slate-100 divide-y divide-slate-100">
+                {l.industry && (
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <Building2 className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-600">{l.industry}</span>
+                  </div>
+                )}
+                {(l.city || l.state) && (
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-600">{[l.city, l.state].filter(Boolean).join(", ")}</span>
+                  </div>
+                )}
+                {l.company_size && (
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <Users className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-600">{l.company_size} employees</span>
+                  </div>
+                )}
+                {l.revenue && (
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <DollarSign className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-600">Revenue: {l.revenue}</span>
+                  </div>
+                )}
+                {l.founded_year && (
+                  <div className="flex items-center gap-2 px-3 py-2">
+                    <Calendar className="w-3 h-3 text-slate-400 shrink-0" />
+                    <span className="text-xs text-slate-600">Founded {l.founded_year}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Social / Web links */}
+          {(l.linkedin_url || l.website || l.facebook_url || l.x_url) && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Links</p>
+              <div className="flex flex-wrap gap-2">
+                {l.linkedin_url && (
+                  <a href={l.linkedin_url} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 hover:bg-blue-100 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" /> LinkedIn
+                  </a>
+                )}
+                {l.website && (
+                  <a href={l.website} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors"
+                  >
+                    <Globe className="w-3 h-3" /> Website
+                  </a>
+                )}
+                {l.facebook_url && (
+                  <a href={l.facebook_url} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-100 text-indigo-700 hover:bg-indigo-100 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" /> Facebook
+                  </a>
+                )}
+                {l.x_url && (
+                  <a href={l.x_url} target="_blank" rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white hover:bg-slate-700 transition-colors"
+                  >
+                    <ExternalLink className="w-3 h-3" /> 𝕏
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Notes</p>
+            <LeadNotes leadId={l.id} notes={l.notes} />
+          </div>
+
+          {/* Linked Client */}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Linked Client</p>
+            <LeadClientLink leadId={l.id} clientId={l.client_id} clients={clients} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Leads() {
   const { data: leads, isLoading } = useListLeads();
   const { data: clients = [] } = useListClients();
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const selectedLead = (leads ?? []).find(l => l.id === selectedLeadId) ?? null;
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [importRows, setImportRows] = useState<CsvLead[]>([]);
@@ -650,7 +930,8 @@ export default function Leads() {
                   colLeads.map(lead => (
                     <div
                       key={lead.id}
-                      className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3 hover:border-slate-300 transition-colors"
+                      onClick={() => setSelectedLeadId(lead.id)}
+                      className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3 hover:border-[#266b75]/40 hover:shadow-md transition-all cursor-pointer"
                     >
                       {/* Lead name + email + delete */}
                       <div className="flex items-start justify-between gap-2">
@@ -677,7 +958,7 @@ export default function Leads() {
                           )}
                         </div>
                         <button
-                          onClick={() => handleDelete(lead.id)}
+                          onClick={e => { e.stopPropagation(); handleDelete(lead.id); }}
                           disabled={deletingId === lead.id}
                           className="shrink-0 p-1 text-slate-300 hover:text-red-500 transition-colors rounded"
                           title="Delete lead"
@@ -703,7 +984,7 @@ export default function Leads() {
                       )}
 
                       {/* Status Timeline */}
-                      <div>
+                      <div onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Pipeline</span>
                           <span className={cn("text-[10px] font-semibold px-1.5 py-0.5 rounded-full border", col.pill)}>
@@ -748,14 +1029,18 @@ export default function Leads() {
                       )}
 
                       {/* Notes */}
-                      <LeadNotes leadId={lead.id} notes={lead.notes} />
+                      <div onClick={e => e.stopPropagation()}>
+                        <LeadNotes leadId={lead.id} notes={lead.notes} />
+                      </div>
 
                       {/* Linked Client */}
-                      <LeadClientLink
-                        leadId={lead.id}
-                        clientId={(lead as any).client_id}
-                        clients={clients}
-                      />
+                      <div onClick={e => e.stopPropagation()}>
+                        <LeadClientLink
+                          leadId={lead.id}
+                          clientId={(lead as any).client_id}
+                          clients={clients}
+                        />
+                      </div>
                     </div>
                   ))
                 )}
@@ -763,6 +1048,17 @@ export default function Leads() {
             );
           })}
         </div>
+      )}
+
+      {/* Lead Detail Panel */}
+      {selectedLead && (
+        <LeadDetailPanel
+          lead={selectedLead}
+          clients={clients}
+          onClose={() => setSelectedLeadId(null)}
+          onSetStatus={setStatus}
+          isPending={updateMutation.isPending}
+        />
       )}
 
       {/* Add Lead Modal */}
