@@ -9,6 +9,7 @@ import { spawnRecurringTasks, spawnOnCompletion } from "../lib/spawn-recurring";
 import { sendMail, template } from "../lib/mailer";
 import { logAudit } from "../lib/audit";
 import { updateTask as cuUpdateTask, createComment as cuCreateComment, localStatusToCU, dateToMs } from "../services/clickup";
+import { pushTaskToAsana } from "../services/asana";
 import {
   CreateTaskBody,
   UpdateTaskBody,
@@ -31,7 +32,7 @@ function todayStr(): string {
   return new Date().toISOString().split("T")[0]!;
 }
 
-// ── ClickUp auto-push helpers ─────────────────────────────────────────────────
+// ── External service auto-push helpers ────────────────────────────────────────
 
 async function getClickUpToken(): Promise<string | null> {
   const rows = await db
@@ -42,7 +43,21 @@ async function getClickUpToken(): Promise<string | null> {
   return rows[0]?.value ?? null;
 }
 
-/** Fire-and-forget: push a single task update to ClickUp if it is linked. */
+async function getAsanaPat(): Promise<string | null> {
+  const rows = await db
+    .select({ value: appSettingsTable.value })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.key, "asana_pat"))
+    .limit(1);
+  return rows[0]?.value ?? null;
+}
+
+/**
+ * Fire-and-forget: push a task update to ClickUp if linked.
+ * Status is only pushed when the local status is "Completed" — we never send
+ * a non-complete status to ClickUp so we don't un-complete tasks that were
+ * already marked done there.
+ */
 async function maybePushTaskToClickUp(task: {
   clickup_task_id: string | null;
   title: string;
@@ -59,8 +74,34 @@ async function maybePushTaskToClickUp(task: {
       name: task.title,
       description: task.description ?? undefined,
       due_date: dateToMs(task.due_date),
-      status: localStatusToCU(task.status),
+      // Only push status=Completed; never push incomplete statuses to avoid
+      // un-completing tasks that were already marked done in ClickUp.
+      ...(task.status === "Completed" ? { status: localStatusToCU(task.status) } : {}),
       tags: task.tags ? task.tags.split(",").map(t => t.trim()).filter(Boolean) : [],
+    });
+  } catch { /* best-effort */ }
+}
+
+/**
+ * Fire-and-forget: mark a task as completed in Asana when it is completed
+ * in the dashboard. Never called with completed=false so we never un-complete
+ * tasks that were already done in Asana.
+ */
+async function maybePushCompletionToAsana(task: {
+  asana_gid: string | null;
+  title: string;
+  due_date: string | null;
+  description: string | null;
+}): Promise<void> {
+  if (!task.asana_gid) return;
+  const pat = await getAsanaPat();
+  if (!pat) return;
+  try {
+    await pushTaskToAsana(pat, task.asana_gid, {
+      name: task.title,
+      due_on: task.due_date ?? null,
+      completed: true,
+      notes: task.description ?? null,
     });
   } catch { /* best-effort */ }
 }
@@ -432,7 +473,8 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
   const parsed = UpdateTaskResponse.parse(updated ?? rawUpdated);
   res.json(parsed);
 
-  // Fire-and-forget: push changes to ClickUp if this task is linked
+  // Fire-and-forget: push changes to ClickUp if this task is linked.
+  // Status is only forwarded when Completed (see helper for rationale).
   maybePushTaskToClickUp({
     clickup_task_id: updated.clickup_task_id ?? null,
     title: updated.title,
@@ -441,6 +483,17 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
     description: updated.description ?? null,
     tags: updated.tags ?? null,
   }).catch(() => {});
+
+  // Fire-and-forget: if the task was just marked Completed, immediately
+  // mark it done in Asana too (real-time, rather than waiting for nightly sync).
+  if (body.status === "Completed") {
+    maybePushCompletionToAsana({
+      asana_gid: updated.asana_gid ?? null,
+      title: updated.title,
+      due_date: updated.due_date ?? null,
+      description: updated.description ?? null,
+    }).catch(() => {});
+  }
 
   const actor = req.session.user;
   const action = body.status === "Completed" ? "completed" : "updated";

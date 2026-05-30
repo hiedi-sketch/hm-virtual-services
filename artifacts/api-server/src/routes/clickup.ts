@@ -422,8 +422,13 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
         ? [...existingTags, clientName]
         : existingTags;
 
-      // Map status to what actually exists in this ClickUp list
-      const mappedStatus = localStatusToCUActual(task.status, cuStatuses);
+      // Map status to what actually exists in this ClickUp list.
+      // Only include status when the task is Completed — we never push
+      // incomplete statuses in the batch sync to avoid un-completing tasks
+      // that were already marked done in ClickUp.
+      const mappedStatus = task.status === "Completed"
+        ? localStatusToCUActual(task.status, cuStatuses)
+        : undefined;
 
       await updateTask(creds.token, task.clickup_task_id!, {
         name: task.title,

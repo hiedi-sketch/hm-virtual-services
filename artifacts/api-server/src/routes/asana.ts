@@ -374,10 +374,12 @@ export async function runPush(): Promise<{ pushed: number; errors: number; pushe
 
   await Promise.all(linked.map(async task => {
     try {
+      // Only push completed: true — never push completed: false, which would
+      // un-complete tasks that were already marked done in Asana.
       await pushTaskToAsana(creds.pat, task.asana_gid!, {
         name:      task.title,
         due_on:    task.due_date ?? null,
-        completed: task.status === "Completed",
+        ...(task.status === "Completed" ? { completed: true } : {}),
         notes:     task.description ?? null,
       });
       pushed++;
