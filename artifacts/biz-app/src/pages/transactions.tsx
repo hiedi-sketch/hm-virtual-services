@@ -385,10 +385,20 @@ function TransactionEditPanel({
   const [notes, setNotes] = useState(tx.internal_notes ?? "");
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
+  const [receiptMime, setReceiptMime] = useState<string | null>(null);
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMemo(tx.memo ?? ""); }, [tx.memo]);
   useEffect(() => { setNotes(tx.internal_notes ?? ""); }, [tx.internal_notes]);
+
+  // Resolve actual mimetype via HEAD so we render image vs PDF correctly
+  useEffect(() => {
+    setReceiptMime(null);
+    if (!tx.receipt_url) return;
+    fetch(tx.receipt_url.replace(/\/download$/, "/preview"), { method: "HEAD", credentials: "include" })
+      .then(r => setReceiptMime(r.headers.get("content-type")))
+      .catch(() => {});
+  }, [tx.receipt_url]);
 
   const handleReceiptFile = async (file: File) => {
     setUploadingReceipt(true);
@@ -399,12 +409,8 @@ function TransactionEditPanel({
   const receiptPreviewUrl = tx.receipt_url
     ? tx.receipt_url.replace(/\/download$/, "/preview")
     : null;
-  const receiptIsImage = tx.receipt_url
-    ? /\.(jpg|jpeg|png|gif|webp)/i.test(tx.receipt_url) || (tx.receipt_url.includes("/uploads/") && !/\.pdf$/i.test(tx.receipt_url))
-    : false;
-  const receiptIsPdf = tx.receipt_url
-    ? /\.pdf$/i.test(tx.receipt_url) || tx.receipt_url.includes("/uploads/") && /\.pdf$/i.test(tx.receipt_url)
-    : false;
+  const receiptIsImage = receiptMime ? receiptMime.startsWith("image/") : false;
+  const receiptIsPdf   = receiptMime ? receiptMime === "application/pdf" : false;
 
   return (
     <>
