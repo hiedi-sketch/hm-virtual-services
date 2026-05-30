@@ -1,0 +1,59 @@
+Add an Invoicing page to my existing React client dashboard (light theme).
+
+The page should have a clean, modern, refined aesthetic — think luxury-minimal 
+with generous white space, crisp typography, and subtle depth. Use a tonal 
+palette built around teal (#0D9488 or similar) as the brand accent color, with 
+soft neutrals and clean card surfaces.
+
+LAYOUT & STRUCTURE:
+- Top summary bar with 4 KPI cards: Total Invoiced (MTD), Outstanding, 
+  Overdue (flagged in amber/red), Paid
+- A main invoices table below with columns: Invoice #, Client, Service Period, 
+  Amount, Status, Due Date, Actions
+- Status tags as colored pills: Draft (gray), Sent (blue), Paid (green), 
+  Overdue (red)
+- Actions column with icon buttons: Preview, Edit, Duplicate, Mark Paid
+
+INVOICE TABLE FEATURES:
+- Filter bar above the table: All / Draft / Sent / Paid / Overdue tabs
+- Search input to filter by client name
+- Sort by clicking column headers
+- Empty state illustration/message when no invoices match filter
+
+CREATE INVOICE:
+- "New Invoice" button (teal, top right) opens a slide-in right panel (not a modal)
+- Panel contains: Client dropdown, Service Period (date range), Invoice # 
+  (auto-generated), Line items section (description, qty, rate, subtotal rows 
+  with add/remove), Notes field, Due Date, total auto-calculated
+- Save as Draft and Send buttons at bottom of panel
+
+INVOICE DELIVERY & PAYMENT:
+- "Send Invoice" button triggers an email to the client with:
+  - A clean HTML email template that matches the dashboard's teal brand aesthetic
+  - A PDF of the invoice attached (auto-generated from the invoice details)
+  - A prominent "Pay Now" button/link in the email body that uses the client's 
+    existing Square payment link stored on their client profile
+- The PDF should include: HM Virtual Services branding, invoice number, client 
+  name, service period, line items table, total due, due date, and the Square 
+  payment link printed as both a clickable link and a plain URL for easy reference
+- After sending, invoice status auto-updates from Draft → Sent
+- Show a success toast notification confirming the email was sent
+
+CLIENT PROFILE INTEGRATION:
+- Each client record should have a Square Payment Link field
+- This link is pulled automatically when generating the invoice email and PDF
+- If no Square link is on file for a client, show a warning banner before 
+  allowing the invoice to be sent
+
+DESIGN DETAILS:
+- Use a refined, elegant font pairing — a clean geometric sans for UI and a 
+  slightly warmer font for invoice numbers and amounts
+- Subtle box shadows on cards, not heavy
+- Hover states on table rows
+- Smooth slide animation on the create invoice panel
+- No cluttered borders — use space and subtle background shifts to separate 
+  sections
+- The page should feel like a premium SaaS invoicing tool, not a generic form
+
+Keep all existing routing, navigation, and global styles intact. Add the 
+Invoicing page as a new route and add it to the sidebar navigation.
