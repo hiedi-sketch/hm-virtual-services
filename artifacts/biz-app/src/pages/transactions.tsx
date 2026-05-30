@@ -707,7 +707,7 @@ export default function TransactionsPage() {
   const editTx = editTxId != null ? (txMap.get(editTxId) ?? allTx.find(t => t.id === editTxId) ?? null) : null;
 
   const loadTransactions = useCallback(async (clientId: number) => {
-    activeClientIdRef.current = clientId;
+    if (activeClientIdRef.current !== clientId) return; // stale caller — a newer client was already selected
     setLoading(true);
     setLoadError(null);
     setTxData(null);
@@ -743,6 +743,7 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     if (selectedClientId) {
+      activeClientIdRef.current = selectedClientId; // authoritative update for programmatic changes
       setTxData(null);
       setTxMap(new Map());
       setSyncConflict(null);
@@ -961,6 +962,7 @@ export default function TransactionsPage() {
                 value={selectedClientId}
                 onChange={e => {
                   const newId = e.target.value ? Number(e.target.value) : "";
+                  activeClientIdRef.current = newId; // set synchronously before any effect fires
                   setSelectedClientId(newId);
                   setTxData(null);
                   setTxMap(new Map());

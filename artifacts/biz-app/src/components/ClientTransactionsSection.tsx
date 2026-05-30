@@ -424,10 +424,15 @@ export function ClientTransactionsSection({ client }: { client: any }) {
 
   const activeClientIdRef = useRef<number>(client.id);
 
+  // Keep ref authoritative — must run before loadTransactions effect
+  useEffect(() => {
+    activeClientIdRef.current = client.id;
+  }, [client.id]);
+
   const loadTransactions = useCallback(async () => {
     if (!hasQbo) return;
     const thisClientId = client.id;
-    activeClientIdRef.current = thisClientId;
+    if (activeClientIdRef.current !== thisClientId) return; // stale caller — client prop already changed
     setTransactions([]);
     setLoading(true);
     try {
