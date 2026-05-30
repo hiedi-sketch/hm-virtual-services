@@ -1064,6 +1064,22 @@ export default function TransactionsPage() {
             </div>
           </div>
 
+          {/* QuickBooks button */}
+          <div className="shrink-0">
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 invisible">QB</label>
+            <a
+              href="https://qbo.intuit.com/app/homepage"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-[#2CA01C] text-white hover:bg-[#238016] transition-colors"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 4a8 8 0 1 1 0 16A8 8 0 0 1 12 4zm-1 3v2H9a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1v2h2v-2h1a2 2 0 0 0 2-2v-2a2 2 0 0 0-2-2h-1V7h-2zm-1 4h4v2H10v-2z"/>
+              </svg>
+              QuickBooks
+            </a>
+          </div>
+
           {/* Upload button */}
           <div className="shrink-0 flex items-center gap-2">
             <input
