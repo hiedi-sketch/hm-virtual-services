@@ -526,6 +526,18 @@ export default function AppDevTrackerDetail() {
   };
   const app = loadApp();
 
+  // App date fields — editable inline, persisted to localStorage
+  const [appStartDate,  setAppStartDate]  = useState<string>(app?.startDate  ?? "");
+  const [appTargetDate, setAppTargetDate] = useState<string>(app?.targetDate ?? "");
+
+  const saveAppField = (field: keyof AppRecord, value: string) => {
+    const raw  = localStorage.getItem("hm_tracker_apps");
+    const list: AppRecord[] = raw ? JSON.parse(raw) : [];
+    localStorage.setItem("hm_tracker_apps", JSON.stringify(
+      list.map(a => String(a.id) === appId ? { ...a, [field]: value } : a)
+    ));
+  };
+
   // dailyHoursAvailable — editable per-app setting
   const [dailyHours, setDailyHours] = useState<number>(app?.dailyHoursAvailable ?? 6);
   const [dailyHoursInput, setDailyHoursInput] = useState<string>(String(app?.dailyHoursAvailable ?? 6));
@@ -544,8 +556,8 @@ export default function AppDevTrackerDetail() {
   const { sprints, loading, error, addSprint, updateSprint, deleteSprint } = useAppSprints(appId);
 
   // ── Schedule computation (pure, runs on every render)
-  const schedule = computeSchedule(sprints, dailyHours, app?.targetDate ?? "");
-  const stats    = computeSprintStats(sprints, app?.targetDate ?? "");
+  const schedule = computeSchedule(sprints, dailyHours, appTargetDate);
+  const stats    = computeSprintStats(sprints, appTargetDate);
 
   // Prefer schedule-based projection; fall back to velocity-based
   const projLaunch = schedule.projectedLaunchDate ?? stats.projectedDate;
@@ -652,10 +664,30 @@ export default function AppDevTrackerDetail() {
             </div>
           </div>
 
-          {/* Row 1 — Date cards */}
+          {/* Row 1 — Date cards (Start + Target editable inline) */}
           <div style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
-            <StatCard label="Start Date"      value={fmtDate(app?.startDate)} />
-            <StatCard label="Original Target" value={fmtDate(app?.targetDate)} />
+            {/* Editable Start Date */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#94a3b8", marginBottom: "8px" }}>Start Date</div>
+              <input
+                type="date"
+                value={appStartDate}
+                onChange={e => { setAppStartDate(e.target.value); saveAppField("startDate", e.target.value); }}
+                style={{ width: "100%", border: "none", outline: "none", fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: appStartDate ? "#0f172a" : "#cbd5e1", background: "transparent", cursor: "pointer", padding: 0, boxSizing: "border-box" }}
+              />
+              {!appStartDate && <div style={{ fontSize: "11px", color: "#cbd5e1", marginTop: "2px" }}>Click to set</div>}
+            </div>
+            {/* Editable Target Date */}
+            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#94a3b8", marginBottom: "8px" }}>Original Target</div>
+              <input
+                type="date"
+                value={appTargetDate}
+                onChange={e => { setAppTargetDate(e.target.value); saveAppField("targetDate", e.target.value); }}
+                style={{ width: "100%", border: "none", outline: "none", fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: appTargetDate ? "#0f172a" : "#cbd5e1", background: "transparent", cursor: "pointer", padding: 0, boxSizing: "border-box" }}
+              />
+              {!appTargetDate && <div style={{ fontSize: "11px", color: "#cbd5e1", marginTop: "2px" }}>Click to set</div>}
+            </div>
             <StatCard
               label="Projected Launch"
               value={loading ? "Loading…" : fmtDate(projLaunch)}
