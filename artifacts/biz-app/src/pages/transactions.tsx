@@ -52,17 +52,16 @@ type QboAccount = {
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
-type StatusKey = "uncategorized" | "needs_info" | "awaiting_response" | "responded" | "resolved";
+type StatusKey = "needs_info" | "awaiting_response" | "responded" | "resolved";
 
 const STATUS_CONFIG: Record<StatusKey, { label: string; badge: string; dot: string }> = {
-  uncategorized:     { label: "Uncategorized",     badge: "bg-red-50 text-red-700 border-red-200",       dot: "bg-red-500" },
   needs_info:        { label: "Needs Info",         badge: "bg-amber-50 text-amber-700 border-amber-200", dot: "bg-amber-500" },
   awaiting_response: { label: "Awaiting Response",  badge: "bg-blue-50 text-blue-700 border-blue-200",    dot: "bg-blue-500" },
   responded:         { label: "Responded",          badge: "bg-purple-50 text-purple-700 border-purple-200", dot: "bg-purple-500" },
   resolved:          { label: "Resolved",           badge: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
 };
 
-const STATUS_ORDER: StatusKey[] = ["uncategorized", "needs_info", "awaiting_response", "responded", "resolved"];
+const STATUS_ORDER: StatusKey[] = ["needs_info", "awaiting_response", "responded", "resolved"];
 
 const CHANNEL_LABELS: Record<string, string> = {
   dashboard: "Dashboard", asana: "Asana", clickup: "ClickUp",
@@ -109,7 +108,7 @@ function AmountCell({ amount }: { amount: number | null | undefined }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status as StatusKey] ?? STATUS_CONFIG.uncategorized;
+  const cfg = STATUS_CONFIG[status as StatusKey] ?? STATUS_CONFIG.needs_info;
   return (
     <span className={cn("inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold border whitespace-nowrap", cfg.badge)}>
       <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg.dot)} />
@@ -240,8 +239,8 @@ function CategoryCell({ tx, accounts, onSave }: {
   // No accounts loaded — show as plain text (CSV or no QBO realm)
   if (accounts.length === 0) {
     return (
-      <span className={cn("text-xs", tx.is_uncategorized ? "text-amber-600 font-medium" : "text-slate-600")}>
-        {tx.is_uncategorized ? "Uncategorized" : (tx.category || "—")}
+      <span className="text-xs text-slate-600">
+        {tx.category || "—"}
       </span>
     );
   }
@@ -250,16 +249,10 @@ function CategoryCell({ tx, accounts, onSave }: {
     <div ref={containerRef} className="relative">
       <button
         onClick={() => { setOpen(o => !o); setSearch(""); }}
-        className={cn(
-          "flex items-center gap-1 text-xs rounded-lg px-2 py-1 w-full max-w-[200px] transition-colors group text-left",
-          tx.is_uncategorized
-            ? "bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
-            : "text-slate-600 hover:bg-slate-100"
-        )}
+        className="flex items-center gap-1 text-xs rounded-lg px-2 py-1 w-full max-w-[200px] transition-colors group text-left text-slate-600 hover:bg-slate-100"
         title="Click to change category"
       >
-        {tx.is_uncategorized && <AlertCircle className="w-3 h-3 shrink-0" />}
-        <span className="truncate flex-1">{tx.category || "Uncategorized"}</span>
+        <span className="truncate flex-1">{tx.category || "Select…"}</span>
         <ChevronDown className="w-3 h-3 shrink-0 text-slate-400 group-hover:text-slate-600" />
       </button>
 
@@ -865,9 +858,6 @@ export default function TransactionsPage() {
   };
 
   const handleFlag = async (tx: Tx) => {
-    if (tx.status === "uncategorized") {
-      await apiPatch(tx.id, { status: "needs_info" }, { status: "needs_info" });
-    }
     setFlagTxId(tx.id);
   };
 
@@ -975,10 +965,7 @@ export default function TransactionsPage() {
     }
   };
 
-  const uncategorized = allTx.filter(t => t.is_uncategorized);
-  const categorized = allTx.filter(t => !t.is_uncategorized);
-  const sorted = [...uncategorized, ...categorized];
-  const filtered = filterStatus === "all" ? sorted : sorted.filter(t => t.status === filterStatus);
+  const filtered = filterStatus === "all" ? allTx : allTx.filter(t => t.status === filterStatus);
 
   const flagTx = flagTxId != null ? (txMap.get(flagTxId) ?? null) : null;
 
@@ -1241,16 +1228,6 @@ export default function TransactionsPage() {
             )}
           </div>
 
-          {/* Uncategorized notice */}
-          {filterStatus === "all" && uncategorized.length > 0 && (
-            <div className="flex items-center gap-2 px-5 py-2.5 bg-amber-50 border-b border-amber-100">
-              <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-              <span className="text-sm text-amber-800 font-medium">
-                {uncategorized.length} transaction{uncategorized.length !== 1 ? "s" : ""} missing Category — shown at top
-              </span>
-            </div>
-          )}
-
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
@@ -1280,10 +1257,7 @@ export default function TransactionsPage() {
                     <tr
                       key={tx.id}
                       onClick={() => setEditTxId(tx.id)}
-                      className={cn(
-                        "hover:bg-slate-50/80 transition-colors group cursor-pointer",
-                        tx.is_uncategorized && filterStatus === "all" && "bg-amber-50/30 hover:bg-amber-50/60"
-                      )}
+                      className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
                     >
                       <td className="px-4 py-3 text-slate-600 whitespace-nowrap text-xs">
                         {fmtDateShort(tx.date)}
@@ -1297,15 +1271,9 @@ export default function TransactionsPage() {
                         <AccountCell tx={tx} accounts={clientAccounts} onSave={account => handleSaveAccount(tx.id, account)} />
                       </td>
                       <td className="px-4 py-3">
-                        {tx.is_uncategorized ? (
-                          <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
-                            <AlertCircle className="w-3 h-3 shrink-0" /> Uncategorized
-                          </span>
-                        ) : (
-                          <span className="text-xs text-slate-600 truncate block max-w-[190px]" title={tx.category ?? undefined}>
-                            {tx.category || <span className="text-slate-300">—</span>}
-                          </span>
-                        )}
+                        <span className="text-xs text-slate-600 truncate block max-w-[190px]" title={tx.category ?? undefined}>
+                          {tx.category || <span className="text-slate-300">—</span>}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={tx.status} />

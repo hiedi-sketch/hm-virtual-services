@@ -475,8 +475,8 @@ router.post("/transactions/upload", requireAdmin, upload.single("file"), async (
       memo:             pick(r, COL_MEMO),
       account,
       amount:           resolveAmount(r),
-      is_uncategorized: !account,
-      status:           "uncategorized",
+      is_uncategorized: false,
+      status:           "needs_info",
     };
   });
 
