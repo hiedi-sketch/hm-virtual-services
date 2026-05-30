@@ -239,7 +239,7 @@ function TimerPopoutInner() {
               className="w-full appearance-none text-sm border border-slate-200 rounded-xl px-3 py-2 pr-8 text-slate-700 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
             >
               <option value="">— Select client —</option>
-              {clients?.map(c => (
+              {clients?.filter(c => (c as any).is_active !== false).map(c => (
                 <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>
               ))}
             </select>

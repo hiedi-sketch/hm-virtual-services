@@ -25,6 +25,7 @@ const ADMIN_NAV = [
   { href: "/dashboard",    label: "Dashboard",              icon: LayoutDashboard },
   { href: "/clients",      label: "Client Hub",             icon: Users },
   { href: "/tasks",        label: "Task Manager",           icon: CheckSquare },
+  { href: "/time",         label: "Time Tracker",           icon: Clock },
   { href: "/invoices",     label: "Billing & Invoices",     icon: FileText },
   { href: "/transactions", label: "Transaction Questions",  icon: ArrowLeftRight },
   { href: "/app-tracker",  label: "App Dev Tracker",        icon: MonitorSmartphone },
@@ -35,6 +36,7 @@ const ADMIN_NAV = [
 
 const TEAM_MEMBER_NAV = [
   { href: "/tasks", label: "Task Manager", icon: CheckSquare },
+  { href: "/time",  label: "Time Tracker", icon: Clock },
   { href: "/leads", label: "Leads",        icon: Megaphone },
 ];
 

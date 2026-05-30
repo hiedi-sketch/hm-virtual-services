@@ -271,7 +271,7 @@ export function GlobalTimerBar() {
                       className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
                     >
                       <option value="">No client</option>
-                      {clients?.map((c) => <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>)}
+                      {clients?.filter(c => (c as any).is_active !== false).map((c) => <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>)}
                     </select>
                   </div>
 

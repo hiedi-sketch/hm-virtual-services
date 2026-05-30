@@ -1656,7 +1656,7 @@ export default function Tasks() {
     });
   }, [tasks]);
 
-  const { data: clients = [] } = useQuery<ApiClient[]>({
+  const { data: allTaskClients = [] } = useQuery<ApiClient[]>({
     queryKey: ["clients"],
     queryFn: async () => {
       const res = await fetch("/api/clients", { credentials: "include" });
@@ -1664,6 +1664,7 @@ export default function Tasks() {
       return res.json();
     },
   });
+  const clients = allTaskClients.filter(c => (c as any).is_active !== false);
 
   const { data: teamMembers = [] } = useQuery<ApiTeamMember[]>({
     queryKey: ["team-members"],

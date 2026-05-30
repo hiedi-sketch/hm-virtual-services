@@ -271,7 +271,7 @@ export function FloatingTimer({ sidebarCollapsed = false }: { sidebarCollapsed?:
               className="w-full appearance-none text-sm border border-slate-200 rounded-lg px-3 py-2 pr-8 text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
             >
               <option value="">— Select client —</option>
-              {clients?.map(c => (
+              {clients?.filter(c => (c as any).is_active !== false).map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>

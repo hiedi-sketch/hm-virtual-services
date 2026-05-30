@@ -459,7 +459,8 @@ export default function TimeTracking() {
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
   const { data: entries, isLoading: entriesLoading } = useListTimeEntries();
-  const { data: clients } = useListClients();
+  const { data: allClients } = useListClients();
+  const clients = allClients?.filter(c => (c as any).is_active !== false);
   const { data: tasks } = useListTasks();
   const queryClient = useQueryClient();
   const { toast } = useToast();
