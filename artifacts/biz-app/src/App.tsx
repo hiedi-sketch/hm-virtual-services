@@ -147,6 +147,8 @@ function Router() {
         )}
         {user.role === "admin" && <Route path="/app-tracker" component={AppDevTracker} />}
         <Route path="/notifications" component={NotificationsPage} />
+        <Route path="/client/transactions"><ClientPortal /></Route>
+        <Route path="/client"><ClientPortal /></Route>
         <Route component={NotFound} />
       </Switch>
     </Layout>
