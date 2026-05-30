@@ -73,6 +73,9 @@ router.patch("/transactions/:id", requireAdmin, async (req, res) => {
 
   const {
     status,
+    memo,
+    account,
+    qbo_account_id,
     internal_notes,
     flagged_question,
     send_question,
@@ -80,6 +83,9 @@ router.patch("/transactions/:id", requireAdmin, async (req, res) => {
     resolve,
   } = req.body as {
     status?: string;
+    memo?: string;
+    account?: string;
+    qbo_account_id?: string;
     internal_notes?: string;
     flagged_question?: string;
     send_question?: boolean;
@@ -89,9 +95,23 @@ router.patch("/transactions/:id", requireAdmin, async (req, res) => {
 
   const updates: Record<string, any> = {};
 
-  if (status !== undefined)         updates.status = status;
-  if (internal_notes !== undefined) updates.internal_notes = internal_notes;
+  if (status !== undefined)           updates.status = status;
+  if (internal_notes !== undefined)   updates.internal_notes = internal_notes;
   if (flagged_question !== undefined) updates.flagged_question = flagged_question;
+
+  // Editable fields that mark qbo_pending when changed
+  if (memo !== undefined) {
+    updates.memo = memo;
+    updates.qbo_pending = true;
+  }
+  if (account !== undefined) {
+    updates.account = account;
+    updates.is_uncategorized = !account;
+    updates.qbo_pending = true;
+  }
+  if (qbo_account_id !== undefined) {
+    updates.qbo_account_id = qbo_account_id;
+  }
 
   if (send_question) {
     const [tx] = await db

@@ -1,12 +1,16 @@
 /**
  * QuickBooks Online Accountant (QBOA) integration routes
  *
- * GET    /api/qbo/status          – connection status + connected user info
- * GET    /api/qbo/connect         – redirect to Intuit OAuth2 consent screen
- * GET    /api/qbo/callback        – OAuth2 callback; stores tokens
- * POST   /api/qbo/disconnect      – revoke tokens & clear stored credentials
- * GET    /api/qbo/firms           – list QBOA-managed companies (firms)
- * POST   /api/qbo/refresh-firms   – re-fetch firm list from Intuit and cache
+ * GET    /api/qbo/status                         – connection status + connected user info
+ * GET    /api/qbo/connect                        – redirect to Intuit OAuth2 consent screen
+ * GET    /api/qbo/callback                       – OAuth2 callback; stores tokens
+ * POST   /api/qbo/disconnect                     – revoke tokens & clear stored credentials
+ * GET    /api/qbo/firms                          – list QBOA-managed companies (firms)
+ * POST   /api/qbo/refresh-firms                  – re-fetch firm list from Intuit and cache
+ * GET    /api/qbo/clients/:id/accounts           – chart of accounts for a client's QBO realm
+ * POST   /api/qbo/clients/:id/sync-transactions  – sync transactions from QBO
+ * POST   /api/qbo/transactions/:id/save          – write memo/account back to QBO
+ * POST   /api/qbo/transactions/bulk-save         – bulk write-back for a client
  */
 
 import { Router, type IRouter } from "express";
@@ -151,7 +155,7 @@ router.get("/qbo/connect", requireAuth, requireRole("admin"), (_req, res) => {
     response_type: "code",
     scope: "com.intuit.quickbooks.accounting openid profile email",
     state,
-    prompt: "login",  // always show the Intuit login screen so a different account can be chosen
+    prompt: "login",
   });
 
   res.redirect(`${INTUIT_BASE}?${params.toString()}`);
@@ -198,13 +202,11 @@ router.get("/qbo/callback", async (req, res) => {
   };
   await saveTokens(tokens);
 
-  // Store the realmId returned by Intuit (identifies the connected QBO company)
   if (realmId) {
     await setSetting("qbo_realm_id", realmId);
     logger.info({ realmId }, "QBO callback: stored realmId");
   }
 
-  // Fetch user info
   try {
     const userRes = await fetch(DISCOVERY_URL, {
       headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: "application/json" },
@@ -216,8 +218,6 @@ router.get("/qbo/callback", async (req, res) => {
     }
   } catch { /* best effort */ }
 
-  // Build & cache firm list — try QBOA account list first, fall back to direct company info.
-  // Merges with any previously cached firms so multiple connected accounts accumulate.
   try {
     const firms = await fetchFirms(tokens.access_token, realmId ?? null);
     if (firms.length > 0) {
@@ -251,16 +251,12 @@ router.post("/qbo/disconnect", requireAuth, requireRole("admin"), async (_req, r
   await deleteSetting("qbo_tokens");
   await deleteSetting("qbo_connected_name");
   await deleteSetting("qbo_connected_email");
-  // qbo_firms_cache and qbo_realm_id are intentionally kept so previously
-  // connected companies remain visible in the dropdown after reconnecting
-  // with a different account.
 
   res.json({ ok: true });
 });
 
 // ─── Firms cache helpers ──────────────────────────────────────────────────────
 
-/** Merge newly fetched firms into the existing cache, deduplicating by realmId. */
 async function mergeFirmsCache(newFirms: any[]): Promise<any[]> {
   const existing: any[] = await getSetting("qbo_firms_cache")
     .then(raw => (raw ? JSON.parse(raw) : []))
@@ -268,21 +264,15 @@ async function mergeFirmsCache(newFirms: any[]): Promise<any[]> {
 
   const map = new Map<string, any>();
   for (const f of existing) if (f.realmId) map.set(f.realmId, f);
-  for (const f of newFirms) if (f.realmId) map.set(f.realmId, f); // new data wins
+  for (const f of newFirms) if (f.realmId) map.set(f.realmId, f);
   return Array.from(map.values());
 }
 
-// ─── Firms fetcher ────────────────────────────────────────────────────────────
-
-/** Fetch the company name for a single realmId via the QBO CompanyInfo API */
 async function fetchCompanyInfo(accessToken: string, realmId: string): Promise<{ realmId: string; companyName: string; country: string } | null> {
   try {
     const url = `${QBO_API_BASE}/${realmId}/companyinfo/${realmId}?minorversion=65`;
     const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        Accept: "application/json",
-      },
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
     });
     if (!res.ok) return null;
     const data = await res.json() as any;
@@ -297,13 +287,7 @@ async function fetchCompanyInfo(accessToken: string, realmId: string): Promise<{
   }
 }
 
-/**
- * Fetch the full list of QBOA-managed companies.
- * Falls back to a single-company lookup using realmId when the QBOA
- * Account List API is unavailable (e.g. standard QBO instead of Accountant).
- */
 async function fetchFirms(accessToken: string, fallbackRealmId?: string | null): Promise<any[]> {
-  // Try QBOA account list first (only works for Accountant apps)
   try {
     const res = await fetch(FIRMS_URL, {
       headers: {
@@ -324,10 +308,8 @@ async function fetchFirms(accessToken: string, fallbackRealmId?: string | null):
         }));
       }
     }
-    // Non-OK (e.g. 403) — fall through to single-company lookup
   } catch { /* fall through */ }
 
-  // Fall back: look up the specific company using the realmId from the callback
   const realmId = fallbackRealmId ?? await getSetting("qbo_realm_id");
   if (realmId) {
     logger.info({ realmId }, "QBO firms: QBOA list unavailable, falling back to CompanyInfo lookup");
@@ -370,11 +352,73 @@ router.post("/qbo/refresh-firms", requireAuth, requireRole("admin"), async (_req
   }
 });
 
+// ─── GET /api/qbo/clients/:id/accounts ───────────────────────────────────────
+// Returns chart of accounts for a client's QBO realm. Cached for 24h.
+
+router.get("/qbo/clients/:id/accounts", requireAuth, requireRole("admin"), async (req, res) => {
+  const clientId = Number(req.params.id);
+  if (isNaN(clientId)) { res.status(400).json({ error: "Invalid client id" }); return; }
+
+  const [clientRow] = await db.select().from(clientsTable).where(eq(clientsTable.id, clientId)).limit(1);
+  const realmId = (clientRow as any)?.qbo_realm_id;
+  if (!realmId) { res.status(400).json({ error: "No QBO company linked to this client" }); return; }
+
+  const cacheKey = `qbo_accounts_cache_${realmId}`;
+  const cached = await getSetting(cacheKey);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached) as { accounts: any[]; cached_at: string };
+      const age = Date.now() - new Date(parsed.cached_at).getTime();
+      if (age < 24 * 60 * 60 * 1000) {
+        res.json({ accounts: parsed.accounts, cached: true });
+        return;
+      }
+    } catch { /* re-fetch */ }
+  }
+
+  const token = await getValidAccessToken();
+  if (!token) { res.status(503).json({ error: "QuickBooks not connected" }); return; }
+
+  try {
+    const query = encodeURIComponent("SELECT * FROM Account WHERE Active = true MAXRESULTS 500");
+    const url = `${QBO_API_BASE}/${realmId}/query?query=${query}&minorversion=65`;
+    const qboRes = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+
+    if (!qboRes.ok) {
+      const errText = await qboRes.text();
+      logger.warn({ status: qboRes.status, errText }, "QBO accounts fetch failed");
+      res.status(502).json({ error: `QBO returned ${qboRes.status}` });
+      return;
+    }
+
+    const data = await qboRes.json() as any;
+    const raw: any[] = data?.QueryResponse?.Account ?? [];
+    const accounts = raw.map(a => ({
+      Id: a.Id,
+      Name: a.Name,
+      FullyQualifiedName: a.FullyQualifiedName ?? a.Name,
+      AccountType: a.AccountType,
+      AccountSubType: a.AccountSubType,
+    })).sort((a, b) => a.FullyQualifiedName.localeCompare(b.FullyQualifiedName));
+
+    await setSetting(cacheKey, JSON.stringify({ accounts, cached_at: new Date().toISOString() }));
+    res.json({ accounts, cached: false });
+  } catch (err: any) {
+    logger.error({ err }, "Failed to fetch QBO accounts");
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Helper: parse QBO TransactionList report rows ────────────────────────────
+
+interface ColItem { value: string; id?: string }
 
 interface QboTxRow {
   date: string | null;
   transaction_type: string | null;
+  qbo_txn_id: string | null;
   num: string | null;
   name: string | null;
   memo: string | null;
@@ -383,14 +427,14 @@ interface QboTxRow {
   amount: number | null;
 }
 
-function extractTxRows(row: any, colCount: number): any[][] {
-  const results: any[][] = [];
+function extractTxRows(row: any): ColItem[][] {
+  const results: ColItem[][] = [];
   if (row.ColData && Array.isArray(row.ColData)) {
-    results.push(row.ColData.map((c: any) => c.value ?? ""));
+    results.push(row.ColData.map((c: any) => ({ value: c.value ?? "", id: c.id })));
   }
   if (row.Rows?.Row) {
     for (const r of row.Rows.Row) {
-      results.push(...extractTxRows(r, colCount));
+      results.push(...extractTxRows(r));
     }
   }
   return results;
@@ -407,18 +451,20 @@ function parseTransactionListReport(report: any): QboTxRow[] {
   const splitIdx  = columns.findIndex(c => c === "Split");
   const amtIdx    = columns.findIndex(c => c === "Amount");
 
-  const rawRows: any[][] = [];
+  const rawRows: ColItem[][] = [];
   for (const row of (report?.Rows?.Row ?? [])) {
-    rawRows.push(...extractTxRows(row, columns.length));
+    rawRows.push(...extractTxRows(row));
   }
 
   return rawRows.map(cols => {
-    const get = (i: number) => (i >= 0 && cols[i] !== undefined ? String(cols[i]).trim() : null) || null;
+    const get    = (i: number) => (i >= 0 && cols[i] !== undefined ? String(cols[i].value).trim() : null) || null;
+    const getId  = (i: number) => (i >= 0 && cols[i]?.id ? String(cols[i].id) : null);
     const rawAmt = get(amtIdx);
     const amount = rawAmt ? parseFloat(rawAmt.replace(/[$,]/g, "")) : null;
     return {
       date:             get(dateIdx),
       transaction_type: get(typeIdx),
+      qbo_txn_id:       getId(typeIdx),
       num:              get(numIdx),
       name:             get(nameIdx),
       memo:             get(memoIdx),
@@ -426,7 +472,7 @@ function parseTransactionListReport(report: any): QboTxRow[] {
       split:            get(splitIdx),
       amount:           isNaN(amount as number) ? null : amount,
     };
-  }).filter(r => r.date); // skip empty rows
+  }).filter(r => r.date);
 }
 
 function isUncategorized(account: string | null, split: string | null): boolean {
@@ -447,7 +493,6 @@ router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admi
   const accessToken = await getValidAccessToken();
   if (!accessToken) { res.status(503).json({ error: "QuickBooks not connected — please connect on the QuickBooks settings page." }); return; }
 
-  // Check for existing imports covering this date range
   const existing = await db
     .select()
     .from(transactionImportsTable)
@@ -473,7 +518,6 @@ router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admi
     }
   }
 
-  // Get client's realm IDs
   const [clientRow] = await db.select().from(clientsTable).where(eq(clientsTable.id, clientId)).limit(1);
   if (!clientRow) { res.status(404).json({ error: "Client not found" }); return; }
 
@@ -509,7 +553,6 @@ router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admi
       const report = await resp.json() as any;
       const rows = parseTransactionListReport(report);
 
-      // Create import record
       const [importRecord] = await db.insert(transactionImportsTable).values({
         client_id:        clientId,
         filename:         `QBO Sync: ${startDate} to ${endDate}`,
@@ -536,8 +579,11 @@ router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admi
           amount:           r.amount,
           is_uncategorized: isUncategorized(r.account, r.split),
           status:           isUncategorized(r.account, r.split) ? "uncategorized" : "needs_info",
+          qbo_txn_id:       r.qbo_txn_id,
+          qbo_txn_type:     r.transaction_type,
+          qbo_pending:      false,
         }));
-        await db.insert(transactionsTable).values(txRows);
+        await db.insert(transactionsTable).values(txRows as any);
         totalInserted += rows.length;
       }
 
@@ -571,7 +617,6 @@ router.get("/qbo/clients/:id/transactions", requireAuth, requireRole("admin"), a
     .where(eq(transactionsTable.client_id, clientId))
     .orderBy(transactionsTable.date, transactionsTable.id);
 
-  // Last sync timestamp across all imports for this client
   const lastSync = imports.length > 0
     ? imports.reduce((a, b) => (a.imported_at > b.imported_at ? a : b)).imported_at
     : null;
@@ -591,26 +636,239 @@ router.patch("/qbo/clients/:id/realm", requireAuth, requireRole("admin"), async 
     channel_config?: string | null;
   };
 
-  // Derive primary realm_id from first item in array (backward compat)
   const primaryRealmId = (qbo_realm_ids && qbo_realm_ids.length > 0) ? qbo_realm_ids[0] : null;
 
   const [updated] = await db
     .update(clientsTable)
     .set({
-      qbo_realm_id: primaryRealmId,
-      qbo_realm_ids: qbo_realm_ids ? JSON.stringify(qbo_realm_ids) : null,
-      preferred_channel: (preferred_channel as any) ?? null,
-      channel_config: channel_config ?? null,
-    })
+      qbo_realm_id:      primaryRealmId,
+      qbo_realm_ids:     qbo_realm_ids ? JSON.stringify(qbo_realm_ids) : null,
+      preferred_channel: preferred_channel ?? undefined,
+      channel_config:    channel_config ?? undefined,
+    } as any)
     .where(eq(clientsTable.id, id))
     .returning();
 
-  if (!updated) {
-    res.status(404).json({ error: "Client not found" });
+  if (!updated) { res.status(404).json({ error: "Client not found" }); return; }
+  res.json(updated);
+});
+
+// ─── QBO write-back helpers ───────────────────────────────────────────────────
+
+function getEntityPath(txType: string | null): string | null {
+  if (!txType) return null;
+  const normalized = txType.toLowerCase().replace(/\s+/g, "");
+  const map: Record<string, string> = {
+    purchase:          "purchase",
+    expense:           "purchase",
+    bill:              "bill",
+    invoice:           "invoice",
+    journalentry:      "journalentry",
+    check:             "check",
+    salesreceipt:      "salesreceipt",
+    deposit:           "deposit",
+    transfer:          "transfer",
+    creditmemo:        "creditmemo",
+    refundreceipt:     "refundreceipt",
+    creditcardcredit:  "creditcardcredit",
+    vendorcredit:      "vendorcredit",
+    billpayment:       "billpayment",
+    payment:           "payment",
+  };
+  return map[normalized] ?? null;
+}
+
+async function writeEntityToQbo(
+  accessToken: string,
+  realmId: string,
+  txnId: string,
+  txnType: string,
+  memo: string | null,
+  accountId: string | null,
+  accountName: string | null,
+): Promise<{ ok: boolean; error?: string }> {
+  const path = getEntityPath(txnType);
+  if (!path) return { ok: false, error: `Unsupported entity type: ${txnType}` };
+
+  // Fetch the current entity to get SyncToken and full structure
+  const getUrl = `${QBO_API_BASE}/${realmId}/${path}/${txnId}?minorversion=65`;
+  const getRes = await fetch(getUrl, {
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+  });
+
+  if (!getRes.ok) {
+    const errText = await getRes.text();
+    logger.warn({ path, txnId, status: getRes.status }, "QBO entity fetch failed for write-back");
+    return { ok: false, error: `Could not fetch entity from QuickBooks (${getRes.status}): ${errText.slice(0, 200)}` };
+  }
+
+  const entityData = await getRes.json() as any;
+  // QBO wraps the entity under its type key
+  const entityKey = Object.keys(entityData).find(k => k !== "time" && typeof entityData[k] === "object");
+  if (!entityKey) return { ok: false, error: "Unrecognized QBO response shape" };
+
+  const entity = { ...entityData[entityKey] };
+
+  // Update memo (PrivateNote in QBO)
+  if (memo !== null) {
+    entity.PrivateNote = memo;
+  }
+
+  // Update account on the first applicable expense line
+  if (accountId && entity.Line && Array.isArray(entity.Line)) {
+    for (const line of entity.Line) {
+      const dt = line.DetailType;
+      if (dt === "AccountBasedExpenseLineDetail" && line.AccountBasedExpenseLineDetail) {
+        line.AccountBasedExpenseLineDetail.AccountRef = {
+          value: accountId,
+          name: accountName ?? undefined,
+        };
+        break;
+      }
+      if (dt === "DepositLineDetail" && line.DepositLineDetail) {
+        line.DepositLineDetail.AccountRef = {
+          value: accountId,
+          name: accountName ?? undefined,
+        };
+        break;
+      }
+      if (dt === "ItemBasedExpenseLineDetail" && line.ItemBasedExpenseLineDetail) {
+        // For item-based, update the AccountRef if present
+        if (line.ItemBasedExpenseLineDetail.AccountRef) {
+          line.ItemBasedExpenseLineDetail.AccountRef = {
+            value: accountId,
+            name: accountName ?? undefined,
+          };
+        }
+        break;
+      }
+    }
+  }
+
+  // POST the modified entity back
+  const postUrl = `${QBO_API_BASE}/${realmId}/${path}?minorversion=65`;
+  const postRes = await fetch(postUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(entity),
+  });
+
+  if (!postRes.ok) {
+    const errText = await postRes.text();
+    logger.warn({ path, txnId, status: postRes.status }, "QBO entity update failed");
+    return { ok: false, error: `QuickBooks rejected the update (${postRes.status}): ${errText.slice(0, 200)}` };
+  }
+
+  return { ok: true };
+}
+
+// ─── POST /api/qbo/transactions/:id/save ─────────────────────────────────────
+// Write a single transaction's memo + account back to QBO
+
+router.post("/qbo/transactions/:id/save", requireAuth, requireRole("admin"), async (req, res) => {
+  const txId = Number(req.params.id);
+  if (isNaN(txId)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [tx] = await db.select().from(transactionsTable).where(eq(transactionsTable.id, txId)).limit(1);
+  if (!tx) { res.status(404).json({ error: "Transaction not found" }); return; }
+
+  if (!(tx as any).qbo_txn_id || !(tx as any).qbo_txn_type) {
+    res.status(400).json({ error: "This transaction has no QBO entity ID. It may have been imported via CSV before entity tracking was added — re-sync to capture IDs." });
     return;
   }
 
-  res.json({ ok: true, qbo_realm_ids: updated.qbo_realm_ids, qbo_realm_id: updated.qbo_realm_id, preferred_channel: updated.preferred_channel, channel_config: updated.channel_config });
+  const [clientRow] = await db.select().from(clientsTable).where(eq(clientsTable.id, tx.client_id)).limit(1);
+  const realmId = (clientRow as any)?.qbo_realm_id;
+  if (!realmId) { res.status(400).json({ error: "No QBO company linked to this client" }); return; }
+
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) { res.status(503).json({ error: "QuickBooks not connected — please reconnect." }); return; }
+
+  const result = await writeEntityToQbo(
+    accessToken,
+    realmId,
+    (tx as any).qbo_txn_id,
+    (tx as any).qbo_txn_type,
+    tx.memo ?? null,
+    (tx as any).qbo_account_id ?? null,
+    tx.account ?? null,
+  );
+
+  if (!result.ok) {
+    res.status(502).json({ error: result.error });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const [updated] = await db
+    .update(transactionsTable)
+    .set({ qbo_pending: false, qbo_last_synced_at: now } as any)
+    .where(eq(transactionsTable.id, txId))
+    .returning();
+
+  res.json({ ok: true, transaction: updated });
+});
+
+// ─── POST /api/qbo/transactions/bulk-save ────────────────────────────────────
+// Write all pending transactions for a client back to QBO
+
+router.post("/qbo/transactions/bulk-save", requireAuth, requireRole("admin"), async (req, res) => {
+  const { client_id } = req.body as { client_id?: number };
+  if (!client_id) { res.status(400).json({ error: "client_id required" }); return; }
+
+  const [clientRow] = await db.select().from(clientsTable).where(eq(clientsTable.id, client_id)).limit(1);
+  const realmId = (clientRow as any)?.qbo_realm_id;
+  if (!realmId) { res.status(400).json({ error: "No QBO company linked to this client" }); return; }
+
+  const accessToken = await getValidAccessToken();
+  if (!accessToken) { res.status(503).json({ error: "QuickBooks not connected — please reconnect." }); return; }
+
+  const pendingTxs = await db
+    .select()
+    .from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.client_id, client_id),
+      eq(transactionsTable.qbo_pending, true),
+    ));
+
+  const now = new Date().toISOString();
+  const results: Array<{ id: number; ok: boolean; error?: string }> = [];
+
+  for (const tx of pendingTxs) {
+    if (!(tx as any).qbo_txn_id || !(tx as any).qbo_txn_type) {
+      results.push({ id: tx.id, ok: false, error: "No QBO entity ID" });
+      continue;
+    }
+
+    const result = await writeEntityToQbo(
+      accessToken,
+      realmId,
+      (tx as any).qbo_txn_id,
+      (tx as any).qbo_txn_type,
+      tx.memo ?? null,
+      (tx as any).qbo_account_id ?? null,
+      tx.account ?? null,
+    );
+
+    if (result.ok) {
+      await db
+        .update(transactionsTable)
+        .set({ qbo_pending: false, qbo_last_synced_at: now } as any)
+        .where(eq(transactionsTable.id, tx.id));
+      results.push({ id: tx.id, ok: true });
+    } else {
+      results.push({ id: tx.id, ok: false, error: result.error });
+    }
+  }
+
+  const succeeded = results.filter(r => r.ok).length;
+  const failed    = results.filter(r => !r.ok).length;
+
+  res.json({ ok: true, results, succeeded, failed, total: results.length });
 });
 
 export default router;

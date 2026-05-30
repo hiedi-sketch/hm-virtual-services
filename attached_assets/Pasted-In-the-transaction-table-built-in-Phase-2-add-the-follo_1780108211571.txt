@@ -1,0 +1,74 @@
+In the transaction table built in Phase 2, add 
+the following functionality:
+
+STATUS COLUMN
+Add a status badge to each transaction row:
+- Uncategorized (red) — no category in QBO
+- Needs Info (yellow) — flagged for client
+- Awaiting Response (blue) — question sent
+- Responded (purple) — client has replied
+- Resolved (green) — marked done by you
+
+CATEGORIZATION
+Make the category field editable inline on 
+each row. Populate it with a searchable 
+dropdown from the client's QBO chart of 
+accounts. Changes are saved locally until 
+you are ready to write back to QBO.
+
+MEMO/NOTES
+Make the memo field editable inline on each 
+row. Saves automatically on blur.
+
+INTERNAL NOTES
+Add a separate internal notes field per 
+transaction visible to you only — never 
+shown to the client. Saves automatically.
+
+FLAG FOR CLIENT
+Add a "Flag for Client" button on each row. 
+Clicking opens a side panel showing:
+- Transaction detail (date, vendor, amount)
+- A text field to type your question
+- A "Send to Client" button
+
+On send:
+- Update status to "Awaiting Response"
+- Store question text and timestamp
+- Record which channel it will route to 
+  based on client's preferred_channel setting
+- Do not send yet — channel delivery is 
+  Phase 4
+
+SAVE TO QBO
+Add a "Save to QuickBooks" button per row 
+that writes the updated category and memo 
+back to QBO via the API. Show a success 
+or error indicator per row.
+
+RESOLVE
+Add a "Mark Resolved" button that appears 
+once a transaction has a client response. 
+Sets status to Resolved and records timestamp.
+
+BULK ACTIONS
+At the top of the table add:
+- Filter by status (all | uncategorized | 
+  needs info | awaiting | responded | resolved)
+- Count badge per status showing at a glance 
+  how many transactions are in each state
+- A "Save All to QuickBooks" button that 
+  writes all pending category and memo 
+  changes back to QBO in one action
+
+DATA MODEL ADDITIONS
+Add these fields to the transaction record:
+- status
+- flagged_question
+- question_sent_at
+- routed_to_channel
+- client_response
+- response_received_at
+- internal_notes
+- resolved_at
+- qbo_last_synced_at

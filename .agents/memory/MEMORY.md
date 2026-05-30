@@ -1,0 +1,1 @@
+- [Transaction route path fix](tx-route-paths.md) — transactions.ts routes must NOT include /api/ prefix; they're already mounted inside the index router at /api.
