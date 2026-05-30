@@ -167,25 +167,13 @@ function MemoCell({ tx, onSave }: { tx: Tx; onSave: (memo: string) => void }) {
   );
 }
 
-// ─── Account Cell (dropdown from client account list) ─────────────────────────
+// ─── Account Cell (native select from client account list) ───────────────────
 
 function AccountCell({ tx, accounts, onSave }: {
   tx: Tx;
   accounts: string[];
   onSave: (account: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
   if (accounts.length === 0) {
     return (
       <span className="text-xs text-slate-600 truncate block max-w-[150px]" title={tx.account ?? undefined}>
@@ -195,43 +183,21 @@ function AccountCell({ tx, accounts, onSave }: {
   }
 
   return (
-    <div ref={containerRef} className="relative" onClick={e => e.stopPropagation()}>
-      <button
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
+    <div onClick={e => e.stopPropagation()}>
+      <select
+        value={tx.account ?? ""}
+        onChange={e => { e.stopPropagation(); onSave(e.target.value); }}
+        onClick={e => e.stopPropagation()}
         className={cn(
-          "flex items-center gap-1 text-xs rounded-lg px-2 py-1 w-full max-w-[160px] transition-colors text-left border",
-          tx.account
-            ? "text-slate-700 border-slate-200 hover:bg-slate-100"
-            : "text-slate-500 border-dashed border-slate-300 hover:bg-slate-50 hover:border-[#266b75]/40"
+          "text-xs rounded-lg px-2 py-1 max-w-[160px] border bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] cursor-pointer",
+          tx.account ? "text-slate-700 border-slate-200" : "text-slate-400 border-dashed border-slate-300"
         )}
       >
-        <span className="truncate flex-1">{tx.account || "Select…"}</span>
-        <ChevronDown className="w-3 h-3 shrink-0 text-slate-400" />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-30 bg-white border border-slate-200 rounded-xl shadow-lg min-w-[160px] max-w-[220px] py-1 max-h-48 overflow-y-auto">
-          {accounts.map(a => (
-            <button
-              key={a}
-              onClick={() => { onSave(a); setOpen(false); }}
-              className={cn(
-                "w-full text-left px-3 py-2 text-xs hover:bg-[#266b75]/10 transition-colors truncate",
-                tx.account === a ? "text-[#266b75] font-semibold" : "text-slate-700"
-              )}
-            >
-              {a}
-            </button>
-          ))}
-          {tx.account && (
-            <button
-              onClick={() => { onSave(""); setOpen(false); }}
-              className="w-full text-left px-3 py-2 text-xs text-slate-400 hover:bg-slate-50 transition-colors border-t border-slate-100 mt-1"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      )}
+        <option value="">Select…</option>
+        {accounts.map(a => (
+          <option key={a} value={a}>{a}</option>
+        ))}
+      </select>
     </div>
   );
 }
