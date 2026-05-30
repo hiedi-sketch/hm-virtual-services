@@ -43,7 +43,7 @@ function parseRows(buffer: Buffer, filename: string): Record<string, any>[] {
 }
 
 // GET /api/transactions?client_id=X
-router.get("/api/transactions", requireAdmin, async (req, res) => {
+router.get("/transactions", requireAdmin, async (req, res) => {
   const clientId = Number(req.query.client_id);
   if (!clientId) return res.status(400).json({ error: "client_id required" });
 
@@ -67,7 +67,7 @@ router.get("/api/transactions", requireAdmin, async (req, res) => {
 });
 
 // PATCH /api/transactions/:id
-router.patch("/api/transactions/:id", requireAdmin, async (req, res) => {
+router.patch("/transactions/:id", requireAdmin, async (req, res) => {
   const txId = Number(req.params.id);
   if (!txId) return res.status(400).json({ error: "Invalid id" });
 
@@ -135,7 +135,7 @@ router.patch("/api/transactions/:id", requireAdmin, async (req, res) => {
 
 // POST /api/transactions/batch-send
 // Marks all listed "needs_info" transactions as "awaiting_response", stamps send metadata, and emails the client.
-router.post("/api/transactions/batch-send", requireAdmin, async (req, res) => {
+router.post("/transactions/batch-send", requireAdmin, async (req, res) => {
   const { client_id, transaction_ids, note } = req.body as {
     client_id?: number;
     transaction_ids?: number[];
@@ -261,7 +261,7 @@ router.post("/api/transactions/batch-send", requireAdmin, async (req, res) => {
 
 // GET /api/transactions/my-flagged
 // Client-facing: returns this client's "awaiting_response" transactions
-router.get("/api/transactions/my-flagged", requireAuth, async (req, res) => {
+router.get("/transactions/my-flagged", requireAuth, async (req, res) => {
   const user = req.session.user!;
   if (user.role !== "client" || !user.client_id) {
     return res.status(403).json({ error: "Client access only" });
@@ -281,7 +281,7 @@ router.get("/api/transactions/my-flagged", requireAuth, async (req, res) => {
 
 // PATCH /api/transactions/:id/respond
 // Client-facing: submit a response to a flagged transaction
-router.patch("/api/transactions/:id/respond", requireAuth, async (req, res) => {
+router.patch("/transactions/:id/respond", requireAuth, async (req, res) => {
   const user = req.session.user!;
   if (user.role !== "client" || !user.client_id) {
     return res.status(403).json({ error: "Client access only" });
@@ -313,7 +313,7 @@ router.patch("/api/transactions/:id/respond", requireAuth, async (req, res) => {
 });
 
 // POST /api/transactions/upload
-router.post("/api/transactions/upload", requireAdmin, upload.single("file"), async (req, res) => {
+router.post("/transactions/upload", requireAdmin, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   const clientId = Number(req.body.client_id);
@@ -396,7 +396,7 @@ router.post("/api/transactions/upload", requireAdmin, upload.single("file"), asy
 });
 
 // DELETE /api/transactions/import/:id
-router.delete("/api/transactions/import/:id", requireAdmin, async (req, res) => {
+router.delete("/transactions/import/:id", requireAdmin, async (req, res) => {
   const importId = Number(req.params.id);
   await db.delete(transactionsTable).where(eq(transactionsTable.import_id, importId));
   await db.delete(transactionImportsTable).where(eq(transactionImportsTable.id, importId));
