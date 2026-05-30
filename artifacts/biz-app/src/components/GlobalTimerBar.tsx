@@ -125,6 +125,16 @@ export function GlobalTimerBar() {
   }
 
   async function handleConfirmSave() {
+    const missing: string[] = [];
+    if (!promptClientId) missing.push("no client selected");
+    if (!promptServiceType) missing.push("no service type selected");
+    if (missing.length > 0) {
+      const ok = window.confirm(
+        `Save timer without ${missing.join(" and ")}?\n\nClick OK to save anyway, or Cancel to go back and fill in the missing details.`
+      );
+      if (!ok) return;
+    }
+
     setSaving(true);
     setShowSavePrompt(false);
     try {
