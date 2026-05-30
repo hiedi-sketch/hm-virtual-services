@@ -4,12 +4,23 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-export type TaskStatus = "todo" | "in-progress" | "done";
+export type TaskStatus = "todo" | "in-progress" | "done" | "blocked";
 
 export type Task = {
   id: string;
   title: string;
   status: TaskStatus;
+  description?: string;
+  phase?: string;
+  priority?: "low" | "medium" | "high" | "critical";
+  estimatedHours?: number;
+  dependsOn?: string;
+  blocking?: string;
+  plannedDueDate?: string;
+  adjustedDueDate?: string;
+  actualDate?: string;
+  notes?: string;
+  claudePromptRef?: string;
 };
 
 export type Sprint = {
