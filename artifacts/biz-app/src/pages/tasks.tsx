@@ -1546,7 +1546,9 @@ export default function Tasks() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [dueDateFilter, setDueDateFilter] = useState("all");
   const [highlightedTaskId, setHighlightedTaskId] = useState<number | null>(null);
+  const [blinkingTaskId, setBlinkingTaskId] = useState<number | null>(null);
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map());
+  const prevTimerStatusRef = useRef(timerState.status);
 
   // Track which tasks are "held" in Tasks to Process until Process is clicked.
   const [pendingProcessing, setPendingProcessing] = useState<number[]>([]);
@@ -1561,10 +1563,13 @@ export default function Tasks() {
     if (task.status === "Completed") setStatusFilter("all");
     else setStatusFilter("incomplete");
     setHighlightedTaskId(task.id);
+    setBlinkingTaskId(task.id);
     setTimeout(() => {
       const el = rowRefs.current.get(task.id);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-      setTimeout(() => setHighlightedTaskId(null), 2000);
+      // After the blink animation finishes, drop the blink phase but keep the
+      // persistent highlight until the user acts on the task.
+      setTimeout(() => setBlinkingTaskId(null), 1500);
     }, 80);
   }, []);
 
@@ -1720,6 +1725,12 @@ export default function Tasks() {
   // ── Mutations ─────────────────────────────────────────────────────────────
 
   const patchTask = useCallback(async (id: number, fields: Record<string, unknown>) => {
+    // Any status change on the highlighted task clears the persistent highlight.
+    if ("status" in fields) {
+      setHighlightedTaskId(prev => prev === id ? null : prev);
+      setBlinkingTaskId(prev => prev === id ? null : prev);
+    }
+
     // Save & stop the timer BEFORE the optimistic update so the reactive useEffect
     // sees an idle timer (not running) when the task status flips to Completed.
     if (fields.status === "Completed" && timerState.taskId === id && timerState.status !== "idle") {
@@ -1875,6 +1886,16 @@ export default function Tasks() {
       }
     }
   }, [tasks, timerState.taskId, timerState.status, saveAndStop, stop]);
+
+  // Clear the persistent highlight when the timer stops.
+  useEffect(() => {
+    const prev = prevTimerStatusRef.current;
+    prevTimerStatusRef.current = timerState.status;
+    if ((prev === "running" || prev === "paused") && timerState.status === "idle") {
+      setHighlightedTaskId(null);
+      setBlinkingTaskId(null);
+    }
+  }, [timerState.status]);
 
   const handleTimerClick = (task: ApiTask) => {
     const isThisTask = timerState.taskId === task.id;
@@ -2086,6 +2107,20 @@ export default function Tasks() {
 
   return (
     <div className="space-y-5">
+      <style>{`
+        @keyframes task-row-blink {
+          0%   { background-color: transparent;       box-shadow: none; }
+          14%  { background-color: rgb(254 243 199);  box-shadow: inset 0 0 0 2px rgb(251 191 36); }
+          28%  { background-color: transparent;       box-shadow: none; }
+          46%  { background-color: rgb(254 243 199);  box-shadow: inset 0 0 0 2px rgb(251 191 36); }
+          60%  { background-color: transparent;       box-shadow: none; }
+          78%  { background-color: rgb(254 243 199);  box-shadow: inset 0 0 0 2px rgb(251 191 36); }
+          100% { background-color: rgb(254 243 199);  box-shadow: inset 0 0 0 2px rgb(251 191 36); }
+        }
+        .task-row-blink {
+          animation: task-row-blink 1.5s ease-out forwards;
+        }
+      `}</style>
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
@@ -2969,7 +3004,8 @@ export default function Tasks() {
                         ref={el => { if (el) rowRefs.current.set(task.id, el); else rowRefs.current.delete(task.id); }}
                         className={cn(
                         "border-b border-slate-100 transition-colors",
-                        highlightedTaskId === task.id ? "bg-amber-100 ring-2 ring-inset ring-amber-400"
+                        blinkingTaskId === task.id ? "task-row-blink"
+                          : highlightedTaskId === task.id ? "bg-amber-100 ring-2 ring-inset ring-amber-400"
                           : selectedIds.has(task.id) ? "bg-[#266b75]/5" : isThisTask ? "bg-[#266b75]/5" : "hover:bg-slate-50/50",
                         isExpanded && "border-b-0",
                       )}>
