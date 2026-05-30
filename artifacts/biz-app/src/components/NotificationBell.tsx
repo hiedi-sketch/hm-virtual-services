@@ -78,7 +78,15 @@ function useNotifications() {
   });
 }
 
-export function NotificationBell({ userRole }: { userRole?: string }) {
+export function NotificationBell({
+  userRole,
+  buttonClassName,
+  iconSize = "w-5 h-5",
+}: {
+  userRole?: string;
+  buttonClassName?: string;
+  iconSize?: string;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
@@ -133,10 +141,10 @@ export function NotificationBell({ userRole }: { userRole?: string }) {
     <div ref={ref} className="relative">
       <button
         onClick={handleOpen}
-        className="relative p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+        className={buttonClassName ?? "relative p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"}
         title="Notifications"
       >
-        <Bell className="w-4 h-4" />
+        <Bell className={iconSize} />
         {unread > 0 && (
           <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center text-white text-[9px] font-bold rounded-full leading-none" style={{ background: "#266b75" }}>
             {unread > 99 ? "99+" : unread}

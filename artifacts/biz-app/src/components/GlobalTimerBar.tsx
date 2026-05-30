@@ -11,6 +11,8 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/NotificationBell";
+import { useAuth } from "@/contexts/AuthContext";
 
 const SERVICE_TYPE_OPTIONS: { value: ServiceType; label: string }[] = [
   { value: null,                label: "— Unassigned —" },
@@ -37,6 +39,7 @@ function ServiceTypePill({ value }: { value: ServiceType }) {
 }
 
 export function GlobalTimerBar() {
+  const { user } = useAuth();
   const { state, elapsedMs, start, pause, stop, assignClient } = useTimer();
   const { data: clients } = useListClients();
   const { data: tasks } = useListTasks();
@@ -157,13 +160,17 @@ export function GlobalTimerBar() {
   // ── Idle bar ───────────────────────────────────────────────────────────────
   if (isIdle) {
     return (
-      <div className="border-t border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto h-10 flex items-center gap-3">
+      <div className="border-b border-slate-200 bg-white px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto h-11 flex items-center gap-3">
           <div className="flex items-center gap-2 text-slate-400">
             <Timer className="w-4 h-4" />
             <span className="text-xs font-medium">No timer running</span>
           </div>
           <div className="flex-1" />
+          {user && (
+            <NotificationBell userRole={user.role} />
+          )}
+          <div className="w-px h-5 bg-slate-200 shrink-0" />
           <button
             onClick={start}
             className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#266b75] hover:bg-[#1e5560] transition-colors px-3 py-1.5 rounded-lg shadow-sm"
@@ -352,6 +359,16 @@ export function GlobalTimerBar() {
           >
             <X className="w-4 h-4" />
           </button>
+
+          <div className="w-px h-5 bg-white/25 shrink-0" />
+
+          {/* Notification bell */}
+          {user && (
+            <NotificationBell
+              userRole={user.role}
+              buttonClassName="relative p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/15 transition-colors"
+            />
+          )}
         </div>
       </div>
     </div>

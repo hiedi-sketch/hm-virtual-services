@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { NotificationBell } from "@/components/NotificationBell";
 
 const ADMIN_NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -236,10 +235,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Main content ── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <GlobalTimerBar />
-        {/* Top bar */}
-        <div className="shrink-0 h-12 bg-white border-b border-slate-200 flex items-center justify-end px-5 gap-3">
-          {user && <NotificationBell userRole={user.role} />}
-        </div>
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5">
           {children}
         </main>
