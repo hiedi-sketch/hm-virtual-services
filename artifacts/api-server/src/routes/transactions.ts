@@ -112,6 +112,7 @@ router.patch("/transactions/:id", requireAdmin, async (req, res) => {
     send_question,
     client_response,
     resolve,
+    flagged_for_client,
   } = req.body as {
     status?: string;
     memo?: string;
@@ -123,14 +124,16 @@ router.patch("/transactions/:id", requireAdmin, async (req, res) => {
     send_question?: boolean;
     client_response?: string;
     resolve?: boolean;
+    flagged_for_client?: boolean;
   };
 
   const updates: Record<string, any> = {};
 
-  if (status !== undefined)           updates.status = status;
-  if (internal_notes !== undefined)   updates.internal_notes = internal_notes;
-  if (flagged_question !== undefined) updates.flagged_question = flagged_question;
-  if (account !== undefined)          updates.account = account;
+  if (status !== undefined)              updates.status = status;
+  if (internal_notes !== undefined)      updates.internal_notes = internal_notes;
+  if (flagged_question !== undefined)    updates.flagged_question = flagged_question;
+  if (account !== undefined)             updates.account = account;
+  if (flagged_for_client !== undefined)  updates.flagged_for_client = flagged_for_client;
 
   // Editable fields that mark qbo_pending when changed
   if (memo !== undefined) {
@@ -229,9 +232,10 @@ router.post("/transactions/batch-send", requireAdmin, async (req, res) => {
     const [row] = await db
       .update(transactionsTable)
       .set({
-        status:            "awaiting_response",
-        question_sent_at:  sentAt,
-        routed_to_channel: channel,
+        status:             "awaiting_response",
+        question_sent_at:   sentAt,
+        routed_to_channel:  channel,
+        flagged_for_client: false,
       })
       .where(and(eq(transactionsTable.id, txId), eq(transactionsTable.client_id, client_id)))
       .returning();
@@ -484,6 +488,14 @@ router.post("/transactions/upload", requireAdmin, upload.single("file"), async (
   await db.insert(transactionsTable).values(txRows);
 
   res.json({ ok: true, import: importRecord, count: txRows.length });
+});
+
+// DELETE /api/transactions/:id  — delete a single transaction row
+router.delete("/transactions/:id", requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: "Invalid id" });
+  await db.delete(transactionsTable).where(eq(transactionsTable.id, id));
+  res.json({ ok: true });
 });
 
 // DELETE /api/transactions/import/:id

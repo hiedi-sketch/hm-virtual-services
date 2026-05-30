@@ -51,6 +51,7 @@ export const transactionsTable = pgTable("transactions", {
   qbo_account_id: text("qbo_account_id"),
   qbo_last_synced_at: text("qbo_last_synced_at"),
   qbo_pending: boolean("qbo_pending").notNull().default(false),
+  flagged_for_client: boolean("flagged_for_client").notNull().default(false),
 });
 
 export type Transaction = typeof transactionsTable.$inferSelect;
