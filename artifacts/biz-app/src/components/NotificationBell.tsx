@@ -78,6 +78,31 @@ function useNotifications() {
   });
 }
 
+function playChime() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const notes = [
+      { freq: 880, start: 0,    dur: 0.18 },
+      { freq: 1108, start: 0.12, dur: 0.18 },
+      { freq: 1320, start: 0.24, dur: 0.28 },
+    ];
+    notes.forEach(({ freq, start, dur }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+      gain.gain.setValueAtTime(0, ctx.currentTime + start);
+      gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur);
+    });
+    setTimeout(() => ctx.close(), 1000);
+  } catch {}
+}
+
 export function NotificationBell({
   userRole,
   buttonClassName,
@@ -94,6 +119,19 @@ export function NotificationBell({
   const { data } = useNotifications();
 
   const unread = data?.unreadCount ?? 0;
+
+  // Play chime when unread count increases (skip on first load)
+  const prevUnread = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevUnread.current === null) {
+      prevUnread.current = unread;
+      return;
+    }
+    if (unread > prevUnread.current) {
+      playChime();
+    }
+    prevUnread.current = unread;
+  }, [unread]);
   const notifications = data?.notifications ?? [];
 
   useEffect(() => {
