@@ -1,22 +1,23 @@
 import { useState, useRef, Fragment } from "react";
 import { useParams, useLocation } from "wouter";
 import {
-  useAppSprints, computeSprintStats, Task, TaskStatus, Sprint,
+  useAppSprints, computeSprintStats, computeSchedule,
+  Task, TaskStatus, Sprint, ScheduleEntry,
 } from "@/hooks/useAppSprints";
 
-// ── Constants ────────────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 const BRAND       = "#266b75";
 const BRAND_LIGHT = "#7dbdc6";
 const BRAND_BG    = "rgba(38,107,117,0.08)";
 
+// Updated colors: In Progress → yellow, Done → green (unchanged), Blocked → red
 const STATUS_MAP: Record<TaskStatus, { label: string; bg: string; color: string }> = {
-  "todo":        { label: "To Do",       bg: "#f1f5f9", color: "#64748b" },
-  "in-progress": { label: "In Progress", bg: "#eff6ff", color: "#2563eb" },
-  "done":        { label: "Done",        bg: "#f0fdf4", color: "#16a34a" },
-  "blocked":     { label: "Blocked",     bg: "#fef2f2", color: "#dc2626" },
+  "todo":        { label: "Not Started",  bg: "#f1f5f9", color: "#64748b" },
+  "in-progress": { label: "In Progress",  bg: "#fffbeb", color: "#d97706" },
+  "done":        { label: "Complete",     bg: "#f0fdf4", color: "#16a34a" },
+  "blocked":     { label: "Blocked",      bg: "#fef2f2", color: "#dc2626" },
 };
 
-// Legacy cycle used in sprint card view
 const CYCLE: Record<TaskStatus, TaskStatus> = {
   "todo": "in-progress", "in-progress": "done", "done": "todo", "blocked": "todo",
 };
@@ -26,25 +27,25 @@ const LBL: React.CSSProperties = {
   letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "5px",
 };
 const INP: React.CSSProperties = {
-  width: "100%", background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px",
-  color: "#0f172a", padding: "8px 11px", fontSize: "13px", fontFamily: "'Inter', sans-serif",
-  boxSizing: "border-box",
+  width: "100%", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px",
+  color: "#0f172a", padding: "8px 11px", fontSize: "13px",
+  fontFamily: "'Inter',sans-serif", boxSizing: "border-box",
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-function fmtDate(d: string | Date | null | undefined): string {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtDate(d: Date | string | null | undefined): string {
   if (!d) return "—";
-  const date = typeof d === "string" ? new Date(d + (d.includes("T") ? "" : "T00:00:00")) : d;
+  const date = d instanceof Date
+    ? d
+    : new Date((d as string) + ((d as string).includes("T") ? "" : "T00:00:00"));
   if (isNaN(date.getTime())) return "—";
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function daysFromNow(dateStr?: string): number | null {
-  if (!dateStr) return null;
-  const date = new Date(dateStr + "T00:00:00");
-  if (isNaN(date.getTime())) return null;
+function daysFromDate(d: Date | null): number | null {
+  if (!d) return null;
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  return Math.round((date.getTime() - today.getTime()) / 86_400_000);
+  return Math.round((d.getTime() - today.getTime()) / 86_400_000);
 }
 
 function getCurrentSprint(sprints: Sprint[]): Sprint | null {
@@ -59,13 +60,29 @@ function getCurrentSprint(sprints: Sprint[]): Sprint | null {
   );
 }
 
-// ── StatCard ─────────────────────────────────────────────────────────────────
+// 3-tier severity: positive = ahead, -7..0 = warning, < -7 = danger
+type DabTier = "ahead" | "warning" | "danger" | "unknown";
+function getDabTier(dab: number | null): DabTier {
+  if (dab === null) return "unknown";
+  if (dab >= 0)  return "ahead";
+  if (dab >= -7) return "warning";
+  return "danger";
+}
+const TIER_PALETTE: Record<DabTier, { bg: string; border: string; iconBg: string; iconStroke: string; headColor: string; subColor: string }> = {
+  ahead:   { bg: "#f0fdf4", border: "#bbf7d0", iconBg: "#dcfce7", iconStroke: "#16a34a", headColor: "#15803d", subColor: "#16a34a" },
+  warning: { bg: "#fffbeb", border: "#fde68a", iconBg: "#fef9c3", iconStroke: "#d97706", headColor: "#92400e", subColor: "#d97706" },
+  danger:  { bg: "#fef2f2", border: "#fecaca", iconBg: "#fee2e2", iconStroke: "#dc2626", headColor: "#dc2626", subColor: "#ef4444" },
+  unknown: { bg: "#f8fafc", border: "#e2e8f0", iconBg: "#f1f5f9", iconStroke: "#94a3b8", headColor: "#64748b", subColor: "#94a3b8" },
+};
+
+// ── StatCard ──────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, accent }: {
   label: string; value: string; sub?: string; accent?: boolean;
 }) {
   return (
     <div style={{
-      background: accent ? BRAND : "#fff", border: `1px solid ${accent ? "transparent" : "#e2e8f0"}`,
+      background: accent ? BRAND : "#fff",
+      border: `1px solid ${accent ? "transparent" : "#e2e8f0"}`,
       borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0,
       boxShadow: accent ? `0 4px 16px ${BRAND}44` : "0 1px 3px rgba(0,0,0,0.05)",
     }}>
@@ -76,33 +93,42 @@ function StatCard({ label, value, sub, accent }: {
   );
 }
 
-// ── TaskTable Component ───────────────────────────────────────────────────────
+// ── DaysChip — reused for table Days+/- column ────────────────────────────────
+function DaysChip({ days }: { days: number | null }) {
+  if (days === null) return <span style={{ color: "#cbd5e1", fontSize: "12px" }}>—</span>;
+  if (days > 0)  return <span style={{ color: "#16a34a", fontSize: "12px", fontWeight: 700 }}>+{days}d</span>;
+  if (days === 0) return <span style={{ color: "#d97706", fontSize: "12px", fontWeight: 700 }}>Today</span>;
+  return <span style={{ color: "#dc2626", fontSize: "12px", fontWeight: 700 }}>{days}d</span>;
+}
+
+// ── TaskTable ─────────────────────────────────────────────────────────────────
 interface TaskTableProps {
   sprints: Sprint[];
+  taskDates: Map<string, ScheduleEntry>;
   updateSprint: (id: string, updates: Partial<Omit<Sprint, "id">>) => Promise<void>;
   addSprint: (sprint: Omit<Sprint, "id" | "createdAt">) => Promise<void>;
 }
 
-function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
-  const [activeFilter,     setActiveFilter]     = useState<string>("all");
+function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTableProps) {
+  const [activeFilter,    setActiveFilter]    = useState("all");
   const [collapsedSprints, setCollapsedSprints] = useState<Set<string>>(new Set());
-  const [expandedTasks,    setExpandedTasks]    = useState<Set<string>>(new Set());
-  const [taskDrafts,       setTaskDrafts]       = useState<Record<string, Partial<Task>>>({});
-  const [savingTaskId,     setSavingTaskId]     = useState<string | null>(null);
-  const [addingInSprint,   setAddingInSprint]   = useState<string | null>(null);
-  const [newTaskDraft,     setNewTaskDraft]     = useState<Partial<Task>>({});
-  const [showSprintModal,  setShowSprintModal]  = useState(false);
-  const [sprintForm,       setSprintForm]       = useState({ name: "", startDate: "", endDate: "" });
-  const [sprintSaving,     setSprintSaving]     = useState(false);
+  const [expandedTasks,   setExpandedTasks]   = useState<Set<string>>(new Set());
+  const [taskDrafts,      setTaskDrafts]      = useState<Record<string, Partial<Task>>>({});
+  const [savingTaskId,    setSavingTaskId]    = useState<string | null>(null);
+  const [addingInSprint,  setAddingInSprint]  = useState<string | null>(null);
+  const [newTaskDraft,    setNewTaskDraft]    = useState<Partial<Task>>({});
+  const [showModal,       setShowModal]       = useState(false);
+  const [sprintForm,      setSprintForm]      = useState({ name: "", startDate: "", endDate: "" });
+  const [sprintSaving,    setSprintSaving]    = useState(false);
 
-  const filteredSprints = activeFilter === "all" ? sprints : sprints.filter(s => s.id === activeFilter);
+  const filtered = activeFilter === "all" ? sprints : sprints.filter(s => s.id === activeFilter);
 
   const toggleSprint = (id: string) =>
-    setCollapsedSprints(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setCollapsedSprints(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const toggleTask = (taskId: string, sprint: Sprint) => {
-    setExpandedTasks(prev => {
-      const n = new Set(prev);
+    setExpandedTasks(p => {
+      const n = new Set(p);
       if (n.has(taskId)) { n.delete(taskId); }
       else {
         n.add(taskId);
@@ -113,52 +139,47 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
     });
   };
 
-  const updateDraft = (taskId: string, field: keyof Task, value: unknown) =>
+  const setDraft = (taskId: string, field: keyof Task, value: unknown) =>
     setTaskDrafts(d => ({ ...d, [taskId]: { ...d[taskId], [field]: value } }));
 
   const saveTask = async (sprint: Sprint, taskId: string) => {
     setSavingTaskId(taskId);
     const draft = taskDrafts[taskId] ?? {};
-    const updatedTasks = sprint.tasks.map(t => t.id === taskId ? { ...t, ...draft } : t);
-    await updateSprint(sprint.id, { tasks: updatedTasks });
+    await updateSprint(sprint.id, { tasks: sprint.tasks.map(t => t.id === taskId ? { ...t, ...draft } : t) });
     setSavingTaskId(null);
-    setExpandedTasks(prev => { const n = new Set(prev); n.delete(taskId); return n; });
+    setExpandedTasks(p => { const n = new Set(p); n.delete(taskId); return n; });
   };
 
   const markTask = async (sprint: Sprint, taskId: string, status: TaskStatus) => {
-    const updatedTasks = sprint.tasks.map(t => t.id === taskId ? { ...t, status } : t);
-    await updateSprint(sprint.id, { tasks: updatedTasks });
+    await updateSprint(sprint.id, { tasks: sprint.tasks.map(t => t.id === taskId ? { ...t, status } : t) });
     setTaskDrafts(d => d[taskId] ? { ...d, [taskId]: { ...d[taskId], status } } : d);
   };
 
   const handleAddTask = async (sprint: Sprint) => {
     if (!newTaskDraft.title?.trim()) return;
-    const newTask: Task = { id: crypto.randomUUID(), title: newTaskDraft.title.trim(), status: "todo", ...newTaskDraft };
-    await updateSprint(sprint.id, { tasks: [...(sprint.tasks ?? []), newTask] });
-    setNewTaskDraft({});
-    setAddingInSprint(null);
+    const t: Task = { id: crypto.randomUUID(), title: newTaskDraft.title.trim(), status: "todo", ...newTaskDraft };
+    await updateSprint(sprint.id, { tasks: [...(sprint.tasks ?? []), t] });
+    setNewTaskDraft({}); setAddingInSprint(null);
   };
 
   const handleAddSprint = async () => {
     if (!sprintForm.name.trim()) return;
     setSprintSaving(true);
     await addSprint({ name: sprintForm.name.trim(), startDate: sprintForm.startDate, endDate: sprintForm.endDate, tasks: [] });
-    setSprintForm({ name: "", startDate: "", endDate: "" });
-    setShowSprintModal(false);
-    setSprintSaving(false);
+    setSprintForm({ name: "", startDate: "", endDate: "" }); setShowModal(false); setSprintSaving(false);
   };
 
   return (
     <div>
-      {/* ── Filter tabs ── */}
+      {/* Filter tabs */}
       <div style={{ display: "flex", gap: "6px", marginBottom: "20px", flexWrap: "wrap" as const }}>
         {[{ id: "all", label: "All Sprints" }, ...sprints.map(s => ({ id: s.id, label: s.name }))].map(tab => {
           const active = activeFilter === tab.id;
-          const count  = tab.id === "all" ? sprints.flatMap(s => s.tasks ?? []).length : sprints.find(s => s.id === tab.id)?.tasks?.length ?? 0;
+          const count  = tab.id === "all"
+            ? sprints.flatMap(s => s.tasks ?? []).length
+            : sprints.find(s => s.id === tab.id)?.tasks?.length ?? 0;
           return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveFilter(tab.id)}
+            <button key={tab.id} onClick={() => setActiveFilter(tab.id)}
               style={{ background: active ? BRAND : "#fff", border: `1px solid ${active ? BRAND : "#e2e8f0"}`, borderRadius: "8px", color: active ? "#fff" : "#64748b", padding: "7px 14px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
             >
               {tab.label}
@@ -168,19 +189,17 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
         })}
       </div>
 
-      {/* ── Sprint sections ── */}
-      {filteredSprints.map(sprint => {
-        const tasks      = sprint.tasks ?? [];
-        const done       = tasks.filter(t => t.status === "done").length;
-        const pct        = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
+      {/* Sprint sections */}
+      {filtered.map(sprint => {
+        const tasks = sprint.tasks ?? [];
+        const done  = tasks.filter(t => t.status === "done").length;
+        const pct   = tasks.length > 0 ? Math.round((done / tasks.length) * 100) : 0;
         const isCollapsed = collapsedSprints.has(sprint.id);
 
         return (
           <div key={sprint.id} style={{ marginBottom: "16px", border: "1px solid #e2e8f0", borderRadius: "14px", overflow: "hidden", background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
-
-            {/* Sprint header (collapsible) */}
-            <div
-              onClick={() => toggleSprint(sprint.id)}
+            {/* Sprint header */}
+            <div onClick={() => toggleSprint(sprint.id)}
               style={{ display: "flex", alignItems: "center", gap: "12px", padding: "13px 18px", cursor: "pointer", background: "#f8fafc", borderBottom: isCollapsed ? "none" : "1px solid #e2e8f0", userSelect: "none" as const }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" style={{ transform: isCollapsed ? "rotate(-90deg)" : "none", transition: "transform 0.2s", flexShrink: 0 }}>
@@ -195,24 +214,22 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
                 )}
               </div>
               <span style={{ fontSize: "11px", color: "#94a3b8" }}>{done}/{tasks.length} done</span>
-              <span style={{ fontSize: "11px", fontWeight: 700, color: pct === 100 ? "#16a34a" : BRAND, background: pct === 100 ? "#f0fdf4" : BRAND_BG, borderRadius: "20px", padding: "2px 10px" }}>
-                {pct}%
-              </span>
+              <span style={{ fontSize: "11px", fontWeight: 700, color: pct === 100 ? "#16a34a" : BRAND, background: pct === 100 ? "#f0fdf4" : BRAND_BG, borderRadius: "20px", padding: "2px 10px" }}>{pct}%</span>
             </div>
 
             {!isCollapsed && (
               <div style={{ overflowX: "auto" as const }}>
-                <table style={{ width: "100%", borderCollapse: "collapse" as const, minWidth: "800px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" as const, minWidth: "820px" }}>
                   <thead>
                     <tr style={{ background: "#fcfcfd" }}>
                       {[
-                        { label: "#",            width: "72px",  align: "center" as const },
-                        { label: "Task Name",    width: "auto",  align: "left" as const   },
-                        { label: "Est Hrs",      width: "76px",  align: "center" as const },
-                        { label: "Planned Due",  width: "112px", align: "left" as const   },
-                        { label: "Adj Due",      width: "112px", align: "left" as const   },
-                        { label: "Status",       width: "120px", align: "left" as const   },
-                        { label: "Days +/-",     width: "80px",  align: "center" as const },
+                        { label: "#",           width: "72px",  align: "center" as const },
+                        { label: "Task Name",   width: "auto",  align: "left" as const   },
+                        { label: "Est Hrs",     width: "76px",  align: "center" as const },
+                        { label: "Planned Due", width: "116px", align: "left" as const   },
+                        { label: "Adj Due",     width: "116px", align: "left" as const   },
+                        { label: "Status",      width: "126px", align: "left" as const   },
+                        { label: "Days +/-",    width: "84px",  align: "center" as const },
                       ].map(h => (
                         <th key={h.label} style={{ padding: "9px 14px", width: h.width, textAlign: h.align, fontSize: "10px", fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase" as const, borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" as const }}>
                           {h.label}
@@ -222,26 +239,23 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
                   </thead>
                   <tbody>
                     {tasks.length === 0 && addingInSprint !== sprint.id && (
-                      <tr>
-                        <td colSpan={7} style={{ padding: "22px", textAlign: "center" as const, color: "#94a3b8", fontSize: "13px", fontStyle: "italic" }}>
-                          No tasks yet — click + Add Task below.
-                        </td>
-                      </tr>
+                      <tr><td colSpan={7} style={{ padding: "22px", textAlign: "center" as const, color: "#94a3b8", fontSize: "13px", fontStyle: "italic" }}>No tasks — click + Add Task below.</td></tr>
                     )}
 
                     {tasks.map(task => {
                       const isExpanded = expandedTasks.has(task.id);
                       const draft      = taskDrafts[task.id] ?? task;
                       const sty        = STATUS_MAP[task.status] ?? STATUS_MAP["todo"];
-                      const daysLeft   = daysFromNow(task.plannedDueDate);
-                      const isSaving   = savingTaskId === task.id;
+                      const computed   = taskDates.get(task.id);
+                      const planDue    = computed?.plannedDue ?? null;
+                      const adjDue     = computed?.adjustedDue ?? null;
+                      const daysLeft   = daysFromDate(adjDue ?? planDue);
                       const shortId    = task.id.replace(/-/g, "").slice(0, 6).toUpperCase();
+                      const isSaving   = savingTaskId === task.id;
 
                       return (
                         <Fragment key={task.id}>
-                          {/* Task row */}
-                          <tr
-                            onClick={() => toggleTask(task.id, sprint)}
+                          <tr onClick={() => toggleTask(task.id, sprint)}
                             style={{ cursor: "pointer", background: isExpanded ? "#f0fdf9" : "transparent", borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}
                           >
                             <td style={{ padding: "10px 14px", textAlign: "center" as const }}>
@@ -250,88 +264,95 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
                             <td style={{ padding: "10px 14px" }}>
                               <div style={{ fontSize: "13px", fontWeight: 500, color: task.status === "done" ? "#94a3b8" : "#0f172a", textDecoration: task.status === "done" ? "line-through" : "none" }}>{task.title}</div>
                               <div style={{ display: "flex", gap: "8px", marginTop: "2px", flexWrap: "wrap" as const }}>
-                                {task.phase && <span style={{ fontSize: "10px", color: "#7dbdc6", fontWeight: 600 }}>{task.phase}</span>}
+                                {task.phase && <span style={{ fontSize: "10px", color: BRAND_LIGHT, fontWeight: 600 }}>{task.phase}</span>}
                                 {task.priority && (
                                   <span style={{ fontSize: "10px", fontWeight: 700, color: task.priority === "critical" ? "#7c3aed" : task.priority === "high" ? "#dc2626" : task.priority === "medium" ? "#d97706" : "#64748b" }}>
                                     {task.priority.toUpperCase()}
                                   </span>
+                                )}
+                                {computed?.estimatedDays != null && (
+                                  <span style={{ fontSize: "10px", color: "#94a3b8" }}>≈{computed.estimatedDays.toFixed(1)}d</span>
                                 )}
                               </div>
                             </td>
                             <td style={{ padding: "10px 14px", textAlign: "center" as const, fontSize: "12px", color: task.estimatedHours ? "#334155" : "#cbd5e1" }}>
                               {task.estimatedHours ? `${task.estimatedHours}h` : "—"}
                             </td>
-                            <td style={{ padding: "10px 14px", fontSize: "12px", color: "#334155", whiteSpace: "nowrap" as const }}>
-                              {task.plannedDueDate ? fmtDate(task.plannedDueDate) : <span style={{ color: "#cbd5e1" }}>—</span>}
+                            {/* Planned Due — auto-calculated if possible */}
+                            <td style={{ padding: "10px 14px", fontSize: "12px", whiteSpace: "nowrap" as const }}>
+                              {planDue
+                                ? <span style={{ color: "#334155" }}>{fmtDate(planDue)}</span>
+                                : <span style={{ color: "#cbd5e1" }}>—</span>}
                             </td>
-                            <td style={{ padding: "10px 14px", fontSize: "12px", color: "#334155", whiteSpace: "nowrap" as const }}>
-                              {task.adjustedDueDate ? fmtDate(task.adjustedDueDate) : <span style={{ color: "#cbd5e1" }}>—</span>}
+                            {/* Adj Due — dependency-resolved */}
+                            <td style={{ padding: "10px 14px", fontSize: "12px", whiteSpace: "nowrap" as const }}>
+                              {adjDue
+                                ? <span style={{ color: task.status === "done" ? "#16a34a" : "#334155", fontWeight: adjDue !== planDue ? 600 : 400 }}>{fmtDate(adjDue)}</span>
+                                : <span style={{ color: "#cbd5e1" }}>—</span>}
                             </td>
                             <td style={{ padding: "10px 14px" }}>
                               <span style={{ background: sty.bg, color: sty.color, fontSize: "10px", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", whiteSpace: "nowrap" as const }}>{sty.label}</span>
                             </td>
                             <td style={{ padding: "10px 14px", textAlign: "center" as const }}>
-                              {daysLeft === null ? <span style={{ color: "#cbd5e1", fontSize: "12px" }}>—</span>
-                                : daysLeft > 0  ? <span style={{ color: "#16a34a", fontSize: "12px", fontWeight: 700 }}>+{daysLeft}d</span>
-                                : daysLeft === 0 ? <span style={{ color: "#d97706", fontSize: "12px", fontWeight: 700 }}>Today</span>
-                                : <span style={{ color: "#dc2626", fontSize: "12px", fontWeight: 700 }}>{daysLeft}d</span>}
+                              <DaysChip days={daysLeft} />
                             </td>
                           </tr>
 
-                          {/* Expanded detail row */}
+                          {/* Expanded detail */}
                           {isExpanded && (
                             <tr>
                               <td colSpan={7} style={{ padding: 0, background: "#f8fbfc", borderBottom: "2px solid #e2e8f0" }}>
                                 <div style={{ padding: "20px 24px" }}>
 
+                                  {/* Auto-calc info bar */}
+                                  {computed && (
+                                    <div style={{ display: "flex", gap: "16px", padding: "10px 14px", background: BRAND_BG, border: `1px solid ${BRAND}22`, borderRadius: "10px", marginBottom: "16px", flexWrap: "wrap" as const, fontSize: "12px", color: BRAND }}>
+                                      {computed.estimatedDays != null && <span>⏱ <b>{computed.estimatedDays.toFixed(1)}</b> est days</span>}
+                                      {computed.plannedDue    && <span>📅 Planned: <b>{fmtDate(computed.plannedDue)}</b></span>}
+                                      {computed.adjustedDue   && <span>🔄 Adjusted: <b>{fmtDate(computed.adjustedDue)}</b></span>}
+                                    </div>
+                                  )}
+
                                   {/* Action buttons */}
                                   <div style={{ display: "flex", gap: "8px", marginBottom: "18px", flexWrap: "wrap" as const }}>
                                     {([
-                                      { status: "in-progress" as TaskStatus, label: "Mark In Progress", onColor: "#2563eb", onBg: "#2563eb", offBg: "#eff6ff", offColor: "#2563eb" },
-                                      { status: "done"        as TaskStatus, label: "Mark Complete",    onColor: "#fff",    onBg: "#16a34a", offBg: "#f0fdf4", offColor: "#16a34a" },
-                                      { status: "blocked"     as TaskStatus, label: "Mark Blocked",     onColor: "#fff",    onBg: "#dc2626", offBg: "#fef2f2", offColor: "#dc2626" },
+                                      { status: "in-progress" as TaskStatus, label: "Mark In Progress", onBg: "#d97706", offBg: "#fffbeb", offColor: "#d97706" },
+                                      { status: "done"        as TaskStatus, label: "Mark Complete",    onBg: "#16a34a", offBg: "#f0fdf4", offColor: "#16a34a" },
+                                      { status: "blocked"     as TaskStatus, label: "Mark Blocked",     onBg: "#dc2626", offBg: "#fef2f2", offColor: "#dc2626" },
                                     ] as const).map(btn => {
                                       const active = draft.status === btn.status;
                                       return (
-                                        <button
-                                          key={btn.status}
+                                        <button key={btn.status}
                                           onClick={e => { e.stopPropagation(); markTask(sprint, task.id, btn.status); }}
-                                          style={{ background: active ? btn.onBg : btn.offBg, border: `1px solid ${active ? btn.onBg : btn.offColor}44`, borderRadius: "8px", color: active ? btn.onColor : btn.offColor, padding: "7px 16px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                                          style={{ background: active ? btn.onBg : btn.offBg, border: `1px solid ${active ? btn.onBg : btn.offColor}55`, borderRadius: "8px", color: active ? "#fff" : btn.offColor, padding: "7px 16px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
                                         >
                                           {active ? "✓ " : ""}{btn.label}
                                         </button>
                                       );
                                     })}
                                     <div style={{ flex: 1 }} />
-                                    <button
-                                      onClick={e => { e.stopPropagation(); setExpandedTasks(prev => { const n = new Set(prev); n.delete(task.id); return n; }); }}
+                                    <button onClick={e => { e.stopPropagation(); setExpandedTasks(p => { const n = new Set(p); n.delete(task.id); return n; }); }}
                                       style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#94a3b8", padding: "7px 12px", fontSize: "12px", cursor: "pointer" }}
-                                    >
-                                      ✕ Collapse
-                                    </button>
+                                    >✕ Collapse</button>
                                   </div>
 
-                                  {/* Fields grid — 3 columns */}
+                                  {/* Fields — 3-col grid */}
                                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-
                                     <div style={{ gridColumn: "1 / -1" }}>
                                       <label style={LBL}>Task Name</label>
-                                      <input style={INP} value={draft.title ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "title", e.target.value)} />
+                                      <input style={INP} value={draft.title ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "title", e.target.value)} />
                                     </div>
-
                                     <div style={{ gridColumn: "1 / -1" }}>
                                       <label style={LBL}>Description</label>
-                                      <textarea rows={2} style={{ ...INP, resize: "vertical" as const }} value={draft.description ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "description", e.target.value)} placeholder="What needs to be done?" />
+                                      <textarea rows={2} style={{ ...INP, resize: "vertical" as const }} value={draft.description ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "description", e.target.value)} placeholder="What needs to be done?" />
                                     </div>
-
                                     <div>
                                       <label style={LBL}>Phase</label>
-                                      <input style={INP} value={draft.phase ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "phase", e.target.value)} placeholder="e.g. Discovery" />
+                                      <input style={INP} value={draft.phase ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "phase", e.target.value)} placeholder="e.g. Discovery" />
                                     </div>
-
                                     <div>
                                       <label style={LBL}>Priority</label>
-                                      <select style={INP} value={draft.priority ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "priority", e.target.value as Task["priority"])}>
+                                      <select style={INP} value={draft.priority ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "priority", e.target.value as Task["priority"])}>
                                         <option value="">— Select —</option>
                                         <option value="low">Low</option>
                                         <option value="medium">Medium</option>
@@ -339,63 +360,51 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
                                         <option value="critical">Critical</option>
                                       </select>
                                     </div>
-
                                     <div>
                                       <label style={LBL}>Est Hours</label>
-                                      <input type="number" min={0} style={INP} value={draft.estimatedHours ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "estimatedHours", e.target.value ? Number(e.target.value) : undefined)} placeholder="0" />
+                                      <input type="number" min={0} style={INP} value={draft.estimatedHours ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "estimatedHours", e.target.value ? Number(e.target.value) : undefined)} placeholder="0" />
                                     </div>
-
                                     <div>
-                                      <label style={LBL}>Depends On</label>
-                                      <input style={INP} value={draft.dependsOn ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "dependsOn", e.target.value)} placeholder="Task name or ID" />
+                                      <label style={LBL}>Planned Start Date</label>
+                                      <input type="date" style={INP} value={draft.plannedStartDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "plannedStartDate", e.target.value)} />
                                     </div>
-
                                     <div>
-                                      <label style={LBL}>Blocking</label>
-                                      <input style={INP} value={draft.blocking ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "blocking", e.target.value)} placeholder="Task name or ID" />
+                                      <label style={LBL}>Planned Due Date <span style={{ color: "#94a3b8", fontWeight: 400, textTransform: "none" as const, letterSpacing: 0, fontSize: "10px" }}>(auto if start+hrs set)</span></label>
+                                      <input type="date" style={INP} value={draft.plannedDueDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "plannedDueDate", e.target.value)} />
                                     </div>
-
                                     <div>
-                                      <label style={LBL}>Claude Prompt Reference</label>
-                                      <input style={INP} value={draft.claudePromptRef ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "claudePromptRef", e.target.value)} placeholder="Prompt ID or link" />
+                                      <label style={LBL}>Adjusted Due Date <span style={{ color: "#94a3b8", fontWeight: 400, textTransform: "none" as const, letterSpacing: 0, fontSize: "10px" }}>(auto from deps)</span></label>
+                                      <input type="date" style={INP} value={draft.adjustedDueDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "adjustedDueDate", e.target.value)} />
                                     </div>
-
-                                    <div>
-                                      <label style={LBL}>Planned Due Date</label>
-                                      <input type="date" style={INP} value={draft.plannedDueDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "plannedDueDate", e.target.value)} />
-                                    </div>
-
-                                    <div>
-                                      <label style={LBL}>Adjusted Due Date</label>
-                                      <input type="date" style={INP} value={draft.adjustedDueDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "adjustedDueDate", e.target.value)} />
-                                    </div>
-
                                     <div>
                                       <label style={LBL}>Actual Completion Date</label>
-                                      <input type="date" style={INP} value={draft.actualDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "actualDate", e.target.value)} />
+                                      <input type="date" style={INP} value={draft.actualDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "actualDate", e.target.value)} />
                                     </div>
-
+                                    <div>
+                                      <label style={LBL}>Depends On</label>
+                                      <input style={INP} value={draft.dependsOn ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "dependsOn", e.target.value)} placeholder="Task name or ID" />
+                                    </div>
+                                    <div>
+                                      <label style={LBL}>Blocking</label>
+                                      <input style={INP} value={draft.blocking ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "blocking", e.target.value)} placeholder="Task name or ID" />
+                                    </div>
+                                    <div>
+                                      <label style={LBL}>Claude Prompt Reference</label>
+                                      <input style={INP} value={draft.claudePromptRef ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "claudePromptRef", e.target.value)} placeholder="Prompt ID or link" />
+                                    </div>
                                     <div style={{ gridColumn: "1 / -1" }}>
                                       <label style={LBL}>Notes</label>
-                                      <textarea rows={3} style={{ ...INP, resize: "vertical" as const }} value={draft.notes ?? ""} onClick={e => e.stopPropagation()} onChange={e => updateDraft(task.id, "notes", e.target.value)} placeholder="Additional notes…" />
+                                      <textarea rows={3} style={{ ...INP, resize: "vertical" as const }} value={draft.notes ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "notes", e.target.value)} placeholder="Additional notes…" />
                                     </div>
                                   </div>
 
-                                  {/* Save / Cancel */}
                                   <div style={{ display: "flex", gap: "8px", marginTop: "14px" }}>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); saveTask(sprint, task.id); }}
-                                      disabled={isSaving}
+                                    <button onClick={e => { e.stopPropagation(); saveTask(sprint, task.id); }} disabled={isSaving}
                                       style={{ background: BRAND, border: "none", borderRadius: "8px", color: "#fff", padding: "8px 20px", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: isSaving ? 0.7 : 1 }}
-                                    >
-                                      {isSaving ? "Saving…" : "Save Changes"}
-                                    </button>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); setExpandedTasks(prev => { const n = new Set(prev); n.delete(task.id); return n; }); }}
+                                    >{isSaving ? "Saving…" : "Save Changes"}</button>
+                                    <button onClick={e => { e.stopPropagation(); setExpandedTasks(p => { const n = new Set(p); n.delete(task.id); return n; }); }}
                                       style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#64748b", padding: "8px 16px", fontSize: "12px", cursor: "pointer" }}
-                                    >
-                                      Cancel
-                                    </button>
+                                    >Cancel</button>
                                   </div>
                                 </div>
                               </td>
@@ -405,18 +414,14 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
                       );
                     })}
 
-                    {/* Add Task row */}
+                    {/* Add task row */}
                     {addingInSprint === sprint.id ? (
                       <tr style={{ background: "#f8fbfc" }}>
                         <td colSpan={7} style={{ padding: "12px 14px" }}>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 130px 120px auto", gap: "8px", alignItems: "end" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 80px 130px 130px 110px auto", gap: "8px", alignItems: "end" }}>
                             <div>
                               <label style={LBL}>Task Name *</label>
-                              <input
-                                autoFocus
-                                style={INP}
-                                value={newTaskDraft.title ?? ""}
-                                onChange={e => setNewTaskDraft(d => ({ ...d, title: e.target.value }))}
+                              <input autoFocus style={INP} value={newTaskDraft.title ?? ""} onChange={e => setNewTaskDraft(d => ({ ...d, title: e.target.value }))}
                                 onKeyDown={e => { if (e.key === "Enter") handleAddTask(sprint); if (e.key === "Escape") { setAddingInSprint(null); setNewTaskDraft({}); } }}
                                 placeholder="Task name…"
                               />
@@ -426,7 +431,11 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
                               <input type="number" min={0} style={INP} value={newTaskDraft.estimatedHours ?? ""} onChange={e => setNewTaskDraft(d => ({ ...d, estimatedHours: e.target.value ? Number(e.target.value) : undefined }))} placeholder="0" />
                             </div>
                             <div>
-                              <label style={LBL}>Planned Due</label>
+                              <label style={LBL}>Start Date</label>
+                              <input type="date" style={INP} value={newTaskDraft.plannedStartDate ?? ""} onChange={e => setNewTaskDraft(d => ({ ...d, plannedStartDate: e.target.value }))} />
+                            </div>
+                            <div>
+                              <label style={LBL}>Due Date</label>
                               <input type="date" style={INP} value={newTaskDraft.plannedDueDate ?? ""} onChange={e => setNewTaskDraft(d => ({ ...d, plannedDueDate: e.target.value }))} />
                             </div>
                             <div>
@@ -443,8 +452,7 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
                     ) : (
                       <tr>
                         <td colSpan={7} style={{ padding: "8px 14px", borderTop: "1px solid #f8fafc" }}>
-                          <button
-                            onClick={() => { setAddingInSprint(sprint.id); setNewTaskDraft({}); }}
+                          <button onClick={() => { setAddingInSprint(sprint.id); setNewTaskDraft({}); }}
                             style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#94a3b8", padding: "6px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 500 }}
                           >
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
@@ -462,21 +470,19 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
       })}
 
       {/* + Add Sprint */}
-      <button
-        onClick={() => setShowSprintModal(true)}
+      <button onClick={() => setShowModal(true)}
         style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", width: "100%", background: "#fff", border: `2px dashed ${BRAND}55`, borderRadius: "12px", color: BRAND, padding: "13px 24px", fontSize: "13px", fontWeight: 600, cursor: "pointer", marginTop: "8px" }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
         Add Sprint
       </button>
 
-      {/* Sprint modal */}
-      {showSprintModal && (
+      {showModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, padding: "20px" }}>
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "16px", width: "100%", maxWidth: "440px", boxShadow: "0 20px 60px rgba(0,0,0,0.12)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px 14px", borderBottom: "1px solid #f1f5f9" }}>
               <span style={{ fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>New Sprint</span>
-              <button onClick={() => setShowSprintModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             </div>
@@ -486,17 +492,11 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
                 <input autoFocus style={INP} value={sprintForm.name} onChange={e => setSprintForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Sprint 1 — Auth & Onboarding" onKeyDown={e => e.key === "Enter" && handleAddSprint()} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <label style={LBL}>Start Date</label>
-                  <input type="date" style={INP} value={sprintForm.startDate} onChange={e => setSprintForm(f => ({ ...f, startDate: e.target.value }))} />
-                </div>
-                <div>
-                  <label style={LBL}>End Date</label>
-                  <input type="date" style={INP} value={sprintForm.endDate} onChange={e => setSprintForm(f => ({ ...f, endDate: e.target.value }))} />
-                </div>
+                <div><label style={LBL}>Start Date</label><input type="date" style={INP} value={sprintForm.startDate} onChange={e => setSprintForm(f => ({ ...f, startDate: e.target.value }))} /></div>
+                <div><label style={LBL}>End Date</label><input type="date" style={INP} value={sprintForm.endDate} onChange={e => setSprintForm(f => ({ ...f, endDate: e.target.value }))} /></div>
               </div>
-              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "4px" }}>
-                <button onClick={() => setShowSprintModal(false)} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#334155", padding: "9px 18px", fontSize: "13px", cursor: "pointer" }}>Cancel</button>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                <button onClick={() => setShowModal(false)} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#334155", padding: "9px 18px", fontSize: "13px", cursor: "pointer" }}>Cancel</button>
                 <button onClick={handleAddSprint} disabled={sprintSaving} style={{ background: BRAND, border: "none", borderRadius: "8px", color: "#fff", padding: "9px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", opacity: sprintSaving ? 0.7 : 1 }}>
                   {sprintSaving ? "Saving…" : "Create Sprint"}
                 </button>
@@ -509,65 +509,109 @@ function TaskTable({ sprints, updateSprint, addSprint }: TaskTableProps) {
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Main Page ──────────────────────────────────────────────────────────────────
+type AppRecord = { id: number; name: string; stage: string; description: string; startDate?: string; targetDate?: string; dailyHoursAvailable?: number };
+
 export default function AppDevTrackerDetail() {
   const params = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const taskTableRef = useRef<HTMLDivElement>(null);
   const appId = params.id ?? "";
 
-  const appsRaw = localStorage.getItem("hm_tracker_apps");
-  const allApps: { id: number; name: string; stage: string; description: string; startDate?: string; targetDate?: string }[] =
-    appsRaw ? JSON.parse(appsRaw) : [];
-  const app = allApps.find(a => String(a.id) === appId);
+  // ── App metadata from localStorage
+  const loadApp = (): AppRecord | undefined => {
+    const raw = localStorage.getItem("hm_tracker_apps");
+    const list: AppRecord[] = raw ? JSON.parse(raw) : [];
+    return list.find(a => String(a.id) === appId);
+  };
+  const app = loadApp();
+
+  // dailyHoursAvailable — editable per-app setting
+  const [dailyHours, setDailyHours] = useState<number>(app?.dailyHoursAvailable ?? 6);
+  const [dailyHoursInput, setDailyHoursInput] = useState<string>(String(app?.dailyHoursAvailable ?? 6));
+
+  const saveDailyHours = (val: number) => {
+    const safeVal = val > 0 ? val : 1;
+    setDailyHours(safeVal);
+    setDailyHoursInput(String(safeVal));
+    const raw  = localStorage.getItem("hm_tracker_apps");
+    const list: AppRecord[] = raw ? JSON.parse(raw) : [];
+    localStorage.setItem("hm_tracker_apps", JSON.stringify(
+      list.map(a => String(a.id) === appId ? { ...a, dailyHoursAvailable: safeVal } : a)
+    ));
+  };
 
   const { sprints, loading, error, addSprint, updateSprint, deleteSprint } = useAppSprints(appId);
-  const stats = computeSprintStats(sprints, app?.targetDate ?? "");
-  const currentSprint = getCurrentSprint(sprints);
 
-  const [showTaskTable,  setShowTaskTable]  = useState(false);
+  // ── Schedule computation (pure, runs on every render)
+  const schedule = computeSchedule(sprints, dailyHours, app?.targetDate ?? "");
+  const stats    = computeSprintStats(sprints, app?.targetDate ?? "");
+
+  // Prefer schedule-based projection; fall back to velocity-based
+  const projLaunch = schedule.projectedLaunchDate ?? stats.projectedDate;
+  const dab        = schedule.daysAheadBehind ?? stats.daysAheadBehind;
+  const dabTierKey = getDabTier(dab);
+  const tier       = TIER_PALETTE[dabTierKey];
+
+  const currentSprint = getCurrentSprint(sprints);
+  const csTasks = currentSprint?.tasks ?? [];
+  const csDone  = csTasks.filter(t => t.status === "done").length;
+  const csPct   = csTasks.length > 0 ? Math.round((csDone / csTasks.length) * 100) : 0;
+
+  const [showTaskTable,   setShowTaskTable]   = useState(false);
   const [showSprintModal, setShowSprintModal] = useState(false);
-  const [sprintForm,     setSprintForm]     = useState({ name: "", startDate: "", endDate: "" });
-  const [sprintSaving,   setSprintSaving]   = useState(false);
-  const [addingTask,     setAddingTask]     = useState<string | null>(null);
-  const [newTaskTitle,   setNewTaskTitle]   = useState("");
+  const [sprintForm,      setSprintForm]      = useState({ name: "", startDate: "", endDate: "" });
+  const [sprintSaving,    setSprintSaving]    = useState(false);
+  const [addingTask,      setAddingTask]      = useState<string | null>(null);
+  const [newTaskTitle,    setNewTaskTitle]    = useState("");
 
   const handleAddSprint = async () => {
     if (!sprintForm.name.trim()) return;
     setSprintSaving(true);
     await addSprint({ name: sprintForm.name.trim(), startDate: sprintForm.startDate, endDate: sprintForm.endDate, tasks: [] });
-    setSprintForm({ name: "", startDate: "", endDate: "" });
-    setShowSprintModal(false);
-    setSprintSaving(false);
+    setSprintForm({ name: "", startDate: "", endDate: "" }); setShowSprintModal(false); setSprintSaving(false);
   };
 
   const handleAddTask = async (sprintId: string, tasks: Task[]) => {
     if (!newTaskTitle.trim()) return;
-    const newTask: Task = { id: crypto.randomUUID(), title: newTaskTitle.trim(), status: "todo" };
-    await updateSprint(sprintId, { tasks: [...tasks, newTask] });
+    await updateSprint(sprintId, { tasks: [...tasks, { id: crypto.randomUUID(), title: newTaskTitle.trim(), status: "todo" }] });
     setNewTaskTitle(""); setAddingTask(null);
   };
 
-  const handleCycleStatus = async (sprintId: string, tasks: Task[], taskId: string) => {
-    const updated = tasks.map(t => t.id === taskId ? { ...t, status: CYCLE[t.status] } : t);
-    await updateSprint(sprintId, { tasks: updated });
-  };
+  const handleCycleStatus = async (sprintId: string, tasks: Task[], taskId: string) =>
+    updateSprint(sprintId, { tasks: tasks.map(t => t.id === taskId ? { ...t, status: CYCLE[t.status] } : t) });
 
   const handleDeleteTask = async (sprintId: string, tasks: Task[], taskId: string) =>
     updateSprint(sprintId, { tasks: tasks.filter(t => t.id !== taskId) });
-
-  // Current sprint derived
-  const csTasks = currentSprint?.tasks ?? [];
-  const csDone  = csTasks.filter(t => t.status === "done").length;
-  const csPct   = csTasks.length > 0 ? Math.round((csDone / csTasks.length) * 100) : 0;
-  const dab     = stats.daysAheadBehind;
-  const dabAhead = dab !== null && dab >= 0;
 
   const handleToggleTaskTable = () => {
     const next = !showTaskTable;
     setShowTaskTable(next);
     if (next) setTimeout(() => taskTableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
   };
+
+  // Projected Launch sub-text
+  const projSub = (() => {
+    if (!projLaunch) return stats.total === 0 ? "Add tasks with dates" : "Not enough data yet";
+    if (schedule.projectedLaunchDate) return "Based on task schedules";
+    return "Based on completion velocity";
+  })();
+
+  // Days callout label + icon
+  const dabLabel = (() => {
+    if (dab === null) return null;
+    const abs = Math.abs(dab);
+    if (dabTierKey === "ahead")   return `${abs} day${abs !== 1 ? "s" : ""} ahead of target`;
+    if (dabTierKey === "warning") return `${abs} day${abs !== 1 ? "s" : ""} behind target ⚠️`;
+    return `${abs} day${abs !== 1 ? "s" : ""} behind target 🚨`;
+  })();
+
+  const dabSub = (() => {
+    if (dab === null) return stats.total === 0 ? "Add tasks to see schedule status." : "Complete at least one task to project launch.";
+    if (dabTierKey === "ahead")   return `Projected ${fmtDate(projLaunch)} · Target ${fmtDate(app?.targetDate)} · On track`;
+    if (dabTierKey === "warning") return `Projected ${fmtDate(projLaunch)} · Target ${fmtDate(app?.targetDate)} · Monitor closely`;
+    return `Projected ${fmtDate(projLaunch)} · Target ${fmtDate(app?.targetDate)} · Needs attention`;
+  })();
 
   return (
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Inter',sans-serif", color: "#0f172a" }}>
@@ -580,14 +624,8 @@ export default function AppDevTrackerDetail() {
             Back to App Tracker
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" as const }}>
-            <div style={{ fontSize: "22px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a", letterSpacing: "-0.3px" }}>
-              {app?.name ?? `App #${appId}`}
-            </div>
-            {app?.stage && (
-              <span style={{ background: BRAND_BG, border: `1px solid ${BRAND}44`, borderRadius: "20px", padding: "3px 12px", fontSize: "11px", color: BRAND, fontWeight: 700, letterSpacing: "0.06em" }}>
-                {app.stage}
-              </span>
-            )}
+            <div style={{ fontSize: "22px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a", letterSpacing: "-0.3px" }}>{app?.name ?? `App #${appId}`}</div>
+            {app?.stage && <span style={{ background: BRAND_BG, border: `1px solid ${BRAND}44`, borderRadius: "20px", padding: "3px 12px", fontSize: "11px", color: BRAND, fontWeight: 700, letterSpacing: "0.06em" }}>{app.stage}</span>}
             {app?.description && <span style={{ fontSize: "13px", color: "#64748b" }}>{app.description}</span>}
           </div>
         </div>
@@ -597,17 +635,32 @@ export default function AppDevTrackerDetail() {
 
         {/* ── SUMMARY SECTION ── */}
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "18px", padding: "28px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: "32px" }}>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND, letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: "20px" }}>Summary</div>
+
+          {/* Header row with dailyHours setting */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap" as const, gap: "12px" }}>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>Summary</div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>Daily hours available:</span>
+              <input
+                type="number" min={0.5} max={24} step={0.5}
+                value={dailyHoursInput}
+                onChange={e => setDailyHoursInput(e.target.value)}
+                onBlur={() => { const n = parseFloat(dailyHoursInput); if (!isNaN(n) && n > 0) saveDailyHours(n); else setDailyHoursInput(String(dailyHours)); }}
+                style={{ width: "60px", border: `1px solid ${BRAND}55`, borderRadius: "7px", padding: "5px 8px", fontSize: "13px", fontWeight: 600, color: BRAND, textAlign: "center" as const, outline: "none", background: BRAND_BG }}
+              />
+              <span style={{ fontSize: "12px", color: "#94a3b8" }}>hrs/day</span>
+            </div>
+          </div>
 
           {/* Row 1 — Date cards */}
           <div style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
-            <StatCard label="Start Date"        value={fmtDate(app?.startDate)} />
-            <StatCard label="Original Target"   value={fmtDate(app?.targetDate)} />
+            <StatCard label="Start Date"      value={fmtDate(app?.startDate)} />
+            <StatCard label="Original Target" value={fmtDate(app?.targetDate)} />
             <StatCard
               label="Projected Launch"
-              value={loading ? "Loading…" : fmtDate(stats.projectedDate ?? undefined)}
-              sub={stats.projectedDate ? "Based on current velocity" : stats.total === 0 ? "Add tasks to project" : "Not enough data yet"}
-              accent={!!stats.projectedDate}
+              value={loading ? "Loading…" : fmtDate(projLaunch)}
+              sub={projSub}
+              accent={!!projLaunch}
             />
           </div>
 
@@ -618,7 +671,7 @@ export default function AppDevTrackerDetail() {
             <StatCard label="Remaining"    value={loading ? "—" : String(stats.total - stats.done)} sub={stats.total > 0 && stats.done < stats.total ? "Tasks left" : stats.done > 0 ? "All done!" : undefined} />
           </div>
 
-          {/* Progress bar */}
+          {/* Overall progress bar */}
           <div style={{ marginBottom: "20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
               <span style={{ fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Overall Progress</span>
@@ -649,37 +702,31 @@ export default function AppDevTrackerDetail() {
             </div>
           )}
 
-          {/* Days ahead/behind */}
-          {dab !== null ? (
-            <div style={{ display: "flex", alignItems: "center", gap: "14px", padding: "14px 20px", borderRadius: "12px", marginBottom: "20px", background: dabAhead ? "#f0fdf4" : "#fef2f2", border: `1px solid ${dabAhead ? "#bbf7d0" : "#fecaca"}` }}>
-              <div style={{ width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0, background: dabAhead ? "#dcfce7" : "#fee2e2", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={dabAhead ? "#16a34a" : "#dc2626"} strokeWidth="2.5">
-                  {dabAhead ? <path d="M12 19V5M5 12l7-7 7 7"/> : <path d="M12 5v14M5 12l7 7 7-7"/>}
+          {/* 3-tier days ahead/behind callout */}
+          <div style={{ display: "flex", alignItems: "center", gap: "14px", padding: "14px 20px", borderRadius: "12px", marginBottom: "20px", background: tier.bg, border: `1px solid ${tier.border}` }}>
+            <div style={{ width: "36px", height: "36px", borderRadius: "50%", flexShrink: 0, background: tier.iconBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {dab !== null ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={tier.iconStroke} strokeWidth="2.5">
+                  {dabTierKey === "ahead"
+                    ? <path d="M12 19V5M5 12l7-7 7 7"/>
+                    : <path d="M12 5v14M5 12l7 7 7-7"/>
+                  }
                 </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: "16px", fontWeight: 700, color: dabAhead ? "#15803d" : "#dc2626" }}>
-                  {Math.abs(dab)} day{Math.abs(dab) !== 1 ? "s" : ""} {dabAhead ? "ahead of target" : "behind target"}
-                </div>
-                <div style={{ fontSize: "12px", color: dabAhead ? "#16a34a" : "#ef4444", marginTop: "2px" }}>
-                  Projected {fmtDate(stats.projectedDate ?? undefined)} · Target {fmtDate(app?.targetDate)} · {dabAhead ? "On track" : "Needs attention"}
-                </div>
-              </div>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={tier.iconStroke} strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+              )}
             </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px 18px", borderRadius: "12px", marginBottom: "20px", background: "#f8fafc", border: "1px solid #e2e8f0" }}>
-              <div style={{ width: "32px", height: "32px", borderRadius: "50%", background: "#f1f5f9", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-              </div>
-              <span style={{ fontSize: "13px", color: "#64748b" }}>
-                {stats.total === 0 ? "Add sprints and tasks to see schedule status." : stats.done === 0 ? "Complete at least one task to generate a projected launch date." : "Not enough data to project launch date."}
-              </span>
+            <div>
+              {dabLabel
+                ? <div style={{ fontSize: "16px", fontWeight: 700, color: tier.headColor }}>{dabLabel}</div>
+                : <div style={{ fontSize: "14px", fontWeight: 600, color: tier.headColor }}>Schedule status unavailable</div>
+              }
+              <div style={{ fontSize: "12px", color: tier.subColor, marginTop: "2px" }}>{dabSub}</div>
             </div>
-          )}
+          </div>
 
-          {/* View Full Task Table toggle */}
-          <button
-            onClick={handleToggleTaskTable}
+          {/* Toggle task table button */}
+          <button onClick={handleToggleTaskTable}
             style={{ display: "inline-flex", alignItems: "center", gap: "8px", background: showTaskTable ? "#f1f5f9" : BRAND, border: showTaskTable ? "1px solid #e2e8f0" : "none", borderRadius: "10px", color: showTaskTable ? "#64748b" : "#fff", padding: "11px 22px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
@@ -692,12 +739,17 @@ export default function AppDevTrackerDetail() {
           <div ref={taskTableRef} style={{ marginBottom: "32px", scrollMarginTop: "24px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
               <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>Full Task Table</div>
-              <span style={{ fontSize: "12px", color: "#94a3b8" }}>Click any row to expand details</span>
+              <span style={{ fontSize: "12px", color: "#94a3b8" }}>Click a row to expand · Planned/Adj dates auto-calculated from start date + hours ÷ {dailyHours} hrs/day</span>
             </div>
             {loading ? (
               <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>Loading…</div>
             ) : (
-              <TaskTable sprints={sprints} updateSprint={updateSprint} addSprint={addSprint} />
+              <TaskTable
+                sprints={sprints}
+                taskDates={schedule.taskDates}
+                updateSprint={updateSprint}
+                addSprint={addSprint}
+              />
             )}
           </div>
         )}
@@ -707,8 +759,7 @@ export default function AppDevTrackerDetail() {
           <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>
             Sprints <span style={{ fontSize: "13px", color: "#94a3b8", fontWeight: 500 }}>({sprints.length})</span>
           </div>
-          <button
-            onClick={() => setShowSprintModal(true)}
+          <button onClick={() => setShowSprintModal(true)}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: BRAND, border: "none", borderRadius: "9px", color: "#fff", padding: "9px 18px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
@@ -767,12 +818,18 @@ export default function AppDevTrackerDetail() {
                     const sty = STATUS_MAP[task.status] ?? STATUS_MAP["todo"];
                     return (
                       <div key={task.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "9px 20px", borderBottom: "1px solid #f8fafc" }}>
-                        <button onClick={() => handleCycleStatus(sprint.id, tasks, task.id)} title="Click to advance status" style={{ flexShrink: 0, background: sty.bg, border: "none", borderRadius: "20px", color: sty.color, fontSize: "10px", fontWeight: 700, padding: "3px 10px", cursor: "pointer", letterSpacing: "0.04em", whiteSpace: "nowrap" as const }}>
-                          {sty.label}
-                        </button>
+                        <button onClick={() => handleCycleStatus(sprint.id, tasks, task.id)} title="Click to advance status"
+                          style={{ flexShrink: 0, background: sty.bg, border: "none", borderRadius: "20px", color: sty.color, fontSize: "10px", fontWeight: 700, padding: "3px 10px", cursor: "pointer", letterSpacing: "0.04em", whiteSpace: "nowrap" as const }}
+                        >{sty.label}</button>
                         <span style={{ flex: 1, fontSize: "13px", color: task.status === "done" ? "#94a3b8" : "#334155", textDecoration: task.status === "done" ? "line-through" : "none" }}>
                           {task.title}
                         </span>
+                        {/* Show computed adj due in card view */}
+                        {(() => {
+                          const c = schedule.taskDates.get(task.id);
+                          const d = c?.adjustedDue ?? c?.plannedDue;
+                          return d ? <span style={{ fontSize: "11px", color: "#94a3b8", whiteSpace: "nowrap" as const }}>{fmtDate(d)}</span> : null;
+                        })()}
                         <button onClick={() => handleDeleteTask(sprint.id, tasks, task.id)} style={{ background: "none", border: "none", color: "#cbd5e1", cursor: "pointer", padding: "2px", lineHeight: 0, flexShrink: 0 }}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                         </button>
@@ -781,12 +838,18 @@ export default function AppDevTrackerDetail() {
                   })}
                   {addingTask === sprint.id ? (
                     <div style={{ display: "flex", gap: "8px", padding: "10px 20px", alignItems: "center" }}>
-                      <input autoFocus value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleAddTask(sprint.id, tasks); if (e.key === "Escape") { setAddingTask(null); setNewTaskTitle(""); } }} placeholder="Task title… (Enter to save, Esc to cancel)" style={{ flex: 1, border: `1px solid ${BRAND}66`, borderRadius: "8px", padding: "8px 12px", fontSize: "13px", outline: "none", color: "#0f172a", background: "#fff" }} />
+                      <input autoFocus value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}
+                        onKeyDown={e => { if (e.key === "Enter") handleAddTask(sprint.id, tasks); if (e.key === "Escape") { setAddingTask(null); setNewTaskTitle(""); } }}
+                        placeholder="Task title… (Enter to save, Esc to cancel)"
+                        style={{ flex: 1, border: `1px solid ${BRAND}66`, borderRadius: "8px", padding: "8px 12px", fontSize: "13px", outline: "none", color: "#0f172a", background: "#fff" }}
+                      />
                       <button onClick={() => handleAddTask(sprint.id, tasks)} style={{ background: BRAND, border: "none", borderRadius: "8px", color: "#fff", padding: "8px 14px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Add</button>
                       <button onClick={() => { setAddingTask(null); setNewTaskTitle(""); }} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#64748b", padding: "8px 12px", fontSize: "12px", cursor: "pointer" }}>Cancel</button>
                     </div>
                   ) : (
-                    <button onClick={() => setAddingTask(sprint.id)} style={{ display: "flex", alignItems: "center", gap: "6px", margin: "8px 20px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#94a3b8", padding: "7px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 500 }}>
+                    <button onClick={() => setAddingTask(sprint.id)}
+                      style={{ display: "flex", alignItems: "center", gap: "6px", margin: "8px 20px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#94a3b8", padding: "7px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 500 }}
+                    >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                       Add task
                     </button>
@@ -798,7 +861,7 @@ export default function AppDevTrackerDetail() {
         </div>
       </div>
 
-      {/* ── Sprint Modal (card view) ── */}
+      {/* Sprint Modal (card view) */}
       {showSprintModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.35)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "20px" }}>
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "16px", width: "100%", maxWidth: "440px", boxShadow: "0 20px 60px rgba(0,0,0,0.12)" }}>
@@ -814,16 +877,10 @@ export default function AppDevTrackerDetail() {
                 <input autoFocus style={INP} value={sprintForm.name} onChange={e => setSprintForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Sprint 1 — Auth & Onboarding" onKeyDown={e => e.key === "Enter" && handleAddSprint()} />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <div>
-                  <label style={LBL}>Start Date</label>
-                  <input type="date" style={INP} value={sprintForm.startDate} onChange={e => setSprintForm(f => ({ ...f, startDate: e.target.value }))} />
-                </div>
-                <div>
-                  <label style={LBL}>End Date</label>
-                  <input type="date" style={INP} value={sprintForm.endDate} onChange={e => setSprintForm(f => ({ ...f, endDate: e.target.value }))} />
-                </div>
+                <div><label style={LBL}>Start Date</label><input type="date" style={INP} value={sprintForm.startDate} onChange={e => setSprintForm(f => ({ ...f, startDate: e.target.value }))} /></div>
+                <div><label style={LBL}>End Date</label><input type="date" style={INP} value={sprintForm.endDate} onChange={e => setSprintForm(f => ({ ...f, endDate: e.target.value }))} /></div>
               </div>
-              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "4px" }}>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                 <button onClick={() => setShowSprintModal(false)} style={{ background: "transparent", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#334155", padding: "9px 18px", fontSize: "13px", cursor: "pointer" }}>Cancel</button>
                 <button onClick={handleAddSprint} disabled={sprintSaving} style={{ background: BRAND, border: "none", borderRadius: "8px", color: "#fff", padding: "9px 20px", fontSize: "13px", fontWeight: 600, cursor: "pointer", opacity: sprintSaving ? 0.7 : 1 }}>
                   {sprintSaving ? "Saving…" : "Create Sprint"}
