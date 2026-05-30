@@ -29,8 +29,8 @@ const COL_NUM  = ["Num", "NUM", "num", "Check Number", "Ref No.", "Check #"];
 const COL_NAME = ["Name", "NAME", "name", "Payee", "Vendor", "From/To", "Payee Name"];
 const COL_MEMO = ["Memo/Description", "Memo", "Description", "MEMO", "memo",
                   "Bank description", "Bank Description", "Transaction Description", "Details"];
-const COL_ACCT = ["Account", "ACCOUNT", "account", "Category", "Split",
-                  "Match/Categorize", "QBO Match"];
+const COL_ACCT     = ["Account", "ACCOUNT", "account"];
+const COL_CATEGORY = ["Match/Categorize", "Category", "Split", "QBO Match"];
 const COL_AMT  = ["Amount", "AMOUNT", "amount"];
 // Separate debit/credit columns (e.g. Chase: Spent / Received)
 const COL_DEBIT  = ["Debit", "DEBIT", "debit", "Spent", "Withdrawal", "Withdrawals", "Charges"];
@@ -474,6 +474,7 @@ router.post("/transactions/upload", requireAdmin, upload.single("file"), async (
       name:             pick(r, COL_NAME),
       memo:             pick(r, COL_MEMO),
       account,
+      category:         pick(r, COL_CATEGORY) || undefined,
       amount:           resolveAmount(r),
       is_uncategorized: false,
       status:           "needs_info",

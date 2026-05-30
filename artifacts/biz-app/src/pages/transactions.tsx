@@ -1271,9 +1271,10 @@ export default function TransactionsPage() {
                         <AccountCell tx={tx} accounts={clientAccounts} onSave={account => handleSaveAccount(tx.id, account)} />
                       </td>
                       <td className="px-4 py-3">
-                        <span className="text-xs text-slate-600 truncate block max-w-[190px]" title={tx.category ?? undefined}>
-                          {tx.category || <span className="text-slate-300">—</span>}
-                        </span>
+                        {tx.category
+                          ? <span className="text-xs text-slate-600 truncate block max-w-[190px]" title={tx.category}>{tx.category}</span>
+                          : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-500 border border-slate-200">Uncategorized</span>
+                        }
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={tx.status} />
