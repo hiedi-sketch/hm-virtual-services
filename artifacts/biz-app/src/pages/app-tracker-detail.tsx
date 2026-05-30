@@ -75,6 +75,71 @@ const TIER_PALETTE: Record<DabTier, { bg: string; border: string; iconBg: string
   unknown: { bg: "#f8fafc", border: "#e2e8f0", iconBg: "#f1f5f9", iconStroke: "#94a3b8", headColor: "#64748b", subColor: "#94a3b8" },
 };
 
+// ── CSV helpers (module-level pure functions) ─────────────────────────────────
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/);
+  if (lines.length < 2) return [];
+
+  const parseRow = (line: string): string[] => {
+    const result: string[] = [];
+    let field = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { field += '"'; i++; }
+        else { inQ = !inQ; }
+      } else if (ch === ',' && !inQ) {
+        result.push(field); field = "";
+      } else {
+        field += ch;
+      }
+    }
+    result.push(field);
+    return result;
+  };
+
+  const headers = parseRow(lines[0]).map(h => h.trim().toLowerCase().replace(/\s+/g, "_"));
+  return lines.slice(1)
+    .filter(l => l.trim())
+    .map(line => {
+      const vals = parseRow(line);
+      const row: Record<string, string> = {};
+      headers.forEach((h, i) => { row[h] = (vals[i] ?? "").trim(); });
+      return row;
+    })
+    .filter(r => r.task_title?.trim() || r.sprint_name?.trim());
+}
+
+const CSV_HEADERS = [
+  "sprint_name", "sprint_start_date", "sprint_end_date",
+  "task_title", "status", "phase", "priority", "estimated_hours",
+  "planned_start_date", "planned_due_date", "adjusted_due_date", "actual_date",
+  "depends_on", "blocking", "claude_prompt_ref", "description", "notes",
+];
+
+function downloadTemplate() {
+  const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const row = (...vals: string[]) => vals.map(q).join(",");
+  const lines = [
+    CSV_HEADERS.join(","),
+    "# HOW TO USE THIS TEMPLATE",
+    "# status values: todo | in-progress | done | blocked",
+    "# priority values: low | medium | high | critical",
+    "# dates: YYYY-MM-DD format",
+    "# depends_on: task_title or 6-char short ID of prerequisite task",
+    "# adjusted_due_date and actual_date can be left blank (auto-calculated)",
+    row("Sprint 1 — Foundation","2026-06-01","2026-06-14","Set up dev environment","todo","Setup","high","4","2026-06-01","2026-06-02","","","","","","One-time setup of the development environment",""),
+    row("Sprint 1 — Foundation","2026-06-01","2026-06-14","Create database schema","todo","Backend","medium","8","2026-06-02","2026-06-04","","","Set up dev environment","","","Define all tables, relations and indexes",""),
+    row("Sprint 2 — Auth","2026-06-15","2026-06-28","Implement authentication","todo","Auth","high","12","2026-06-15","2026-06-19","","","Create database schema","","","Google SSO + email/password login","Test on mobile and desktop"),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = "sprint_import_template.csv"; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── StatCard ──────────────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, accent }: {
   label: string; value: string; sub?: string; accent?: boolean;
@@ -577,6 +642,94 @@ export default function AppDevTrackerDetail() {
   const [addingTask,      setAddingTask]      = useState<string | null>(null);
   const [newTaskTitle,    setNewTaskTitle]    = useState("");
 
+  // ── CSV import ──
+  type ImportSprintRow = { name: string; startDate: string; endDate: string; taskCount: number; isNew: boolean };
+  type ImportPreview   = { sprintRows: ImportSprintRow[]; rows: Record<string, string>[] };
+  const fileInputRef               = useRef<HTMLInputElement>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importing,     setImporting]     = useState(false);
+  const [importError,   setImportError]   = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const text = ev.target?.result as string;
+        const rows = parseCSV(text).filter(r => !r.sprint_name?.startsWith("#"));
+        if (!rows.length) { setImportError("No data rows found. Make sure the file matches the template."); return; }
+        const namesSeen = new Set<string>();
+        const sprintRows: ImportSprintRow[] = [];
+        for (const r of rows) {
+          const name = r.sprint_name?.trim();
+          if (!name || namesSeen.has(name)) continue;
+          namesSeen.add(name);
+          sprintRows.push({
+            name,
+            startDate: r.sprint_start_date ?? "",
+            endDate:   r.sprint_end_date   ?? "",
+            taskCount: rows.filter(x => x.sprint_name?.trim() === name && x.task_title?.trim()).length,
+            isNew:     !sprints.find(s => s.name === name),
+          });
+        }
+        setImportPreview({ sprintRows, rows });
+        setImportError(null);
+      } catch {
+        setImportError("Failed to parse the CSV. Please check the file format.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    const { rows } = importPreview;
+    const sprintGroups = new Map<string, { startDate: string; endDate: string; tasks: Task[] }>();
+    for (const r of rows) {
+      const name = r.sprint_name?.trim();
+      if (!name || r.sprint_name?.startsWith("#")) continue;
+      if (!sprintGroups.has(name)) {
+        sprintGroups.set(name, { startDate: r.sprint_start_date ?? "", endDate: r.sprint_end_date ?? "", tasks: [] });
+      }
+      const taskTitle = r.task_title?.trim();
+      if (!taskTitle) continue;
+      const validStatuses: TaskStatus[] = ["todo","in-progress","done","blocked"];
+      const status: TaskStatus = validStatuses.includes(r.status as TaskStatus) ? r.status as TaskStatus : "todo";
+      const validPriorities = ["low","medium","high","critical"];
+      const priority = validPriorities.includes(r.priority) ? r.priority as Task["priority"] : undefined;
+      sprintGroups.get(name)!.tasks.push({
+        id:              crypto.randomUUID(),
+        title:           taskTitle,
+        status,
+        phase:           r.phase?.trim()           || undefined,
+        priority,
+        estimatedHours:  r.estimated_hours         ? (Number(r.estimated_hours) || undefined) : undefined,
+        plannedStartDate:r.planned_start_date?.trim() || undefined,
+        plannedDueDate:  r.planned_due_date?.trim()   || undefined,
+        adjustedDueDate: r.adjusted_due_date?.trim()  || undefined,
+        actualDate:      r.actual_date?.trim()        || undefined,
+        dependsOn:       r.depends_on?.trim()         || undefined,
+        blocking:        r.blocking?.trim()            || undefined,
+        claudePromptRef: r.claude_prompt_ref?.trim()  || undefined,
+        description:     r.description?.trim()        || undefined,
+        notes:           r.notes?.trim()              || undefined,
+      });
+    }
+    for (const [name, data] of sprintGroups) {
+      const existing = sprints.find(s => s.name === name);
+      if (existing) {
+        await updateSprint(existing.id, { tasks: [...(existing.tasks ?? []), ...data.tasks] });
+      } else {
+        await addSprint({ name, startDate: data.startDate, endDate: data.endDate, tasks: data.tasks });
+      }
+    }
+    setImporting(false);
+    setImportPreview(null);
+  };
+
   const handleAddSprint = async () => {
     if (!sprintForm.name.trim()) return;
     setSprintSaving(true);
@@ -787,16 +940,44 @@ export default function AppDevTrackerDetail() {
         )}
 
         {/* ── SPRINT MANAGEMENT (card view) ── */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        {/* Hidden file input for CSV upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          style={{ display: "none" }}
+          onChange={handleFileChange}
+        />
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" as const, gap: "8px" }}>
           <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>
             Sprints <span style={{ fontSize: "13px", color: "#94a3b8", fontWeight: 500 }}>({sprints.length})</span>
           </div>
-          <button onClick={() => setShowSprintModal(true)}
-            style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: BRAND, border: "none", borderRadius: "9px", color: "#fff", padding: "9px 18px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-            Add Sprint
-          </button>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" as const }}>
+            {importError && (
+              <span style={{ fontSize: "12px", color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "7px", padding: "5px 10px" }}>
+                ⚠ {importError}
+              </span>
+            )}
+            <button onClick={downloadTemplate}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#fff", border: "1px solid #e2e8f0", borderRadius: "9px", color: "#475569", padding: "8px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Template
+            </button>
+            <button onClick={() => { setImportError(null); fileInputRef.current?.click(); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "#fff", border: `1px solid ${BRAND}`, borderRadius: "9px", color: BRAND, padding: "8px 14px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Import CSV
+            </button>
+            <button onClick={() => setShowSprintModal(true)}
+              style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: BRAND, border: "none", borderRadius: "9px", color: "#fff", padding: "9px 18px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              Add Sprint
+            </button>
+          </div>
         </div>
 
         {loading && <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8", fontSize: "14px" }}>Loading sprints…</div>}
@@ -892,6 +1073,65 @@ export default function AppDevTrackerDetail() {
           })}
         </div>
       </div>
+
+      {/* CSV Import Preview Modal */}
+      {importPreview && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "20px" }}>
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "16px", width: "100%", maxWidth: "500px", boxShadow: "0 20px 60px rgba(0,0,0,0.15)", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px 14px", borderBottom: "1px solid #f1f5f9" }}>
+              <div>
+                <div style={{ fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>Review Import</div>
+                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                  {importPreview.sprintRows.length} sprint{importPreview.sprintRows.length !== 1 ? "s" : ""} · {importPreview.sprintRows.reduce((a, b) => a + b.taskCount, 0)} tasks
+                </div>
+              </div>
+              <button onClick={() => setImportPreview(null)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+
+            {/* Sprint list */}
+            <div style={{ overflowY: "auto", flex: 1, padding: "16px 24px" }}>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "10px" }}>Sprints found in file</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {importPreview.sprintRows.map(s => (
+                  <div key={s.name} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", borderRadius: "10px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
+                        {s.taskCount} task{s.taskCount !== 1 ? "s" : ""}
+                        {s.startDate && ` · ${s.startDate}`}{s.endDate && ` → ${s.endDate}`}
+                      </div>
+                    </div>
+                    <span style={{ flexShrink: 0, fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "6px", background: s.isNew ? "#dcfce7" : "#fef9c3", color: s.isNew ? "#15803d" : "#92400e" }}>
+                      {s.isNew ? "New" : "Merge"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ marginTop: "12px", padding: "10px 14px", borderRadius: "10px", background: "#f0f9ff", border: "1px solid #bae6fd", fontSize: "12px", color: "#0369a1" }}>
+                <strong>New</strong> sprints will be created. <strong>Merge</strong> sprints already exist — tasks will be appended.
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: "14px 24px 20px", borderTop: "1px solid #f1f5f9", display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button onClick={() => setImportPreview(null)} disabled={importing}
+                style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "9px", color: "#475569", padding: "9px 18px", fontSize: "13px", fontWeight: 600, cursor: importing ? "not-allowed" : "pointer", opacity: importing ? 0.5 : 1 }}
+              >
+                Cancel
+              </button>
+              <button onClick={confirmImport} disabled={importing}
+                style={{ background: importing ? "#94a3b8" : BRAND, border: "none", borderRadius: "9px", color: "#fff", padding: "9px 22px", fontSize: "13px", fontWeight: 600, cursor: importing ? "not-allowed" : "pointer", display: "inline-flex", alignItems: "center", gap: "8px" }}
+              >
+                {importing && <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin 1s linear infinite" }}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>}
+                {importing ? "Importing…" : `Import ${importPreview.sprintRows.reduce((a,b) => a+b.taskCount,0)} Tasks`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sprint Modal (card view) */}
       {showSprintModal && (
