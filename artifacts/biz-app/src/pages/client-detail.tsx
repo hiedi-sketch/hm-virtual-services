@@ -1840,6 +1840,9 @@ export default function ClientDetail() {
         )}
       </div>
 
+      {/* Client Messages */}
+      <ClientDetailMessages clientId={clientId} />
+
       {/* Client Documents */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
@@ -1850,9 +1853,6 @@ export default function ClientDetail() {
           <DocumentsTab clientId={client.id} />
         </div>
       </div>
-
-      {/* Client Messages */}
-      <ClientDetailMessages clientId={clientId} />
 
         </div>{/* ── end right column ── */}
 
