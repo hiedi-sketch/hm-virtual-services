@@ -202,6 +202,13 @@ export function NotificationBell({
                   {unread} new
                 </span>
               )}
+              <button
+                onClick={playChime}
+                title="Test notification sound"
+                className="text-[10px] text-slate-400 hover:text-[#266b75] transition-colors ml-1"
+              >
+                🔔 Test
+              </button>
             </div>
             {unread > 0 && (
               <button
