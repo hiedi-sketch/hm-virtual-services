@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useTimer, formatElapsed } from "@/contexts/TimerContext";
 
 const ADMIN_NAV = [
   { href: "/dashboard",    label: "Dashboard",              icon: LayoutDashboard },
@@ -43,6 +44,7 @@ const EXPANDED_W = 240;
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const { toggleTimer, state: timerState, elapsedMs } = useTimer();
 
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -62,12 +64,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const sidebarW = collapsed ? COLLAPSED_W : EXPANDED_W;
 
   const firstName = user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there";
-
-  const openTimerPopout = () => {
-    const base = (import.meta.env.BASE_URL as string) ?? "/";
-    const url = `${window.location.origin}${base}timer-popout`;
-    window.open(url, "hm-timer-popout", "width=420,height=260,menubar=no,toolbar=no,location=no,status=no,resizable=yes");
-  };
+  const isTimerRunning = timerState.status === "running";
+  const isTimerActive = timerState.status !== "idle";
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -207,27 +205,52 @@ export function Layout({ children }: { children: React.ReactNode }) {
           className="shrink-0 py-2 px-2 space-y-0.5"
           style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
         >
-          {/* Timer popout button */}
+          {/* Timer toggle button */}
           <button
-            onClick={openTimerPopout}
-            title="Open timer in a popup window"
+            onClick={toggleTimer}
+            title={isTimerRunning ? "Timer running — click to open" : "Open timer"}
             className={cn(
-              "w-full flex items-center rounded-lg py-2 transition-colors",
+              "w-full flex items-center rounded-lg py-2 transition-colors relative",
               collapsed ? "justify-center px-0" : "gap-3 px-3"
             )}
-            style={{ color: "rgba(255,255,255,0.72)" }}
+            style={{
+              color: isTimerRunning ? "#ffffff" : "rgba(255,255,255,0.72)",
+              backgroundColor: isTimerRunning ? "rgba(255,255,255,0.15)" : "transparent",
+            }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.backgroundColor = isTimerRunning
+                ? "rgba(255,255,255,0.22)"
+                : "rgba(255,255,255,0.08)";
               e.currentTarget.style.color = "#ffffff";
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = "transparent";
-              e.currentTarget.style.color = "rgba(255,255,255,0.72)";
+              e.currentTarget.style.backgroundColor = isTimerRunning
+                ? "rgba(255,255,255,0.15)"
+                : "transparent";
+              e.currentTarget.style.color = isTimerRunning ? "#ffffff" : "rgba(255,255,255,0.72)";
             }}
           >
-            <Clock style={{ width: 18, height: 18, flexShrink: 0 }} />
+            {/* Pulsing ring when running */}
+            {isTimerRunning && (
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+              </span>
+            )}
+            <Clock
+              style={{
+                width: 18,
+                height: 18,
+                flexShrink: 0,
+                marginLeft: isTimerRunning && !collapsed ? 8 : 0,
+              }}
+            />
             {!collapsed && (
-              <span className="text-sm font-medium">Popout Timer</span>
+              <span className="text-sm font-medium truncate">
+                {isTimerActive
+                  ? formatElapsed(elapsedMs)
+                  : "Timer"}
+              </span>
             )}
           </button>
 

@@ -57,6 +57,9 @@ interface TimerContextValue {
     serviceType?: ServiceType,
   ) => void;
   saveAndStop: () => Promise<void>;
+  timerOpen: boolean;
+  toggleTimer: () => void;
+  setTimerOpen: (open: boolean) => void;
 }
 
 const TimerContext = createContext<TimerContextValue | null>(null);
@@ -83,7 +86,10 @@ function getTodayLocal() {
 export function TimerProvider({ children }: { children: React.ReactNode }) {
   const [state, setStateRaw] = useState<TimerState>(loadState);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [timerOpen, setTimerOpen] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const toggleTimer = useCallback(() => setTimerOpen(o => !o), []);
 
   const setState = useCallback((next: TimerState) => {
     setStateRaw(next);
@@ -214,7 +220,7 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [state, setState, computeElapsed]);
 
   return (
-    <TimerContext.Provider value={{ state, elapsedMs, start, pause, stop, assignClient, assignTask, setServiceType, setNotes, startForTask, saveAndStop }}>
+    <TimerContext.Provider value={{ state, elapsedMs, start, pause, stop, assignClient, assignTask, setServiceType, setNotes, startForTask, saveAndStop, timerOpen, toggleTimer, setTimerOpen }}>
       {children}
     </TimerContext.Provider>
   );
