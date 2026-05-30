@@ -287,9 +287,17 @@ app.use("/api", router);
 const frontendPath = path.resolve(process.cwd(), "artifacts/biz-app/dist/public");
 if (fs.existsSync(frontendPath)) {
   logger.info({ frontendPath }, "Serving frontend static files");
-  app.use(express.static(frontendPath));
+  // Serve hashed assets (JS/CSS) with no special headers — Vite content-hashes them so
+  // filenames change on every build. index.html must not be served here so the catch-all
+  // below can set the correct no-cache headers on it.
+  app.use(express.static(frontendPath, { index: false }));
   // Express 5 requires a named wildcard or regex — bare "*" is no longer valid.
+  // index.html must never be cached: it references hashed bundles, so a stale
+  // index.html means the browser loads old JS even after a new deployment.
   app.get(/(.*)/, (_req, res) => {
+    res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.set("Pragma", "no-cache");
+    res.set("Expires", "0");
     res.sendFile(path.join(frontendPath, "index.html"));
   });
 }
