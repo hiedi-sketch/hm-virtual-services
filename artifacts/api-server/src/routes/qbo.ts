@@ -537,33 +537,33 @@ router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admi
   let totalInserted = 0;
   const importIds: number[] = [];
 
-  for (const realmId of realmIds) {
-    try {
-      // ── Realm identity check ────────────────────────────────────────────────
-      // Intuit can silently return the token-owner's company data when the
-      // requested realm is not accessible, instead of returning 401/403.
-      // Verify the realm we're about to query is actually the one we expect
-      // before importing any transactions.
-      const infoUrl = `${QBO_API_BASE}/${realmId}/companyinfo/${realmId}?minorversion=65`;
-      const infoResp = await fetch(infoUrl, {
-        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-      });
-      if (!infoResp.ok) {
-        const errText = await infoResp.text();
-        logger.warn({ realmId, status: infoResp.status, errText }, "QBO realm not accessible — skipping sync");
-        continue;
-      }
-      const infoBody = await infoResp.json() as any;
-      const returnedRealmId = String(infoBody?.CompanyInfo?.Id ?? "");
-      if (returnedRealmId && returnedRealmId !== String(realmId)) {
-        logger.warn(
-          { expected: realmId, actual: returnedRealmId },
-          "QBO realm mismatch — API returned a different company's data, skipping to prevent cross-client contamination",
-        );
-        continue;
-      }
-      // ────────────────────────────────────────────────────────────────────────
+  // Build the set of realm IDs this QBO connection is authorised for.
+  // The companyinfo endpoint is cluster-specific (returns WrongClusterError),
+  // so we use locally-cached data only — no extra API round-trip needed.
+  const adminRealm  = await getSetting("qbo_realm_id");
+  const firmsRaw    = await getSetting("qbo_firms_cache").catch(() => null);
+  const cachedFirms: any[] = firmsRaw ? JSON.parse(firmsRaw) : [];
+  const authorisedRealms = new Set<string>(
+    cachedFirms.map((f: any) => String(f.realmId)).filter(Boolean),
+  );
+  if (adminRealm) authorisedRealms.add(String(adminRealm));
 
+  for (const realmId of realmIds) {
+    // ── Realm authorisation check (local, no extra API call) ─────────────────
+    // The Intuit API can silently serve the token-owner's data for realms the
+    // token cannot access instead of returning 401/403.  Guard against that by
+    // only allowing realms that were explicitly imported through the QBO
+    // connection flow (admin realm + firms cache).
+    if (!authorisedRealms.has(String(realmId))) {
+      logger.warn(
+        { realmId, authorisedRealms: Array.from(authorisedRealms) },
+        "QBO realm not in authorised set — skipping to prevent cross-client data contamination",
+      );
+      continue;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    try {
       const url = `${QBO_API_BASE}/${realmId}/reports/TransactionList?start_date=${startDate}&end_date=${endDate}&minorversion=65`;
       const resp = await fetch(url, {
         headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
