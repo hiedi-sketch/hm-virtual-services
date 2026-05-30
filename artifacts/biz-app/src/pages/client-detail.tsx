@@ -28,7 +28,6 @@ import {
   ClipboardList, Calendar, CreditCard, Receipt,
 } from "lucide-react";
 import { ClientOnboardingChecklist } from "@/components/ClientOnboardingChecklist";
-import { ClientTransactionsSection } from "@/components/ClientTransactionsSection";
 import { cn, formatCurrency, fmtHours } from "@/lib/utils";
 
 const MY_TZ = "America/Chicago";
@@ -207,7 +206,6 @@ export default function ClientDetail() {
   const [editNotes, setEditNotes] = useState("");
   const [editPreferredChannel, setEditPreferredChannel] = useState<"dashboard" | "asana" | "clickup" | "">("");
   const [editChannelConfig, setEditChannelConfig] = useState("");
-  const [editQboRealmId, setEditQboRealmId] = useState("");
 
   const [sendingInvite, setSendingInvite] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
@@ -479,7 +477,6 @@ export default function ClientDetail() {
     setEditNotes((client as any).notes ?? "");
     setEditPreferredChannel((client as any).preferred_channel ?? "");
     setEditChannelConfig((client as any).channel_config ?? "");
-    setEditQboRealmId((client as any).qbo_realm_id ?? "");
     setShowEditProfile(true);
   };
 
@@ -501,7 +498,6 @@ export default function ClientDetail() {
         notes: editNotes.trim() || null,
         preferred_channel: (editPreferredChannel || null) as any,
         channel_config: editChannelConfig.trim() || null,
-        qbo_realm_id: editQboRealmId.trim() || null,
       } as any,
     });
   };
@@ -756,18 +752,6 @@ export default function ClientDetail() {
                   />
                 </div>
               )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">
-                QBO Realm ID <span className="font-normal text-slate-400">(optional — for future sync)</span>
-              </label>
-              <input
-                className={inputCls}
-                value={editQboRealmId}
-                onChange={e => setEditQboRealmId(e.target.value)}
-                placeholder="Leave blank for now"
-              />
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
@@ -1911,9 +1895,6 @@ export default function ClientDetail() {
         </div>
         <DocumentsTab clientId={client.id} />
       </div>
-
-      {/* Transactions */}
-      <ClientTransactionsSection client={client} />
 
       {/* Client Messages */}
       <ClientDetailMessages clientId={clientId} />

@@ -31,7 +31,6 @@ import Backup from "@/pages/backup";
 import Services from "@/pages/services";
 import TimerPopout from "@/pages/timer-popout";
 import AsanaPage from "@/pages/asana";
-import QuickBooksPage from "@/pages/quickbooks";
 import TransactionsPage from "@/pages/transactions";
 import AppDevTracker from "@/pages/app-tracker";
 // Public-facing marketing pages
@@ -137,7 +136,6 @@ function Router() {
         {user.role === "admin" && <Route path="/backup" component={Backup} />}
         {user.role === "admin" && <Route path="/services" component={Services} />}
         {user.role === "admin" && <Route path="/asana" component={AsanaPage} />}
-        {user.role === "admin" && <Route path="/quickbooks" component={QuickBooksPage} />}
         {user.role === "admin" && (
           <Route path="/transactions">
             <ErrorBoundary>

@@ -18,7 +18,6 @@ import {
   Link2,
   ChevronLeft,
   ChevronRight,
-  BookOpen,
   ArrowLeftRight,
   MonitorSmartphone,
 } from "lucide-react";
@@ -38,7 +37,6 @@ const ADMIN_NAV = [
   { href: "/api-keys", label: "API Keys", icon: KeyRound },
   { href: "/backup", label: "Backup", icon: HardDriveDownload },
   { href: "/asana", label: "Asana Sync", icon: Link2 },
-  { href: "/quickbooks", label: "QuickBooks", icon: BookOpen },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/app-tracker", label: "App Dev Tracker", icon: MonitorSmartphone },
 ];
