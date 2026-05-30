@@ -751,9 +751,6 @@ export default function TransactionsPage() {
       setFilterStatus("all");
       setQboAccounts([]);
       loadTransactions(selectedClientId as number);
-      if (hasQboRealm) {
-        loadQboAccounts(selectedClientId as number);
-      }
     } else {
       activeClientIdRef.current = "";
       setTxData(null);
@@ -764,7 +761,13 @@ export default function TransactionsPage() {
       setFlagTxId(null);
       setQboAccounts([]);
     }
-  }, [selectedClientId, loadTransactions, loadQboAccounts, hasQboRealm]);
+  }, [selectedClientId, loadTransactions]);
+
+  useEffect(() => {
+    if (selectedClientId && hasQboRealm) {
+      loadQboAccounts(selectedClientId as number);
+    }
+  }, [selectedClientId, hasQboRealm, loadQboAccounts]);
 
   const patchTx = useCallback((id: number, updates: Partial<Tx>) => {
     setTxMap(prev => {
@@ -956,7 +959,13 @@ export default function TransactionsPage() {
             <div className="relative">
               <select
                 value={selectedClientId}
-                onChange={e => { setSelectedClientId(e.target.value ? Number(e.target.value) : ""); setSyncConflict(null); }}
+                onChange={e => {
+                  const newId = e.target.value ? Number(e.target.value) : "";
+                  setSelectedClientId(newId);
+                  setTxData(null);
+                  setTxMap(new Map());
+                  setSyncConflict(null);
+                }}
                 className="w-full appearance-none border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] pr-8"
               >
                 <option value="">— Select a client —</option>

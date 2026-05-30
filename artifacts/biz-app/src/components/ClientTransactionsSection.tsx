@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import {
   RefreshCw, BookOpen, AlertCircle, ChevronDown, ChevronUp,
@@ -422,16 +422,25 @@ export function ClientTransactionsSection({ client }: { client: any }) {
   const [flaggingTx, setFlaggingTx] = useState<Tx | null>(null);
   const [sendPanelOpen, setSendPanelOpen] = useState(false);
 
+  const activeClientIdRef = useRef<number>(client.id);
+
   const loadTransactions = useCallback(async () => {
     if (!hasQbo) return;
+    const thisClientId = client.id;
+    activeClientIdRef.current = thisClientId;
+    setTransactions([]);
     setLoading(true);
     try {
-      const res = await fetch(`/api/qbo/clients/${client.id}/transactions`, { credentials: "include" });
+      const res = await fetch(`/api/qbo/clients/${thisClientId}/transactions`, { credentials: "include" });
+      if (activeClientIdRef.current !== thisClientId) return; // stale — client changed mid-fetch
       if (!res.ok) return;
       const data = await res.json();
+      if (activeClientIdRef.current !== thisClientId) return; // stale — check again after await
       setTransactions(data.transactions ?? []);
       setLastSync(data.lastSync ?? null);
-    } catch {} finally { setLoading(false); }
+    } catch {} finally {
+      if (activeClientIdRef.current === thisClientId) setLoading(false);
+    }
   }, [client.id, hasQbo]);
 
   useEffect(() => { loadTransactions(); }, [loadTransactions]);
