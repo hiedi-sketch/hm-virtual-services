@@ -1,0 +1,235 @@
+Revamp the client onboarding portal setup flow.
+
+Goal:
+
+When I send the onboarding form to a client, they should receive one email with one secure link. That link should allow them to complete their onboarding form and create their portal login at the same time.
+
+Inside the “Onboard a New Client” sidebar:
+
+After I select the service type:
+
+* Bookkeeping Only
+* Virtual Assistant Only
+* Both Bookkeeping & VA
+
+Show two options:
+
+* Complete Form Now
+* Send Form to Client
+
+If I choose “Send Form to Client”:
+
+* Show the client email field.
+* Default the email field to the client email if already entered.
+* Allow me to edit the email before sending.
+* Add a button labeled “Send Portal Setup + Onboarding Form.”
+
+When I click “Send Portal Setup + Onboarding Form”:
+
+* Create a pending portal account for the client.
+* Generate one secure unique setup/onboarding link.
+* Send one email to the client.
+* Set portal status to “Invite Sent.”
+* Set onboarding form status to “Sent to Client.”
+* Save the sent date and time.
+
+Client email:
+
+Subject: Set Up Your HM Virtual Services Portal + Complete Your Onboarding
+
+Body:
+Hi [Client Name],
+
+Welcome to HM Virtual Services!
+
+Please use the secure link below to complete your onboarding form and create your client portal login.
+
+Your portal will allow you to upload documents, view invoices, check task progress, and communicate with us as we work together.
+
+[Secure Setup + Onboarding Link]
+
+Thank you,
+Hiedi
+HM Virtual Services
+
+Client setup/onboarding page:
+
+When the client clicks the link:
+
+* Open a secure onboarding page.
+* This page should not be shown in the main navigation.
+* Show HM Virtual Services branding.
+* Show this welcome message:
+
+“Welcome to HM Virtual Services! Please complete your onboarding form below. As part of this form, you will also confirm your email address and create the password for your client portal.”
+
+At the top of the form, include the portal setup fields:
+
+* Client Name
+* Email Address
+* Create Password
+* Confirm Password
+
+The email address should automatically populate from the client record.
+
+The client should be allowed to edit the email address.
+
+If the client edits the email address:
+
+* Update the client record email.
+* Update the portal account email.
+* Use the updated email for future portal login and email notifications.
+
+Password requirements:
+
+* Password is required.
+* Confirm password is required.
+* Password and confirm password must match.
+* Password should be securely hashed before storing.
+* Do not store plain text passwords.
+
+After the portal setup fields, show the correct onboarding form based on the selected service type:
+
+* Bookkeeping Only
+* Virtual Assistant Only
+* Both Bookkeeping & VA
+
+Before final submission:
+
+* Show a review page or review section.
+* The client should be able to review their answers.
+* The client should be able to go back and edit before submitting.
+* Add a final submit button labeled “Submit Onboarding + Create Portal.”
+
+When the client clicks “Submit Onboarding + Create Portal”:
+
+* Validate required fields.
+* Save the completed onboarding form to the client record.
+* Create/activate the client portal account.
+* Update portal status to “Active.”
+* Update onboarding form status to “Complete.”
+* Save form completed date and time.
+* Save portal account created date and time.
+* Save the completed onboarding form directly to the client’s Documents area.
+* Document type should be “Completed Onboarding Form.”
+* Document status should be “Shared in Portal.”
+* The completed form should be visible to Hiedi from the Client Details page.
+* The completed form should be visible to the client inside their portal Documents page.
+* Expire the secure setup/onboarding link after successful submission.
+* Log the client into the portal automatically after submission.
+* Show a confirmation message inside the portal.
+
+Client confirmation message:
+
+“Thank you! Your onboarding form has been submitted and your client portal has been created. You can now use your portal to upload documents, view invoices, check task progress, and communicate with HM Virtual Services.”
+
+After submission, send a thank-you email to the client:
+
+Subject: Thank You for Completing Your HM Virtual Services Onboarding
+
+Body:
+Hi [Client Name],
+
+Thank you for completing your onboarding form and setting up your client portal.
+
+We have received your information and will review everything shortly. If we need anything else, we will reach out through your client portal or by email.
+
+You can continue using your portal to upload documents, view invoices, check task progress, and communicate with us.
+
+Thank you,
+Hiedi
+HM Virtual Services
+
+After submission, send an email notification to Hiedi:
+
+Subject: Onboarding Completed - [Client Name]
+
+Body:
+Hi Hiedi,
+
+[Client Name] has completed their onboarding form and created their client portal account.
+
+Service Type: [Bookkeeping Only / Virtual Assistant Only / Both Bookkeeping & VA]
+
+The completed onboarding form has been saved to the client’s Documents area.
+
+View Client:
+[Client Details Link]
+
+Client Details page updates:
+
+Add or update the following fields:
+
+* Service Type
+
+* Client Email
+
+* Portal Status:
+
+  * Not Created
+  * Invite Sent
+  * Active
+
+* Onboarding Form Status:
+
+  * Not Started
+  * Sent to Client
+  * In Progress
+  * Complete
+
+* Form Sent Date
+
+* Form Completed Date
+
+* Portal Invite Sent Date
+
+* Portal Account Created Date
+
+Add these buttons:
+
+* Send Portal Setup + Onboarding Form
+* Resend Setup + Onboarding Link
+* View Completed Onboarding Form
+* Unlock Onboarding Form for Edits
+
+If Hiedi completes the form manually:
+
+* Allow Hiedi to complete the onboarding form inside the dashboard.
+* Save the completed form directly to the client’s Documents area.
+* Document type: Completed Onboarding Form.
+* If the client already has a portal account, document status should be Shared in Portal.
+* If the client does not have a portal account yet, document status should be Internal Only until the portal account is created.
+* Hiedi should still be able to send the portal setup link separately if needed.
+
+Database requirements:
+
+Create or update database tables/fields as needed to support:
+
+* Client service type
+* Client email
+* Pending portal account
+* Portal status
+* Secure setup/onboarding token
+* Token expiration or used status
+* Portal invite sent date
+* Portal account created date
+* Onboarding form status
+* Onboarding form completion method
+* Form sent date
+* Form completed date
+* Completed onboarding form data
+* Completed onboarding form document record
+* Document type
+* Document status
+* Password hash
+* Whether onboarding form is locked or unlocked
+
+Security requirements:
+
+* The setup/onboarding link must be secure and unique.
+* The setup/onboarding link should expire after successful submission.
+* The client must only be able to access their own form.
+* The completed document must only be visible to that client and Hiedi.
+* Passwords must be securely hashed.
+* Do not store plain text passwords.
+* If the client changes their email during setup, update the client record and portal account before activating the portal.

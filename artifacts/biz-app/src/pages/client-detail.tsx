@@ -209,6 +209,9 @@ export default function ClientDetail() {
 
   const [sendingInvite, setSendingInvite] = useState(false);
   const [showChecklist, setShowChecklist] = useState(false);
+  const [showSendOnboardingForm, setShowSendOnboardingForm] = useState(false);
+  const [sendOnboardingEmail, setSendOnboardingEmail] = useState("");
+  const [sendingOnboardingForm, setSendingOnboardingForm] = useState(false);
 
   // Budget adjustment state
   const [showAdjustBudget, setShowAdjustBudget] = useState(false);
@@ -459,6 +462,30 @@ export default function ClientDetail() {
       toast({ title: "Could not send invite", description: err.message, variant: "destructive" });
     } finally {
       setSendingInvite(false);
+    }
+  };
+
+  const handleSendOnboardingForm = async () => {
+    if (!client || sendingOnboardingForm) return;
+    const email = sendOnboardingEmail.trim() || client.email || "";
+    if (!email) { toast({ title: "No email address on file", variant: "destructive" }); return; }
+    setSendingOnboardingForm(true);
+    try {
+      const res = await fetch(`/api/clients/${clientId}/send-onboarding-form`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to send form");
+      toast({ title: "Onboarding form sent", description: `Sent to ${email}` });
+      setShowSendOnboardingForm(false);
+      queryClient.invalidateQueries({ queryKey: getGetClientQueryKey(clientId) });
+    } catch (err: any) {
+      toast({ title: "Failed to send form", description: err.message, variant: "destructive" });
+    } finally {
+      setSendingOnboardingForm(false);
     }
   };
 
@@ -890,6 +917,47 @@ export default function ClientDetail() {
                 <ClipboardList className="w-3.5 h-3.5" />
                 Onboarding Checklist
               </button>
+              {/* Send Onboarding Form button */}
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setSendOnboardingEmail(client?.email ?? "");
+                    setShowSendOnboardingForm(v => !v);
+                  }}
+                  className="flex items-center gap-1.5 text-sm text-[#266b75] hover:text-[#1d5159] border border-[#266b75]/30 hover:border-[#266b75]/60 bg-[#266b75]/5 hover:bg-[#266b75]/10 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {(client as any)?.onboarding_form_status === "sent_to_client" || (client as any)?.onboarding_form_status === "complete"
+                    ? "Resend Onboarding Form"
+                    : "Send Onboarding Form"}
+                </button>
+                {showSendOnboardingForm && (
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-xl z-30 p-4 space-y-3">
+                    <p className="text-xs font-semibold text-slate-700">Send onboarding form link to:</p>
+                    <input
+                      type="email"
+                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/40 focus:border-[#266b75]"
+                      placeholder="client@example.com"
+                      value={sendOnboardingEmail}
+                      onChange={e => setSendOnboardingEmail(e.target.value)}
+                      onKeyDown={e => e.key === "Enter" && handleSendOnboardingForm()}
+                    />
+                    <div className="flex gap-2">
+                      <button onClick={() => setShowSendOnboardingForm(false)}
+                        className="flex-1 text-sm text-slate-500 border border-slate-200 rounded-lg py-1.5 hover:bg-slate-50 transition-colors">
+                        Cancel
+                      </button>
+                      <button onClick={handleSendOnboardingForm} disabled={sendingOnboardingForm}
+                        className="flex-1 text-sm bg-[#266b75] hover:bg-[#1d5159] text-white font-medium rounded-lg py-1.5 transition-colors disabled:opacity-60 flex items-center justify-center gap-1.5">
+                        {sendingOnboardingForm
+                          ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin inline-block" />
+                          : <Send className="w-3.5 h-3.5" />}
+                        {sendingOnboardingForm ? "Sending…" : "Send"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={handleSendPortalInvite}
                 disabled={sendingInvite}
@@ -930,6 +998,69 @@ export default function ClientDetail() {
           </>
         )}
       </div>
+
+      {/* Portal & Onboarding Status Card */}
+      {(() => {
+        const portalStatus: string = (client as any).portal_status ?? "not_created";
+        const formStatus: string = (client as any).onboarding_form_status ?? "not_started";
+        const formSentDate: string | null = (client as any).form_sent_date ?? null;
+        const formCompletedDate: string | null = (client as any).form_completed_date ?? null;
+        const portalAccountCreatedDate: string | null = (client as any).portal_account_created_date ?? null;
+        const fmt = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+        const portalBadge = {
+          not_created:  { label: "Not Created",   cls: "bg-slate-100 text-slate-500 border-slate-200" },
+          invite_sent:  { label: "Invite Sent",   cls: "bg-amber-50 text-amber-700 border-amber-200" },
+          active:       { label: "Active",        cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        }[portalStatus] ?? { label: portalStatus, cls: "bg-slate-100 text-slate-500 border-slate-200" };
+
+        const formBadge = {
+          not_started:     { label: "Not Started",     cls: "bg-slate-100 text-slate-500 border-slate-200" },
+          sent_to_client:  { label: "Sent to Client",  cls: "bg-amber-50 text-amber-700 border-amber-200" },
+          in_progress:     { label: "In Progress",     cls: "bg-blue-50 text-blue-700 border-blue-200" },
+          complete:        { label: "Complete",        cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        }[formStatus] ?? { label: formStatus, cls: "bg-slate-100 text-slate-500 border-slate-200" };
+
+        return (
+          <div className="mt-4 bg-white rounded-2xl border border-slate-200 p-5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">Portal &amp; Onboarding</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <p className="text-xs text-slate-400 mb-1">Portal Status</p>
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${portalBadge.cls}`}>
+                  {portalBadge.label}
+                </span>
+                {portalAccountCreatedDate && (
+                  <p className="text-[10px] text-slate-400 mt-1">{fmt(portalAccountCreatedDate)}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 mb-1">Onboarding Form</p>
+                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${formBadge.cls}`}>
+                  {formBadge.label}
+                </span>
+                {formSentDate && formStatus !== "complete" && (
+                  <p className="text-[10px] text-slate-400 mt-1">Sent {fmt(formSentDate)}</p>
+                )}
+                {formCompletedDate && (
+                  <p className="text-[10px] text-slate-400 mt-1">Completed {fmt(formCompletedDate)}</p>
+                )}
+              </div>
+              {formStatus === "complete" && (
+                <div className="col-span-2 flex items-end">
+                  <a
+                    href={`/clients/${clientId}?tab=documents`}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#266b75] hover:underline"
+                  >
+                    <Paperclip className="w-3.5 h-3.5" />
+                    View Completed Onboarding Form
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Time Zone Card */}
       {(client as any).timezone && (

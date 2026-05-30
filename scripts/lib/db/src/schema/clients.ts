@@ -1,4 +1,4 @@
-import { pgTable, serial, text, real, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -46,6 +46,22 @@ export const clientsTable = pgTable("clients", {
   preferred_channel: text("preferred_channel", { enum: ["dashboard", "asana", "clickup"] }),
   /** Channel config JSON: e.g. Asana project GID or ClickUp list ID */
   channel_config: text("channel_config"),
+  /** Client portal account status */
+  portal_status: text("portal_status", { enum: ["not_created", "invite_sent", "active"] }).default("not_created"),
+  /** Onboarding form status */
+  onboarding_form_status: text("onboarding_form_status", { enum: ["not_started", "sent_to_client", "in_progress", "complete"] }).default("not_started"),
+  /** Date the onboarding form was sent to the client */
+  form_sent_date: timestamp("form_sent_date", { withTimezone: true }),
+  /** Date the client completed and submitted the onboarding form */
+  form_completed_date: timestamp("form_completed_date", { withTimezone: true }),
+  /** Date the portal invite was sent */
+  portal_invite_sent_date: timestamp("portal_invite_sent_date", { withTimezone: true }),
+  /** Date the portal account was activated */
+  portal_account_created_date: timestamp("portal_account_created_date", { withTimezone: true }),
+  /** Secure token used for client-facing onboarding link */
+  onboarding_token: text("onboarding_token"),
+  /** Whether the onboarding token has been used (form submitted) */
+  onboarding_token_used: boolean("onboarding_token_used").default(false),
 });
 
 export const insertClientSchema = createInsertSchema(clientsTable).omit({ id: true });

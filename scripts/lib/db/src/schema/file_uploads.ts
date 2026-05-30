@@ -9,6 +9,10 @@ export const fileUploadsTable = pgTable("file_uploads", {
   mimetype: text("mimetype").notNull(),
   size_bytes: integer("size_bytes").notNull(),
   created_at: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** Optional document type label (e.g. "Completed Onboarding Form") */
+  document_type: text("document_type"),
+  /** Optional document status (e.g. "Shared in Portal") */
+  document_status: text("document_status"),
 });
 
 export type FileUpload = typeof fileUploadsTable.$inferSelect;

@@ -31,6 +31,7 @@ import zapierWebhookRouter from "./zapier-webhook";
 import estimateResponseRouter from "./estimate-response";
 import payRouter from "./pay";
 import transactionsRouter from "./transactions";
+import onboardingRouter from "./onboarding";
 
 const router: IRouter = Router();
 
@@ -66,5 +67,6 @@ router.use(zapierWebhookRouter);
 router.use(estimateResponseRouter);
 router.use(payRouter);
 router.use(transactionsRouter);
+router.use(onboardingRouter);
 
 export default router;

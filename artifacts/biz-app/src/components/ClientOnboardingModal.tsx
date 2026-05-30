@@ -372,6 +372,15 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<{ clientName: string; email: string } | null>(null);
 
+  // Delivery mode: pending = hasn't chosen yet, fill = Complete Form Now, send = Send Form to Client
+  const [deliveryMode, setDeliveryMode] = useState<"pending" | "fill" | "send">("pending");
+  const [showDelivery, setShowDelivery] = useState(false);
+  const [sendName, setSendName] = useState("");
+  const [sendContactName, setSendContactName] = useState("");
+  const [sendEmail, setSendEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendDone, setSendDone] = useState<{ name: string; email: string } | null>(null);
+
   const set = useCallback((k: keyof OnboardingData, v: any) => setData(d => ({ ...d, [k]: v })), []);
 
   const steps = buildSteps(data.services);
@@ -381,11 +390,20 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
 
   const goNext = () => {
     if (stepId === 1 && !data.services) { toast({ title: "Please select a service", variant: "destructive" }); return; }
+    if (stepId === 1 && deliveryMode === "pending") {
+      setShowDelivery(true);
+      return;
+    }
     if (stepId === 2 && (!data.name || !data.email)) { toast({ title: "Business name and email are required", variant: "destructive" }); return; }
     const next = steps[currentIdx + 1];
     if (next) setStepId(next.id);
   };
   const goPrev = () => {
+    if (stepId === 2 && deliveryMode === "fill") {
+      setShowDelivery(true);
+      setDeliveryMode("pending");
+      return;
+    }
     const prev = steps[currentIdx - 1];
     if (prev) setStepId(prev.id);
   };
@@ -394,6 +412,13 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
     setData(EMPTY);
     setStepId(1);
     setDone(null);
+    setDeliveryMode("pending");
+    setShowDelivery(false);
+    setSendName("");
+    setSendContactName("");
+    setSendEmail("");
+    setSending(false);
+    setSendDone(null);
     onClose();
   };
 
@@ -442,6 +467,45 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
     }
   };
 
+  const handleSendForm = async () => {
+    if (!sendName.trim() || !sendEmail.trim()) {
+      toast({ title: "Business name and email are required", variant: "destructive" }); return;
+    }
+    setSending(true);
+    try {
+      const createRes = await fetch("/api/clients/onboard", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: sendName.trim(),
+          contact_name: sendContactName.trim() || null,
+          email: sendEmail.trim(),
+          services: data.services,
+          send_invite: false,
+        }),
+      });
+      const createJson = await createRes.json().catch(() => ({}));
+      if (!createRes.ok) throw new Error(createJson.error ?? "Failed to create client");
+      const newClientId = createJson.client?.id;
+
+      const sendRes = await fetch(`/api/clients/${newClientId}/send-onboarding-form`, {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: sendEmail.trim() }),
+      });
+      const sendJson = await sendRes.json().catch(() => ({}));
+      if (!sendRes.ok) throw new Error(sendJson.error ?? "Failed to send onboarding form");
+
+      queryClient.invalidateQueries({ queryKey: getListClientsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getGetDashboardQueryKey() });
+      setSendDone({ name: sendContactName.trim() || sendName.trim(), email: sendEmail.trim() });
+    } catch (err: any) {
+      toast({ title: "Failed to send form", description: err.message, variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -459,15 +523,23 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
             <div className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-100 shrink-0">
               <div>
                 <h2 className="text-lg font-display font-bold text-slate-900">Onboard a New Client</h2>
-                {!done && <p className="text-xs text-slate-400 mt-0.5">Step {currentIdx + 1} of {steps.length} — {steps[currentIdx]?.label}</p>}
+                {!done && !sendDone && !showDelivery && (
+                  <p className="text-xs text-slate-400 mt-0.5">Step {currentIdx + 1} of {steps.length} — {steps[currentIdx]?.label}</p>
+                )}
+                {!done && !sendDone && showDelivery && deliveryMode === "pending" && (
+                  <p className="text-xs text-slate-400 mt-0.5">How would you like to complete this form?</p>
+                )}
+                {!done && !sendDone && showDelivery && deliveryMode === "send" && (
+                  <p className="text-xs text-slate-400 mt-0.5">Send onboarding form to client</p>
+                )}
               </div>
               <button onClick={handleClose} className="p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Progress bar */}
-            {!done && (
+            {/* Progress bar — only when filling the form normally */}
+            {!done && !sendDone && !showDelivery && (
               <div className="px-6 pt-4 pb-2 shrink-0 bg-white border-b border-slate-100">
                 <div className="flex gap-1">
                   {steps.map((s, i) => (
@@ -509,6 +581,75 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
                     Done
                   </button>
                 </div>
+              ) : sendDone ? (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-5">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Form Sent!</h3>
+                    <p className="text-slate-500 mt-1">
+                      <span className="font-semibold">{sendDone.name}</span> will receive the onboarding form at{" "}
+                      <strong>{sendDone.email}</strong>.
+                    </p>
+                  </div>
+                  <div className="bg-[#266b75]/8 border border-[#266b75]/20 rounded-2xl px-6 py-4 text-sm text-[#266b75] max-w-sm">
+                    <Send className="w-4 h-4 mx-auto mb-1.5" />
+                    The client will complete the form and create their portal login. You'll receive an email notification when they're done.
+                  </div>
+                  <button onClick={handleClose} className="mt-2 bg-[#266b75] hover:bg-[#1d5159] text-white font-semibold px-6 py-2.5 rounded-xl transition-colors">
+                    Done
+                  </button>
+                </div>
+              ) : showDelivery && deliveryMode === "pending" ? (
+                <div className="space-y-3 pt-2">
+                  <p className="text-sm text-slate-500 mb-4">The service type has been selected. How would you like to complete the onboarding form?</p>
+                  <button type="button"
+                    onClick={() => { setDeliveryMode("fill"); setShowDelivery(false); setStepId(2); }}
+                    className="w-full flex items-start gap-4 rounded-2xl border-2 border-slate-200 hover:border-[#266b75] bg-white p-4 text-left transition-all group">
+                    <span className="mt-0.5 p-2 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-[#266b75] group-hover:text-white transition-colors">
+                      <User className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <p className="font-semibold text-slate-800">Complete Form Now</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Fill in the onboarding form yourself — all steps, review, then save.</p>
+                    </div>
+                  </button>
+                  <button type="button"
+                    onClick={() => setDeliveryMode("send")}
+                    className="w-full flex items-start gap-4 rounded-2xl border-2 border-slate-200 hover:border-[#266b75] bg-white p-4 text-left transition-all group">
+                    <span className="mt-0.5 p-2 rounded-xl bg-slate-100 text-slate-500 group-hover:bg-[#266b75] group-hover:text-white transition-colors">
+                      <Send className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <p className="font-semibold text-slate-800">Send Form to Client</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Email a secure link so the client fills out the form and sets up their own portal login.</p>
+                    </div>
+                  </button>
+                </div>
+              ) : showDelivery && deliveryMode === "send" ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 bg-[#266b75]/8 border border-[#266b75]/20 rounded-xl px-4 py-3">
+                    <Send className="w-4 h-4 text-[#266b75] mt-0.5 shrink-0" />
+                    <p className="text-sm text-[#266b75]">We'll create the client record and email them a secure link to complete the onboarding form themselves.</p>
+                  </div>
+                  <div className="bg-white rounded-2xl border border-slate-100 p-5 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Client Name</label>
+                        <input className={inputCls} placeholder="Jane Smith" value={sendContactName} onChange={e => setSendContactName(e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Business Name <span className="text-red-400">*</span></label>
+                        <input className={inputCls} placeholder="Acme Corp" value={sendName} onChange={e => setSendName(e.target.value)} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Client Email Address <span className="text-red-400">*</span></label>
+                      <input type="email" className={inputCls} placeholder="client@example.com" value={sendEmail} onChange={e => setSendEmail(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <AnimatePresence mode="wait">
                   <motion.div key={stepId} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.18 }}>
@@ -526,23 +667,47 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
             </div>
 
             {/* Footer nav */}
-            {!done && (
+            {!done && !sendDone && (
               <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-between shrink-0">
-                <button onClick={goPrev} disabled={isFirst}
-                  className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-4 py-2 rounded-xl hover:bg-slate-100">
-                  <ChevronLeft className="w-4 h-4" /> Back
-                </button>
-                {isLast ? (
-                  <button onClick={handleSubmit} disabled={submitting}
-                    className="flex items-center gap-2 bg-[#266b75] hover:bg-[#1d5159] text-white font-semibold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-60">
-                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                    {submitting ? "Submitting…" : "Submit & Save Client"}
-                  </button>
+                {showDelivery && deliveryMode === "pending" ? (
+                  <>
+                    <button onClick={() => { setShowDelivery(false); }}
+                      className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors px-4 py-2 rounded-xl hover:bg-slate-100">
+                      <ChevronLeft className="w-4 h-4" /> Back
+                    </button>
+                    <div />
+                  </>
+                ) : showDelivery && deliveryMode === "send" ? (
+                  <>
+                    <button onClick={() => setDeliveryMode("pending")}
+                      className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 transition-colors px-4 py-2 rounded-xl hover:bg-slate-100">
+                      <ChevronLeft className="w-4 h-4" /> Back
+                    </button>
+                    <button onClick={handleSendForm} disabled={sending}
+                      className="flex items-center gap-2 bg-[#266b75] hover:bg-[#1d5159] text-white font-semibold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-60">
+                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {sending ? "Sending…" : "Send Onboarding Form"}
+                    </button>
+                  </>
                 ) : (
-                  <button onClick={goNext}
-                    className="flex items-center gap-1.5 bg-[#266b75] hover:bg-[#1d5159] text-white font-semibold px-5 py-2.5 rounded-xl transition-colors">
-                    Next <ChevronRight className="w-4 h-4" />
-                  </button>
+                  <>
+                    <button onClick={goPrev} disabled={isFirst}
+                      className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-4 py-2 rounded-xl hover:bg-slate-100">
+                      <ChevronLeft className="w-4 h-4" /> Back
+                    </button>
+                    {isLast ? (
+                      <button onClick={handleSubmit} disabled={submitting}
+                        className="flex items-center gap-2 bg-[#266b75] hover:bg-[#1d5159] text-white font-semibold px-6 py-2.5 rounded-xl transition-colors disabled:opacity-60">
+                        {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                        {submitting ? "Submitting…" : "Submit & Save Client"}
+                      </button>
+                    ) : (
+                      <button onClick={goNext}
+                        className="flex items-center gap-1.5 bg-[#266b75] hover:bg-[#1d5159] text-white font-semibold px-5 py-2.5 rounded-xl transition-colors">
+                        Next <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}

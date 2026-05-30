@@ -33,6 +33,7 @@ import TimerPopout from "@/pages/timer-popout";
 import AsanaPage from "@/pages/asana";
 import TransactionsPage from "@/pages/transactions";
 import AppDevTracker from "@/pages/app-tracker";
+import PublicOnboarding from "@/pages/public-onboarding";
 import SettingsPage from "@/pages/settings";
 // Public-facing marketing pages
 import PublicHome from "@/pages/public-home";
@@ -75,6 +76,7 @@ function Router() {
   if (location.startsWith("/reset-password")) return <ResetPassword />;
   if (location === "/estimate-response") return <EstimateResponsePage />;
   if (location.startsWith("/pay/")) return <PayPage />;
+  if (location.startsWith("/onboarding/")) return <PublicOnboarding />;
   if (location === "/privacy-policy") return <PrivacyPolicy />;
   if (location === "/eula") return <Eula />;
   if (location === "/terms") return <Terms />;

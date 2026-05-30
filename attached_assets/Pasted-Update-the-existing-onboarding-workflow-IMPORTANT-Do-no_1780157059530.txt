@@ -1,0 +1,294 @@
+Update the existing onboarding workflow.
+
+IMPORTANT:
+
+Do not rebuild or redesign the onboarding form itself.
+
+The onboarding form already exists and is working correctly.
+
+The existing form already includes:
+
+* Multiple onboarding steps
+* Step 6 Portal Email & Password setup
+* Review page after Step 6
+* Final submission process
+
+Keep the current onboarding form structure exactly as it is.
+
+The only changes needed are to how clients access the form and what happens after submission.
+
+---
+
+ONBOARD A NEW CLIENT SIDEBAR
+
+After selecting:
+
+* Bookkeeping Only
+* Virtual Assistant Only
+* Both Bookkeeping & VA
+
+Display two options:
+
+* Complete Form Now
+* Send Form to Client
+
+---
+
+COMPLETE FORM NOW
+
+If Hiedi selects Complete Form Now:
+
+* Open the existing onboarding form inside the dashboard.
+* No changes to current behavior.
+* Continue saving the form as it currently does.
+
+---
+
+SEND FORM TO CLIENT
+
+If Hiedi selects Send Form to Client:
+
+Show:
+
+* Client Email Address field
+* Send Onboarding Form button
+
+The email address should default to the email already stored on the client record.
+
+Allow Hiedi to edit the email before sending.
+
+---
+
+WHEN SEND ONBOARDING FORM IS CLICKED
+
+Create a secure onboarding link.
+
+The onboarding link should open the EXISTING onboarding form.
+
+Do not create a separate onboarding page.
+
+Do not create a separate portal setup page.
+
+The client should complete the same onboarding form Hiedi would complete manually.
+
+Update status:
+
+* Portal Status = Invite Sent
+* Onboarding Form Status = Sent to Client
+
+Store:
+
+* Form Sent Date
+* Portal Invite Sent Date
+
+---
+
+CLIENT EMAIL
+
+Subject:
+Welcome to HM Virtual Services - Complete Your Onboarding
+
+Body:
+
+Hi [Client Name],
+
+Welcome to HM Virtual Services!
+
+Please use the secure link below to complete your onboarding form and set up your client portal.
+
+[Secure Onboarding Link]
+
+During the onboarding process you will:
+
+* Complete your onboarding questionnaire
+* Confirm your email address
+* Create your portal password
+* Review your information before submitting
+
+Once submitted, your client portal will be activated automatically.
+
+Thank you,
+
+Hiedi
+HM Virtual Services
+
+---
+
+CLIENT EXPERIENCE
+
+When the client clicks the onboarding link:
+
+Open the EXISTING onboarding form.
+
+Do not require login first.
+
+The onboarding link itself serves as their secure access.
+
+The client completes the onboarding form exactly as it exists today.
+
+Step 6 already contains:
+
+* Portal Email
+* Password Creation
+
+Keep this process unchanged.
+
+Allow the client to edit the email address on Step 6.
+
+If they change the email address:
+
+* Update the client record
+* Update the portal account email
+* Use the new email address for future logins and notifications
+
+The existing Review step should remain unchanged.
+
+---
+
+AFTER FINAL SUBMISSION
+
+When the client clicks Submit on the existing Review page:
+
+Automatically:
+
+1. Save onboarding form data.
+2. Create and activate the portal account.
+3. Save the portal email from Step 6.
+4. Save the password hash.
+5. Mark Portal Status = Active.
+6. Mark Onboarding Form Status = Complete.
+7. Save Form Completed Date.
+8. Save Portal Account Created Date.
+
+---
+
+DOCUMENT STORAGE
+
+Immediately create a document record:
+
+Document Type:
+Completed Onboarding Form
+
+Document Status:
+Shared in Portal
+
+Save the completed onboarding form directly into the Client Documents area.
+
+Do not create any temporary holding area.
+
+The completed onboarding form should be visible:
+
+* On the Client Details page
+* In the Client Documents section
+* Inside the Client Portal Documents section
+
+---
+
+CLIENT THANK YOU EMAIL
+
+After submission:
+
+Send email to the client.
+
+Subject:
+Thank You for Completing Your Onboarding
+
+Body:
+
+Hi [Client Name],
+
+Thank you for completing your onboarding form.
+
+Your client portal has been activated and your information has been received.
+
+We will review everything and reach out if additional information is needed.
+
+You may now use your client portal to:
+
+* Upload documents
+* View invoices
+* Track tasks
+* Communicate with HM Virtual Services
+
+Thank you,
+
+Hiedi
+HM Virtual Services
+
+---
+
+HIEDI NOTIFICATION EMAIL
+
+After submission:
+
+Send email to Hiedi.
+
+Subject:
+Onboarding Completed - [Client Name]
+
+Body:
+
+[Client Name] has completed their onboarding form.
+
+Service Type:
+[Selected Service Type]
+
+Portal Account:
+Activated
+
+Completed onboarding form has been saved to Client Documents.
+
+View Client:
+[Client Details Link]
+
+---
+
+CLIENT DETAILS PAGE
+
+Add or update fields:
+
+Portal Status
+
+* Not Created
+* Invite Sent
+* Active
+
+Onboarding Form Status
+
+* Not Started
+* Sent to Client
+* In Progress
+* Complete
+
+Additional fields:
+
+* Form Sent Date
+* Form Completed Date
+* Portal Invite Sent Date
+* Portal Account Created Date
+
+---
+
+BUTTONS
+
+Add:
+
+* Send Onboarding Form
+* Resend Onboarding Form
+* View Completed Onboarding Form
+
+---
+
+SECURITY
+
+The onboarding link should:
+
+* Be unique per client
+* Be secure
+* Allow access to the onboarding form without requiring login
+* Expire immediately after successful submission
+
+The completed portal account should then use the email and password collected in Step 6 for future logins.
+
+Do not change the existing onboarding form structure, steps, portal setup fields, review page, or submission flow.
+Only change how the client accesses the form and what happens after final submission.
