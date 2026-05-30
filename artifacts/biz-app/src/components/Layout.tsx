@@ -117,7 +117,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
           >
             <p className="text-sm font-semibold text-white truncate">
-              Hi there, {firstName}
+              Hi there, {firstName}!
             </p>
             <p
               className="text-xs truncate mt-0.5"
