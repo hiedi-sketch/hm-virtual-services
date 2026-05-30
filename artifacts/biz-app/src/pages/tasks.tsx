@@ -61,7 +61,7 @@ interface ApiClient {
 // ── Constants ───────────────────────────────────────────────────────────────
 
 const STATUS_OPTIONS = ["Not Started", "To Discuss", "Pending", "Awaiting Reply", "In Progress", "Needs SMR Review", "Confirmed", "Completed"];
-const SERVICE_OPTIONS = ["Bookkeeping", "Virtual Assistant", "Family"];
+const SERVICE_OPTIONS = ["Bookkeeping", "Virtual Assistant"];
 const FREQ_OPTIONS = ["Daily", "Weekdays", "Weekly", "Monthly", "Annually"];
 const WEEKDAY_OPTIONS = [
   { value: "sun", label: "Sunday",  short: "Sun" },
@@ -1403,9 +1403,12 @@ function NewTaskRow({
 
   const handleSubmit = async () => {
     if (!title.trim() || !clientId) return;
+    const isFamily = clientId === "family";
+    const clientObj = isFamily ? null : clients?.find((c: ApiClient) => String(c.id) === clientId);
     await onSave({
       title: title.trim(),
-      client_id: Number(clientId),
+      client_id: isFamily ? null : Number(clientId),
+      client_name: isFamily ? "Family" : (clientObj ? (clientObj.contact_name?.trim() || clientObj.name) : null),
       service_type: serviceType || null,
       status,
       due_date: dueDate || null,
@@ -1437,6 +1440,7 @@ function NewTaskRow({
         <select value={clientId} onChange={e => setClientId(e.target.value)} required
           className="text-xs border border-slate-200 rounded px-1.5 py-1 bg-white outline-none focus:border-[#266b75] w-36">
           <option value="">— Client —</option>
+          <option value="family">Family</option>
           {clients.map(c => (
             <option key={c.id} value={c.id}>{c.contact_name?.trim() || c.name}</option>
           ))}
@@ -1935,7 +1939,7 @@ export default function Tasks() {
     const filtered = tasks.filter(t => {
       // Tasks held in "Tasks to Process" (pending the Process button) stay out of the main table
       if (pendingProcessing.includes(t.id)) return false;
-      if (t.status !== "Completed" && (!t.client_id || !t.service_type)) return false;
+      if (t.status !== "Completed" && t.client_name !== "Family" && (!t.client_id || !t.service_type)) return false;
       if (q && !t.title.toLowerCase().includes(q)) return false;
       if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
       if (serviceFilter !== "all" && t.service_type !== serviceFilter) return false;
@@ -1978,6 +1982,7 @@ export default function Tasks() {
   const toProcess = useMemo(() =>
     tasks.filter(t =>
       t.status !== "Completed" &&
+      t.client_name !== "Family" &&
       (pendingProcessing.includes(t.id) || !t.client_id || !t.service_type)
     ),
     [tasks, pendingProcessing]
@@ -2597,10 +2602,11 @@ export default function Tasks() {
                         <div className={cn("rounded px-1.5 py-0.5", !task.client_id && "bg-rose-100 border border-rose-200")}>
                           <EditableSelect
                             value={task.client_name}
-                            options={clients.map(c => c.contact_name?.trim() || c.name)}
+                            options={["Family", ...clients.map(c => c.contact_name?.trim() || c.name)]}
                             saving={isSaving}
                             placeholder="— Required —"
                             onSave={v => {
+                              if (v === "Family") { patchTask(task.id, { client_id: null, client_name: "Family" }); return; }
                               const c = clients.find(cl => (cl.contact_name?.trim() || cl.name) === v);
                               if (c) patchTask(task.id, { client_id: c.id, client_name: c.contact_name?.trim() || c.name });
                             }}
@@ -2860,7 +2866,6 @@ export default function Tasks() {
                 <option value="">— pick —</option>
                 <option value="Bookkeeping">Bookkeeping</option>
                 <option value="Virtual Assistant">Virtual Assistant</option>
-                <option value="Family">Family</option>
               </select>
               <button
                 onClick={() => { if (!bulkServiceType) return; handleBulkAction("update_service_type"); }}
@@ -3094,10 +3099,11 @@ export default function Tasks() {
                         <td className="px-2 py-2 text-xs whitespace-nowrap">
                           <EditableSelect
                             value={task.client_name}
-                            options={clients.map(c => c.contact_name?.trim() || c.name)}
+                            options={["Family", ...clients.map(c => c.contact_name?.trim() || c.name)]}
                             saving={isSaving}
                             placeholder="— Client —"
                             onSave={v => {
+                              if (v === "Family") { patchTask(task.id, { client_id: null, client_name: "Family" }); return; }
                               const client = clients.find(c => (c.contact_name?.trim() || c.name) === v);
                               if (client) patchTask(task.id, { client_id: client.id, client_name: client.contact_name?.trim() || client.name });
                             }}
