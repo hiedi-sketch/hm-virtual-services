@@ -951,7 +951,8 @@ export default function TransactionsPage() {
                   <th className="px-4 py-3.5 w-40">Account</th>
                   <th className="px-4 py-3.5 w-52">Category</th>
                   <th className="px-4 py-3.5 w-36">Status</th>
-                  <th className="px-4 py-3.5 w-28 text-right">Amount</th>
+                  <th className="px-4 py-3.5 w-28 text-right">Debit</th>
+                  <th className="px-4 py-3.5 w-28 text-right">Credit</th>
                   <th className="px-4 py-3.5 w-36">Internal Notes</th>
                   <th className="px-4 py-3.5 w-28 text-center">Actions</th>
                 </tr>
@@ -959,7 +960,7 @@ export default function TransactionsPage() {
               <tbody className="divide-y divide-slate-100">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-6 py-10 text-center text-slate-400 text-sm">
+                    <td colSpan={11} className="px-6 py-10 text-center text-slate-400 text-sm">
                       No transactions match this filter.
                     </td>
                   </tr>
@@ -1006,7 +1007,14 @@ export default function TransactionsPage() {
                         <StatusBadge status={tx.status} />
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <AmountCell amount={tx.amount} />
+                        {tx.amount != null && tx.amount < 0
+                          ? <span className="font-mono text-sm font-semibold tabular-nums text-red-600">${Math.abs(tx.amount).toFixed(2)}</span>
+                          : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {tx.amount != null && tx.amount > 0
+                          ? <span className="font-mono text-sm font-semibold tabular-nums text-emerald-700">${tx.amount.toFixed(2)}</span>
+                          : <span className="text-slate-300">—</span>}
                       </td>
                       <td className="px-4 py-3 min-w-[140px]">
                         <NotesCell tx={tx} onSave={notes => handleSaveNotes(tx.id, notes)} />
