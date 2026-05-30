@@ -355,7 +355,8 @@ export async function runPush(): Promise<{ pushed: number; errors: number; pushe
   const creds = await getCredentials();
   if (!creds) throw new Error("Asana is not configured.");
 
-  // Fetch all local tasks that have been linked to Asana
+  // Fetch all local tasks that have been linked to Asana, excluding tasks that are
+  // already Completed (no need to push completed/processed tasks repeatedly).
   const linked = await db
     .select({
       id:         tasksTable.id,
@@ -366,7 +367,7 @@ export async function runPush(): Promise<{ pushed: number; errors: number; pushe
       description: tasksTable.description,
     })
     .from(tasksTable)
-    .where(isNotNull(tasksTable.asana_gid));
+    .where(and(isNotNull(tasksTable.asana_gid), ne(tasksTable.status, "Completed")));
 
   let pushed = 0;
   let errors = 0;

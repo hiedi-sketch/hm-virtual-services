@@ -378,6 +378,8 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
   const creds = await getCredentials();
   if (!creds) throw new Error("ClickUp is not configured.");
 
+  // Fetch linked tasks, excluding Completed ones — no need to keep pushing
+  // already-processed or completed tasks to ClickUp on every sync cycle.
   const linked = await db
     .select({
       id: tasksTable.id,
@@ -393,7 +395,7 @@ export async function runClickUpPush(): Promise<{ pushed: number; errors: number
     })
     .from(tasksTable)
     .leftJoin(clientsTable, eq(tasksTable.client_id, clientsTable.id))
-    .where(isNotNull(tasksTable.clickup_task_id));
+    .where(and(isNotNull(tasksTable.clickup_task_id), ne(tasksTable.status, "Completed")));
 
   // Fetch the actual statuses and custom fields for the default list
   const [cuStatuses, cuFields] = await Promise.all([

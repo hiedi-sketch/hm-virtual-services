@@ -392,11 +392,13 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
 
   // Auto-set completed_date and last_generated_at when completing.
   const extraFields: Record<string, unknown> = {};
+  let existingLastGeneratedAt: string | null = null;
   if (body.status === "Completed") {
     const [existing] = await db
-      .select({ recurrence: tasksTable.recurrence, completed_date: tasksTable.completed_date })
+      .select({ recurrence: tasksTable.recurrence, completed_date: tasksTable.completed_date, last_generated_at: tasksTable.last_generated_at })
       .from(tasksTable)
       .where(eq(tasksTable.id, id));
+    existingLastGeneratedAt = existing?.last_generated_at ?? null;
     if (!body.completed_date && !existing?.completed_date) {
       extraFields["completed_date"] = todayStr();
     }
@@ -448,8 +450,10 @@ router.patch("/tasks/:id", requireRole("admin", "team_member"), async (req, res)
   logAudit("task", id, action, summary, { id: actor?.id, name: actor?.name });
 
   // Immediately spawn the next recurring instance when a recurring task is completed,
-  // so it appears right away rather than waiting for the midnight cron run.
-  if (body.status === "Completed" && updated.recurrence) {
+  // but only if this is the first time it's being processed (last_generated_at was
+  // null before this update). Re-completing an already-processed task should not
+  // spawn a duplicate.
+  if (body.status === "Completed" && updated.recurrence && !existingLastGeneratedAt) {
     spawnOnCompletion(updated).catch((err) =>
       logger.error({ err, taskId: updated.id }, "spawnOnCompletion failed"),
     );
