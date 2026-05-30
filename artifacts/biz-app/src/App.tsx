@@ -33,6 +33,7 @@ import TimerPopout from "@/pages/timer-popout";
 import AsanaPage from "@/pages/asana";
 import TransactionsPage from "@/pages/transactions";
 import AppDevTracker from "@/pages/app-tracker";
+import AppDevTrackerDetail from "@/pages/app-tracker-detail";
 import PublicOnboarding from "@/pages/public-onboarding";
 import SettingsPage from "@/pages/settings";
 // Public-facing marketing pages
@@ -146,6 +147,7 @@ function Router() {
             </ErrorBoundary>
           </Route>
         )}
+        {user.role === "admin" && <Route path="/app-tracker/:id" component={AppDevTrackerDetail} />}
         {user.role === "admin" && <Route path="/app-tracker" component={AppDevTracker} />}
         {user.role === "admin" && <Route path="/settings" component={SettingsPage} />}
         <Route path="/notifications" component={NotificationsPage} />

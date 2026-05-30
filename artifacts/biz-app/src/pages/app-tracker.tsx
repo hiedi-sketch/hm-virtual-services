@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
+import { useAppSprints, computeSprintStats } from "@/hooks/useAppSprints";
 
 const DEV_STAGES = ["Concept", "Planning", "In Development", "Testing", "Staging", "Live", "On Hold"];
 const STAGE_COLORS: Record<string, string> = {
@@ -100,6 +102,63 @@ const btnSecondary: React.CSSProperties = {
   color: "#334155", padding: "10px 20px", fontSize: "14px", cursor: "pointer",
 };
 
+// ── Brand ────────────────────────────────────────────────────────────────────
+const BRAND = "#266b75";
+const BRAND_LIGHT = "#7dbdc6";
+
+// ── App Card Footer (live Firebase data) ─────────────────────────────────────
+const AppCardFooter = ({ appId, targetDate }: { appId: number; targetDate: string }) => {
+  const [, setLocation] = useLocation();
+  const { sprints, loading } = useAppSprints(appId);
+  const stats = computeSprintStats(sprints, targetDate);
+
+  return (
+    <div style={{ borderTop: "1px solid #f1f5f9", marginTop: "16px", paddingTop: "14px" }}>
+      {/* Progress bar */}
+      <div style={{ marginBottom: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
+          <span style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>Task Progress</span>
+          <span style={{ fontSize: "12px", fontWeight: 700, color: BRAND }}>
+            {loading ? "—" : stats.total > 0 ? `${stats.pct}%  (${stats.done}/${stats.total} tasks)` : "No tasks yet — open tracker to add sprints"}
+          </span>
+        </div>
+        <div style={{ height: "5px", background: "#f1f5f9", borderRadius: "3px", overflow: "hidden" }}>
+          <div style={{ height: "100%", width: loading || stats.total === 0 ? "0%" : `${stats.pct}%`, background: `linear-gradient(90deg, ${BRAND}, ${BRAND_LIGHT})`, borderRadius: "3px", transition: "width 0.4s ease" }} />
+        </div>
+      </div>
+
+      {/* Projected launch + days ahead/behind */}
+      <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" as const, marginBottom: "14px" }}>
+        <div>
+          <span style={{ fontSize: "11px", color: "#94a3b8" }}>Projected Launch: </span>
+          <span style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}>
+            {loading || !stats.projectedDate
+              ? "—"
+              : stats.projectedDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+          </span>
+        </div>
+        {stats.daysAheadBehind !== null && (
+          <div>
+            <span style={{ fontSize: "11px", color: "#94a3b8" }}>vs. Target: </span>
+            <span style={{ fontSize: "12px", fontWeight: 700, color: stats.daysAheadBehind >= 0 ? "#16a34a" : "#dc2626" }}>
+              {Math.abs(stats.daysAheadBehind)}d {stats.daysAheadBehind >= 0 ? "ahead ↑" : "behind ↓"}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Open Tracker button */}
+      <button
+        onClick={() => setLocation(`/app-tracker/${appId}`)}
+        style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: BRAND, border: "none", borderRadius: "8px", color: "#ffffff", padding: "8px 16px", fontSize: "12px", fontWeight: 600, cursor: "pointer", letterSpacing: "0.02em" }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+        Open Tracker
+      </button>
+    </div>
+  );
+};
+
 // ── App Tracker tab ──────────────────────────────────────────────────────────
 type AppEntry = { id: number; name: string; stage: string; description: string; startDate: string; targetDate: string; devChecklist: Record<string, boolean>; maintenanceChecklist: Record<string, boolean> };
 
@@ -153,6 +212,7 @@ const AppTrackerTab = ({ apps, setApps }: { apps: AppEntry[]; setApps: React.Dis
                   {DEV_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
+              <AppCardFooter appId={app.id} targetDate={app.targetDate} />
             </div>
             <button onClick={() => deleteApp(app.id)} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#334155", cursor: "pointer", padding: "8px", lineHeight: 0 }}><Icon name="trash" /></button>
           </div>
@@ -443,6 +503,11 @@ export default function AppDevTracker() {
   const [apps, setApps] = useState<AppEntry[]>(INITIAL_APPS);
   const [changes, setChanges] = useState<ChangeEntry[]>([]);
   const [checklists, setChecklists] = useState<ChecklistsState>({});
+
+  // Sync apps to localStorage so the detail page can read name/targetDate
+  useEffect(() => {
+    localStorage.setItem("hm_tracker_apps", JSON.stringify(apps));
+  }, [apps]);
 
   const tabs = [
     { id: "apps", label: "App Pipeline", icon: "apps" },
