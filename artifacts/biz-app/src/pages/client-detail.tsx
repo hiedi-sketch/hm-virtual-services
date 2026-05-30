@@ -585,7 +585,7 @@ export default function ClientDetail() {
   }, 0);
 
   return (
-    <div className="space-y-8 max-w-5xl">
+    <div className="max-w-7xl">
       {/* Back */}
       <button
         onClick={() => navigate("/clients")}
@@ -594,6 +594,12 @@ export default function ClientDetail() {
         <ArrowLeft className="w-4 h-4" />
         Back to Clients
       </button>
+
+      {/* Two-column layout: left = main content, right = services / docs / messages */}
+      <div className="mt-6 xl:grid xl:grid-cols-[1fr_22rem] xl:gap-6 space-y-6 xl:space-y-0">
+
+        {/* ── Left column ── */}
+        <div className="xl:col-start-1 xl:row-start-1 space-y-6">
 
       {/* Client Header */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-6">
@@ -1346,6 +1352,11 @@ export default function ClientDetail() {
         />
       )}
 
+        </div>{/* ── end left column ── */}
+
+        {/* ── Right column (sticky side panel) ── */}
+        <div className="xl:col-start-2 xl:row-start-1 xl:row-span-2 space-y-6 xl:sticky xl:top-6">
+
       {/* Assigned Services */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1828,6 +1839,25 @@ export default function ClientDetail() {
         )}
       </div>
 
+      {/* Client Documents */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+          <Paperclip className="w-4 h-4 text-slate-500" />
+          <span className="font-semibold text-slate-900 text-sm">Documents</span>
+        </div>
+        <div className="p-4">
+          <DocumentsTab clientId={client.id} />
+        </div>
+      </div>
+
+      {/* Client Messages */}
+      <ClientDetailMessages clientId={clientId} />
+
+        </div>{/* ── end right column ── */}
+
+        {/* ── Left column (bottom) ── */}
+        <div className="xl:col-start-1 xl:row-start-2 space-y-6">
+
       {/* ── Subclients Overview ──────────────────────────────────────────────── */}
       {subclients.length > 0 && (() => {
         // Computed sort
@@ -2034,17 +2064,9 @@ export default function ClientDetail() {
         </div>
       )}
 
-      {/* Client Documents */}
-      <div className="mt-8">
-        <div className="flex items-center gap-2 mb-4">
-          <Paperclip className="w-5 h-5 text-slate-500" />
-          <h2 className="text-lg font-semibold text-slate-900">Client Documents</h2>
-        </div>
-        <DocumentsTab clientId={client.id} />
-      </div>
+        </div>{/* ── end left column bottom ── */}
 
-      {/* Client Messages */}
-      <ClientDetailMessages clientId={clientId} />
+      </div>{/* ── end two-column grid ── */}
     </div>
   );
 }
