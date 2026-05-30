@@ -193,6 +193,8 @@ export const ListTasksResponseItem = zod.object({
   status: zod.preprocess(normalizeTaskStatus, zod.enum(["Not Started", "Pending", "Confirmed", "In Progress", "Completed", "Needs SMR Review", "To Discuss", "Awaiting Reply"])),
   due_date: zod.string().nullish(),
   completed_date: zod.string().nullish(),
+  reset_interval_hours: zod.number().nullable().optional(),
+  reset_daily_time: zod.string().nullable().optional(),
   client_name: zod.string().nullish(),
   recurrence: recurrenceZod,
   last_generated_at: zod.string().nullish(),
@@ -312,6 +314,8 @@ export const UpdateTaskBody = zod.object({
   service_type: zod.enum(["Bookkeeping", "Virtual Assistant", "Family"]).nullish(),
   is_pinned: zod.boolean().optional(),
   queue_position: zod.number().nullable().optional(),
+  reset_interval_hours: zod.number().nullable().optional(),
+  reset_daily_time: zod.string().nullable().optional(),
 });
 
 export const UpdateTaskResponse = zod.object({
@@ -332,6 +336,8 @@ export const UpdateTaskResponse = zod.object({
   is_pinned: zod.boolean().optional().default(false),
   queue_position: zod.number().nullable().optional(),
   missive_conversation_id: zod.string().nullish(),
+  reset_interval_hours: zod.number().nullable().optional(),
+  reset_daily_time: zod.string().nullable().optional(),
 });
 
 /**

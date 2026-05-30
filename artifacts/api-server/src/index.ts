@@ -5,8 +5,9 @@ import { runPush } from "./routes/asana";
 import { runClickUpPush } from "./routes/clickup";
 import { db } from "@workspace/db";
 import { tasksTable } from "@workspace/db";
-import { eq, and, ne } from "drizzle-orm";
+import { eq, and, ne, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { notifyAdmins } from "./lib/notify";
 
 const rawPort = process.env["PORT"];
 
@@ -79,28 +80,107 @@ cron.schedule("5 0 * * *", async () => {
 });
 
 // ── Daily task reset ──────────────────────────────────────────────────────
-// Runs at 12:01am every day. Resets pinned tasks that are in an active/interim
-// state back to "Not Started" with today's due date so they appear fresh and
-// are never shown as past-due. Explicitly excludes already-"Not Started" and
-// "Completed" tasks — completed pinned tasks are left alone until the user or
-// recurring-spawn logic handles them.
+// Runs at 12:01am every day. Resets pinned tasks with no specific per-task
+// schedule back to "Not Started". Tasks with reset_interval_hours or
+// reset_daily_time set are handled by the per-task scheduler below.
 cron.schedule("1 0 * * *", async () => {
-  logger.info("Daily task reset: starting");
+  logger.info("Daily task reset (global): starting");
   try {
     const today = new Date().toISOString().split("T")[0]!;
     const result = await db
       .update(tasksTable)
-      .set({ status: "Not Started", due_date: today })
+      .set({ status: "Not Started", due_date: today, last_reset_at: new Date() })
       .where(
         and(
           eq(tasksTable.is_pinned, true),
           ne(tasksTable.status, "Not Started"),
           ne(tasksTable.status, "Completed"),
+          isNull(tasksTable.reset_interval_hours),
+          isNull(tasksTable.reset_daily_time),
         )
       )
-      .returning({ id: tasksTable.id });
-    logger.info({ count: result.length }, "Daily task reset: complete");
+      .returning({ id: tasksTable.id, title: tasksTable.title });
+    logger.info({ count: result.length }, "Daily task reset (global): complete");
+    for (const task of result) {
+      await notifyAdmins({
+        type: "task_reset",
+        title: `Daily task reset: ${task.title}`,
+        message: `"${task.title}" was automatically reset to Not Started.`,
+        entityType: "task",
+        entityId: task.id,
+      });
+    }
   } catch (err) {
-    logger.error({ err }, "Daily task reset: failed");
+    logger.error({ err }, "Daily task reset (global): failed");
+  }
+});
+
+// ── Per-task scheduled reset ───────────────────────────────────────────────
+// Runs every 5 minutes. Handles two flavours:
+//   1. reset_interval_hours — resets when (NOW - last_reset_at) >= N hours
+//   2. reset_daily_time     — resets once per day when the clock passes HH:MM
+// Only resets tasks that are NOT already "Not Started" or "Completed".
+cron.schedule("*/5 * * * *", async () => {
+  try {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const currentHHMM = `${hh}:${mm}`;
+
+    // 1. Interval-based tasks: elapsed time >= reset_interval_hours
+    const intervalTasks = await db
+      .select({ id: tasksTable.id, title: tasksTable.title })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.is_pinned, true),
+          ne(tasksTable.status, "Not Started"),
+          ne(tasksTable.status, "Completed"),
+          sql`${tasksTable.reset_interval_hours} IS NOT NULL`,
+          sql`(${tasksTable.last_reset_at} IS NULL OR (NOW() - ${tasksTable.last_reset_at}) >= (${tasksTable.reset_interval_hours} * INTERVAL '1 hour'))`,
+        )
+      );
+
+    // 2. Daily-time tasks: current time has passed reset_daily_time and hasn't
+    //    been reset yet today at that time
+    const dailyTimeTasks = await db
+      .select({ id: tasksTable.id, title: tasksTable.title })
+      .from(tasksTable)
+      .where(
+        and(
+          eq(tasksTable.is_pinned, true),
+          ne(tasksTable.status, "Not Started"),
+          ne(tasksTable.status, "Completed"),
+          sql`${tasksTable.reset_daily_time} IS NOT NULL`,
+          sql`${tasksTable.reset_daily_time} <= ${currentHHMM}`,
+          sql`(${tasksTable.last_reset_at} IS NULL OR ${tasksTable.last_reset_at} < (CURRENT_DATE + ${tasksTable.reset_daily_time}::time))`,
+        )
+      );
+
+    const allTasks = [...intervalTasks, ...dailyTimeTasks];
+
+    for (const task of allTasks) {
+      const today = now.toISOString().split("T")[0]!;
+      await db
+        .update(tasksTable)
+        .set({ status: "Not Started", due_date: today, last_reset_at: now })
+        .where(eq(tasksTable.id, task.id));
+
+      await notifyAdmins({
+        type: "task_reset",
+        title: `Task auto-reset: ${task.title}`,
+        message: `"${task.title}" was automatically reset to Not Started.`,
+        entityType: "task",
+        entityId: task.id,
+      });
+
+      logger.info({ taskId: task.id, title: task.title }, "Per-task scheduled reset applied");
+    }
+
+    if (allTasks.length > 0) {
+      logger.info({ count: allTasks.length }, "Per-task scheduled reset: complete");
+    }
+  } catch (err) {
+    logger.error({ err }, "Per-task scheduled reset: failed");
   }
 });

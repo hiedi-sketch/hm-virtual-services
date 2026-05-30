@@ -109,6 +109,8 @@ const taskSelectFields = {
   is_pinned: tasksTable.is_pinned,
   queue_position: tasksTable.queue_position,
   missive_conversation_id: tasksTable.missive_conversation_id,
+  reset_interval_hours: tasksTable.reset_interval_hours,
+  reset_daily_time: tasksTable.reset_daily_time,
   incomplete_subtask_count: sql<number>`(
     SELECT COUNT(*) FROM subtasks
     WHERE subtasks.task_id = ${tasksTable.id} AND subtasks.done = false

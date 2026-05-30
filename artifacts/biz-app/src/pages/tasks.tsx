@@ -34,6 +34,8 @@ interface ApiTask {
   is_pinned: boolean;
   queue_position: number | null;
   missive_conversation_id: string | null;
+  reset_interval_hours?: number | null;
+  reset_daily_time?: string | null;
 }
 
 interface ApiTeamMember {
@@ -2191,7 +2193,7 @@ export default function Tasks() {
                         <p className={cn("text-xs font-medium text-slate-800 truncate group-hover:text-[#266b75] group-hover:underline transition-colors", done && "line-through text-slate-400")}>{task.title}</p>
                         {task.client_name && <p className="text-[10px] text-slate-400 truncate">{task.client_name}</p>}
                       </button>
-                      <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span className={cn("inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium", statusColors[task.status] ?? "bg-slate-100 text-slate-600")}>
                           {task.status}
                         </span>
@@ -2200,6 +2202,42 @@ export default function Tasks() {
                             {String(Math.floor(elapsedMs / 3600000)).padStart(2,"0")}:{String(Math.floor((elapsedMs % 3600000) / 60000)).padStart(2,"0")}:{String(Math.floor((elapsedMs % 60000) / 1000)).padStart(2,"0")}
                           </span>
                         )}
+                      </div>
+                      <div className="flex items-center gap-1 mt-1">
+                        <RefreshCw className="w-2.5 h-2.5 text-slate-300 shrink-0" />
+                        <select
+                          value={
+                            task.reset_interval_hours != null
+                              ? `interval:${task.reset_interval_hours}`
+                              : task.reset_daily_time != null
+                              ? `daily:${task.reset_daily_time}`
+                              : "none"
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === "none") {
+                              patchTask(task.id, { reset_interval_hours: null, reset_daily_time: null });
+                            } else if (val.startsWith("interval:")) {
+                              patchTask(task.id, { reset_interval_hours: Number(val.split(":")[1]), reset_daily_time: null });
+                            } else if (val.startsWith("daily:")) {
+                              patchTask(task.id, { reset_interval_hours: null, reset_daily_time: val.split(":").slice(1).join(":") });
+                            }
+                          }}
+                          disabled={isSaving}
+                          className="text-[9px] bg-transparent border border-slate-200 rounded px-1 py-0 text-slate-400 hover:border-amber-300 hover:text-slate-600 focus:outline-none focus:border-amber-400 transition-colors cursor-pointer disabled:opacity-50"
+                          title="Auto-reset schedule"
+                        >
+                          <option value="none">No auto-reset</option>
+                          <option value="interval:1">Every 1 hour</option>
+                          <option value="interval:2">Every 2 hours</option>
+                          <option value="interval:4">Every 4 hours</option>
+                          <option value="interval:8">Every 8 hours</option>
+                          <option value="interval:12">Every 12 hours</option>
+                          <option value="daily:00:01">Daily at 12:01am</option>
+                          <option value="daily:06:00">Daily at 6:00am</option>
+                          <option value="daily:08:00">Daily at 8:00am</option>
+                          <option value="daily:12:00">Daily at noon</option>
+                        </select>
                       </div>
                     </div>
                     {/* Timer buttons */}

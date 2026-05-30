@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, boolean } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -20,6 +20,9 @@ export const tasksTable = pgTable("tasks", {
   is_pinned: boolean("is_pinned").notNull().default(false),
   queue_position: integer("queue_position"),
   missive_conversation_id: text("missive_conversation_id"),
+  reset_interval_hours: integer("reset_interval_hours"),
+  reset_daily_time: text("reset_daily_time"),
+  last_reset_at: timestamp("last_reset_at", { withTimezone: true }),
 });
 
 export const insertTaskSchema = createInsertSchema(tasksTable).omit({ id: true });

@@ -11,7 +11,8 @@ export type NotifyType =
   | "invoice_reminder"
   | "task_assigned"
   | "task_comment"
-  | "new_message";
+  | "new_message"
+  | "task_reset";
 
 interface CreateNotificationOpts {
   userId: number;
