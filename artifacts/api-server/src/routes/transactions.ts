@@ -5,7 +5,7 @@ import path from "path";
 import fs from "fs";
 import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
-import { transactionsTable, transactionImportsTable, clientsTable } from "@workspace/db";
+import { transactionsTable, transactionImportsTable, clientsTable, fileUploadsTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { sendMail, template } from "../lib/mailer";
@@ -373,6 +373,50 @@ router.patch("/transactions/:id/respond", requireAuth, receiptUpload.single("rec
   if (!updated) return res.status(404).json({ error: "Transaction not found or already responded" });
 
   res.json(updated);
+});
+
+// POST /api/transactions/:id/receipt — admin uploads a receipt, auto-adds to client Documents
+router.post("/transactions/:id/receipt", requireAdmin, receiptUpload.single("file"), async (req, res) => {
+  const txId = Number(req.params.id);
+  if (isNaN(txId)) return res.status(400).json({ error: "Invalid id" });
+  if (!req.file)   return res.status(400).json({ error: "No file provided" });
+
+  const user = req.session.user!;
+
+  const [tx] = await db
+    .select({ client_id: transactionsTable.client_id })
+    .from(transactionsTable)
+    .where(eq(transactionsTable.id, txId));
+  if (!tx) return res.status(404).json({ error: "Transaction not found" });
+
+  const ext = req.file.mimetype === "application/pdf" ? ".pdf"
+            : req.file.mimetype === "image/png"       ? ".png"
+            : ".jpg";
+  const filename   = `receipt_${randomUUID()}${ext}`;
+  const uploadsDir = path.resolve(process.cwd(), "uploads");
+  await fs.promises.mkdir(uploadsDir, { recursive: true });
+  await fs.promises.writeFile(path.join(uploadsDir, filename), req.file.buffer);
+
+  const [fileRecord] = await db
+    .insert(fileUploadsTable)
+    .values({
+      client_id:            tx.client_id,
+      uploaded_by_user_id:  user.id,
+      original_name:        req.file.originalname || `receipt${ext}`,
+      stored_name:          filename,
+      mimetype:             req.file.mimetype,
+      size_bytes:           req.file.size,
+    })
+    .returning();
+
+  const receiptUrl = `/api/uploads/${fileRecord.id}/download`;
+  const [updated] = await db
+    .update(transactionsTable)
+    .set({ receipt_url: receiptUrl })
+    .where(eq(transactionsTable.id, txId))
+    .returning();
+
+  res.json({ transaction: updated, upload: fileRecord });
 });
 
 // GET /api/transactions/receipt/:filename

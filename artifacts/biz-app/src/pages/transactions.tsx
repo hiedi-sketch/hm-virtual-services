@@ -369,7 +369,7 @@ function FlagPanel({
 // ─── Transaction Edit Panel ───────────────────────────────────────────────────
 
 function TransactionEditPanel({
-  tx, onClose, onSaveMemo, onSaveCategory, onSaveNotes, onFlag, onResolve,
+  tx, onClose, onSaveMemo, onSaveCategory, onSaveNotes, onFlag, onResolve, onUploadReceipt,
 }: {
   tx: Tx;
   onClose: () => void;
@@ -378,12 +378,20 @@ function TransactionEditPanel({
   onSaveNotes: (notes: string) => void;
   onFlag: () => void;
   onResolve: () => void;
+  onUploadReceipt: (file: File) => Promise<void>;
 }) {
   const [memo, setMemo] = useState(tx.memo ?? "");
   const [notes, setNotes] = useState(tx.internal_notes ?? "");
+  const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMemo(tx.memo ?? ""); }, [tx.memo]);
   useEffect(() => { setNotes(tx.internal_notes ?? ""); }, [tx.internal_notes]);
+
+  const handleReceiptFile = async (file: File) => {
+    setUploadingReceipt(true);
+    try { await onUploadReceipt(file); } finally { setUploadingReceipt(false); }
+  };
 
   return (
     <div className="fixed inset-y-0 right-0 z-50 flex">
@@ -400,27 +408,27 @@ function TransactionEditPanel({
 
         {/* Summary */}
         <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 space-y-2">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-semibold text-slate-900 text-base truncate">{tx.name || "Unknown Payee"}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{fmtDateShort(tx.date)} · {tx.transaction_type || "—"}</p>
-            </div>
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-bold text-slate-900 text-xl leading-none">{fmtDateShort(tx.date)}</p>
             <div className="text-right shrink-0">
               {tx.amount != null && tx.amount < 0 && (
                 <>
-                  <p className="font-mono font-bold text-red-600 text-lg leading-none">${Math.abs(tx.amount).toFixed(2)}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Debit</p>
+                  <p className="font-mono font-bold text-red-600 text-xl leading-none">${Math.abs(tx.amount).toFixed(2)}</p>
+                  <p className="text-xs text-slate-400 mt-1">Debit</p>
                 </>
               )}
               {tx.amount != null && tx.amount > 0 && (
                 <>
-                  <p className="font-mono font-bold text-emerald-700 text-lg leading-none">${tx.amount.toFixed(2)}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Credit</p>
+                  <p className="font-mono font-bold text-emerald-700 text-xl leading-none">${tx.amount.toFixed(2)}</p>
+                  <p className="text-xs text-slate-400 mt-1">Credit</p>
                 </>
               )}
-              {tx.amount == null && <p className="text-slate-300">—</p>}
+              {tx.amount == null && <p className="text-slate-300 text-xl">—</p>}
             </div>
           </div>
+          {tx.transaction_type && (
+            <p className="text-xs text-slate-500">{tx.transaction_type}</p>
+          )}
           {tx.account && (
             <p className="text-xs text-slate-500"><span className="font-medium text-slate-600">Account:</span> {tx.account}</p>
           )}
@@ -497,15 +505,37 @@ function TransactionEditPanel({
             </div>
           )}
 
-          {tx.receipt_url && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Receipt</label>
-              {/\.(jpg|jpeg|png)$/i.test(tx.receipt_url) ? (
-                <a href={tx.receipt_url} target="_blank" rel="noopener noreferrer" className="block">
+          {/* Receipt / Documents */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Receipt / Document</label>
+              <button
+                type="button"
+                onClick={() => receiptInputRef.current?.click()}
+                disabled={uploadingReceipt}
+                className="flex items-center gap-1 text-xs font-medium text-[#266b75] hover:text-[#1f545d] disabled:opacity-50 transition-colors"
+              >
+                {uploadingReceipt ? (
+                  <><Upload className="w-3 h-3 animate-pulse" /> Uploading…</>
+                ) : (
+                  <><Upload className="w-3 h-3" /> {tx.receipt_url ? "Replace" : "Upload"}</>
+                )}
+              </button>
+              <input
+                ref={receiptInputRef}
+                type="file"
+                accept="image/jpeg,image/png,application/pdf"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleReceiptFile(f); e.target.value = ""; }}
+              />
+            </div>
+            {tx.receipt_url ? (
+              /\.(jpg|jpeg|png)/i.test(tx.receipt_url) || tx.receipt_url.includes("/download") && !tx.receipt_url.endsWith(".pdf") ? (
+                <a href={tx.receipt_url} target="_blank" rel="noopener noreferrer" className="block group">
                   <img
                     src={tx.receipt_url}
                     alt="Receipt"
-                    className="rounded-xl border border-slate-200 max-w-full object-contain max-h-48 hover:opacity-90 transition-opacity"
+                    className="rounded-xl border border-slate-200 max-w-full object-contain max-h-48 group-hover:opacity-90 transition-opacity"
                   />
                   <p className="text-xs text-[#266b75] mt-1 hover:underline">View full image →</p>
                 </a>
@@ -514,14 +544,25 @@ function TransactionEditPanel({
                   href={tx.receipt_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 font-medium hover:bg-slate-100 transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 font-medium hover:bg-slate-100 transition-colors"
                 >
-                  <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
-                  View Receipt (PDF)
+                  <svg className="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+                  View Document
                 </a>
-              )}
-            </div>
-          )}
+              )
+            ) : (
+              <button
+                type="button"
+                onClick={() => receiptInputRef.current?.click()}
+                disabled={uploadingReceipt}
+                className="w-full flex flex-col items-center gap-2 py-5 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-[#266b75]/40 hover:text-[#266b75] hover:bg-[#266b75]/5 transition-colors disabled:opacity-50"
+              >
+                <Upload className="w-5 h-5" />
+                <span className="text-xs font-medium">Click to attach receipt or document</span>
+                <span className="text-xs opacity-70">JPG · PNG · PDF</span>
+              </button>
+            )}
+          </div>
 
         </div>
 
@@ -797,6 +838,19 @@ export default function TransactionsPage() {
 
   const handleSaveAccount = async (txId: number, account: string) => {
     await apiPatch(txId, { account }, { account });
+  };
+
+  const handleUploadReceipt = async (txId: number, file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const result = await apiFetch(`/api/transactions/${txId}/receipt`, { method: "POST", body: fd });
+      if (result.transaction) patchTx(txId, result.transaction);
+      toast({ title: "Receipt uploaded", description: "Added to transaction and client documents." });
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+      throw err;
+    }
   };
 
   const handleAddAccount = async () => {
@@ -1337,6 +1391,7 @@ export default function TransactionsPage() {
           onSaveNotes={notes => handleSaveNotes(editTx.id, notes)}
           onFlag={() => { setEditTxId(null); setFlagTxId(editTx.id); }}
           onResolve={() => { handleResolve(editTx); setEditTxId(null); }}
+          onUploadReceipt={file => handleUploadReceipt(editTx.id, file)}
         />
       )}
     </div>
