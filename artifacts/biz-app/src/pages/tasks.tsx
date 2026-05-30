@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useTimer } from "@/contexts/TimerContext";
 import { TaskCommentPanel } from "@/components/TaskCommentPanel";
+import { TaskDetailSlideOver } from "@/components/TaskDetailSlideOver";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -1582,7 +1583,7 @@ export default function Tasks() {
     }
   }
   const [saving, setSaving] = useState<Set<number>>(new Set());
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [detailTask, setDetailTask] = useState<ApiTask | null>(null);
   const [showNewRow, setShowNewRow] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -2539,10 +2540,9 @@ export default function Tasks() {
                   const tpIsRunning = tpIsThisTask && timerState.status === "running";
                   const tpIsPaused = tpIsThisTask && timerState.status === "paused";
                   const isSelected = tpSelectedIds.has(task.id);
-                  const isExpanded = expanded.has(task.id);
                   return (
                     <React.Fragment key={task.id}>
-                    <tr className={cn("transition-colors", isExpanded ? "border-b-0" : "", isSelected ? "bg-rose-50" : "bg-white hover:bg-rose-50/40")}>
+                    <tr className={cn("transition-colors", isSelected ? "bg-rose-50" : "bg-white hover:bg-rose-50/40")}>
                       {/* Checkbox */}
                       <td className="px-3 py-2.5 w-8">
                         <input
@@ -2699,22 +2699,13 @@ export default function Tasks() {
                           >
                             <CheckCheck className="w-3.5 h-3.5" />
                           </button>
-                          {/* Expand subtasks / comments */}
+                          {/* Open detail panel */}
                           <button
-                            onClick={() => setExpanded(prev => {
-                              const n = new Set(prev);
-                              n.has(task.id) ? n.delete(task.id) : n.add(task.id);
-                              return n;
-                            })}
-                            className={cn(
-                              "w-6 h-6 flex items-center justify-center rounded transition-all",
-                              isExpanded
-                                ? "bg-[#266b75] text-white"
-                                : "text-slate-400 hover:text-[#266b75] hover:bg-[#266b75]/10"
-                            )}
-                            title={isExpanded ? "Collapse" : "Subtasks & comments"}
+                            onClick={() => setDetailTask(task)}
+                            className="w-6 h-6 flex items-center justify-center rounded transition-all text-slate-400 hover:text-[#266b75] hover:bg-[#266b75]/10"
+                            title="Subtasks & comments"
                           >
-                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                            <ChevronRight className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => deleteTask(task.id)}
@@ -2727,7 +2718,6 @@ export default function Tasks() {
                         </div>
                       </td>
                     </tr>
-                    {isExpanded && <SubtaskPanel taskId={task.id} description={task.description} />}
                     </React.Fragment>
                   );
                 })}
@@ -2994,7 +2984,6 @@ export default function Tasks() {
                   const isRunning  = isThisTask && timerState.status === "running";
                   const isPaused   = isThisTask && timerState.status === "paused";
                   const isSaving   = saving.has(task.id);
-                  const isExpanded = expanded.has(task.id);
                   const { freq, days, monthDay } = parseRecurrence(task.recurrence);
                   const pendingSubtasks = task.incomplete_subtask_count ?? 0;
 
@@ -3007,7 +2996,6 @@ export default function Tasks() {
                         blinkingTaskId === task.id ? "task-row-blink"
                           : highlightedTaskId === task.id ? "bg-amber-100 ring-2 ring-inset ring-amber-400"
                           : selectedIds.has(task.id) ? "bg-[#266b75]/5" : isThisTask ? "bg-[#266b75]/5" : "hover:bg-slate-50/50",
-                        isExpanded && "border-b-0",
                       )}>
                         {/* Row checkbox */}
                         <td className="px-2 py-2">
@@ -3034,28 +3022,17 @@ export default function Tasks() {
                             {task.status === "Completed" && <Check className="w-3.5 h-3.5" />}
                           </button>
                         </td>
-                        {/* Expand toggle */}
+                        {/* Open detail panel */}
                         <td className="px-2 py-2">
                           <div className="relative inline-flex">
                             <button
-                              onClick={() => setExpanded(prev => {
-                                const n = new Set(prev);
-                                n.has(task.id) ? n.delete(task.id) : n.add(task.id);
-                                return n;
-                              })}
-                              className={cn(
-                                "w-6 h-6 flex items-center justify-center rounded transition-all",
-                                isExpanded
-                                  ? "bg-[#266b75] text-white"
-                                  : "text-slate-500 hover:text-[#266b75] hover:bg-[#266b75]/10"
-                              )}
-                              title={isExpanded ? "Collapse subtasks" : `${pendingSubtasks} subtask${pendingSubtasks !== 1 ? "s" : ""} pending`}
+                              onClick={() => setDetailTask(task)}
+                              className="w-6 h-6 flex items-center justify-center rounded transition-all text-slate-500 hover:text-[#266b75] hover:bg-[#266b75]/10"
+                              title={`Open detail${pendingSubtasks > 0 ? ` · ${pendingSubtasks} subtask${pendingSubtasks !== 1 ? "s" : ""} pending` : ""}`}
                             >
-                              {isExpanded
-                                ? <ChevronDown className="w-3.5 h-3.5" />
-                                : <ChevronRight className="w-3.5 h-3.5" />}
+                              <ChevronRight className="w-3.5 h-3.5" />
                             </button>
-                            {pendingSubtasks > 0 && !isExpanded && (
+                            {pendingSubtasks > 0 && (
                               <span className="absolute -top-1.5 -right-1.5 w-4 h-4 flex items-center justify-center rounded-full bg-amber-400 text-white text-[9px] font-bold leading-none shadow-sm">
                                 {pendingSubtasks > 9 ? "9+" : pendingSubtasks}
                               </span>
@@ -3344,8 +3321,6 @@ export default function Tasks() {
                         </td>
                       </tr>
 
-                      {/* Subtask expand panel */}
-                      {isExpanded && <SubtaskPanel taskId={task.id} description={task.description} />}
                     </React.Fragment>
                   );
                 })}
@@ -3354,6 +3329,13 @@ export default function Tasks() {
           </div>
         )}
       </div>
+
+      <TaskDetailSlideOver
+        task={detailTask}
+        onClose={() => setDetailTask(null)}
+        onPatch={patchTask}
+        onDelete={deleteTask}
+      />
     </div>
   );
 }
