@@ -255,13 +255,17 @@ router.post("/transactions/batch-send", requireAdmin, async (req, res) => {
       const amt = tx.amount != null
         ? `$${Math.abs(tx.amount).toFixed(2)}${tx.amount < 0 ? " (credit)" : ""}`
         : "—";
-      const date = tx.date
-        ? new Date(tx.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-        : "—";
+      let date = "—";
+      if (tx.date) {
+        // Handle both YYYY-MM-DD and MM/DD/YYYY formats
+        const d = tx.date.includes("/") ? new Date(tx.date) : new Date(tx.date + "T00:00:00");
+        date = isNaN(d.getTime()) ? tx.date : d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      }
+      const description = tx.memo || tx.name || "—";
       return `
         <tr>
           <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:14px;color:#475569;">${date}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:14px;color:#1e293b;font-weight:500;">${tx.name ?? "—"}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:14px;color:#1e293b;font-weight:500;">${description}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #e2e8f0;font-size:14px;color:#1e293b;font-weight:600;text-align:right;">${amt}</td>
         </tr>`;
     }).join("");
