@@ -417,8 +417,6 @@ router.post("/transactions/upload", requireAdmin, upload.single("file"), async (
   const clientId = Number(req.body.client_id);
   if (!clientId) return res.status(400).json({ error: "client_id required" });
 
-  const overwrite = req.body.overwrite === "true";
-
   let rows: Record<string, any>[];
   try {
     rows = parseRows(req.file.buffer, req.file.originalname);
@@ -432,32 +430,6 @@ router.post("/transactions/upload", requireAdmin, upload.single("file"), async (
   const datesSorted = [...dates].sort();
   const dateRangeStart = datesSorted[0] ?? null;
   const dateRangeEnd   = datesSorted[datesSorted.length - 1] ?? null;
-
-  const existing = await db
-    .select()
-    .from(transactionImportsTable)
-    .where(
-      and(
-        eq(transactionImportsTable.client_id, clientId),
-        eq(transactionImportsTable.date_range_start, dateRangeStart ?? ""),
-        eq(transactionImportsTable.date_range_end, dateRangeEnd ?? ""),
-      )
-    );
-
-  if (existing.length > 0 && !overwrite) {
-    return res.status(409).json({
-      conflict: true,
-      existing_import: existing[0],
-      message: `Transactions for this date range (${dateRangeStart} – ${dateRangeEnd}) have already been uploaded for this client. Confirm to overwrite.`,
-    });
-  }
-
-  if (existing.length > 0 && overwrite) {
-    for (const imp of existing) {
-      await db.delete(transactionsTable).where(eq(transactionsTable.import_id, imp.id));
-      await db.delete(transactionImportsTable).where(eq(transactionImportsTable.id, imp.id));
-    }
-  }
 
   const [importRecord] = await db
     .insert(transactionImportsTable)

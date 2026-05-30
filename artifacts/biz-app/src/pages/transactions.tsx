@@ -691,7 +691,6 @@ export default function TransactionsPage() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadConflict, setUploadConflict] = useState<{ existing: TxImport; message: string; file: File } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [flagTxId, setFlagTxId] = useState<number | null>(null);
@@ -835,27 +834,21 @@ export default function TransactionsPage() {
     }
   }, [patchTx, txData, toast]);
 
-  const doUpload = async (file: File, overwrite = false) => {
+  const doUpload = async (file: File) => {
     if (!selectedClientId) return;
     setUploading(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("client_id", String(selectedClientId));
-      if (overwrite) fd.append("overwrite", "true");
       const result = await apiFetch("/api/transactions/upload", { method: "POST", body: fd });
-      setUploadConflict(null);
       toast({
         title: "Upload complete",
         description: `${result.count} transaction${result.count === 1 ? "" : "s"} imported.`,
       });
       await loadTransactions(selectedClientId as number);
     } catch (err: any) {
-      if (err.status === 409 && err.body?.conflict) {
-        setUploadConflict({ existing: err.body.existing_import, message: err.body.message, file });
-      } else {
-        toast({ title: "Upload failed", description: err.message, variant: "destructive" });
-      }
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -1173,32 +1166,6 @@ export default function TransactionsPage() {
           </div>
         )}
       </div>
-
-      {/* ── Conflict warning ── */}
-      {uploadConflict && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex items-start gap-4">
-          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-amber-900">Date Range Already Uploaded</p>
-            <p className="text-sm text-amber-800 mt-1">{uploadConflict.message}</p>
-            <p className="text-xs text-amber-700 mt-1">
-              Last uploaded: <span className="font-medium">{fmtDate(uploadConflict.existing.imported_at)}</span> · {uploadConflict.existing.row_count} rows
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => doUpload(uploadConflict.file, true)}
-              disabled={uploading}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-50"
-            >
-              <CheckCircle2 className="w-4 h-4" /> Replace
-            </button>
-            <button onClick={() => setUploadConflict(null)} className="p-2 rounded-xl text-amber-600 hover:bg-amber-100 transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* ── Empty states ── */}
       {!selectedClientId && (
