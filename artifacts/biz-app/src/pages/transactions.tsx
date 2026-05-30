@@ -5,7 +5,7 @@ import {
   Trash2, AlertTriangle, CheckCircle2, ChevronDown,
   Clock, Calendar, AlertCircle, X, Flag,
   MessageSquare, CheckCheck, StickyNote, Filter, ChevronRight,
-  RefreshCw, Zap, CloudUpload, Search,
+  RefreshCw, Zap, CloudUpload, Search, ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -756,8 +756,20 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          {/* Sync button */}
-          <div className="shrink-0">
+          {/* Update bank feed + Sync buttons */}
+          <div className="shrink-0 flex items-center gap-2">
+            {hasQboRealm && (
+              <a
+                href="https://app.qbo.intuit.com/app/banking"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Opens QuickBooks banking page in a new tab — click Update there to pull the latest transactions from your bank, then come back and sync."
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-[#266b75] text-[#266b75] hover:bg-[#266b75]/5 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Update Bank Feed in QBO
+              </a>
+            )}
             <button
               onClick={() => doSync(false)}
               disabled={!selectedClientId || syncing}
