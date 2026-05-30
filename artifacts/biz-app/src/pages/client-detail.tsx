@@ -1264,6 +1264,7 @@ export default function ClientDetail() {
             else { setCommentTaskId(id); setCommentTaskTitle(title); }
           }}
           activeCommentTaskId={commentTaskId}
+          hideClientColumn
           defaultSortKey="due_date"
           defaultSortDir="asc"
           noCard

@@ -135,6 +135,7 @@ type TaskTableProps = {
   showComments?: boolean;
   serviceTypeFilter?: string;
   readOnly?: boolean;
+  hideClientColumn?: boolean;
   defaultSortKey?: SortKey | null;
   defaultSortDir?: "asc" | "desc";
   noCard?: boolean;
@@ -153,6 +154,7 @@ export default function TaskTable({
   showComments = true,
   serviceTypeFilter,
   readOnly = false,
+  hideClientColumn = false,
   defaultSortKey = null,
   defaultSortDir = "asc",
   noCard = false,
@@ -194,7 +196,7 @@ export default function TaskTable({
   const sortIcon = (key: SortKey) =>
     sortKey === key ? (sortDirection === "asc" ? " ↑" : " ↓") : "";
 
-  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + (onDeleteTask ? 1 : 0) + (readOnly ? 6 : 7) + 1;
+  const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + (onDeleteTask ? 1 : 0) + (readOnly || hideClientColumn ? 6 : 7);
 
   const tableContent = (
     <div className="overflow-x-auto">
@@ -205,7 +207,7 @@ export default function TaskTable({
               <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("title")}>
                 Task{sortIcon("title")}
               </th>
-              {!readOnly && (
+              {!readOnly && !hideClientColumn && (
                 <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("client_name")}>
                   Client{sortIcon("client_name")}
                 </th>
@@ -223,7 +225,6 @@ export default function TaskTable({
               {onStartTimer && <th className="px-6 py-4 text-center w-24">Timer</th>}
               {onComment && <th className="px-6 py-4 text-center w-16">Notes</th>}
               {onDeleteTask && <th className="px-6 py-4 text-center w-12" />}
-              <th className="px-6 py-4 w-10" />
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-sm">
@@ -282,24 +283,36 @@ export default function TaskTable({
 
                       {/* Title */}
                       <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
-                        {readOnly ? (
-                          <span className={`font-semibold ${task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"}`}>
-                            {task.title}
-                          </span>
-                        ) : (
-                          <input
-                            value={task.title}
-                            onChange={(e) => onUpdateField?.(task.id, "title", e.target.value)}
-                            onClick={e => e.stopPropagation()}
-                            className={`w-full bg-transparent outline-none font-semibold ${
-                              task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
-                            }`}
-                          />
-                        )}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setExpandedId(prev => prev === task.id ? null : task.id); }}
+                            className="shrink-0 p-0.5 rounded hover:bg-slate-100 transition-colors"
+                            title={isExpanded ? "Collapse" : "Expand"}
+                          >
+                            <ChevronDown className={cn(
+                              "w-4 h-4 text-slate-400 transition-transform duration-200",
+                              isExpanded && "rotate-180"
+                            )} />
+                          </button>
+                          {readOnly ? (
+                            <span className={`font-semibold ${task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"}`}>
+                              {task.title}
+                            </span>
+                          ) : (
+                            <input
+                              value={task.title}
+                              onChange={(e) => onUpdateField?.(task.id, "title", e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              className={`w-full bg-transparent outline-none font-semibold ${
+                                task.status === "Completed" ? "line-through text-slate-400" : "text-slate-900"
+                              }`}
+                            />
+                          )}
+                        </div>
                       </td>
 
-                      {/* Client — hidden in readOnly (client only sees their own tasks) */}
-                      {!readOnly && (
+                      {/* Client — hidden in readOnly or when hideClientColumn is set */}
+                      {!readOnly && !hideClientColumn && (
                         <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">
                           {task.client_name ?? <span className="text-slate-300">—</span>}
                         </td>
@@ -436,13 +449,6 @@ export default function TaskTable({
                         </td>
                       )}
 
-                      {/* Expand chevron */}
-                      <td className="px-4 py-4">
-                        <ChevronDown className={cn(
-                          "w-4 h-4 text-slate-400 transition-transform duration-200",
-                          isExpanded && "rotate-180"
-                        )} />
-                      </td>
                     </tr>
 
                     {/* Expanded row */}
