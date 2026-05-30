@@ -454,6 +454,187 @@ function FlagPanel({
   );
 }
 
+// ─── Transaction Edit Panel ───────────────────────────────────────────────────
+
+function TransactionEditPanel({
+  tx, accounts, hasQboRealm, isSavingQbo,
+  onClose, onSaveMemo, onSaveCategory, onSaveNotes, onSaveToQbo, onFlag, onResolve,
+}: {
+  tx: Tx;
+  accounts: QboAccount[];
+  hasQboRealm: boolean;
+  isSavingQbo: boolean;
+  onClose: () => void;
+  onSaveMemo: (memo: string) => void;
+  onSaveCategory: (accountId: string, accountName: string) => void;
+  onSaveNotes: (notes: string) => void;
+  onSaveToQbo: () => void;
+  onFlag: () => void;
+  onResolve: () => void;
+}) {
+  const [memo, setMemo] = useState(tx.memo ?? "");
+  const [notes, setNotes] = useState(tx.internal_notes ?? "");
+
+  useEffect(() => { setMemo(tx.memo ?? ""); }, [tx.memo]);
+  useEffect(() => { setNotes(tx.internal_notes ?? ""); }, [tx.internal_notes]);
+
+  const hasPendingQbo = tx.qbo_pending && !!tx.qbo_txn_id && hasQboRealm;
+
+  return (
+    <div className="fixed inset-y-0 right-0 z-50 flex">
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-[1px]" onClick={onClose} />
+      <div className="relative ml-auto w-full max-w-md bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <span className="font-semibold text-slate-900 text-base">Transaction Details</span>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Summary */}
+        <div className="px-5 py-4 bg-slate-50 border-b border-slate-100 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-semibold text-slate-900 text-base truncate">{tx.name || "Unknown Payee"}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{fmtDateShort(tx.date)} · {tx.transaction_type || "—"}</p>
+            </div>
+            <div className="text-right shrink-0">
+              {tx.amount != null && tx.amount < 0 && (
+                <>
+                  <p className="font-mono font-bold text-red-600 text-lg leading-none">${Math.abs(tx.amount).toFixed(2)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Debit</p>
+                </>
+              )}
+              {tx.amount != null && tx.amount > 0 && (
+                <>
+                  <p className="font-mono font-bold text-emerald-700 text-lg leading-none">${tx.amount.toFixed(2)}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Credit</p>
+                </>
+              )}
+              {tx.amount == null && <p className="text-slate-300">—</p>}
+            </div>
+          </div>
+          {tx.account && (
+            <p className="text-xs text-slate-500"><span className="font-medium text-slate-600">Account:</span> {tx.account}</p>
+          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            <StatusBadge status={tx.status} />
+            {hasPendingQbo && (
+              <span className="inline-flex items-center gap-1 text-xs text-[#266b75] font-medium">
+                <CloudUpload className="w-3 h-3" /> Unsaved QBO changes
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Editable fields */}
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Memo / Description</label>
+            <input
+              type="text"
+              value={memo}
+              onChange={e => setMemo(e.target.value)}
+              onBlur={() => { if (memo !== (tx.memo ?? "")) onSaveMemo(memo); }}
+              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setMemo(tx.memo ?? ""); }}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+              placeholder="Add memo…"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Category</label>
+            <CategoryCell tx={tx} accounts={accounts} onSave={onSaveCategory} />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Internal Notes</label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              onBlur={() => { if (notes !== (tx.internal_notes ?? "")) onSaveNotes(notes); }}
+              rows={4}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] resize-none"
+              placeholder="Add internal note…"
+            />
+          </div>
+
+          {tx.flagged_question && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Question Sent to Client</label>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2.5 text-sm text-blue-900 whitespace-pre-wrap">
+                {tx.flagged_question}
+              </div>
+              {tx.question_sent_at && (
+                <p className="text-xs text-slate-400 mt-1">
+                  {fmtDate(tx.question_sent_at)} · via {CHANNEL_LABELS[tx.routed_to_channel ?? ""] ?? tx.routed_to_channel ?? "Dashboard"}
+                </p>
+              )}
+            </div>
+          )}
+
+          {tx.client_response && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Client Response</label>
+              <div className="rounded-xl border border-purple-100 bg-purple-50 px-3 py-2.5 text-sm text-purple-900 whitespace-pre-wrap">
+                {tx.client_response}
+              </div>
+              {tx.response_received_at && (
+                <p className="text-xs text-slate-400 mt-1">Received {fmtDate(tx.response_received_at)}</p>
+              )}
+            </div>
+          )}
+
+        </div>
+
+        {/* Footer actions */}
+        <div className="px-5 py-4 border-t border-slate-100 space-y-2">
+          {hasPendingQbo && (
+            <button
+              onClick={onSaveToQbo}
+              disabled={isSavingQbo}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#266b75] text-white text-sm font-semibold hover:bg-[#1f545d] transition-colors disabled:opacity-50"
+            >
+              <CloudUpload className={cn("w-4 h-4", isSavingQbo && "animate-pulse")} />
+              {isSavingQbo ? "Saving to QuickBooks…" : "Save Changes to QuickBooks"}
+            </button>
+          )}
+          <div className="flex gap-2">
+            {tx.status !== "resolved" && (
+              <button
+                onClick={onFlag}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-amber-200 bg-amber-50/50 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition-colors"
+              >
+                <Flag className="w-4 h-4" />
+                {tx.status === "awaiting_response" || tx.status === "responded" ? "View Question" : "Flag for Client"}
+              </button>
+            )}
+            {tx.status === "responded" && (
+              <button
+                onClick={onResolve}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50/50 text-emerald-700 text-sm font-semibold hover:bg-emerald-50 transition-colors"
+              >
+                <CheckCheck className="w-4 h-4" />
+                Mark Resolved
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TransactionsPage() {
@@ -472,6 +653,7 @@ export default function TransactionsPage() {
   const [syncConflict, setSyncConflict] = useState<{ existing: TxImport; message: string } | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [flagTxId, setFlagTxId] = useState<number | null>(null);
+  const [editTxId, setEditTxId] = useState<number | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [qboAccounts, setQboAccounts] = useState<QboAccount[]>([]);
   const [savingQbo, setSavingQbo] = useState<Set<number>>(new Set());
@@ -483,6 +665,7 @@ export default function TransactionsPage() {
   const hasQboRealm = !!(selectedClient as any)?.qbo_realm_id;
 
   const allTx: Tx[] = (txData?.transactions ?? []).map(t => txMap.get(t.id) ?? t);
+  const editTx = editTxId != null ? (txMap.get(editTxId) ?? allTx.find(t => t.id === editTxId) ?? null) : null;
 
   const loadTransactions = useCallback(async (clientId: number) => {
     setLoading(true);
@@ -982,8 +1165,9 @@ export default function TransactionsPage() {
                   return (
                     <tr
                       key={tx.id}
+                      onClick={() => setEditTxId(tx.id)}
                       className={cn(
-                        "hover:bg-slate-50/80 transition-colors group",
+                        "hover:bg-slate-50/80 transition-colors group cursor-pointer",
                         tx.is_uncategorized && filterStatus === "all" && "bg-amber-50/30 hover:bg-amber-50/60"
                       )}
                     >
@@ -1001,7 +1185,9 @@ export default function TransactionsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <MemoCell tx={tx} onSave={memo => handleSaveMemo(tx.id, memo)} />
+                        <span className="text-xs text-slate-500 truncate block max-w-[200px]" title={tx.memo ?? undefined}>
+                          {tx.memo || <span className="text-slate-300 italic">—</span>}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs text-slate-600 truncate block max-w-[150px]" title={tx.account ?? undefined}>
@@ -1009,11 +1195,15 @@ export default function TransactionsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3">
-                        <CategoryCell
-                          tx={tx}
-                          accounts={qboAccounts}
-                          onSave={(id, name) => handleSaveCategory(tx.id, id, name)}
-                        />
+                        {tx.is_uncategorized ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-amber-600 font-medium">
+                            <AlertCircle className="w-3 h-3 shrink-0" /> Uncategorized
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-600 truncate block max-w-[190px]" title={tx.category ?? undefined}>
+                            {tx.category || <span className="text-slate-300">—</span>}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={tx.status} />
@@ -1028,10 +1218,12 @@ export default function TransactionsPage() {
                           ? <span className="font-mono text-sm font-semibold tabular-nums text-emerald-700">${tx.amount.toFixed(2)}</span>
                           : <span className="text-slate-300">—</span>}
                       </td>
-                      <td className="px-4 py-3 min-w-[140px]">
-                        <NotesCell tx={tx} onSave={notes => handleSaveNotes(tx.id, notes)} />
-                      </td>
                       <td className="px-4 py-3">
+                        {tx.internal_notes
+                          ? <span className="inline-flex items-center gap-1 text-xs text-slate-500" title={tx.internal_notes}><StickyNote className="w-3.5 h-3.5 shrink-0 text-slate-400" /><span className="truncate max-w-[90px]">{tx.internal_notes}</span></span>
+                          : <StickyNote className="w-3.5 h-3.5 text-slate-200" />}
+                      </td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           {/* Save to QBO */}
                           {hasPendingQbo && (
@@ -1134,6 +1326,23 @@ export default function TransactionsPage() {
           onClose={() => setFlagTxId(null)}
           onSend={question => handleSendQuestion(flagTx.id, question)}
           onSetNeedsInfo={() => apiPatch(flagTx.id, { status: "needs_info" }, { status: "needs_info" })}
+        />
+      )}
+
+      {/* ── Transaction Edit Panel ── */}
+      {editTx && !flagTx && (
+        <TransactionEditPanel
+          tx={editTx}
+          accounts={qboAccounts}
+          hasQboRealm={hasQboRealm}
+          isSavingQbo={savingQbo.has(editTx.id)}
+          onClose={() => setEditTxId(null)}
+          onSaveMemo={memo => handleSaveMemo(editTx.id, memo)}
+          onSaveCategory={(id, name) => handleSaveCategory(editTx.id, id, name)}
+          onSaveNotes={notes => handleSaveNotes(editTx.id, notes)}
+          onSaveToQbo={() => handleSaveToQbo(editTx.id)}
+          onFlag={() => { setEditTxId(null); setFlagTxId(editTx.id); }}
+          onResolve={() => { handleResolve(editTx); setEditTxId(null); }}
         />
       )}
     </div>
