@@ -659,6 +659,8 @@ export default function TransactionsPage() {
   const [savingQbo, setSavingQbo] = useState<Set<number>>(new Set());
   const [bulkSaving, setBulkSaving] = useState(false);
 
+  const activeClientIdRef = useRef<number | "">(selectedClientId);
+
   const activeClients = (clients ?? []).filter(c => (c as any).is_active !== false);
   const selectedClient = activeClients.find(c => c.id === selectedClientId);
   const clientChannel = (selectedClient as any)?.preferred_channel ?? "dashboard";
@@ -668,10 +670,14 @@ export default function TransactionsPage() {
   const editTx = editTxId != null ? (txMap.get(editTxId) ?? allTx.find(t => t.id === editTxId) ?? null) : null;
 
   const loadTransactions = useCallback(async (clientId: number) => {
+    activeClientIdRef.current = clientId;
     setLoading(true);
     setLoadError(null);
+    setTxData(null);
+    setTxMap(new Map());
     try {
       const data = await apiFetch(`/api/transactions?client_id=${clientId}`);
+      if (activeClientIdRef.current !== clientId) return; // stale — a newer client was selected
       const normalized: TxData = {
         imports: Array.isArray(data?.imports) ? data.imports : [],
         transactions: Array.isArray(data?.transactions) ? data.transactions : [],
@@ -681,10 +687,11 @@ export default function TransactionsPage() {
       normalized.transactions.forEach(t => m.set(t.id, t));
       setTxMap(m);
     } catch (err: any) {
+      if (activeClientIdRef.current !== clientId) return;
       setLoadError(err.message ?? "Failed to load transactions");
       toast({ title: "Failed to load transactions", description: err.message, variant: "destructive" });
     } finally {
-      setLoading(false);
+      if (activeClientIdRef.current === clientId) setLoading(false);
     }
   }, [toast]);
 
@@ -699,17 +706,25 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     if (selectedClientId) {
-      loadTransactions(selectedClientId as number);
+      setTxData(null);
+      setTxMap(new Map());
+      setSyncConflict(null);
+      setEditTxId(null);
+      setFlagTxId(null);
       setFilterStatus("all");
       setQboAccounts([]);
+      loadTransactions(selectedClientId as number);
       if (hasQboRealm) {
         loadQboAccounts(selectedClientId as number);
       }
     } else {
+      activeClientIdRef.current = "";
       setTxData(null);
       setTxMap(new Map());
       setLoadError(null);
       setSyncConflict(null);
+      setEditTxId(null);
+      setFlagTxId(null);
       setQboAccounts([]);
     }
   }, [selectedClientId, loadTransactions, loadQboAccounts, hasQboRealm]);
