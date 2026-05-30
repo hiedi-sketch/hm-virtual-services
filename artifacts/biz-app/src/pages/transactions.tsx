@@ -197,10 +197,12 @@ function AccountCell({ tx, accounts, onSave }: {
   return (
     <div ref={containerRef} className="relative" onClick={e => e.stopPropagation()}>
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
         className={cn(
-          "flex items-center gap-1 text-xs rounded-lg px-2 py-1 w-full max-w-[160px] transition-colors text-left",
-          tx.account ? "text-slate-700 hover:bg-slate-100" : "text-slate-300 italic hover:bg-slate-50"
+          "flex items-center gap-1 text-xs rounded-lg px-2 py-1 w-full max-w-[160px] transition-colors text-left border",
+          tx.account
+            ? "text-slate-700 border-slate-200 hover:bg-slate-100"
+            : "text-slate-500 border-dashed border-slate-300 hover:bg-slate-50 hover:border-[#266b75]/40"
         )}
       >
         <span className="truncate flex-1">{tx.account || "Select…"}</span>
