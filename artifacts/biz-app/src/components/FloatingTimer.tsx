@@ -36,7 +36,7 @@ function getTodayLocal() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export function FloatingTimer() {
+export function FloatingTimer({ sidebarCollapsed = false }: { sidebarCollapsed?: boolean }) {
   const { state, elapsedMs, start, pause, stop, assignClient, assignTask, setServiceType, setNotes, timerOpen, setTimerOpen } = useTimer();
   const { data: clients } = useListClients();
   const { data: tasks } = useListTasks();
@@ -130,8 +130,12 @@ export function FloatingTimer() {
   return (
     <div
       ref={panelRef}
-      className="fixed bottom-6 right-6 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
-      style={{ boxShadow: "0 8px 40px rgba(38,107,117,0.15), 0 2px 8px rgba(0,0,0,0.08)" }}
+      className="fixed bottom-6 z-50 w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+      style={{
+        left: sidebarCollapsed ? "calc(3.5rem + 0.75rem)" : "calc(14rem + 0.75rem)",
+        boxShadow: "0 8px 40px rgba(38,107,117,0.15), 0 2px 8px rgba(0,0,0,0.08)",
+        transition: "left 0.2s ease",
+      }}
     >
       {/* Header */}
       <div

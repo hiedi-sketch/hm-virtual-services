@@ -291,7 +291,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      <FloatingTimer />
+      <FloatingTimer sidebarCollapsed={collapsed} />
     </div>
   );
 }
