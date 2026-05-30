@@ -170,7 +170,7 @@ export default function ClientDetail() {
 
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [taskFilter, setTaskFilter] = useState<"all" | "incomplete" | "Pending" | "Confirmed" | "In Progress" | "Completed" | "Needs SMR Review">("incomplete");
+  const [taskFilter, setTaskFilter] = useState<"all" | "incomplete" | "Completed">("incomplete");
   const [showAddService, setShowAddService] = useState(false);
   const [addServiceId, setAddServiceId] = useState("");
   const [addCustomPrice, setAddCustomPrice] = useState("");
@@ -186,8 +186,6 @@ export default function ClientDetail() {
   const [editRolloverCap, setEditRolloverCap] = useState("");
   const [addAllowRollover, setAddAllowRollover] = useState(false);
   const [addRolloverCap, setAddRolloverCap] = useState("");
-  const [commentTaskId, setCommentTaskId] = useState<number | null>(null);
-  const [commentTaskTitle, setCommentTaskTitle] = useState<string>("");
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
@@ -1180,13 +1178,9 @@ export default function ClientDetail() {
 
           <div className="flex gap-1.5 flex-wrap ml-2">
             {([
-              { key: "incomplete", label: "Incomplete" },
               { key: "all",        label: "All" },
-              { key: "Pending",         label: "Pending" },
-              { key: "Confirmed",       label: "Confirmed" },
-              { key: "In Progress",     label: "In Progress" },
-              { key: "Needs SMR Review",label: "Needs SMR Review" },
-              { key: "Completed",       label: "Completed" },
+              { key: "incomplete", label: "Incomplete" },
+              { key: "Completed",  label: "Completed" },
             ] as const).map(f => (
               <button
                 key={f.key}
@@ -1259,11 +1253,6 @@ export default function ClientDetail() {
           tasks={mappedTasks}
           onToggleStatus={toggleStatus}
           onUpdateField={updateTaskField}
-          onComment={(id, title) => {
-            if (commentTaskId === id) { setCommentTaskId(null); }
-            else { setCommentTaskId(id); setCommentTaskTitle(title); }
-          }}
-          activeCommentTaskId={commentTaskId}
           hideClientColumn
           defaultSortKey="due_date"
           defaultSortDir="asc"
@@ -1344,14 +1333,6 @@ export default function ClientDetail() {
         </div>
       )}
 
-      {/* Comment Panel */}
-      {commentTaskId !== null && (
-        <ClientDetailCommentPanel
-          taskId={commentTaskId}
-          taskTitle={commentTaskTitle}
-          onClose={() => setCommentTaskId(null)}
-        />
-      )}
 
         </div>{/* ── end left column ── */}
 

@@ -48,20 +48,20 @@ function ServiceTypeBadge({ value }: { value?: string | null }) {
   if (value === "Bookkeeping") {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border border-[#c8c7cb] bg-[#c8c7cb]/40 text-slate-800 whitespace-nowrap">
-        Bookkeeping
+        BK
       </span>
     );
   }
   if (value === "Virtual Assistant") {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-[#7dbdc6]/30 border border-[#7dbdc6] text-slate-800 whitespace-nowrap">
-        Virtual Assistant
+        VA
       </span>
     );
   }
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 border border-slate-200 text-slate-400 whitespace-nowrap italic">
-      Unassigned
+      —
     </span>
   );
 }
@@ -204,7 +204,7 @@ export default function TaskTable({
           <thead>
             <tr className="bg-slate-50 border-b border-[#c8c7cb] text-slate-500 text-xs uppercase tracking-wider font-semibold">
               <th className="px-6 py-4 w-10" />
-              <th className="px-6 py-4 cursor-pointer select-none" onClick={() => handleSort("title")}>
+              <th className="px-6 py-4 cursor-pointer select-none min-w-[260px]" onClick={() => handleSort("title")}>
                 Task{sortIcon("title")}
               </th>
               {!readOnly && !hideClientColumn && (
@@ -255,28 +255,28 @@ export default function TaskTable({
                       onClick={() => setExpandedId(prev => prev === task.id ? null : task.id)}
                     >
                       {/* Checkbox */}
-                      <td className="px-6 py-4" onClick={e => e.stopPropagation()}>
+                      <td className="px-4 py-4" onClick={e => e.stopPropagation()}>
                         {readOnly ? (
                           <span className={cn(
-                            "w-6 h-6 rounded-full border-2 flex items-center justify-center",
+                            "w-4 h-4 rounded border-2 flex items-center justify-center",
                             task.status === "Completed"
                               ? "bg-emerald-500 border-emerald-500 text-white"
                               : "border-slate-300"
                           )}>
-                            {task.status === "Completed" && <Check className="w-3.5 h-3.5" />}
+                            {task.status === "Completed" && <Check className="w-2.5 h-2.5" />}
                           </span>
                         ) : (
                           <button
                             onClick={() => onToggleStatus?.(task)}
                             title={task.status === "Completed" ? "Mark not started" : "Mark complete"}
                             className={cn(
-                              "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all",
+                              "w-4 h-4 rounded border-2 flex items-center justify-center transition-all",
                               task.status === "Completed"
                                 ? "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 hover:border-emerald-600"
                                 : "border-slate-300 hover:border-emerald-400 hover:bg-emerald-50"
                             )}
                           >
-                            {task.status === "Completed" && <Check className="w-3.5 h-3.5" />}
+                            {task.status === "Completed" && <Check className="w-2.5 h-2.5" />}
                           </button>
                         )}
                       </td>
