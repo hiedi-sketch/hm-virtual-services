@@ -28,6 +28,8 @@ type Tx = {
   question_sent_at: string | null;
   routed_to_channel: string | null;
   client_response: string | null;
+  client_comment: string | null;
+  receipt_url: string | null;
   response_received_at: string | null;
   internal_notes: string | null;
   resolved_at: string | null;
@@ -584,6 +586,41 @@ function TransactionEditPanel({
               </div>
               {tx.response_received_at && (
                 <p className="text-xs text-slate-400 mt-1">Received {fmtDate(tx.response_received_at)}</p>
+              )}
+            </div>
+          )}
+
+          {tx.client_comment && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Client Comment</label>
+              <div className="rounded-xl border border-purple-100 bg-purple-50/60 px-3 py-2.5 text-sm text-purple-900 whitespace-pre-wrap">
+                {tx.client_comment}
+              </div>
+            </div>
+          )}
+
+          {tx.receipt_url && (
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Receipt</label>
+              {/\.(jpg|jpeg|png)$/i.test(tx.receipt_url) ? (
+                <a href={tx.receipt_url} target="_blank" rel="noopener noreferrer" className="block">
+                  <img
+                    src={tx.receipt_url}
+                    alt="Receipt"
+                    className="rounded-xl border border-slate-200 max-w-full object-contain max-h-48 hover:opacity-90 transition-opacity"
+                  />
+                  <p className="text-xs text-[#266b75] mt-1 hover:underline">View full image →</p>
+                </a>
+              ) : (
+                <a
+                  href={tx.receipt_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 font-medium hover:bg-slate-100 transition-colors"
+                >
+                  <svg className="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+                  View Receipt (PDF)
+                </a>
               )}
             </div>
           )}

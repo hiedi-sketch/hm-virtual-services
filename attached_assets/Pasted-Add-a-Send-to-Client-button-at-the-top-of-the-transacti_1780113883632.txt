@@ -1,0 +1,76 @@
+Add a "Send to Client" button at the top of 
+the transaction table that only appears when 
+at least one transaction has been flagged 
+with a question and has status "Needs Info."
+
+PRE-SEND SUMMARY PANEL:
+When clicked, open a summary panel showing:
+- Client name and email
+- Total count of flagged transactions 
+  being sent — example: 
+  "4 transactions ready to send to [Client Name]"
+- A list of each flagged transaction showing:
+  - Date, vendor, amount
+  - Your question for that transaction
+- An optional general message field at the 
+  top — example: "Add a note to your client 
+  (optional)" for any overall context you 
+  want to include in the email
+- A "Confirm & Send" button
+- A "Cancel" button
+
+ON CONFIRM & SEND:
+1. Send ONE email to the client's email address
+   From: hiedi@hmvirtualservices.com
+   Subject: "Action Needed: Transaction Review 
+   — [Month Year]"
+   
+   Email body:
+   - Greeting: "Hi [Client First Name],"
+   - Your optional general message if added
+   - Statement: "I have [X] transactions that 
+     need your input. Please log into your 
+     dashboard to review and respond."
+   - A list of transactions showing:
+     date, vendor, and amount only
+     (do not include your questions in 
+     the email for privacy/security)
+   - A single call to action button:
+     "Review Transactions"
+     linking to:
+     https://hmvirtualservices.com/client/transactions
+   - Sign off: 
+     "Thank you,
+     Hiedi Moorman
+     HM Virtual Services
+     hiedi@hmvirtualservices.com"
+
+2. Update ALL flagged transactions in this 
+   send from status "Needs Info" to 
+   "Awaiting Response" simultaneously
+
+3. Record send timestamp on each transaction
+
+4. Show confirmation message on your dashboard:
+   "Email successfully sent to [client email]. 
+   [X] transactions are now awaiting response."
+
+IMPORTANT RULES:
+- Only transactions belonging to the 
+  currently selected client are included
+- Transactions already in "Awaiting Response", 
+  "Responded", or "Resolved" status are 
+  NOT included in the send
+- If client has no email address on file, 
+  show an error before sending:
+  "No email address found for this client. 
+  Please update their profile before sending."
+- Button is disabled and greyed out if no 
+  transactions are currently flagged with 
+  status "Needs Info"
+
+USE:
+Use the existing email configuration already 
+set up in the app to send from 
+hiedi@hmvirtualservices.com. Do not create 
+new SMTP configuration.

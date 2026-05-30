@@ -40,6 +40,8 @@ export const transactionsTable = pgTable("transactions", {
   question_sent_at: text("question_sent_at"),
   routed_to_channel: text("routed_to_channel"),
   client_response: text("client_response"),
+  client_comment: text("client_comment"),
+  receipt_url: text("receipt_url"),
   response_received_at: text("response_received_at"),
   internal_notes: text("internal_notes"),
   resolved_at: text("resolved_at"),

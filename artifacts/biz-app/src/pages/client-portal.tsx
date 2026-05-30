@@ -11,7 +11,7 @@ import {
   Plus, X, User, Sparkles, LayoutDashboard, Send,
   KeyRound, ShieldCheck, Paperclip, DollarSign,
   MessageSquare, ChevronRight, Package, Eye, EyeOff,
-  Check, CreditCard, ThumbsDown, BookOpen, RefreshCw,
+  Check, CreditCard, ThumbsDown, BookOpen, RefreshCw, Upload,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentsTab } from "@/components/DocumentsTab";
@@ -2009,6 +2009,8 @@ function TransactionsPortalTab({ clientId }: { clientId?: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [responses, setResponses] = useState<Record<number, string>>({});
+  const [comments,  setComments]  = useState<Record<number, string>>({});
+  const [receipts,  setReceipts]  = useState<Record<number, File | null>>({});
   const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
   const [submitted, setSubmitted] = useState<Record<number, boolean>>({});
 
@@ -2025,10 +2027,16 @@ function TransactionsPortalTab({ clientId }: { clientId?: number }) {
     if (!response) { toast({ title: "Please enter a response before submitting", variant: "destructive" }); return; }
     setSubmitting(prev => ({ ...prev, [tx.id]: true }));
     try {
+      const formData = new FormData();
+      formData.append("response", response);
+      const comment = comments[tx.id]?.trim();
+      if (comment) formData.append("comment", comment);
+      const receipt = receipts[tx.id];
+      if (receipt) formData.append("receipt", receipt);
+
       const res = await fetch(`/api/transactions/${tx.id}/respond`, {
         method: "PATCH", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ response }),
+        body: formData,
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -2036,6 +2044,8 @@ function TransactionsPortalTab({ clientId }: { clientId?: number }) {
       }
       setSubmitted(prev => ({ ...prev, [tx.id]: true }));
       setResponses(prev => ({ ...prev, [tx.id]: "" }));
+      setComments(prev =>  ({ ...prev, [tx.id]: "" }));
+      setReceipts(prev =>  ({ ...prev, [tx.id]: null }));
       toast({ title: "Response submitted — thank you!" });
       queryClient.invalidateQueries({ queryKey: ["my-flagged-transactions"] });
     } catch (err: any) {
@@ -2125,15 +2135,66 @@ function TransactionsPortalTab({ clientId }: { clientId?: number }) {
                   <p className="text-sm font-medium">Response submitted — thank you!</p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Your Response</label>
-                  <textarea
-                    className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 resize-none"
-                    rows={3}
-                    value={responses[tx.id] ?? ""}
-                    onChange={e => setResponses(prev => ({ ...prev, [tx.id]: e.target.value }))}
-                    placeholder="Type your answer here…"
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Your Response <span className="text-red-400">*</span>
+                    </label>
+                    <textarea
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 resize-none"
+                      rows={3}
+                      value={responses[tx.id] ?? ""}
+                      onChange={e => setResponses(prev => ({ ...prev, [tx.id]: e.target.value }))}
+                      placeholder="Type your answer here…"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Additional Comments <span className="font-normal text-slate-400 normal-case">(optional)</span>
+                    </label>
+                    <textarea
+                      className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 resize-none"
+                      rows={2}
+                      value={comments[tx.id] ?? ""}
+                      onChange={e => setComments(prev => ({ ...prev, [tx.id]: e.target.value }))}
+                      placeholder="Any other context you'd like to add…"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                      Attach Receipt <span className="font-normal text-slate-400 normal-case">(optional — JPG, PNG, or PDF, max 10 MB)</span>
+                    </label>
+                    {receipts[tx.id] ? (
+                      <div className="flex items-center gap-3 border border-emerald-200 bg-emerald-50 rounded-xl px-4 py-2.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="text-sm text-emerald-800 font-medium truncate flex-1">{receipts[tx.id]!.name}</span>
+                        <button
+                          onClick={() => setReceipts(prev => ({ ...prev, [tx.id]: null }))}
+                          className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <label className="flex items-center gap-3 border border-dashed border-slate-300 rounded-xl px-4 py-3 cursor-pointer hover:border-[#266b75]/50 hover:bg-[#266b75]/5 transition-colors">
+                        <Upload className="w-4 h-4 text-slate-400 shrink-0" />
+                        <span className="text-sm text-slate-500">Click to upload receipt…</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,application/pdf"
+                          className="hidden"
+                          onChange={e => {
+                            const file = e.target.files?.[0] ?? null;
+                            setReceipts(prev => ({ ...prev, [tx.id]: file }));
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+
                   <button
                     onClick={() => handleSubmit(tx)}
                     disabled={!responses[tx.id]?.trim() || submitting[tx.id]}

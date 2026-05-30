@@ -26,6 +26,8 @@ type Tx = {
   question_sent_at: string | null;
   routed_to_channel: string | null;
   client_response: string | null;
+  client_comment: string | null;
+  receipt_url: string | null;
   response_received_at: string | null;
 };
 
@@ -160,6 +162,27 @@ function FlagModal({ tx, onClose, onSave }: {
               <p className="text-sm text-purple-900">{tx.client_response}</p>
               {tx.response_received_at && (
                 <p className="text-[10px] text-purple-500">{fmtSyncTime(tx.response_received_at)}</p>
+              )}
+            </div>
+          )}
+          {tx.status === "responded" && tx.client_comment && (
+            <div className="rounded-xl border border-purple-100 bg-purple-50/60 px-4 py-2.5 space-y-1">
+              <p className="text-xs font-semibold text-purple-700">Client Comment</p>
+              <p className="text-sm text-purple-900">{tx.client_comment}</p>
+            </div>
+          )}
+          {tx.status === "responded" && tx.receipt_url && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 space-y-1.5">
+              <p className="text-xs font-semibold text-slate-600">Receipt Attached</p>
+              {/\.(jpg|jpeg|png)$/i.test(tx.receipt_url) ? (
+                <a href={tx.receipt_url} target="_blank" rel="noopener noreferrer">
+                  <img src={tx.receipt_url} alt="Receipt" className="rounded-lg border border-slate-200 max-w-full max-h-32 object-contain hover:opacity-90 transition-opacity" />
+                </a>
+              ) : (
+                <a href={tx.receipt_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-[#266b75] font-medium hover:underline">
+                  <svg className="w-3.5 h-3.5 text-red-500" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+                  View PDF Receipt →
+                </a>
               )}
             </div>
           )}

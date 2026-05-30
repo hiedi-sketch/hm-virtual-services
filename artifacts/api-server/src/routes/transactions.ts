@@ -1,6 +1,9 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
+import path from "path";
+import fs from "fs";
+import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
 import { transactionsTable, transactionImportsTable, clientsTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
@@ -9,6 +12,15 @@ import { sendMail, template } from "../lib/mailer";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+const receiptUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "application/pdf"];
+    cb(null, allowed.includes(file.mimetype));
+  },
+});
 
 // Column name aliases from QBO exports
 const COL_DATE = ["Date", "DATE", "date"];
@@ -300,8 +312,8 @@ router.get("/transactions/my-flagged", requireAuth, async (req, res) => {
 });
 
 // PATCH /api/transactions/:id/respond
-// Client-facing: submit a response to a flagged transaction
-router.patch("/transactions/:id/respond", requireAuth, async (req, res) => {
+// Client-facing: submit a response (+ optional comment + optional receipt) to a flagged transaction
+router.patch("/transactions/:id/respond", requireAuth, receiptUpload.single("receipt"), async (req, res) => {
   const user = req.session.user!;
   if (user.role !== "client" || !user.client_id) {
     return res.status(403).json({ error: "Client access only" });
@@ -310,13 +322,28 @@ router.patch("/transactions/:id/respond", requireAuth, async (req, res) => {
   const txId = Number(req.params.id);
   if (isNaN(txId)) return res.status(400).json({ error: "Invalid id" });
 
-  const { response } = req.body as { response?: string };
-  if (!response?.trim()) return res.status(400).json({ error: "Response text required" });
+  const response = typeof req.body.response === "string" ? req.body.response.trim() : "";
+  const comment  = typeof req.body.comment  === "string" ? req.body.comment.trim()  : "";
+  if (!response) return res.status(400).json({ error: "Response text required" });
+
+  let receiptUrl: string | null = null;
+  if (req.file) {
+    const ext = req.file.mimetype === "application/pdf" ? ".pdf"
+              : req.file.mimetype === "image/png"       ? ".png"
+              : ".jpg";
+    const filename   = `receipt_${randomUUID()}${ext}`;
+    const uploadsDir = path.resolve(process.cwd(), "uploads");
+    await fs.promises.mkdir(uploadsDir, { recursive: true });
+    await fs.promises.writeFile(path.join(uploadsDir, filename), req.file.buffer);
+    receiptUrl = `/api/transactions/receipt/${filename}`;
+  }
 
   const [updated] = await db
     .update(transactionsTable)
     .set({
-      client_response:      response.trim(),
+      client_response:      response,
+      client_comment:       comment || null,
+      receipt_url:          receiptUrl,
       response_received_at: new Date().toISOString(),
       status:               "responded",
     })
@@ -330,6 +357,28 @@ router.patch("/transactions/:id/respond", requireAuth, async (req, res) => {
   if (!updated) return res.status(404).json({ error: "Transaction not found or already responded" });
 
   res.json(updated);
+});
+
+// GET /api/transactions/receipt/:filename
+// Serve a client-uploaded receipt file. Accessible by authenticated users (admin sees all, client sees own).
+router.get("/transactions/receipt/:filename", requireAuth, async (req, res) => {
+  const { filename } = req.params;
+  if (!filename || /[/\\]/.test(filename)) return res.status(400).json({ error: "Invalid filename" });
+
+  const uploadsDir = path.resolve(process.cwd(), "uploads");
+  const filePath   = path.join(uploadsDir, filename);
+
+  if (!fs.existsSync(filePath)) return res.status(404).json({ error: "Receipt not found" });
+
+  const ext     = path.extname(filename).toLowerCase();
+  const mimeMap: Record<string, string> = {
+    ".pdf":  "application/pdf",
+    ".png":  "image/png",
+    ".jpg":  "image/jpeg",
+    ".jpeg": "image/jpeg",
+  };
+  res.setHeader("Content-Type", mimeMap[ext] ?? "application/octet-stream");
+  res.sendFile(filePath);
 });
 
 // POST /api/transactions/upload
