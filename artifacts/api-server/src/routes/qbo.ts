@@ -537,31 +537,29 @@ router.post("/qbo/clients/:id/sync-transactions", requireAuth, requireRole("admi
   let totalInserted = 0;
   const importIds: number[] = [];
 
-  // Build the set of realm IDs this QBO connection is authorised for.
-  // The companyinfo endpoint is cluster-specific (returns WrongClusterError),
-  // so we use locally-cached data only — no extra API round-trip needed.
-  const adminRealm  = await getSetting("qbo_realm_id");
-  const firmsRaw    = await getSetting("qbo_firms_cache").catch(() => null);
-  const cachedFirms: any[] = firmsRaw ? JSON.parse(firmsRaw) : [];
-  const authorisedRealms = new Set<string>(
-    cachedFirms.map((f: any) => String(f.realmId)).filter(Boolean),
-  );
-  if (adminRealm) authorisedRealms.add(String(adminRealm));
+  // The connected OAuth token belongs to exactly one QBO company (qbo_realm_id).
+  // Intuit's TransactionList reports endpoint does NOT route per-realm for
+  // QBOA tokens — it silently returns the token-owner's data regardless of
+  // which realm ID appears in the URL.  To prevent cross-client contamination
+  // we only allow syncing a realm that exactly matches the connected token's
+  // company.  Clients with a different realm need their own QBO connection.
+  const connectedRealm = await getSetting("qbo_realm_id");
 
   for (const realmId of realmIds) {
-    // ── Realm authorisation check (local, no extra API call) ─────────────────
-    // The Intuit API can silently serve the token-owner's data for realms the
-    // token cannot access instead of returning 401/403.  Guard against that by
-    // only allowing realms that were explicitly imported through the QBO
-    // connection flow (admin realm + firms cache).
-    if (!authorisedRealms.has(String(realmId))) {
+    if (!connectedRealm || String(realmId) !== String(connectedRealm)) {
       logger.warn(
-        { realmId, authorisedRealms: Array.from(authorisedRealms) },
-        "QBO realm not in authorised set — skipping to prevent cross-client data contamination",
+        { realmId, connectedRealm },
+        "QBO sync skipped — client realm does not match connected QBO account",
       );
-      continue;
+      // Surface a clear error rather than silently importing wrong data.
+      res.status(400).json({
+        error:
+          `This client's QuickBooks company (${realmId}) is not the currently ` +
+          `connected QBO account (${connectedRealm ?? "none"}). ` +
+          `To sync this client, reconnect QuickBooks using their company login.`,
+      });
+      return;
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     try {
       const url = `${QBO_API_BASE}/${realmId}/reports/TransactionList?start_date=${startDate}&end_date=${endDate}&minorversion=65`;
