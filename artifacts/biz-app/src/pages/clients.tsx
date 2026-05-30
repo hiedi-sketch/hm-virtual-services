@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 
 const formSchema = z.object({
-  name: z.string().min(1, "Business name is required"),
+  name: z.string().optional(),
   contact_name: z.string().optional(),
   email: z.string().email("Invalid email address"),
   phone: z.string().optional(),
@@ -332,8 +332,8 @@ export default function Clients() {
                 <input {...register("contact_name")} className="input-field" placeholder="Jane Smith" />
               </div>
               <div>
-                <label className="label-text">Business Name <span className="text-destructive">*</span></label>
-                <input {...register("name")} className="input-field" placeholder="Acme Corp" />
+                <label className="label-text">Business Name</label>
+                <input {...register("name")} className="input-field" placeholder="Acme Corp (optional)" />
                 {errors.name && <p className="text-destructive text-xs mt-1">{errors.name.message}</p>}
               </div>
             </div>

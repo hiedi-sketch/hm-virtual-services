@@ -89,7 +89,7 @@ function Step2Business({ data, set }: { data: FormData; set: (k: keyof FormData,
           <input className={inputCls} placeholder="Jane Smith" value={data.contact_name} onChange={e => set("contact_name", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>Business Name <span className="text-red-400">*</span></label>
+          <label className={labelCls}>Business Name <span className="text-slate-400 font-normal normal-case tracking-normal">(optional)</span></label>
           <input className={inputCls} placeholder="Acme Corp" value={data.name} onChange={e => set("name", e.target.value)} />
         </div>
       </div>
@@ -437,7 +437,7 @@ export default function PublicOnboarding() {
 
   const goNext = () => {
     if (stepId === 1 && !data.services) { showToast("Please select a service"); return; }
-    if (stepId === 2 && (!data.name || !data.email)) { showToast("Business name and email are required"); return; }
+    if (stepId === 2 && !data.email) { showToast("Email address is required"); return; }
     if (stepId === 7) {
       if (!data.portal_email && !data.email) { showToast("Please enter your portal email"); return; }
       if (!data.portal_password || data.portal_password.length < 8) { showToast("Password must be at least 8 characters"); return; }
@@ -453,7 +453,7 @@ export default function PublicOnboarding() {
   };
 
   const handleSubmit = async () => {
-    if (!data.name || !data.email || !data.services) { showToast("Missing required fields"); return; }
+    if (!data.email || !data.services) { showToast("Email address and service type are required"); return; }
     if (!data.portal_password || data.portal_password.length < 8) { showToast("Password must be at least 8 characters"); return; }
     if (data.portal_password !== data.portal_password_confirm) { showToast("Passwords do not match"); return; }
     setSubmitting(true);

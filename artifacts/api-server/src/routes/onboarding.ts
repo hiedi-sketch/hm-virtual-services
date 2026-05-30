@@ -142,12 +142,13 @@ router.post("/onboarding/:token/submit", async (req, res) => {
   }
 
   const finalEmail = ((portal_email?.trim() || email?.trim() || client.email) ?? "").toLowerCase();
-  const finalName = contact_name?.trim() || name?.trim() || client.name;
+  const resolvedName = name?.trim() || contact_name?.trim() || client.name || finalEmail.split("@")[0];
+  const finalName = contact_name?.trim() || resolvedName;
   const now = new Date();
 
   // 1. Update client record
   await db.update(clientsTable).set({
-    name: name?.trim() || client.name,
+    name: resolvedName,
     contact_name: contact_name?.trim() || client.contact_name,
     email: finalEmail,
     phone: phone?.trim() || client.phone,

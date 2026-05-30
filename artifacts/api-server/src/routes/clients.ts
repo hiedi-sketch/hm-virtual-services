@@ -132,14 +132,17 @@ router.post("/clients/onboard", requireAdmin, async (req, res) => {
     send_invite,
   } = req.body;
 
-  if (!name || !email || !services) {
-    res.status(400).json({ error: "name, email, and services are required" });
+  if (!email || !services) {
+    res.status(400).json({ error: "email and services are required" });
     return;
   }
 
+  // Fall back: use contact_name, or derive a display name from the email
+  const resolvedName = (name?.trim()) || (contact_name?.trim()) || email.split("@")[0];
+
   // 1. Create the client record
   const [client] = await db.insert(clientsTable).values({
-    name, email,
+    name: resolvedName, email,
     contact_name: contact_name || null,
     phone: phone || null,
     website: website || null,

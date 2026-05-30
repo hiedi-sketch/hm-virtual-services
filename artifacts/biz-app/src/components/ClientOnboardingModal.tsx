@@ -87,8 +87,8 @@ function Step2Business({ data, set }: { data: OnboardingData; set: (k: keyof Onb
           <input className={inputCls} placeholder="Jane Smith" value={data.contact_name} onChange={e => set("contact_name", e.target.value)} />
         </div>
         <div>
-          <label className={labelCls}>Business Name <span className="text-red-400">*</span></label>
-          <input className={inputCls} placeholder="Acme Corp" value={data.name} onChange={e => set("name", e.target.value)} required />
+          <label className={labelCls}>Business Name <span className="text-slate-400 font-normal normal-case tracking-normal">(optional)</span></label>
+          <input className={inputCls} placeholder="Acme Corp" value={data.name} onChange={e => set("name", e.target.value)} />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -394,7 +394,7 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
       setShowDelivery(true);
       return;
     }
-    if (stepId === 2 && (!data.name || !data.email)) { toast({ title: "Business name and email are required", variant: "destructive" }); return; }
+    if (stepId === 2 && !data.email) { toast({ title: "Email address is required", variant: "destructive" }); return; }
     const next = steps[currentIdx + 1];
     if (next) setStepId(next.id);
   };
@@ -468,8 +468,8 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
   };
 
   const handleSendForm = async () => {
-    if (!sendName.trim() || !sendEmail.trim()) {
-      toast({ title: "Business name and email are required", variant: "destructive" }); return;
+    if (!sendEmail.trim()) {
+      toast({ title: "Email address is required", variant: "destructive" }); return;
     }
     setSending(true);
     try {
@@ -640,7 +640,7 @@ export function ClientOnboardingModal({ isOpen, onClose }: Props) {
                         <input className={inputCls} placeholder="Jane Smith" value={sendContactName} onChange={e => setSendContactName(e.target.value)} />
                       </div>
                       <div>
-                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Business Name <span className="text-red-400">*</span></label>
+                        <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Business Name <span className="text-slate-400 font-normal normal-case tracking-normal">(optional)</span></label>
                         <input className={inputCls} placeholder="Acme Corp" value={sendName} onChange={e => setSendName(e.target.value)} />
                       </div>
                     </div>
