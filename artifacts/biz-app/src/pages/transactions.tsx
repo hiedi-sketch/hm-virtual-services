@@ -5,7 +5,7 @@ import {
   Trash2, AlertTriangle, CheckCircle2, ChevronDown,
   Clock, Calendar, AlertCircle, X, Flag,
   MessageSquare, CheckCheck, StickyNote, Filter, ChevronRight,
-  Upload, FileSpreadsheet, Search, Mail, Plus,
+  Upload, FileSpreadsheet, Search, Mail, Plus, Eye, Download, FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -383,6 +383,7 @@ function TransactionEditPanel({
   const [memo, setMemo] = useState(tx.memo ?? "");
   const [notes, setNotes] = useState(tx.internal_notes ?? "");
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
+  const [showReceiptPreview, setShowReceiptPreview] = useState(false);
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMemo(tx.memo ?? ""); }, [tx.memo]);
@@ -393,7 +394,19 @@ function TransactionEditPanel({
     try { await onUploadReceipt(file); } finally { setUploadingReceipt(false); }
   };
 
+  // Derive inline-preview URL from receipt_url
+  const receiptPreviewUrl = tx.receipt_url
+    ? tx.receipt_url.replace(/\/download$/, "/preview")
+    : null;
+  const receiptIsImage = tx.receipt_url
+    ? /\.(jpg|jpeg|png|gif|webp)/i.test(tx.receipt_url) || (tx.receipt_url.includes("/uploads/") && !/\.pdf$/i.test(tx.receipt_url))
+    : false;
+  const receiptIsPdf = tx.receipt_url
+    ? /\.pdf$/i.test(tx.receipt_url) || tx.receipt_url.includes("/uploads/") && /\.pdf$/i.test(tx.receipt_url)
+    : false;
+
   return (
+    <>
     <div className="fixed inset-y-0 right-0 z-50 flex">
       <div className="fixed inset-0 bg-black/20 backdrop-blur-[1px]" onClick={onClose} />
       <div className="relative ml-auto w-full max-w-md bg-white border-l border-slate-200 shadow-2xl flex flex-col h-full">
@@ -530,26 +543,52 @@ function TransactionEditPanel({
               />
             </div>
             {tx.receipt_url ? (
-              /\.(jpg|jpeg|png)/i.test(tx.receipt_url) || tx.receipt_url.includes("/download") && !tx.receipt_url.endsWith(".pdf") ? (
-                <a href={tx.receipt_url} target="_blank" rel="noopener noreferrer" className="block group">
-                  <img
-                    src={tx.receipt_url}
-                    alt="Receipt"
-                    className="rounded-xl border border-slate-200 max-w-full object-contain max-h-48 group-hover:opacity-90 transition-opacity"
-                  />
-                  <p className="text-xs text-[#266b75] mt-1 hover:underline">View full image →</p>
-                </a>
-              ) : (
-                <a
-                  href={tx.receipt_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-700 font-medium hover:bg-slate-100 transition-colors"
-                >
-                  <svg className="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
-                  View Document
-                </a>
-              )
+              <div className="space-y-2">
+                {/* Thumbnail / icon row */}
+                {receiptIsImage ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowReceiptPreview(true)}
+                    className="block w-full group text-left"
+                  >
+                    <img
+                      src={receiptPreviewUrl ?? tx.receipt_url}
+                      alt="Receipt"
+                      className="rounded-xl border border-slate-200 max-w-full object-contain max-h-48 group-hover:opacity-85 transition-opacity"
+                    />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowReceiptPreview(true)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors text-left"
+                  >
+                    <FileText className="w-4 h-4 text-red-500 shrink-0" />
+                    <span className="text-sm text-slate-700 font-medium flex-1 truncate">
+                      {tx.receipt_url.split("/").pop() ?? "Document"}
+                    </span>
+                    <Eye className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
+                )}
+                {/* Action links */}
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setShowReceiptPreview(true)}
+                    className="flex items-center gap-1 text-xs font-medium text-[#266b75] hover:text-[#1f545d] transition-colors"
+                  >
+                    <Eye className="w-3 h-3" /> Preview
+                  </button>
+                  <a
+                    href={tx.receipt_url}
+                    download
+                    className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <Download className="w-3 h-3" /> Download
+                  </a>
+                </div>
+              </div>
             ) : (
               <button
                 type="button"
@@ -598,6 +637,63 @@ function TransactionEditPanel({
 
       </div>
     </div>
+
+    {/* Receipt Preview Modal */}
+    {showReceiptPreview && receiptPreviewUrl && (
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+        onClick={() => setShowReceiptPreview(false)}
+      >
+        <div
+          className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+          style={{ width: "min(92vw, 960px)", height: "min(90vh, 720px)" }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <FileText className="w-4 h-4 text-red-400 shrink-0" />
+              <span className="text-sm font-semibold text-slate-800 truncate">Receipt / Document</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <a
+                href={tx.receipt_url!}
+                download
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+                onClick={e => e.stopPropagation()}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download
+              </a>
+              <button
+                onClick={() => setShowReceiptPreview(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden bg-slate-50 flex items-center justify-center">
+            {receiptIsImage ? (
+              <img
+                src={receiptPreviewUrl}
+                alt="Receipt"
+                className="max-w-full max-h-full object-contain rounded-lg"
+              />
+            ) : (
+              <iframe
+                src={receiptPreviewUrl}
+                title="Receipt"
+                className="w-full h-full border-0"
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   );
 }
 
