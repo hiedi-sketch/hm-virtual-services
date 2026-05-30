@@ -189,22 +189,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Bottom: notification bell + user email + logout */}
+        {/* Bottom: user email + logout */}
         <div
           className="shrink-0 py-3 px-2 space-y-1"
           style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
         >
-          {user && (
-            <div
-              className={cn(
-                "flex items-center",
-                collapsed ? "justify-center" : "px-1"
-              )}
-            >
-              <NotificationBell userRole={user.role} />
-            </div>
-          )}
-
           {user && !collapsed && (
             <div className="px-3 py-1">
               <div
@@ -247,6 +236,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
       {/* ── Main content ── */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <GlobalTimerBar />
+        {/* Top bar */}
+        <div className="shrink-0 h-12 bg-white border-b border-slate-200 flex items-center justify-end px-5 gap-3">
+          {user && <NotificationBell userRole={user.role} />}
+        </div>
         <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-5">
           {children}
         </main>
