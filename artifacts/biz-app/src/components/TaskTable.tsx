@@ -135,6 +135,9 @@ type TaskTableProps = {
   showComments?: boolean;
   serviceTypeFilter?: string;
   readOnly?: boolean;
+  defaultSortKey?: SortKey | null;
+  defaultSortDir?: "asc" | "desc";
+  noCard?: boolean;
 };
 
 export default function TaskTable({
@@ -150,11 +153,14 @@ export default function TaskTable({
   showComments = true,
   serviceTypeFilter,
   readOnly = false,
+  defaultSortKey = null,
+  defaultSortDir = "asc",
+  noCard = false,
 }: TaskTableProps) {
   const today = new Date().toISOString().split("T")[0];
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortKey, setSortKey] = useState<SortKey | null>(defaultSortKey);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(defaultSortDir);
 
   const displayedTasks = useMemo(() => {
     let list = tasks;
@@ -190,9 +196,8 @@ export default function TaskTable({
 
   const colSpan = (onStartTimer ? 1 : 0) + (onComment ? 1 : 0) + (onDeleteTask ? 1 : 0) + (readOnly ? 6 : 7) + 1;
 
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
+  const tableContent = (
+    <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50 border-b border-[#c8c7cb] text-slate-500 text-xs uppercase tracking-wider font-semibold">
@@ -474,6 +479,13 @@ export default function TaskTable({
           </tbody>
         </table>
       </div>
+  );
+
+  if (noCard) return tableContent;
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {tableContent}
     </div>
   );
 }

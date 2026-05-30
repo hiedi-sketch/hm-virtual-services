@@ -170,7 +170,7 @@ export default function ClientDetail() {
 
   const [showNewTaskForm, setShowNewTaskForm] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
-  const [taskFilter, setTaskFilter] = useState<"all" | "Pending" | "Confirmed" | "In Progress" | "Completed">("all");
+  const [taskFilter, setTaskFilter] = useState<"all" | "incomplete" | "Pending" | "Confirmed" | "In Progress" | "Completed" | "Needs SMR Review">("incomplete");
   const [showAddService, setShowAddService] = useState(false);
   const [addServiceId, setAddServiceId] = useState("");
   const [addCustomPrice, setAddCustomPrice] = useState("");
@@ -530,6 +530,7 @@ export default function ClientDetail() {
   };
 
   const filteredTasks = (tasks ?? []).filter(task => {
+    if (taskFilter === "incomplete") return task.status !== "Completed";
     if (taskFilter !== "all") return task.status === taskFilter;
     return true;
   });
@@ -1168,24 +1169,26 @@ export default function ClientDetail() {
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
         {/* Header + Filters */}
-        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+        <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2 flex-wrap">
           <span className="font-semibold text-slate-900 text-sm">Client Tasks</span>
 
-          <div className="ml-auto flex gap-2">
+          <div className="flex gap-1.5 flex-wrap ml-2">
             {([
-              { key: "all", label: "All" },
-              { key: "Pending", label: "Pending" },
-              { key: "Confirmed", label: "Confirmed" },
-              { key: "In Progress", label: "In Progress" },
-              { key: "Completed", label: "Completed" },
+              { key: "incomplete", label: "Incomplete" },
+              { key: "all",        label: "All" },
+              { key: "Pending",         label: "Pending" },
+              { key: "Confirmed",       label: "Confirmed" },
+              { key: "In Progress",     label: "In Progress" },
+              { key: "Needs SMR Review",label: "Needs SMR Review" },
+              { key: "Completed",       label: "Completed" },
             ] as const).map(f => (
               <button
                 key={f.key}
                 onClick={() => setTaskFilter(f.key)}
-                className={`text-xs px-2 py-1 rounded-full border ${
+                className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
                   taskFilter === f.key
-                    ? "bg-primary text-white border-primary"
-                    : "bg-white text-slate-500 border-slate-200"
+                    ? "bg-[#266b75] text-white border-[#266b75]"
+                    : "bg-white text-slate-500 border-slate-200 hover:border-[#266b75]/40 hover:text-[#266b75]"
                 }`}
               >
                 {f.label}
@@ -1195,7 +1198,7 @@ export default function ClientDetail() {
 
           <button
             onClick={() => setShowNewTaskForm(v => !v)}
-            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors ml-2"
+            className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-[#266b75] text-white hover:bg-[#266b75]/90 transition-colors ml-auto"
           >
             <Plus className="w-3.5 h-3.5" />
             Add Task
@@ -1204,38 +1207,48 @@ export default function ClientDetail() {
 
         {/* New Task Form */}
         {showNewTaskForm && (
-          <form onSubmit={handleNewTaskSubmit} className="p-4 bg-slate-50 space-y-3 border-b border-slate-100">
-            <input
-              className="w-full border px-2 py-1 rounded"
-              placeholder="Task Title"
-              value={newTaskTitle}
-              onChange={e => setNewTaskTitle(e.target.value)}
-              required
-            />
-            <input
-              className="w-full border px-2 py-1 rounded"
-              placeholder="Description"
-              value={newTaskDesc}
-              onChange={e => setNewTaskDesc(e.target.value)}
-            />
-            <input
-              type="date"
-              className="w-auto border px-2 py-1 rounded"
-              value={newTaskDueDate}
-              onChange={e => setNewTaskDueDate(e.target.value)}
-            />
-            <div className="flex gap-2">
-              <button type="submit" disabled={createTask.isPending} className="btn-primary flex items-center gap-1">
-                <Plus className="w-4 h-4" /> Create Task
+          <form onSubmit={handleNewTaskSubmit} className="px-5 py-3 bg-slate-50/80 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <input
+                className="flex-1 min-w-0 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] bg-white"
+                placeholder="Task title…"
+                value={newTaskTitle}
+                onChange={e => setNewTaskTitle(e.target.value)}
+                required
+                autoFocus
+              />
+              <input
+                className="w-48 text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] bg-white text-slate-600"
+                placeholder="Description (optional)"
+                value={newTaskDesc}
+                onChange={e => setNewTaskDesc(e.target.value)}
+              />
+              <input
+                type="date"
+                className="text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] bg-white text-slate-600"
+                value={newTaskDueDate}
+                onChange={e => setNewTaskDueDate(e.target.value)}
+              />
+              <button
+                type="submit"
+                disabled={createTask.isPending}
+                className="flex items-center gap-1.5 text-sm px-4 py-2 rounded-lg bg-[#266b75] text-white hover:bg-[#266b75]/90 transition-colors font-medium disabled:opacity-60 whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {createTask.isPending ? "Adding…" : "Add Task"}
               </button>
-              <button type="button" onClick={() => setShowNewTaskForm(false)} className="btn-secondary">
+              <button
+                type="button"
+                onClick={() => setShowNewTaskForm(false)}
+                className="text-sm px-3 py-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
+              >
                 Cancel
               </button>
             </div>
           </form>
         )}
 
-        {/* Task Table */}
+        {/* Task Table — noCard so it shares the outer card, defaultSort by due date */}
         <TaskTable
           tasks={mappedTasks}
           onToggleStatus={toggleStatus}
@@ -1245,6 +1258,9 @@ export default function ClientDetail() {
             else { setCommentTaskId(id); setCommentTaskTitle(title); }
           }}
           activeCommentTaskId={commentTaskId}
+          defaultSortKey="due_date"
+          defaultSortDir="asc"
+          noCard
         />
       </div>
 
