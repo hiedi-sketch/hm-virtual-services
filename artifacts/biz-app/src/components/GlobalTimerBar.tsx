@@ -167,10 +167,6 @@ export function GlobalTimerBar() {
             <span className="text-xs font-medium">No timer running</span>
           </div>
           <div className="flex-1" />
-          {user && (
-            <NotificationBell userRole={user.role} />
-          )}
-          <div className="w-px h-5 bg-slate-200 shrink-0" />
           <button
             onClick={start}
             className="flex items-center gap-1.5 text-xs font-semibold text-white bg-[#266b75] hover:bg-[#1e5560] transition-colors px-3 py-1.5 rounded-lg shadow-sm"
@@ -178,6 +174,10 @@ export function GlobalTimerBar() {
             <Play className="w-3 h-3 fill-current" />
             Start Timer
           </button>
+          <div className="w-px h-5 bg-slate-200 shrink-0" />
+          {user && (
+            <NotificationBell userRole={user.role} iconSize="w-6 h-6" />
+          )}
         </div>
       </div>
     );
@@ -366,6 +366,7 @@ export function GlobalTimerBar() {
           {user && (
             <NotificationBell
               userRole={user.role}
+              iconSize="w-6 h-6"
               buttonClassName="relative p-1.5 rounded-lg text-white/80 hover:text-white hover:bg-white/15 transition-colors"
             />
           )}
