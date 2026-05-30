@@ -1,0 +1,125 @@
+Create a “Client Checklist” button on the Client Details page.
+
+When clicked, it should open an editable onboarding checklist for that specific client.
+
+The checklist should have these columns:
+
+* Stage
+* Task
+* Who
+* Status
+* Notes
+* Due Date
+
+The user should be able to:
+
+* Edit any checklist item
+* Delete checklist items that do not apply
+* Add custom checklist items
+* Change the status
+* Filter by Stage, Who, and Status
+* See overall onboarding progress as a percentage
+* Mark onboarding as complete once all required items are done
+
+Status dropdown options:
+
+* Not Started
+* Waiting on Client
+* Waiting on Hiedi
+* In Progress
+* Complete
+* Not Applicable
+
+Who dropdown options:
+
+* Hiedi
+* Client
+
+Default checklist items:
+
+| Stage               | Task                                                         | Who    | Status      |
+| ------------------- | ------------------------------------------------------------ | ------ | ----------- |
+| New Client Setup    | Discovery call completed                                     | Hiedi  | Not Started |
+| New Client Setup    | Client verbally approved services                            | Client | Not Started |
+| New Client Setup    | Client record created in dashboard                           | Hiedi  | Not Started |
+| Onboarding Form     | Send onboarding form to client OR complete during phone call | Hiedi  | Not Started |
+| Onboarding Form     | Business contact information collected                       | Client | Not Started |
+| Onboarding Form     | Entity type collected                                        | Client | Not Started |
+| Onboarding Form     | EIN collected if applicable                                  | Client | Not Started |
+| Onboarding Form     | Service needs selected                                       | Hiedi  | Not Started |
+| Onboarding Form     | Monthly transaction volume collected                         | Client | Not Started |
+| Onboarding Form     | Number of bank accounts collected                            | Client | Not Started |
+| Onboarding Form     | Number of credit cards collected                             | Client | Not Started |
+| Onboarding Form     | Payroll needs confirmed                                      | Hiedi  | Not Started |
+| Onboarding Form     | Ecommerce/POS platforms confirmed                            | Hiedi  | Not Started |
+| Proposal / Estimate | Create proposal or estimate                                  | Hiedi  | Not Started |
+| Proposal / Estimate | Send proposal or estimate to client                          | Hiedi  | Not Started |
+| Proposal / Estimate | Client approves proposal or estimate                         | Client | Not Started |
+| Proposal / Estimate | Convert approved estimate to invoice if needed               | Hiedi  | Not Started |
+| Contract            | Create client contract                                       | Hiedi  | Not Started |
+| Contract            | Send contract to client                                      | Hiedi  | Not Started |
+| Contract            | Client signs contract                                        | Client | Not Started |
+| Invoice / Payment   | Create invoice                                               | Hiedi  | Not Started |
+| Invoice / Payment   | Send invoice to client                                       | Hiedi  | Not Started |
+| Invoice / Payment   | Client pays invoice or deposit                               | Client | Not Started |
+| Client Dashboard    | Create client dashboard login                                | Hiedi  | Not Started |
+| Client Dashboard    | Send dashboard invite to client                              | Hiedi  | Not Started |
+| Client Dashboard    | Client logs into dashboard                                   | Client | Not Started |
+| Access Collection   | Request QuickBooks Online access                             | Hiedi  | Not Started |
+| Access Collection   | Client sends QBO accountant invite                           | Client | Not Started |
+| Access Collection   | Accept QBO access                                            | Hiedi  | Not Started |
+| Access Collection   | Request Gusto access if applicable                           | Hiedi  | Not Started |
+| Access Collection   | Client provides Gusto access if applicable                   | Client | Not Started |
+| Access Collection   | Request Shopify access if applicable                         | Hiedi  | Not Started |
+| Access Collection   | Client provides Shopify access if applicable                 | Client | Not Started |
+| Access Collection   | Request Stripe access if applicable                          | Hiedi  | Not Started |
+| Access Collection   | Client provides Stripe access if applicable                  | Client | Not Started |
+| Access Collection   | Request PayPal access if applicable                          | Hiedi  | Not Started |
+| Access Collection   | Client provides PayPal access if applicable                  | Client | Not Started |
+| Access Collection   | Request bank feed connection or statements                   | Hiedi  | Not Started |
+| Access Collection   | Client connects bank accounts or uploads statements          | Client | Not Started |
+| Access Collection   | Client connects credit cards or uploads statements           | Client | Not Started |
+| Document Collection | Request prior year tax return                                | Hiedi  | Not Started |
+| Document Collection | Client uploads prior year tax return                         | Client | Not Started |
+| Document Collection | Request prior year financial reports                         | Hiedi  | Not Started |
+| Document Collection | Client uploads prior year P&L and Balance Sheet              | Client | Not Started |
+| Document Collection | Request loan statements if applicable                        | Hiedi  | Not Started |
+| Document Collection | Client uploads loan statements if applicable                 | Client | Not Started |
+| Document Collection | Request payroll reports if applicable                        | Hiedi  | Not Started |
+| Document Collection | Client uploads payroll reports if applicable                 | Client | Not Started |
+| Internal Setup      | Create client folder                                         | Hiedi  | Not Started |
+| Internal Setup      | Save contract and documents to client folder                 | Hiedi  | Not Started |
+| Internal Setup      | Set monthly fee                                              | Hiedi  | Not Started |
+| Internal Setup      | Set monthly hour budget if applicable                        | Hiedi  | Not Started |
+| Internal Setup      | Set client billing schedule                                  | Hiedi  | Not Started |
+| Internal Setup      | Create recurring bookkeeping tasks                           | Hiedi  | Not Started |
+| Internal Setup      | Create recurring payroll tasks if applicable                 | Hiedi  | Not Started |
+| Internal Setup      | Add important client deadlines                               | Hiedi  | Not Started |
+| Initial Review      | Review QBO file                                              | Hiedi  | Not Started |
+| Initial Review      | Review chart of accounts                                     | Hiedi  | Not Started |
+| Initial Review      | Review bank feeds                                            | Hiedi  | Not Started |
+| Initial Review      | Review open transactions or cleanup needs                    | Hiedi  | Not Started |
+| Initial Review      | Confirm whether cleanup or catch-up work is needed           | Hiedi  | Not Started |
+| Kickoff             | Schedule kickoff call                                        | Hiedi  | Not Started |
+| Kickoff             | Complete kickoff call                                        | Hiedi  | Not Started |
+| Kickoff             | Confirm communication expectations                           | Hiedi  | Not Started |
+| Kickoff             | Confirm monthly deadlines                                    | Hiedi  | Not Started |
+| Kickoff             | Confirm how client should submit documents                   | Hiedi  | Not Started |
+| Active Client Setup | Move client status to Active                                 | Hiedi  | Not Started |
+| Active Client Setup | Confirm first month tasks are created                        | Hiedi  | Not Started |
+| Active Client Setup | Confirm onboarding is complete                               | Hiedi  | Not Started |
+
+Each checklist item should belong only to that specific client.
+
+The checklist should be saved to the database so changes remain after refreshing.
+
+Add a progress summary at the top:
+
+* Total Tasks
+* Complete Tasks
+* Waiting on Client
+* Waiting on Hiedi
+* Not Applicable
+* Percent Complete
+
+Do not count “Not Applicable” items against the completion percentage.

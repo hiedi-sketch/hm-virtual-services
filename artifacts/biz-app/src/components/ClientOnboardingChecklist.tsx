@@ -1,210 +1,317 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
-  CheckSquare, Square, ChevronDown, ChevronUp, RotateCcw,
-  ClipboardList, Loader2, AlertTriangle,
+  Plus, Trash2, Loader2, CheckCircle2, X, Save,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// ─── Checklist definition ────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface ChecklistItem {
-  id: string;
-  label: string;
+type ChecklistStatus =
+  | "Not Started"
+  | "In Progress"
+  | "Waiting on Client"
+  | "Waiting on Hiedi"
+  | "Complete"
+  | "Not Applicable";
+
+type ChecklistWho = "Hiedi" | "Client";
+
+interface ChecklistItem {
+  id: number;
+  client_id: number;
+  stage: string;
+  task: string;
+  who: string;
+  status: ChecklistStatus;
+  notes: string | null;
+  due_date: string | null;
+  sort_order: number;
+  is_custom: boolean;
 }
 
-export interface Phase {
-  id: string;
-  title: string;
-  /** if set, phase only renders when service matches */
-  onlyFor?: ("bookkeeping" | "va" | "hybrid")[];
-  items: ChecklistItem[];
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-export const PHASES: Phase[] = [
-  {
-    id: "p1",
-    title: "Phase 1 — Before They Sign",
-    items: [
-      { id: "p1-1", label: "Initial discovery call completed" },
-      { id: "p1-2", label: "Client needs and scope documented" },
-      { id: "p1-3", label: "Services and pricing determined" },
-      { id: "p1-4", label: "Send estimate / proposal for acceptance" },
-      { id: "p1-5", label: "Follow up on estimate if no response within 3 business days" },
-      { id: "p1-6", label: "Estimate accepted" },
-      { id: "p1-7", label: "Send contract for signature" },
-      { id: "p1-8", label: "Confirm contract is signed" },
-      { id: "p1-9", label: "Collect deposit or first invoice payment if required" },
-      { id: "p1-10", label: "Payment received and confirmed" },
-    ],
-  },
-  {
-    id: "p2",
-    title: "Phase 2 — Welcome & Setup",
-    items: [
-      { id: "p2-1", label: "Send welcome email" },
-      { id: "p2-2", label: "Send onboarding questionnaire / intake form" },
-      { id: "p2-3", label: "Completed intake form received and reviewed" },
-      { id: "p2-4", label: "Set up client folder" },
-      { id: "p2-5", label: "Add client to project management tool" },
-      { id: "p2-6", label: "Add client to invoicing/accounting software" },
-      { id: "p2-7", label: "Create client portal login and send access details" },
-      { id: "p2-8", label: "Add client contact info to CRM or client list" },
-      { id: "p2-9", label: "Schedule kickoff call" },
-    ],
-  },
-  {
-    id: "p3",
-    title: "Phase 3 — Kickoff Call",
-    items: [
-      { id: "p3-1", label: "Kickoff call completed" },
-      { id: "p3-2", label: "Reviewed scope of work and expectations" },
-      { id: "p3-3", label: "Confirmed communication preferences" },
-      { id: "p3-4", label: "Confirmed preferred meeting cadence" },
-      { id: "p3-5", label: "Confirmed deadlines and deliverable schedule" },
-      { id: "p3-6", label: "Answered any client questions" },
-      { id: "p3-7", label: "Sent kickoff call recap/summary email to client" },
-    ],
-  },
-  {
-    id: "p4",
-    title: "Phase 4 — Bookkeeping Setup",
-    onlyFor: ["bookkeeping", "hybrid"],
-    items: [
-      { id: "p4-1", label: "Gained access to their accounting software" },
-      { id: "p4-2", label: "Reviewed existing books for accuracy / cleanup needed" },
-      { id: "p4-3", label: "Noted cleanup scope if applicable" },
-      { id: "p4-4", label: "Gained access to bank and credit card accounts" },
-      { id: "p4-5", label: "Confirmed chart of accounts is set up correctly" },
-      { id: "p4-6", label: "Confirmed fiscal year and reporting preferences" },
-      { id: "p4-7", label: "Set up recurring tasks / due date reminders for monthly close" },
-      { id: "p4-8", label: "Confirmed how they will send receipts and documents" },
-      { id: "p4-9", label: "First month/period reconciliation completed" },
-      { id: "p4-10", label: "Sent first financial report or update to client" },
-    ],
-  },
-  {
-    id: "p5",
-    title: "Phase 5 — VA Setup",
-    onlyFor: ["va", "hybrid"],
-    items: [
-      { id: "p5-1", label: "Received access to email and/or calendar" },
-      { id: "p5-2", label: "Received access to all relevant tools and platforms" },
-      { id: "p5-3", label: "Reviewed existing workflows or SOPs if available" },
-      { id: "p5-4", label: "Documented recurring tasks and their frequency" },
-      { id: "p5-5", label: "Clarified priorities and how to handle urgent requests" },
-      { id: "p5-6", label: "Confirmed response time expectations on both sides" },
-      { id: "p5-7", label: "First batch of tasks assigned or identified" },
-      { id: "p5-8", label: "First tasks completed and delivered" },
-    ],
-  },
-  {
-    id: "p6",
-    title: "Phase 6 — Wrap-Up & Ongoing",
-    items: [
-      { id: "p6-1", label: "Send 1-week check-in email" },
-      { id: "p6-2", label: "Confirm client knows how to reach me and submit requests" },
-      { id: "p6-3", label: "Schedule first recurring check-in or reporting call" },
-      { id: "p6-4", label: "Add recurring invoice to billing schedule" },
-      { id: "p6-5", label: "Client marked as Active in the system" },
-    ],
-  },
+const STAGES = [
+  "New Client Setup",
+  "Onboarding Form",
+  "Proposal/Estimate",
+  "Contract",
+  "Invoice/Payment",
+  "Client Dashboard",
+  "Access Collection",
+  "Document Collection",
+  "Internal Setup",
+  "Initial Review",
+  "Kickoff",
+  "Active Client Setup",
 ];
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const STATUSES: ChecklistStatus[] = [
+  "Not Started",
+  "In Progress",
+  "Waiting on Client",
+  "Waiting on Hiedi",
+  "Complete",
+  "Not Applicable",
+];
 
-function getVisiblePhases(serviceType: string | null | undefined): Phase[] {
-  const st = serviceType?.toLowerCase() ?? "";
-  return PHASES.filter(p => {
-    if (!p.onlyFor) return true;
-    return p.onlyFor.includes(st as any);
-  });
+const WHO_OPTIONS: ChecklistWho[] = ["Hiedi", "Client"];
+
+// ─── Style helpers ────────────────────────────────────────────────────────────
+
+function statusStyle(status: string) {
+  switch (status) {
+    case "Complete":            return "bg-emerald-100 text-emerald-800 border-emerald-200";
+    case "In Progress":         return "bg-blue-100 text-blue-800 border-blue-200";
+    case "Waiting on Client":   return "bg-amber-100 text-amber-800 border-amber-200";
+    case "Waiting on Hiedi":    return "bg-violet-100 text-violet-800 border-violet-200";
+    case "Not Applicable":      return "bg-slate-100 text-slate-400 border-slate-200";
+    default:                    return "bg-slate-50 text-slate-600 border-slate-200";
+  }
 }
 
-// ─── Phase Row ───────────────────────────────────────────────────────────────
+function whoStyle(who: string) {
+  return who === "Client"
+    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+    : "bg-[#266b75]/10 text-[#266b75] border-[#266b75]/20";
+}
 
-function PhaseSection({
-  phase,
-  checked,
-  onToggle,
-  defaultOpen,
-}: {
-  phase: Phase;
-  checked: Set<string>;
-  onToggle: (id: string) => void;
-  defaultOpen: boolean;
-}) {
-  const [open, setOpen] = useState(defaultOpen);
-  const doneCount = phase.items.filter(i => checked.has(i.id)).length;
-  const allDone = doneCount === phase.items.length;
+// ─── Row component ────────────────────────────────────────────────────────────
+
+interface RowProps {
+  item: ChecklistItem;
+  onUpdate: (id: number, fields: Partial<ChecklistItem>) => void;
+  onDelete: (id: number) => void;
+}
+
+function ChecklistRow({ item, onUpdate, onDelete }: RowProps) {
+  const [editingTask, setEditingTask] = useState(false);
+  const [taskVal, setTaskVal] = useState(item.task);
+  const [notesVal, setNotesVal] = useState(item.notes ?? "");
+  const taskInputRef = useRef<HTMLInputElement>(null);
+
+  // Keep local task/notes in sync if item changes from outside
+  useEffect(() => { setTaskVal(item.task); }, [item.task]);
+  useEffect(() => { setNotesVal(item.notes ?? ""); }, [item.notes]);
+
+  function commitTask() {
+    setEditingTask(false);
+    const trimmed = taskVal.trim();
+    if (trimmed && trimmed !== item.task) {
+      onUpdate(item.id, { task: trimmed });
+    } else {
+      setTaskVal(item.task);
+    }
+  }
+
+  function commitNotes(val: string) {
+    if (val !== (item.notes ?? "")) {
+      onUpdate(item.id, { notes: val || null });
+    }
+  }
+
+  const isNA = item.status === "Not Applicable";
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
-      {/* Phase header */}
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-slate-50 transition-colors"
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-semibold text-slate-800 text-sm">{phase.title}</span>
-            {allDone && (
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
-                Complete
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-1.5">
-            <div className="flex-1 bg-slate-100 rounded-full h-1.5 max-w-[140px]">
-              <div
-                className="h-1.5 rounded-full bg-[#266b75] transition-all"
-                style={{ width: `${(doneCount / phase.items.length) * 100}%` }}
-              />
-            </div>
-            <span className="text-xs text-slate-400 shrink-0">
-              {doneCount}/{phase.items.length}
-            </span>
-          </div>
-        </div>
-        {open ? (
-          <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" />
-        ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-        )}
-      </button>
+    <tr className={`group border-b border-slate-100 transition-colors hover:bg-slate-50/60 ${isNA ? "opacity-50" : ""}`}>
+      {/* Stage */}
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <span className="text-xs font-medium text-slate-500 leading-tight">{item.stage}</span>
+      </td>
 
-      {/* Items */}
-      {open && (
-        <div className="border-t border-slate-100 divide-y divide-slate-50">
-          {phase.items.map(item => {
-            const done = checked.has(item.id);
-            return (
-              <label
-                key={item.id}
-                className="flex items-start gap-3 px-5 py-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
-              >
-                <div className="pt-0.5 shrink-0">
-                  {done ? (
-                    <CheckSquare className="w-4 h-4 text-[#266b75]" />
-                  ) : (
-                    <Square className="w-4 h-4 text-slate-300" />
-                  )}
-                </div>
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={done}
-                  onChange={() => onToggle(item.id)}
-                />
-                <span className={`text-sm leading-relaxed ${done ? "line-through text-slate-400" : "text-slate-700"}`}>
-                  {item.label}
-                </span>
-              </label>
-            );
-          })}
+      {/* Task */}
+      <td className="px-3 py-2.5 min-w-[200px]">
+        {editingTask ? (
+          <input
+            ref={taskInputRef}
+            type="text"
+            value={taskVal}
+            onChange={e => setTaskVal(e.target.value)}
+            onBlur={commitTask}
+            onKeyDown={e => { if (e.key === "Enter") commitTask(); if (e.key === "Escape") { setTaskVal(item.task); setEditingTask(false); } }}
+            className="w-full text-sm border border-[#266b75] rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30"
+            autoFocus
+          />
+        ) : (
+          <span
+            className={`text-sm cursor-pointer hover:text-[#266b75] transition-colors ${isNA ? "line-through text-slate-400" : "text-slate-800"}`}
+            onClick={() => { setEditingTask(true); setTimeout(() => taskInputRef.current?.select(), 10); }}
+            title="Click to edit"
+          >
+            {item.task}
+          </span>
+        )}
+        {item.is_custom && (
+          <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 border border-slate-200 rounded px-1 py-0.5">custom</span>
+        )}
+      </td>
+
+      {/* Who */}
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <select
+          value={item.who}
+          onChange={e => onUpdate(item.id, { who: e.target.value })}
+          className={`text-xs font-semibold border rounded-full px-2 py-0.5 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#266b75]/40 appearance-none ${whoStyle(item.who)}`}
+        >
+          {WHO_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
+        </select>
+      </td>
+
+      {/* Status */}
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <select
+          value={item.status}
+          onChange={e => onUpdate(item.id, { status: e.target.value as ChecklistStatus })}
+          className={`text-xs font-semibold border rounded-md px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#266b75]/40 appearance-none ${statusStyle(item.status)}`}
+        >
+          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </td>
+
+      {/* Notes */}
+      <td className="px-3 py-2.5 min-w-[160px]">
+        <input
+          type="text"
+          value={notesVal}
+          onChange={e => setNotesVal(e.target.value)}
+          onBlur={e => commitNotes(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") e.currentTarget.blur(); }}
+          placeholder="Add note…"
+          className="w-full text-xs bg-transparent border-b border-transparent hover:border-slate-200 focus:border-[#266b75] focus:outline-none focus:bg-white focus:px-1.5 focus:rounded-sm px-0 py-0.5 text-slate-600 placeholder:text-slate-300 transition-all"
+        />
+      </td>
+
+      {/* Due Date */}
+      <td className="px-3 py-2.5 whitespace-nowrap">
+        <input
+          type="date"
+          value={item.due_date ?? ""}
+          onChange={e => onUpdate(item.id, { due_date: e.target.value || null })}
+          className="text-xs text-slate-600 border border-transparent hover:border-slate-200 focus:border-[#266b75] focus:outline-none rounded-md px-1.5 py-0.5 cursor-pointer bg-transparent focus:bg-white transition-all"
+        />
+      </td>
+
+      {/* Delete */}
+      <td className="px-2 py-2.5 w-8">
+        <button
+          type="button"
+          onClick={() => onDelete(item.id)}
+          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all p-0.5 rounded"
+          title="Delete item"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+// ─── Add Item Form ─────────────────────────────────────────────────────────────
+
+interface AddItemFormProps {
+  onAdd: (item: Omit<ChecklistItem, "id" | "client_id" | "sort_order" | "is_custom">) => Promise<void>;
+  onCancel: () => void;
+}
+
+function AddItemForm({ onAdd, onCancel }: AddItemFormProps) {
+  const [stage, setStage] = useState(STAGES[0]!);
+  const [task, setTask] = useState("");
+  const [who, setWho] = useState<ChecklistWho>("Hiedi");
+  const [status, setStatus] = useState<ChecklistStatus>("Not Started");
+  const [notes, setNotes] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!task.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd({ stage, task: task.trim(), who, status, notes: notes || null, due_date: dueDate || null });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr className="bg-[#266b75]/5 border-b border-[#266b75]/20">
+      <td className="px-3 py-2">
+        <select
+          value={stage}
+          onChange={e => setStage(e.target.value)}
+          className="w-full text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] bg-white"
+        >
+          {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </td>
+      <td className="px-3 py-2">
+        <input
+          type="text"
+          value={task}
+          onChange={e => setTask(e.target.value)}
+          placeholder="Task description…"
+          autoFocus
+          className="w-full text-sm border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] bg-white"
+          onKeyDown={e => { if (e.key === "Escape") onCancel(); }}
+        />
+      </td>
+      <td className="px-3 py-2">
+        <select
+          value={who}
+          onChange={e => setWho(e.target.value as ChecklistWho)}
+          className="w-full text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 bg-white"
+        >
+          {WHO_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
+        </select>
+      </td>
+      <td className="px-3 py-2">
+        <select
+          value={status}
+          onChange={e => setStatus(e.target.value as ChecklistStatus)}
+          className="w-full text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 bg-white"
+        >
+          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </td>
+      <td className="px-3 py-2">
+        <input
+          type="text"
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="Notes…"
+          className="w-full text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 bg-white"
+        />
+      </td>
+      <td className="px-3 py-2">
+        <input
+          type="date"
+          value={dueDate}
+          onChange={e => setDueDate(e.target.value)}
+          className="w-full text-xs border border-slate-200 rounded-md px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 bg-white"
+        />
+      </td>
+      <td className="px-2 py-2">
+        <div className="flex gap-1">
+          <button
+            type="button"
+            onClick={handleSubmit as any}
+            disabled={!task.trim() || saving}
+            className="text-white bg-[#266b75] hover:bg-[#1d5159] rounded-md p-1 disabled:opacity-40 transition-colors"
+            title="Save"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-slate-400 hover:text-slate-700 rounded-md p-1 transition-colors"
+            title="Cancel"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
-      )}
-    </div>
+      </td>
+    </tr>
   );
 }
 
@@ -213,97 +320,116 @@ function PhaseSection({
 interface Props {
   clientId: number;
   clientName: string;
-  serviceType: string | null | undefined;
+  serviceType?: string | null;
 }
 
-export function ClientOnboardingChecklist({ clientId, clientName, serviceType }: Props) {
+export function ClientOnboardingChecklist({ clientId }: Props) {
   const { toast } = useToast();
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [notes, setNotes] = useState("");
+  const [items, setItems] = useState<ChecklistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingRef = useRef<{ checked_items: string[]; notes: string } | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
 
-  const visiblePhases = getVisiblePhases(serviceType);
-  const totalItems = visiblePhases.reduce((s, p) => s + p.items.length, 0);
-  const doneCount = [...checked].filter(id =>
-    visiblePhases.some(p => p.items.some(i => i.id === id))
-  ).length;
-  const pct = totalItems === 0 ? 0 : Math.round((doneCount / totalItems) * 100);
+  // Filters
+  const [filterStage, setFilterStage] = useState("All");
+  const [filterWho, setFilterWho] = useState("All");
+  const [filterStatus, setFilterStatus] = useState("All");
 
-  // Load checklist state
+  // Debounce timers per item
+  const saveTimersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const pendingUpdatesRef = useRef<Record<number, Partial<ChecklistItem>>>({});
+
+  // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/clients/${clientId}/checklist`, { credentials: "include" })
+    fetch(`/api/clients/${clientId}/checklist-items`, { credentials: "include" })
       .then(r => r.json())
-      .then(data => {
-        setChecked(new Set(data.checked_items ?? []));
-        setNotes(data.notes ?? "");
-      })
-      .catch(() => {})
+      .then((data: ChecklistItem[]) => setItems(data))
+      .catch(() => toast({ title: "Failed to load checklist", variant: "destructive" }))
       .finally(() => setLoading(false));
   }, [clientId]);
 
-  // Debounced auto-save
-  const scheduleSave = useCallback((newChecked: Set<string>, newNotes: string) => {
-    pendingRef.current = { checked_items: [...newChecked], notes: newNotes };
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      if (!pendingRef.current) return;
+  // ── Update (debounced PATCH) ───────────────────────────────────────────────
+  const handleUpdate = useCallback((id: number, fields: Partial<ChecklistItem>) => {
+    // Optimistic update
+    setItems(prev => prev.map(item => item.id === id ? { ...item, ...fields } : item));
+
+    // Accumulate pending changes
+    pendingUpdatesRef.current[id] = { ...(pendingUpdatesRef.current[id] ?? {}), ...fields };
+
+    // Debounce save
+    if (saveTimersRef.current[id]) clearTimeout(saveTimersRef.current[id]);
+    saveTimersRef.current[id] = setTimeout(async () => {
+      const payload = pendingUpdatesRef.current[id];
+      if (!payload) return;
+      delete pendingUpdatesRef.current[id];
       setSaving(true);
       try {
-        await fetch(`/api/clients/${clientId}/checklist`, {
+        const res = await fetch(`/api/clients/${clientId}/checklist-items/${id}`, {
           method: "PATCH",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(pendingRef.current),
+          body: JSON.stringify(payload),
         });
-        pendingRef.current = null;
+        if (!res.ok) throw new Error("Save failed");
       } catch {
-        toast({ title: "Failed to save checklist", variant: "destructive" });
+        toast({ title: "Failed to save", variant: "destructive" });
       } finally {
         setSaving(false);
       }
-    }, 800);
+    }, 600);
   }, [clientId, toast]);
 
-  const handleToggle = (id: string) => {
-    setChecked(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      scheduleSave(next, notes);
-      return next;
-    });
-  };
-
-  const handleNotesChange = (val: string) => {
-    setNotes(val);
-    scheduleSave(checked, val);
-  };
-
-  const handleReset = async () => {
-    const empty = new Set<string>();
-    setChecked(empty);
-    setNotes("");
-    setShowResetConfirm(false);
-    setSaving(true);
+  // ── Delete ────────────────────────────────────────────────────────────────
+  const handleDelete = useCallback(async (id: number) => {
+    setItems(prev => prev.filter(item => item.id !== id));
     try {
-      await fetch(`/api/clients/${clientId}/checklist`, {
-        method: "PATCH",
+      await fetch(`/api/clients/${clientId}/checklist-items/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+    } catch {
+      toast({ title: "Failed to delete item", variant: "destructive" });
+    }
+  }, [clientId, toast]);
+
+  // ── Add ───────────────────────────────────────────────────────────────────
+  const handleAdd = useCallback(async (newItem: Omit<ChecklistItem, "id" | "client_id" | "sort_order" | "is_custom">) => {
+    try {
+      const res = await fetch(`/api/clients/${clientId}/checklist-items`, {
+        method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ checked_items: [], notes: "" }),
+        body: JSON.stringify(newItem),
       });
-      toast({ title: "Checklist reset" });
+      if (!res.ok) throw new Error("Failed to add");
+      const created: ChecklistItem = await res.json();
+      setItems(prev => [...prev, created]);
+      setShowAddForm(false);
     } catch {
-      toast({ title: "Failed to reset", variant: "destructive" });
-    } finally {
-      setSaving(false);
+      toast({ title: "Failed to add item", variant: "destructive" });
     }
-  };
+  }, [clientId, toast]);
 
+  // ── Progress stats ────────────────────────────────────────────────────────
+  const total = items.length;
+  const complete = items.filter(i => i.status === "Complete").length;
+  const inProgress = items.filter(i => i.status === "In Progress").length;
+  const waitClient = items.filter(i => i.status === "Waiting on Client").length;
+  const waitHiedi = items.filter(i => i.status === "Waiting on Hiedi").length;
+  const notApplicable = items.filter(i => i.status === "Not Applicable").length;
+  const denominator = total - notApplicable;
+  const pct = denominator > 0 ? Math.round((complete / denominator) * 100) : 0;
+
+  // ── Filtered rows ─────────────────────────────────────────────────────────
+  const filtered = items.filter(item => {
+    if (filterStage !== "All" && item.stage !== filterStage) return false;
+    if (filterWho !== "All" && item.who !== filterWho) return false;
+    if (filterStatus !== "All" && item.status !== filterStatus) return false;
+    return true;
+  });
+
+  // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16 text-slate-400">
@@ -314,102 +440,160 @@ export function ClientOnboardingChecklist({ clientId, clientName, serviceType }:
   }
 
   return (
-    <div className="space-y-5">
-      {/* Header / progress */}
-      <div className="bg-white rounded-2xl border border-slate-200 px-5 py-4">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-2">
-              <ClipboardList className="w-4 h-4 text-[#266b75]" />
-              <span className="text-sm font-semibold text-slate-800">{clientName}</span>
-              {serviceType && (
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#266b75]/10 text-[#266b75] border border-[#266b75]/20">
-                  {serviceType === "hybrid" ? "Bookkeeping & VA" : serviceType === "bookkeeping" ? "Bookkeeping" : "VA"}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">{doneCount} of {totalItems} tasks complete</p>
+    <div className="space-y-4">
+
+      {/* ── Progress Summary ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            {saving && (
+              <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…
+              </span>
+            )}
+            {!saving && pct === 100 && (
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600">
+                <CheckCircle2 className="w-3.5 h-3.5" /> Onboarding complete!
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />}
-            <span className="text-2xl font-bold text-[#266b75]">{pct}%</span>
-          </div>
+          <span className="text-3xl font-bold text-[#266b75]">{pct}%</span>
         </div>
-        <div className="mt-3 bg-slate-100 rounded-full h-2.5">
+
+        {/* Progress bar */}
+        <div className="bg-slate-100 rounded-full h-2.5 mb-4">
           <div
             className="h-2.5 rounded-full bg-[#266b75] transition-all duration-500"
             style={{ width: `${pct}%` }}
           />
         </div>
-        {pct === 100 && (
-          <p className="text-xs text-emerald-600 font-semibold mt-2 text-center">
-            Onboarding complete!
-          </p>
-        )}
+
+        {/* Stat grid */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+          {[
+            { label: "Total", value: total, cls: "text-slate-700" },
+            { label: "Complete", value: complete, cls: "text-emerald-700" },
+            { label: "In Progress", value: inProgress, cls: "text-blue-700" },
+            { label: "Waiting Client", value: waitClient, cls: "text-amber-700" },
+            { label: "Waiting Hiedi", value: waitHiedi, cls: "text-violet-700" },
+            { label: "N/A", value: notApplicable, cls: "text-slate-400" },
+          ].map(stat => (
+            <div key={stat.label} className="text-center">
+              <div className={`text-xl font-bold ${stat.cls}`}>{stat.value}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5 leading-tight">{stat.label}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Phases */}
-      {visiblePhases.map((phase, i) => (
-        <PhaseSection
-          key={phase.id}
-          phase={phase}
-          checked={checked}
-          onToggle={handleToggle}
-          defaultOpen={i === 0}
-        />
-      ))}
+      {/* ── Filters + Add button ── */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={filterStage}
+          onChange={e => setFilterStage(e.target.value)}
+          className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] bg-white"
+        >
+          <option value="All">All Stages</option>
+          {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
 
-      {/* Notes */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-          Notes
-        </label>
-        <textarea
-          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#266b75]/40 focus:border-[#266b75] transition-colors resize-none"
-          rows={5}
-          placeholder="Add any notes about this client's onboarding — next steps, blockers, reminders…"
-          value={notes}
-          onChange={e => handleNotesChange(e.target.value)}
-        />
-        <p className="text-xs text-slate-400 mt-1.5">Saves automatically as you type.</p>
-      </div>
+        <select
+          value={filterWho}
+          onChange={e => setFilterWho(e.target.value)}
+          className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] bg-white"
+        >
+          <option value="All">All: Who</option>
+          {WHO_OPTIONS.map(w => <option key={w} value={w}>{w}</option>)}
+        </select>
 
-      {/* Reset */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5">
-        {!showResetConfirm ? (
+        <select
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+          className="text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] bg-white"
+        >
+          <option value="All">All Statuses</option>
+          {STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+
+        {(filterStage !== "All" || filterWho !== "All" || filterStatus !== "All") && (
           <button
             type="button"
-            onClick={() => setShowResetConfirm(true)}
-            className="flex items-center gap-2 text-sm text-slate-500 hover:text-red-600 transition-colors"
+            onClick={() => { setFilterStage("All"); setFilterWho("All"); setFilterStatus("All"); }}
+            className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1 transition-colors"
           >
-            <RotateCcw className="w-4 h-4" />
-            Reset Checklist
+            <X className="w-3 h-3" /> Clear filters
           </button>
-        ) : (
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-slate-800">Reset this checklist?</p>
-              <p className="text-xs text-slate-500 mt-0.5">All checked items and notes will be cleared. This cannot be undone.</p>
-              <div className="flex gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={handleReset}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
-                >
-                  Yes, Reset
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowResetConfirm(false)}
-                  className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
         )}
+
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={() => setShowAddForm(true)}
+            className="flex items-center gap-1.5 text-sm font-medium text-white bg-[#266b75] hover:bg-[#1d5159] px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Item
+          </button>
+        </div>
+      </div>
+
+      {/* ── Table ── */}
+      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left min-w-[780px]">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/80">
+                <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[130px]">Stage</th>
+                <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Task</th>
+                <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[90px]">Who</th>
+                <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[155px]">Status</th>
+                <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[180px]">Notes</th>
+                <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 w-[130px]">Due Date</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && !showAddForm && (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-400">
+                    {items.length === 0 ? "No checklist items yet." : "No items match the current filters."}
+                  </td>
+                </tr>
+              )}
+              {filtered.map(item => (
+                <ChecklistRow
+                  key={item.id}
+                  item={item}
+                  onUpdate={handleUpdate}
+                  onDelete={handleDelete}
+                />
+              ))}
+              {showAddForm && (
+                <AddItemForm
+                  onAdd={handleAdd}
+                  onCancel={() => setShowAddForm(false)}
+                />
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Footer: filtered count */}
+        <div className="px-4 py-2 border-t border-slate-100 bg-slate-50/40 flex items-center justify-between">
+          <span className="text-xs text-slate-400">
+            {filtered.length} of {total} item{total !== 1 ? "s" : ""}
+            {(filterStage !== "All" || filterWho !== "All" || filterStatus !== "All") ? " (filtered)" : ""}
+          </span>
+          {!showAddForm && (
+            <button
+              type="button"
+              onClick={() => setShowAddForm(true)}
+              className="text-xs text-[#266b75] hover:text-[#1d5159] flex items-center gap-1 transition-colors font-medium"
+            >
+              <Plus className="w-3 h-3" /> Add item
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

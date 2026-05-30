@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
-import { db } from "@workspace/db";
+import { db, pool } from "@workspace/db";
 import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable, usersTable, passwordResetTokensTable, clientOnboardingDataTable, appSettingsTable } from "@workspace/db";
 import { eq, and, gte, lt, sql, inArray, or, isNull, not, ilike } from "drizzle-orm";
 import {
@@ -679,4 +679,185 @@ router.put("/clients/:id/account-list", requireAdmin, async (req, res) => {
   res.json({ accounts });
 });
 
+// ── Checklist Items: default seed data ──────────────────────────────────────
+
+const DEFAULT_CHECKLIST: { stage: string; task: string; who: string }[] = [
+  // New Client Setup
+  { stage: "New Client Setup", task: "Initial discovery call completed", who: "Hiedi" },
+  { stage: "New Client Setup", task: "Document client needs and scope", who: "Hiedi" },
+  { stage: "New Client Setup", task: "Determine services and pricing", who: "Hiedi" },
+  // Onboarding Form
+  { stage: "Onboarding Form", task: "Send onboarding form to client", who: "Hiedi" },
+  { stage: "Onboarding Form", task: "Client completes onboarding form", who: "Client" },
+  { stage: "Onboarding Form", task: "Review completed onboarding form", who: "Hiedi" },
+  { stage: "Onboarding Form", task: "Confirm contact info and communication preferences", who: "Hiedi" },
+  { stage: "Onboarding Form", task: "Confirm preferred meeting cadence", who: "Hiedi" },
+  // Proposal / Estimate
+  { stage: "Proposal/Estimate", task: "Prepare proposal/estimate", who: "Hiedi" },
+  { stage: "Proposal/Estimate", task: "Send proposal/estimate to client", who: "Hiedi" },
+  { stage: "Proposal/Estimate", task: "Follow up if no response within 3 business days", who: "Hiedi" },
+  { stage: "Proposal/Estimate", task: "Client accepts proposal/estimate", who: "Client" },
+  { stage: "Proposal/Estimate", task: "Confirm scope of work", who: "Hiedi" },
+  // Contract
+  { stage: "Contract", task: "Prepare contract", who: "Hiedi" },
+  { stage: "Contract", task: "Send contract for signature", who: "Hiedi" },
+  { stage: "Contract", task: "Confirm contract is signed", who: "Hiedi" },
+  { stage: "Contract", task: "File signed contract", who: "Hiedi" },
+  // Invoice / Payment
+  { stage: "Invoice/Payment", task: "Create initial invoice", who: "Hiedi" },
+  { stage: "Invoice/Payment", task: "Send invoice to client", who: "Hiedi" },
+  { stage: "Invoice/Payment", task: "Confirm deposit or first payment received", who: "Hiedi" },
+  { stage: "Invoice/Payment", task: "Set up recurring billing schedule", who: "Hiedi" },
+  // Client Dashboard
+  { stage: "Client Dashboard", task: "Set up client folder and file structure", who: "Hiedi" },
+  { stage: "Client Dashboard", task: "Add client to project management tool", who: "Hiedi" },
+  { stage: "Client Dashboard", task: "Create client portal login and send access details", who: "Hiedi" },
+  // Access Collection
+  { stage: "Access Collection", task: "Accounting software access received", who: "Client" },
+  { stage: "Access Collection", task: "Bank account view access received", who: "Client" },
+  { stage: "Access Collection", task: "Credit card account access received", who: "Client" },
+  { stage: "Access Collection", task: "Payroll software access received", who: "Client" },
+  { stage: "Access Collection", task: "Email account access received", who: "Client" },
+  { stage: "Access Collection", task: "Calendar access received", who: "Client" },
+  { stage: "Access Collection", task: "Website / hosting access received", who: "Client" },
+  { stage: "Access Collection", task: "Social media access received", who: "Client" },
+  { stage: "Access Collection", task: "Google Drive / Dropbox access received", who: "Client" },
+  { stage: "Access Collection", task: "Password manager access received", who: "Client" },
+  { stage: "Access Collection", task: "Project management tool access received", who: "Client" },
+  { stage: "Access Collection", task: "CRM access received", who: "Client" },
+  { stage: "Access Collection", task: "Phone / voicemail access received", who: "Client" },
+  { stage: "Access Collection", task: "Other platform access received", who: "Client" },
+  // Document Collection
+  { stage: "Document Collection", task: "Prior year tax returns received", who: "Client" },
+  { stage: "Document Collection", task: "Prior year financial statements received", who: "Client" },
+  { stage: "Document Collection", task: "Prior year bank statements received", who: "Client" },
+  { stage: "Document Collection", task: "Chart of accounts provided", who: "Client" },
+  { stage: "Document Collection", task: "Existing contracts / agreements provided", who: "Client" },
+  { stage: "Document Collection", task: "Business license / registration docs provided", who: "Client" },
+  { stage: "Document Collection", task: "Payroll records provided", who: "Client" },
+  { stage: "Document Collection", task: "Insurance documents provided", who: "Client" },
+  // Internal Setup
+  { stage: "Internal Setup", task: "Set up client in accounting software", who: "Hiedi" },
+  { stage: "Internal Setup", task: "Set up chart of accounts", who: "Hiedi" },
+  { stage: "Internal Setup", task: "Import / enter opening balances", who: "Hiedi" },
+  { stage: "Internal Setup", task: "Connect bank feeds", who: "Hiedi" },
+  { stage: "Internal Setup", task: "Set up recurring transactions", who: "Hiedi" },
+  { stage: "Internal Setup", task: "Set up client invoicing template", who: "Hiedi" },
+  { stage: "Internal Setup", task: "Add client to CRM / contact list", who: "Hiedi" },
+  { stage: "Internal Setup", task: "Set up recurring task reminders", who: "Hiedi" },
+  // Initial Review
+  { stage: "Initial Review", task: "Review existing books for accuracy", who: "Hiedi" },
+  { stage: "Initial Review", task: "Document cleanup scope if needed", who: "Hiedi" },
+  { stage: "Initial Review", task: "Identify any missing transactions", who: "Hiedi" },
+  { stage: "Initial Review", task: "Confirm fiscal year and reporting preferences", who: "Hiedi" },
+  { stage: "Initial Review", task: "Complete first bank reconciliation", who: "Hiedi" },
+  // Kickoff
+  { stage: "Kickoff", task: "Schedule kickoff call", who: "Hiedi" },
+  { stage: "Kickoff", task: "Kickoff call completed", who: "Hiedi" },
+  { stage: "Kickoff", task: "Reviewed scope of work and expectations", who: "Hiedi" },
+  { stage: "Kickoff", task: "Answered client questions", who: "Hiedi" },
+  { stage: "Kickoff", task: "Sent kickoff call recap email to client", who: "Hiedi" },
+  // Active Client Setup
+  { stage: "Active Client Setup", task: "Confirm ongoing communication schedule", who: "Hiedi" },
+  { stage: "Active Client Setup", task: "Set up recurring monthly check-in", who: "Hiedi" },
+  { stage: "Active Client Setup", task: "Send 1-week check-in email to client", who: "Hiedi" },
+  { stage: "Active Client Setup", task: "Mark client as Active in system", who: "Hiedi" },
+];
+
+// ── GET /clients/:id/checklist-items ─────────────────────────────────────────
+router.get("/clients/:id/checklist-items", requireAdmin, async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!id || isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const countResult = await db.execute(sql`SELECT COUNT(*)::int AS count FROM client_checklist_items WHERE client_id = ${id}`);
+  const count = Number((countResult.rows as any[])[0]?.count ?? 0);
+
+  if (count === 0) {
+    for (let i = 0; i < DEFAULT_CHECKLIST.length; i++) {
+      const item = DEFAULT_CHECKLIST[i]!;
+      await db.execute(sql`
+        INSERT INTO client_checklist_items (client_id, stage, task, who, status, sort_order, is_custom)
+        VALUES (${id}, ${item.stage}, ${item.task}, ${item.who}, 'Not Started', ${i}, FALSE)
+      `);
+    }
+  }
+
+  const result = await db.execute(sql`
+    SELECT id, client_id, stage, task, who, status, notes, due_date, sort_order, is_custom
+    FROM client_checklist_items
+    WHERE client_id = ${id}
+    ORDER BY sort_order, id
+  `);
+  res.json(result.rows);
+});
+
+// ── PATCH /clients/:id/checklist-items/:itemId ────────────────────────────────
+router.patch("/clients/:id/checklist-items/:itemId", requireAdmin, async (req, res) => {
+  const clientId = Number(req.params["id"]);
+  const itemId = Number(req.params["itemId"]);
+  if (!clientId || isNaN(clientId) || !itemId || isNaN(itemId)) {
+    res.status(400).json({ error: "Invalid id" }); return;
+  }
+  const body = req.body as Record<string, unknown>;
+  // Only update fields that were explicitly sent in the request body
+  const allowed = ["task", "who", "status", "notes", "due_date", "stage"] as const;
+  const setClauses: string[] = ["updated_at = NOW()"];
+  const values: unknown[] = [];
+  let paramIdx = 1;
+  for (const field of allowed) {
+    if (field in body) {
+      setClauses.push(`${field} = $${paramIdx++}`);
+      values.push(body[field] ?? null);
+    }
+  }
+  if (values.length === 0) { res.json({ ok: true }); return; }
+  values.push(itemId, clientId);
+  const setStr = setClauses.join(", ");
+  await pool.query(
+    `UPDATE client_checklist_items SET ${setStr} WHERE id = $${paramIdx} AND client_id = $${paramIdx + 1}`,
+    values,
+  );
+  res.json({ ok: true });
+});
+
+// ── POST /clients/:id/checklist-items ─────────────────────────────────────────
+router.post("/clients/:id/checklist-items", requireAdmin, async (req, res) => {
+  const clientId = Number(req.params["id"]);
+  if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { stage, task, who, status, notes, due_date } = req.body;
+  if (!stage || !task) { res.status(400).json({ error: "stage and task are required" }); return; }
+
+  const maxResult = await db.execute(sql`SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM client_checklist_items WHERE client_id = ${clientId}`);
+  const nextOrder = Number((maxResult.rows as any[])[0]?.next_order ?? 0);
+
+  const inserted = await db.execute(sql`
+    INSERT INTO client_checklist_items (client_id, stage, task, who, status, notes, due_date, sort_order, is_custom)
+    VALUES (
+      ${clientId},
+      ${stage},
+      ${task},
+      ${who ?? "Hiedi"},
+      ${status ?? "Not Started"},
+      ${notes || null},
+      ${due_date || null},
+      ${nextOrder},
+      TRUE
+    )
+    RETURNING id, client_id, stage, task, who, status, notes, due_date, sort_order, is_custom
+  `);
+  res.json((inserted.rows as any[])[0]);
+});
+
+// ── DELETE /clients/:id/checklist-items/:itemId ───────────────────────────────
+router.delete("/clients/:id/checklist-items/:itemId", requireAdmin, async (req, res) => {
+  const clientId = Number(req.params["id"]);
+  const itemId = Number(req.params["itemId"]);
+  if (!clientId || isNaN(clientId) || !itemId || isNaN(itemId)) {
+    res.status(400).json({ error: "Invalid id" }); return;
+  }
+  await db.execute(sql`DELETE FROM client_checklist_items WHERE id = ${itemId} AND client_id = ${clientId}`);
+  res.json({ ok: true });
+});
+
 export default router;
+
