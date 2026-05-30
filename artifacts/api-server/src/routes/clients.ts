@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable, usersTable, passwordResetTokensTable, clientOnboardingDataTable } from "@workspace/db";
+import { clientsTable, timeEntriesTable, clientServicesTable, servicesTable, tasksTable, usersTable, passwordResetTokensTable, clientOnboardingDataTable, appSettingsTable } from "@workspace/db";
 import { eq, and, gte, lt, sql, inArray, or, isNull, not, ilike } from "drizzle-orm";
 import {
   CreateClientBody,
@@ -646,6 +646,34 @@ router.get("/clients/:id/subclients", requireAuth, async (req, res) => {
   });
 
   res.json(result);
+});
+
+// ── Client account list (for transaction Account dropdown) ───────────────────
+
+router.get("/clients/:id/account-list", requireAdmin, async (req, res) => {
+  const clientId = Number(req.params["id"]);
+  if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const key = `client_account_list_${clientId}`;
+  const row = await db.select({ value: appSettingsTable.value }).from(appSettingsTable).where(eq(appSettingsTable.key, key)).limit(1);
+  const accounts: string[] = row[0]?.value ? JSON.parse(row[0].value) : [];
+  res.json({ accounts });
+});
+
+router.put("/clients/:id/account-list", requireAdmin, async (req, res) => {
+  const clientId = Number(req.params["id"]);
+  if (!clientId || isNaN(clientId)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const accounts: string[] = Array.isArray(req.body?.accounts)
+    ? req.body.accounts.map((a: any) => String(a).trim()).filter(Boolean)
+    : [];
+  const key = `client_account_list_${clientId}`;
+  const value = JSON.stringify(accounts);
+  const existing = await db.select({ id: appSettingsTable.id }).from(appSettingsTable).where(eq(appSettingsTable.key, key)).limit(1);
+  if (existing.length > 0) {
+    await db.update(appSettingsTable).set({ value }).where(eq(appSettingsTable.key, key));
+  } else {
+    await db.insert(appSettingsTable).values({ key, value });
+  }
+  res.json({ accounts });
 });
 
 export default router;
