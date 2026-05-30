@@ -22,14 +22,19 @@ const receiptUpload = multer({
   },
 });
 
-// Column name aliases from QBO exports
-const COL_DATE = ["Date", "DATE", "date"];
+// Column name aliases — covers QBO exports, Chase, and common bank formats
+const COL_DATE = ["Date", "DATE", "date", "Transaction Date", "Posted Date"];
 const COL_TYPE = ["Transaction Type", "Type", "TRANSACTION TYPE", "transaction_type"];
-const COL_NUM  = ["Num", "NUM", "num", "Check Number", "Ref No."];
-const COL_NAME = ["Name", "NAME", "name", "Payee", "Vendor"];
-const COL_MEMO = ["Memo/Description", "Memo", "Description", "MEMO", "memo"];
-const COL_ACCT = ["Account", "ACCOUNT", "account", "Category", "Split"];
-const COL_AMT  = ["Amount", "AMOUNT", "amount", "Debit", "Credit"];
+const COL_NUM  = ["Num", "NUM", "num", "Check Number", "Ref No.", "Check #"];
+const COL_NAME = ["Name", "NAME", "name", "Payee", "Vendor", "From/To", "Payee Name"];
+const COL_MEMO = ["Memo/Description", "Memo", "Description", "MEMO", "memo",
+                  "Bank description", "Bank Description", "Transaction Description", "Details"];
+const COL_ACCT = ["Account", "ACCOUNT", "account", "Category", "Split",
+                  "Match/Categorize", "QBO Match"];
+const COL_AMT  = ["Amount", "AMOUNT", "amount"];
+// Separate debit/credit columns (e.g. Chase: Spent / Received)
+const COL_DEBIT  = ["Debit", "DEBIT", "debit", "Spent", "Withdrawal", "Withdrawals", "Charges"];
+const COL_CREDIT = ["Credit", "CREDIT", "credit", "Received", "Deposit", "Deposits", "Payments"];
 
 function pick(row: Record<string, any>, keys: string[]): string | null {
   for (const k of keys) {
@@ -45,6 +50,19 @@ function parseAmount(val: string | null): number | null {
   const cleaned = val.replace(/[$,\s]/g, "").replace(/[()]/g, m => m === "(" ? "-" : "");
   const n = parseFloat(cleaned);
   return isNaN(n) ? null : n;
+}
+
+// Resolve the net amount from a row, handling both combined and split debit/credit columns.
+function resolveAmount(row: Record<string, any>): number | null {
+  const combined = pick(row, COL_AMT);
+  if (combined !== null) return parseAmount(combined);
+
+  const debit  = parseAmount(pick(row, COL_DEBIT));
+  const credit = parseAmount(pick(row, COL_CREDIT));
+
+  if (credit !== null && credit !== 0) return Math.abs(credit);   // credit = positive
+  if (debit  !== null && debit  !== 0) return -Math.abs(debit);   // debit  = negative
+  return null;
 }
 
 function parseRows(buffer: Buffer, filename: string): Record<string, any>[] {
@@ -453,7 +471,7 @@ router.post("/transactions/upload", requireAdmin, upload.single("file"), async (
       name:             pick(r, COL_NAME),
       memo:             pick(r, COL_MEMO),
       account,
-      amount:           parseAmount(pick(r, COL_AMT)),
+      amount:           resolveAmount(r),
       is_uncategorized: !account,
       status:           "uncategorized",
     };
