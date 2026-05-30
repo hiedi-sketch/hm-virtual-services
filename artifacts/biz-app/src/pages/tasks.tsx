@@ -2095,30 +2095,6 @@ export default function Tasks() {
         </div>
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           <button
-            onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-1.5 text-xs font-medium text-[#266b75] border border-[#266b75]/40 bg-[#266b75]/5 hover:bg-[#266b75]/10 rounded-lg px-3 py-2 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Import from Asana
-          </button>
-          <button
-            onClick={() => clickUpConfigured ? setShowClickUpImport(true) : setShowClickUpSettings(true)}
-            className="flex items-center gap-1.5 text-xs font-medium text-purple-700 border border-purple-300 bg-purple-50 hover:bg-purple-100 rounded-lg px-3 py-2 transition-colors"
-          >
-            <span className="font-bold text-[10px] leading-none bg-purple-600 text-white rounded px-1 py-0.5">CU</span>
-            {clickUpConfigured ? "Import from ClickUp" : "Connect ClickUp"}
-          </button>
-          {clickUpConfigured && (
-            <button
-              onClick={() => setShowClickUpSettings(true)}
-              className="flex items-center gap-1.5 text-xs font-medium text-slate-500 border border-slate-200 bg-white hover:bg-slate-50 rounded-lg px-3 py-2 transition-colors"
-              title="ClickUp settings"
-            >
-              <span className="font-bold text-[10px] leading-none bg-purple-600 text-white rounded px-1 py-0.5">CU</span>
-              Settings
-            </button>
-          )}
-          <button
             onClick={handleSyncNow}
             disabled={syncing}
             className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded-lg px-3 py-2 transition-colors disabled:opacity-60"

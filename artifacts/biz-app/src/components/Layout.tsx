@@ -6,45 +6,35 @@ import {
   LayoutDashboard,
   Users,
   CheckSquare,
-  Clock,
-  Megaphone,
   FileText,
+  Megaphone,
   UserCog,
   LogOut,
-  BarChart2,
-  KeyRound,
-  HardDriveDownload,
-  Package,
-  Link2,
-  ChevronLeft,
-  ChevronRight,
   ArrowLeftRight,
   MonitorSmartphone,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 const ADMIN_NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/clients", label: "Client Hub", icon: Users },
-  { href: "/tasks", label: "Task Manager", icon: CheckSquare },
-  { href: "/time", label: "Time Tracking", icon: Clock },
-  { href: "/invoices", label: "Billing & Invoices", icon: FileText },
-  { href: "/services", label: "Services", icon: Package },
-  { href: "/leads", label: "Leads", icon: Megaphone },
-  { href: "/reports", label: "Reports", icon: BarChart2 },
-  { href: "/team", label: "Team", icon: UserCog },
-  { href: "/api-keys", label: "API Keys", icon: KeyRound },
-  { href: "/backup", label: "Backup", icon: HardDriveDownload },
-  { href: "/asana", label: "Asana Sync", icon: Link2 },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/app-tracker", label: "App Dev Tracker", icon: MonitorSmartphone },
+  { href: "/dashboard",    label: "Dashboard",              icon: LayoutDashboard },
+  { href: "/clients",      label: "Client Hub",             icon: Users },
+  { href: "/tasks",        label: "Task Manager",           icon: CheckSquare },
+  { href: "/invoices",     label: "Billing & Invoices",     icon: FileText },
+  { href: "/transactions", label: "Transaction Questions",  icon: ArrowLeftRight },
+  { href: "/app-tracker",  label: "App Dev Tracker",        icon: MonitorSmartphone },
+  { href: "/leads",        label: "Leads",                  icon: Megaphone },
+  { href: "/team",         label: "Users",                  icon: UserCog },
+  { href: "/settings",     label: "Settings",               icon: Settings },
 ];
 
 const TEAM_MEMBER_NAV = [
   { href: "/tasks", label: "Task Manager", icon: CheckSquare },
-  { href: "/time", label: "Time Tracking", icon: Clock },
-  { href: "/leads", label: "Leads", icon: Megaphone },
+  { href: "/leads", label: "Leads",        icon: Megaphone },
 ];
 
 const COLLAPSED_W = 60;
@@ -70,6 +60,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = user?.role === "admin" ? ADMIN_NAV : TEAM_MEMBER_NAV;
   const sidebarW = collapsed ? COLLAPSED_W : EXPANDED_W;
+
+  const firstName = user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there";
+
+  const openTimerPopout = () => {
+    const base = (import.meta.env.BASE_URL as string) ?? "/";
+    const url = `${window.location.origin}${base}timer-popout`;
+    window.open(url, "hm-timer-popout", "width=420,height=260,menubar=no,toolbar=no,location=no,status=no,resizable=yes");
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -113,6 +111,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
             />
           </div>
         </div>
+
+        {/* User greeting */}
+        {user && !collapsed && (
+          <div
+            className="shrink-0 px-4 py-2.5"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <p className="text-sm font-semibold text-white truncate">
+              Hi there, {firstName}
+            </p>
+            <p
+              className="text-xs truncate mt-0.5"
+              style={{ color: "rgba(255,255,255,0.55)" }}
+            >
+              {user.email}
+            </p>
+          </div>
+        )}
 
         {/* Nav links */}
         <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
@@ -186,22 +202,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Bottom: user email + logout */}
+        {/* Bottom: timer popout + logout */}
         <div
-          className="shrink-0 py-3 px-2 space-y-1"
+          className="shrink-0 py-2 px-2 space-y-0.5"
           style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
         >
-          {user && !collapsed && (
-            <div className="px-3 py-1">
-              <div
-                className="text-xs truncate"
-                style={{ color: "rgba(255,255,255,0.55)" }}
-              >
-                {user.email}
-              </div>
-            </div>
-          )}
+          {/* Timer popout button */}
+          <button
+            onClick={openTimerPopout}
+            title="Open timer in a popup window"
+            className={cn(
+              "w-full flex items-center rounded-lg py-2 transition-colors",
+              collapsed ? "justify-center px-0" : "gap-3 px-3"
+            )}
+            style={{ color: "rgba(255,255,255,0.72)" }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)";
+              e.currentTarget.style.color = "#ffffff";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+              e.currentTarget.style.color = "rgba(255,255,255,0.72)";
+            }}
+          >
+            <Clock style={{ width: 18, height: 18, flexShrink: 0 }} />
+            {!collapsed && (
+              <span className="text-sm font-medium">Popout Timer</span>
+            )}
+          </button>
 
+          {/* Logout */}
           {user && (
             <button
               onClick={logout}

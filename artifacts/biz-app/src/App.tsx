@@ -33,6 +33,7 @@ import TimerPopout from "@/pages/timer-popout";
 import AsanaPage from "@/pages/asana";
 import TransactionsPage from "@/pages/transactions";
 import AppDevTracker from "@/pages/app-tracker";
+import SettingsPage from "@/pages/settings";
 // Public-facing marketing pages
 import PublicHome from "@/pages/public-home";
 import PublicAbout from "@/pages/public-about";
@@ -144,6 +145,7 @@ function Router() {
           </Route>
         )}
         {user.role === "admin" && <Route path="/app-tracker" component={AppDevTracker} />}
+        {user.role === "admin" && <Route path="/settings" component={SettingsPage} />}
         <Route path="/notifications" component={NotificationsPage} />
         <Route path="/client/transactions"><ClientPortal /></Route>
         <Route path="/client"><ClientPortal /></Route>
