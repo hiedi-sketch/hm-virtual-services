@@ -184,6 +184,32 @@ router.get("/uploads/:id/download", requireAuth, async (req, res) => {
   res.sendFile(filePath);
 });
 
+// GET /api/uploads/:id/preview — serve inline (no download prompt)
+router.get("/uploads/:id/preview", requireAuth, async (req, res) => {
+  const id = parseInt(req.params["id"]!);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const user = req.session.user!;
+  const [record] = await db
+    .select()
+    .from(fileUploadsTable)
+    .where(eq(fileUploadsTable.id, id))
+    .limit(1);
+
+  if (!record) { res.status(404).json({ error: "File not found" }); return; }
+
+  if (user.role === "client" && record.client_id !== user.client_id) {
+    res.status(403).json({ error: "Forbidden" }); return;
+  }
+
+  const filePath = path.join(UPLOADS_DIR, record.stored_name);
+  if (!fs.existsSync(filePath)) { res.status(404).json({ error: "File missing from storage" }); return; }
+
+  res.setHeader("Content-Disposition", `inline; filename="${record.original_name}"`);
+  res.setHeader("Content-Type", record.mimetype);
+  res.sendFile(filePath);
+});
+
 // DELETE /api/uploads/:id — admin only
 router.delete("/uploads/:id", requireAuth, async (req, res) => {
   const user = req.session.user!;

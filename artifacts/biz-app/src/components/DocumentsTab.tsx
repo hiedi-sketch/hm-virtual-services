@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Upload, FileText, FileImage, File, Download, Trash2, AlertCircle, CloudUpload, Loader2
+  Upload, FileText, FileImage, File, Download, Trash2, AlertCircle, CloudUpload, Loader2, X, Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -28,18 +28,86 @@ function formatBytes(bytes: number): string {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, {
-    month: "short", day: "numeric", year: "numeric"
+    month: "short", day: "numeric", year: "numeric",
   });
 }
 
-function FileIcon({ mimetype }: { mimetype: string }) {
-  if (mimetype.startsWith("image/")) return <FileImage className="w-5 h-5 text-blue-500" />;
-  if (mimetype === "application/pdf") return <FileText className="w-5 h-5 text-red-500" />;
-  return <File className="w-5 h-5 text-slate-400" />;
+function FileIcon({ mimetype, className }: { mimetype: string; className?: string }) {
+  const cls = className ?? "w-5 h-5";
+  if (mimetype.startsWith("image/")) return <FileImage className={cn(cls, "text-blue-500")} />;
+  if (mimetype === "application/pdf")  return <FileText  className={cn(cls, "text-red-500")} />;
+  return <File className={cn(cls, "text-slate-400")} />;
+}
+
+function isPreviewable(mimetype: string) {
+  return mimetype.startsWith("image/") || mimetype === "application/pdf";
+}
+
+// ─── Preview Modal ─────────────────────────────────────────────────────────────
+function PreviewModal({ file, onClose }: { file: FileUploadRecord; onClose: () => void }) {
+  const previewUrl = `/api/uploads/${file.id}/preview`;
+  const isImage = file.mimetype.startsWith("image/");
+  const isPdf   = file.mimetype === "application/pdf";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        style={{ width: "min(90vw, 960px)", height: "min(90vh, 720px)" }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <FileIcon mimetype={file.mimetype} className="w-4 h-4 shrink-0" />
+            <span className="text-sm font-semibold text-slate-800 truncate">{file.original_name}</span>
+            <span className="text-xs text-slate-400 shrink-0">{formatBytes(file.size_bytes)}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-3">
+            <a
+              href={`/api/uploads/${file.id}/download`}
+              download={file.original_name}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+              onClick={e => e.stopPropagation()}
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download
+            </a>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-hidden bg-slate-50 flex items-center justify-center">
+          {isImage && (
+            <img
+              src={previewUrl}
+              alt={file.original_name}
+              className="max-w-full max-h-full object-contain rounded-lg"
+            />
+          )}
+          {isPdf && (
+            <iframe
+              src={previewUrl}
+              title={file.original_name}
+              className="w-full h-full border-0"
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 interface Props {
-  /** When rendered inside admin/team client-detail page, pass the client's ID to scope uploads */
   clientId?: number;
 }
 
@@ -49,6 +117,7 @@ export function DocumentsTab({ clientId }: Props) {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const [previewFile, setPreviewFile] = useState<FileUploadRecord | null>(null);
 
   const qKey = ["uploads", clientId ?? "mine"];
 
@@ -175,15 +244,35 @@ export function DocumentsTab({ clientId }: Props) {
           </div>
           <ul className="divide-y divide-slate-50">
             {files.map(f => (
-              <li key={f.id} className="flex items-center gap-3 px-5 py-3.5 group hover:bg-slate-50/60 transition-colors">
+              <li
+                key={f.id}
+                className="flex items-center gap-3 px-5 py-3.5 group hover:bg-slate-50/60 transition-colors"
+              >
                 <FileIcon mimetype={f.mimetype} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-800 truncate">{f.original_name}</p>
+                <div
+                  className={cn("flex-1 min-w-0", isPreviewable(f.mimetype) && "cursor-pointer")}
+                  onClick={() => isPreviewable(f.mimetype) && setPreviewFile(f)}
+                >
+                  <p className={cn(
+                    "text-sm font-medium text-slate-800 truncate",
+                    isPreviewable(f.mimetype) && "group-hover:text-[#266b75] transition-colors"
+                  )}>
+                    {f.original_name}
+                  </p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {formatBytes(f.size_bytes)} · {formatDate(f.created_at)}
                   </p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  {isPreviewable(f.mimetype) && (
+                    <button
+                      onClick={() => setPreviewFile(f)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-[#266b75] hover:bg-[#266b75]/10 transition-colors"
+                      title="Preview"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                  )}
                   <a
                     href={`/api/uploads/${f.id}/download`}
                     download={f.original_name}
@@ -216,6 +305,11 @@ export function DocumentsTab({ clientId }: Props) {
         <AlertCircle className="w-3 h-3" />
         Files are stored securely and only visible to you and your account team.
       </p>
+
+      {/* Preview modal */}
+      {previewFile && (
+        <PreviewModal file={previewFile} onClose={() => setPreviewFile(null)} />
+      )}
     </div>
   );
 }
