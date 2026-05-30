@@ -5,7 +5,7 @@ import {
   Trash2, AlertTriangle, CheckCircle2, ChevronDown,
   Clock, Calendar, AlertCircle, X, Flag,
   MessageSquare, CheckCheck, StickyNote, Filter, ChevronRight,
-  RefreshCw, Zap, CloudUpload, Search, ExternalLink,
+  Upload, FileSpreadsheet, CloudUpload, Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -69,15 +69,6 @@ const CHANNEL_LABELS: Record<string, string> = {
 };
 
 // ─── Date helpers ─────────────────────────────────────────────────────────────
-
-function todayIso() {
-  return new Date().toISOString().split("T")[0]!;
-}
-
-function firstOfMonthIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -679,15 +670,14 @@ export default function TransactionsPage() {
   const { toast } = useToast();
 
   const [selectedClientId, setSelectedClientId] = useState<number | "">("");
-  const [startDate, setStartDate] = useState(firstOfMonthIso());
-  const [endDate, setEndDate] = useState(todayIso());
 
   const [txData, setTxData] = useState<TxData | null>(null);
   const [txMap, setTxMap] = useState<Map<number, Tx>>(new Map());
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [syncConflict, setSyncConflict] = useState<{ existing: TxImport; message: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadConflict, setUploadConflict] = useState<{ existing: TxImport; message: string; file: File } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
   const [flagTxId, setFlagTxId] = useState<number | null>(null);
   const [editTxId, setEditTxId] = useState<number | null>(null);
@@ -746,7 +736,7 @@ export default function TransactionsPage() {
       activeClientIdRef.current = selectedClientId; // authoritative update for programmatic changes
       setTxData(null);
       setTxMap(new Map());
-      setSyncConflict(null);
+      setUploadConflict(null);
       setEditTxId(null);
       setFlagTxId(null);
       setFilterStatus("all");
@@ -757,7 +747,7 @@ export default function TransactionsPage() {
       setTxData(null);
       setTxMap(new Map());
       setLoadError(null);
-      setSyncConflict(null);
+      setUploadConflict(null);
       setEditTxId(null);
       setFlagTxId(null);
       setQboAccounts([]);
@@ -799,38 +789,30 @@ export default function TransactionsPage() {
     }
   }, [patchTx, txData, toast]);
 
-  const doSync = async (overwrite = false) => {
+  const doUpload = async (file: File, overwrite = false) => {
     if (!selectedClientId) return;
-    if (!startDate || !endDate) {
-      toast({ title: "Date range required", description: "Please select a start and end date.", variant: "destructive" });
-      return;
-    }
-    if (startDate > endDate) {
-      toast({ title: "Invalid date range", description: "Start date must be before end date.", variant: "destructive" });
-      return;
-    }
-
-    setSyncing(true);
+    setUploading(true);
     try {
-      const result = await apiFetch(`/api/qbo/clients/${selectedClientId}/sync-transactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ startDate, endDate, overwrite }),
-      });
-      setSyncConflict(null);
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("client_id", String(selectedClientId));
+      if (overwrite) fd.append("overwrite", "true");
+      const result = await apiFetch("/api/transactions/upload", { method: "POST", body: fd });
+      setUploadConflict(null);
       toast({
-        title: "Sync complete",
-        description: `${result.synced} transaction${result.synced === 1 ? "" : "s"} synced from QuickBooks.`,
+        title: "Upload complete",
+        description: `${result.count} transaction${result.count === 1 ? "" : "s"} imported.`,
       });
       await loadTransactions(selectedClientId as number);
     } catch (err: any) {
       if (err.status === 409 && err.body?.conflict) {
-        setSyncConflict({ existing: err.body.existing_import, message: err.body.message });
+        setUploadConflict({ existing: err.body.existing_import, message: err.body.message, file });
       } else {
-        toast({ title: "Sync failed", description: err.message, variant: "destructive" });
+        toast({ title: "Upload failed", description: err.message, variant: "destructive" });
       }
     } finally {
-      setSyncing(false);
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -947,7 +929,7 @@ export default function TransactionsPage() {
       {/* ── Header ── */}
       <div>
         <h1 className="text-3xl font-display font-bold text-slate-900">Transactions</h1>
-        <p className="text-slate-500 mt-1">Sync and review QuickBooks transactions per client.</p>
+        <p className="text-slate-500 mt-1">Upload and review transactions per client.</p>
       </div>
 
       {/* ── Controls bar ── */}
@@ -966,7 +948,7 @@ export default function TransactionsPage() {
                   setSelectedClientId(newId);
                   setTxData(null);
                   setTxMap(new Map());
-                  setSyncConflict(null);
+                  setUploadConflict(null);
                 }}
                 className="w-full appearance-none border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] pr-8"
               >
@@ -979,77 +961,44 @@ export default function TransactionsPage() {
             </div>
           </div>
 
-          {/* Date range pickers */}
-          <div className="flex items-end gap-2">
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">From</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={e => { setStartDate(e.target.value); setSyncConflict(null); }}
-                className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
-              />
-            </div>
-            <div className="pb-2.5 text-slate-400 text-sm">–</div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">To</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={e => { setEndDate(e.target.value); setSyncConflict(null); }}
-                className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
-              />
-            </div>
-          </div>
-
-          {/* Update bank feed + Sync buttons */}
+          {/* Upload button */}
           <div className="shrink-0 flex items-center gap-2">
-            {hasQboRealm && (
-              <a
-                href="https://app.qbo.intuit.com/app/banking"
-                target="_blank"
-                rel="noopener noreferrer"
-                title="Opens QuickBooks banking page in a new tab — click Update there to pull the latest transactions from your bank, then come back and sync."
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-[#266b75] text-[#266b75] hover:bg-[#266b75]/5 transition-colors"
-              >
-                <ExternalLink className="w-4 h-4" />
-                Update Bank Feed in QBO
-              </a>
-            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              className="hidden"
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) doUpload(file);
+              }}
+            />
             <button
-              onClick={() => doSync(false)}
-              disabled={!selectedClientId || syncing}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={!selectedClientId || uploading}
               className={cn(
                 "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors",
-                selectedClientId && !syncing
+                selectedClientId && !uploading
                   ? "bg-[#266b75] text-white hover:bg-[#1f545d]"
                   : "bg-slate-100 text-slate-400 cursor-not-allowed"
               )}
             >
-              <RefreshCw className={cn("w-4 h-4", syncing && "animate-spin")} />
-              {syncing ? "Syncing…" : "Sync from QuickBooks"}
+              <Upload className={cn("w-4 h-4", uploading && "animate-pulse")} />
+              {uploading ? "Uploading…" : "Upload Spreadsheet"}
             </button>
           </div>
         </div>
 
-        {/* No QBO realm warning */}
-        {selectedClientId && !hasQboRealm && (
-          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center gap-2 text-sm text-amber-700">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>No QuickBooks company linked to this client. Link one on the <span className="font-semibold">Clients</span> page under QuickBooks settings.</span>
-          </div>
-        )}
-
-        {/* Sync history */}
+        {/* Upload history */}
         {txData && txData.imports.length > 0 && (
           <div className="mt-4 pt-4 border-t border-slate-100 space-y-2">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sync History</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Upload History</p>
             {txData.imports.map(imp => (
               <div key={imp.id} className="flex items-center justify-between gap-3 text-xs text-slate-600">
                 <div className="flex items-center gap-2 min-w-0">
-                  <Zap className="w-3.5 h-3.5 text-[#7dbdc6] shrink-0" />
-                  <span className="font-medium text-slate-700 shrink-0">
-                    {fmtDateShort(imp.date_range_start)} – {fmtDateShort(imp.date_range_end)}
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-[#7dbdc6] shrink-0" />
+                  <span className="font-medium text-slate-700 truncate max-w-[180px]" title={imp.filename}>
+                    {imp.filename}
                   </span>
                   <span className="text-slate-400 shrink-0">·</span>
                   <span className="shrink-0">{imp.row_count} rows</span>
@@ -1065,7 +1014,7 @@ export default function TransactionsPage() {
                     <button onClick={() => setDeleteConfirmId(null)} className="px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200">Cancel</button>
                   </div>
                 ) : (
-                  <button onClick={() => setDeleteConfirmId(imp.id)} className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded shrink-0" title="Delete sync">
+                  <button onClick={() => setDeleteConfirmId(imp.id)} className="text-slate-400 hover:text-red-500 transition-colors p-1 rounded shrink-0" title="Delete upload">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
@@ -1076,25 +1025,25 @@ export default function TransactionsPage() {
       </div>
 
       {/* ── Conflict warning ── */}
-      {syncConflict && (
+      {uploadConflict && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 flex items-start gap-4">
           <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
-            <p className="font-semibold text-amber-900">Date Range Already Synced</p>
-            <p className="text-sm text-amber-800 mt-1">{syncConflict.message}</p>
+            <p className="font-semibold text-amber-900">Date Range Already Uploaded</p>
+            <p className="text-sm text-amber-800 mt-1">{uploadConflict.message}</p>
             <p className="text-xs text-amber-700 mt-1">
-              Last synced: <span className="font-medium">{fmtDate(syncConflict.existing.imported_at)}</span> · {syncConflict.existing.row_count} rows
+              Last uploaded: <span className="font-medium">{fmtDate(uploadConflict.existing.imported_at)}</span> · {uploadConflict.existing.row_count} rows
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => doSync(true)}
-              disabled={syncing}
+              onClick={() => doUpload(uploadConflict.file, true)}
+              disabled={uploading}
               className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors disabled:opacity-50"
             >
-              <CheckCircle2 className="w-4 h-4" /> Re-sync
+              <CheckCircle2 className="w-4 h-4" /> Replace
             </button>
-            <button onClick={() => setSyncConflict(null)} className="p-2 rounded-xl text-amber-600 hover:bg-amber-100 transition-colors">
+            <button onClick={() => setUploadConflict(null)} className="p-2 rounded-xl text-amber-600 hover:bg-amber-100 transition-colors">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -1106,7 +1055,7 @@ export default function TransactionsPage() {
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-16 text-center">
           <Calendar className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-700 font-medium">Select a client to view transactions</p>
-          <p className="text-slate-400 text-sm mt-1">Then choose a date range and sync from QuickBooks.</p>
+          <p className="text-slate-400 text-sm mt-1">Then click "Upload Spreadsheet" to import transactions.</p>
         </div>
       )}
       {selectedClientId && loading && (
@@ -1129,9 +1078,9 @@ export default function TransactionsPage() {
       )}
       {selectedClientId && !loading && !loadError && txData && allTx.length === 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-6 py-16 text-center">
-          <RefreshCw className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-700 font-medium">No transactions synced yet</p>
-          <p className="text-slate-400 text-sm mt-1">Select a date range and click "Sync from QuickBooks" above.</p>
+          <FileSpreadsheet className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <p className="text-slate-700 font-medium">No transactions uploaded yet</p>
+          <p className="text-slate-400 text-sm mt-1">Click "Upload Spreadsheet" above to import a CSV or Excel file.</p>
         </div>
       )}
 
