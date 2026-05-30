@@ -88,6 +88,16 @@ export function FloatingTimer({ sidebarCollapsed = false }: { sidebarCollapsed?:
   }
 
   async function handleSave() {
+    const missing: string[] = [];
+    if (!state.clientId) missing.push("no client selected");
+    if (!state.serviceType) missing.push("no service type selected");
+    if (missing.length > 0) {
+      const ok = window.confirm(
+        `Save timer without ${missing.join(" and ")}?\n\nClick OK to save anyway, or Cancel to go back and fill in the missing details.`
+      );
+      if (!ok) return;
+    }
+
     const durationMins = Math.max(1, Math.round(elapsedMs / 60000));
     const startedAt = state.firstStartedAt ? new Date(state.firstStartedAt).toISOString() : null;
     const endedAt = new Date().toISOString();
