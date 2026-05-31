@@ -16,6 +16,7 @@ import ClientDetail from "@/pages/client-detail";
 const Tasks = React.lazy(() => import("@/pages/tasks"));
 import TimeTracking from "@/pages/time";
 import Leads from "@/pages/leads";
+import LeadDetail from "@/pages/lead-detail";
 import Invoices from "@/pages/invoices";
 import Team from "@/pages/team";
 import Reports from "@/pages/reports";
@@ -133,6 +134,7 @@ function Router() {
         </Route>
         <Route path="/time" component={TimeTracking} />
         <Route path="/invoices" component={Invoices} />
+        <Route path="/leads/:id" component={LeadDetail} />
         <Route path="/leads" component={Leads} />
         {user.role === "admin" && <Route path="/team" component={Team} />}
         {user.role === "admin" && <Route path="/reports" component={Reports} />}

@@ -4,6 +4,7 @@ export * from "./client_services";
 export * from "./tasks";
 export * from "./time_entries";
 export * from "./leads";
+export * from "./lead_activities";
 export * from "./invoices";
 export * from "./reminders";
 export * from "./users";

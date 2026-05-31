@@ -427,12 +427,40 @@ export const ListLeadsResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
   email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  cell_phone: zod.string().nullish(),
+  business_name: zod.string().nullish(),
+  client_id: zod.number().nullish(),
+  title: zod.string().nullish(),
+  management_level: zod.string().nullish(),
+  industry: zod.string().nullish(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
+  linkedin_url: zod.string().nullish(),
+  website: zod.string().nullish(),
+  facebook_url: zod.string().nullish(),
+  x_url: zod.string().nullish(),
+  company_size: zod.string().nullish(),
+  revenue: zod.string().nullish(),
+  founded_year: zod.string().nullish(),
   estimated_value: zod.number().nullish(),
   status: zod.enum(["new", "contacted", "proposal", "closed"]),
   lead_source: zod.string().nullish(),
   notes: zod.string().nullish(),
   follow_up_date: zod.string().nullish(),
-  client_id: zod.number().nullish(),
+  stage: zod.string().nullish(),
+  overall_status: zod.string().nullish(),
+  reply_type: zod.string().nullish(),
+  priority: zod.string().nullish(),
+  call_attempts: zod.number().nullish(),
+  last_call_date: zod.string().nullish(),
+  last_call_outcome: zod.string().nullish(),
+  next_follow_up_type: zod.string().nullish(),
+  email_sequence_name: zod.string().nullish(),
+  email_stage: zod.string().nullish(),
+  personalization_notes: zod.string().nullish(),
+  lead_owner: zod.string().nullish(),
+  created_at: zod.any().nullish(),
 });
 export const ListLeadsResponse = zod.array(ListLeadsResponseItem);
 
@@ -463,6 +491,19 @@ export const CreateLeadBody = zod.object({
   lead_source: zod.string().nullish(),
   notes: zod.string().nullish(),
   follow_up_date: zod.string().nullish(),
+  stage: zod.string().nullish(),
+  overall_status: zod.string().nullish(),
+  reply_type: zod.string().nullish(),
+  priority: zod.string().nullish(),
+  call_attempts: zod.number().nullish(),
+  lead_owner: zod.string().nullish(),
+});
+
+/**
+ * @summary Get a single lead
+ */
+export const GetLeadParams = zod.object({
+  id: zod.coerce.number(),
 });
 
 /**
@@ -496,6 +537,18 @@ export const UpdateLeadBody = zod.object({
   lead_source: zod.string().nullish(),
   notes: zod.string().nullish(),
   follow_up_date: zod.string().nullish(),
+  stage: zod.string().nullish(),
+  overall_status: zod.string().nullish(),
+  reply_type: zod.string().nullish(),
+  priority: zod.string().nullish(),
+  call_attempts: zod.number().nullish(),
+  last_call_date: zod.string().nullish(),
+  last_call_outcome: zod.string().nullish(),
+  next_follow_up_type: zod.string().nullish(),
+  email_sequence_name: zod.string().nullish(),
+  email_stage: zod.string().nullish(),
+  personalization_notes: zod.string().nullish(),
+  lead_owner: zod.string().nullish(),
 });
 
 export const UpdateLeadResponse = zod.object({
@@ -507,6 +560,28 @@ export const UpdateLeadResponse = zod.object({
   lead_source: zod.string().nullish(),
   notes: zod.string().nullish(),
   follow_up_date: zod.string().nullish(),
+  stage: zod.string().nullish(),
+  overall_status: zod.string().nullish(),
+  reply_type: zod.string().nullish(),
+  priority: zod.string().nullish(),
+  call_attempts: zod.number().nullish(),
+  last_call_date: zod.string().nullish(),
+  last_call_outcome: zod.string().nullish(),
+  next_follow_up_type: zod.string().nullish(),
+  email_sequence_name: zod.string().nullish(),
+  email_stage: zod.string().nullish(),
+  personalization_notes: zod.string().nullish(),
+  lead_owner: zod.string().nullish(),
+  business_name: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  cell_phone: zod.string().nullish(),
+  city: zod.string().nullish(),
+  state: zod.string().nullish(),
+  title: zod.string().nullish(),
+  linkedin_url: zod.string().nullish(),
+  website: zod.string().nullish(),
+  facebook_url: zod.string().nullish(),
+  x_url: zod.string().nullish(),
 });
 
 /**
@@ -515,6 +590,33 @@ export const UpdateLeadResponse = zod.object({
 export const DeleteLeadParams = zod.object({
   id: zod.coerce.number(),
 });
+
+/**
+ * @summary Lead activity schemas
+ */
+export const GetLeadActivitiesParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const CreateLeadActivityBody = zod.object({
+  type: zod.enum(["call", "email", "note", "follow_up"]),
+  notes: zod.string().nullish(),
+  outcome: zod.string().nullish(),
+  scheduled_date: zod.string().nullish(),
+  follow_up_type: zod.string().nullish(),
+});
+
+export const LeadActivityItem = zod.object({
+  id: zod.number(),
+  lead_id: zod.number(),
+  type: zod.enum(["call", "email", "note", "follow_up"]),
+  notes: zod.string().nullish(),
+  outcome: zod.string().nullish(),
+  scheduled_date: zod.string().nullish(),
+  follow_up_type: zod.string().nullish(),
+  created_at: zod.any().nullish(),
+});
+export const ListLeadActivitiesResponse = zod.array(LeadActivityItem);
 
 /**
  * @summary List all invoices

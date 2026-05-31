@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import {
   useListLeads,
   useListClients,
@@ -655,8 +656,7 @@ function LeadDetailPanel({ lead, clients, onClose, onSetStatus, isPending }: {
 export default function Leads() {
   const { data: leads, isLoading } = useListLeads();
   const { data: clients = [] } = useListClients();
-  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
-  const selectedLead = (leads ?? []).find(l => l.id === selectedLeadId) ?? null;
+  const [, navigate] = useLocation();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
@@ -930,7 +930,7 @@ export default function Leads() {
                   colLeads.map(lead => (
                     <div
                       key={lead.id}
-                      onClick={() => setSelectedLeadId(lead.id)}
+                      onClick={() => navigate(`/leads/${lead.id}`)}
                       className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col gap-3 hover:border-[#266b75]/40 hover:shadow-md transition-all cursor-pointer"
                     >
                       {/* Lead name + email + delete */}
@@ -1048,17 +1048,6 @@ export default function Leads() {
             );
           })}
         </div>
-      )}
-
-      {/* Lead Detail Panel */}
-      {selectedLead && (
-        <LeadDetailPanel
-          lead={selectedLead}
-          clients={clients}
-          onClose={() => setSelectedLeadId(null)}
-          onSetStatus={setStatus}
-          isPending={updateMutation.isPending}
-        />
       )}
 
       {/* Add Lead Modal */}

@@ -1,0 +1,83 @@
+Let me pull up what a HubSpot lead card actually looks like so I can give you accurate details.
+
+Good — now I have a solid picture of how HubSpot lead records actually work. Here’s the breakdown, followed by your Replit prompt:
+
+What makes a HubSpot-style lead card different from a basic list row is that it has two zones — a left panel (activity feed & actions) and a right panel (properties & details) — plus a status bar across the top.
+
+Here’s your copy-paste ready Replit prompt:
+
+I want to upgrade my existing Leads page to work like a HubSpot lead record. When I click on a lead from the leads list, it should open a full lead detail view (not just a small modal) structured like HubSpot’s lead record layout. Here’s exactly what I need:
+
+TOP BAR (Lead Header)
+
+	•	Lead name and business name prominently displayed
+	•	Lead stage dropdown at the top with these stages: New → Contacted → In Progress → Qualified → Disqualified
+	•	Lead owner (my name, pre-filled as default)
+	•	A “Schedule Next Activity” button in the header
+	•	Date lead was created
+
+TWO-COLUMN LAYOUT below the header:
+
+LEFT COLUMN — Activity & Actions
+
+Quick Action Buttons at the top of this column:
+
+	•	Log a Call (opens a small form to log call outcome + notes)
+	•	Log an Email (opens a small form to log email sent + notes)
+	•	Add Note
+	•	Schedule Follow-Up (sets a date + type: Call or Email)
+
+Activity Timeline below the action buttons:
+
+	•	Chronological feed showing every logged activity
+	•	Each activity entry should show: activity type (call/email/note), date and time, and the notes entered
+	•	Most recent activity at the top
+	•	Activities should be color coded or icon coded by type (phone icon for calls, envelope for emails, note icon for notes)
+
+RIGHT COLUMN — Lead Properties
+
+Organized into collapsible sections:
+
+Lead Info
+
+	•	Lead stage (same dropdown as header)
+	•	Lead source (dropdown: Cold List, Referral, Bark, Thumbtack, Website, Other)
+	•	Overall status (dropdown: Untouched, In Progress, Responded, Converted, Dead)
+	•	Reply type (dropdown: Interested, Not Now, Unsubscribe, Wrong Fit, N/A)
+	•	Priority (dropdown: Hot, Warm, Cold)
+
+Contact Info
+
+	•	First name, last name
+	•	Business name
+	•	Email address
+	•	Phone number
+	•	City, state
+
+Outreach Info
+
+	•	Email sequence name
+	•	Email stage / email number they are on
+	•	Call attempts (number counter with a +1 button)
+	•	Last call date
+	•	Last call outcome (dropdown: No Answer, Left Voicemail, Spoke With, Wrong Number)
+	•	Next follow-up date
+	•	Next follow-up type (Call or Email)
+
+Notes
+
+	•	Personalization notes (text area)
+	•	General notes (text area)
+
+FUNCTIONALITY:
+
+	•	All fields in the right column should be inline editable — click to edit, auto-save on blur (like HubSpot)
+	•	The activity timeline should update immediately when a new activity is logged
+	•	The lead stage in the header and in Lead Info should stay in sync
+	•	Add a back button to return to the leads list
+	•	The summary bar on the leads list page should still reflect updated status counts
+	•	Keep the same light theme and component styling as the rest of the dashboard
+
+Do not change any other existing pages. Only update the lead detail view and make sure the leads list links to this new layout.
+
+Let me know how it goes!

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { leadsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { leadsTable, leadActivitiesTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
 import {
   CreateLeadBody,
   UpdateLeadBody,
@@ -9,6 +9,9 @@ import {
   DeleteLeadParams,
   ListLeadsResponse,
   UpdateLeadResponse,
+  GetLeadParams,
+  GetLeadActivitiesParams,
+  CreateLeadActivityBody,
 } from "@workspace/api-zod";
 import { requireAdmin, requireRole } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
@@ -29,6 +32,36 @@ router.post("/leads", requireRole("admin", "team_member"), async (req, res) => {
   logAudit("lead", lead.id, "created", `Lead "${lead.name}" created`, { id: actor?.id, name: actor?.name });
 });
 
+router.get("/leads/:id/activities", requireRole("admin", "team_member"), async (req, res) => {
+  const { id } = GetLeadActivitiesParams.parse(req.params);
+  const activities = await db
+    .select()
+    .from(leadActivitiesTable)
+    .where(eq(leadActivitiesTable.lead_id, id))
+    .orderBy(desc(leadActivitiesTable.created_at));
+  res.json(activities);
+});
+
+router.post("/leads/:id/activities", requireRole("admin", "team_member"), async (req, res) => {
+  const { id } = GetLeadParams.parse(req.params);
+  const body = CreateLeadActivityBody.parse(req.body);
+  const [activity] = await db
+    .insert(leadActivitiesTable)
+    .values({ ...body, lead_id: id })
+    .returning();
+  res.status(201).json(activity);
+});
+
+router.get("/leads/:id", requireRole("admin", "team_member"), async (req, res) => {
+  const { id } = GetLeadParams.parse(req.params);
+  const [lead] = await db.select().from(leadsTable).where(eq(leadsTable.id, id));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+  res.json(lead);
+});
+
 router.patch("/leads/:id", requireRole("admin", "team_member"), async (req, res) => {
   const { id } = UpdateLeadParams.parse(req.params);
   const body = UpdateLeadBody.parse(req.body);
@@ -47,7 +80,7 @@ router.patch("/leads/:id", requireRole("admin", "team_member"), async (req, res)
   const parsed = UpdateLeadResponse.parse(updated);
   res.json(parsed);
   const actor = req.session.user;
-  logAudit("lead", id, "updated", `Lead "${updated.name}" status → ${updated.status}`, { id: actor?.id, name: actor?.name });
+  logAudit("lead", id, "updated", `Lead "${updated.name}" updated`, { id: actor?.id, name: actor?.name });
 });
 
 router.delete("/leads/:id", requireAdmin, async (req, res) => {

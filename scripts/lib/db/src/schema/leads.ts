@@ -1,4 +1,4 @@
-import { pgTable, serial, text, real, integer } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, real, integer, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -27,6 +27,20 @@ export const leadsTable = pgTable("leads", {
   lead_source: text("lead_source"),
   notes: text("notes"),
   follow_up_date: text("follow_up_date"),
+  // HubSpot-style CRM fields
+  stage: text("stage").default("new"),
+  overall_status: text("overall_status").default("Untouched"),
+  reply_type: text("reply_type"),
+  priority: text("priority"),
+  call_attempts: integer("call_attempts").default(0),
+  last_call_date: text("last_call_date"),
+  last_call_outcome: text("last_call_outcome"),
+  next_follow_up_type: text("next_follow_up_type"),
+  email_sequence_name: text("email_sequence_name"),
+  email_stage: text("email_stage"),
+  personalization_notes: text("personalization_notes"),
+  lead_owner: text("lead_owner").default("HM Virtual Services"),
+  created_at: timestamp("created_at").defaultNow(),
 });
 
 export const insertLeadSchema = createInsertSchema(leadsTable).omit({ id: true });
