@@ -985,10 +985,11 @@ export default function LeadDetail() {
                       href={lead.linkedin_url}
                       target="_blank"
                       rel="noreferrer"
+                      aria-label="Open LinkedIn profile"
                       onClick={e => e.stopPropagation()}
                       className="text-slate-400 hover:text-slate-600 transition-colors p-1 shrink-0"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
                     </a>
                   )}
                 </div>
@@ -1005,10 +1006,11 @@ export default function LeadDetail() {
                       href={lead.website}
                       target="_blank"
                       rel="noreferrer"
+                      aria-label="Open website"
                       onClick={e => e.stopPropagation()}
                       className="text-slate-400 hover:text-slate-600 transition-colors p-1 shrink-0"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
                     </a>
                   )}
                 </div>

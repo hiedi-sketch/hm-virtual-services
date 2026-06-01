@@ -1,0 +1,17 @@
+User-agent: *
+Disallow: /api/
+Disallow: /dashboard
+Disallow: /clients
+Disallow: /invoices
+Disallow: /time
+Disallow: /leads
+Disallow: /tasks
+Disallow: /team
+Disallow: /reports
+Disallow: /settings
+Disallow: /backup
+Disallow: /api-keys
+
+Allow: /
+Allow: /pay/
+Allow: /privacy-policy

@@ -141,6 +141,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 title={collapsed ? label : undefined}
+                aria-label={label}
                 className={cn(
                   "flex items-center rounded-lg transition-colors cursor-pointer",
                   collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"
