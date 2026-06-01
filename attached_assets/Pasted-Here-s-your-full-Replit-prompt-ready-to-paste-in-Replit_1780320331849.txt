@@ -1,0 +1,149 @@
+Here's your full Replit prompt — ready to paste in:
+
+Replit Prompt:
+
+I need to add an Accounts Payable (AP) Queue module to my existing React + Vite + TypeScript dashboard. This is Phase 1 only — bill tracking, status management, and per-client cycle settings. No email sending or client portal yet.
+
+Tech Stack
+
+React + Vite + TypeScript
+Existing dashboard uses dark teal (#2B7A8B) and bright teal (#4AAFC4) with Raleway font
+Match the existing dashboard's visual style exactly
+Use PostgreSQL for all data (no localStorage)
+
+
+Database Tables Needed
+ap_bills
+
+id (uuid, primary key)
+client_id (reference to existing clients table)
+vendor (text)
+invoice_number (text, optional)
+invoice_date (date)
+due_date (date)
+amount (decimal)
+category (text — GL/expense category)
+status (enum: upcoming, due_soon, sent_for_approval, approved, snoozed, rejected, paid)
+notes (text, optional)
+attachment_url (text, optional — for PDF/doc upload)
+snooze_until (date, optional — manual or auto next cycle)
+client_response_note (text, optional)
+created_at, updated_at (timestamps)
+
+ap_client_settings
+
+id (uuid, primary key)
+client_id (unique, reference to existing clients table)
+cycle_window_days (integer, default 14)
+payment_day (text, default tuesday)
+approval_send_day (text, default wednesday)
+created_at, updated_at (timestamps)
+
+
+Status Logic & Auto-Transitions
+Auto status flip — run on page load and on a scheduled check:
+
+If a bill is upcoming and its due_date falls within the client's cycle_window_days from today → auto-flip to due_soon
+If a bill is snoozed and today >= snooze_until → auto-flip back to due_soon
+
+Manual triggers:
+
+due_soon → sent_for_approval — triggered when approval email is sent (Phase 2). For now, add a manual "Mark as Sent" button
+sent_for_approval → approved / snoozed / rejected — client response (for now, manual buttons to simulate)
+approved → paid — you mark manually
+
+Snooze logic:
+
+When snoozed, auto-calculate snooze_until as the next cycle's payment date based on client settings
+Also allow manual date override via a date picker
+
+Reject logic:
+
+client_response_note is required before status can be set to rejected
+
+
+UI — Master Bill Queue Page
+Page layout:
+
+Page title: Accounts Payable
+Top bar with:
+
+Filter by client (dropdown, default = All Clients)
+Filter by status (multi-select or tabs)
+"Add Bill" button (opens modal)
+Total outstanding amount shown (sum of all non-paid bills)
+
+
+
+Bills table columns:
+
+Client
+Vendor
+Invoice #
+Invoice Date
+Due Date (highlight in amber if due within 7 days, red if overdue)
+Amount
+Category
+Status (color-coded pill/badge)
+Actions
+
+Status badge colors:
+
+Upcoming — gray
+Due Soon — amber
+Sent for Approval — blue
+Approved — green
+Snoozed — purple
+Rejected — red
+Paid — dark gray / muted
+
+Row actions (contextual based on status):
+
+All statuses: Edit, View/Download attachment
+due_soon: Mark as Sent
+sent_for_approval: Approve, Snooze, Reject
+approved: Mark as Paid
+snoozed: Edit snooze date, Re-enter cycle manually
+rejected: View note, Re-open (back to due_soon)
+
+
+Add / Edit Bill Modal
+Fields:
+
+Client (dropdown from existing clients)
+Vendor (text)
+Invoice Number (text, optional)
+Invoice Date (date picker)
+Due Date (date picker)
+Amount (currency input)
+Category (text or dropdown — use common expense categories as suggestions)
+Notes (textarea, optional)
+Attachment (file upload, accept PDF and common image types, store URL)
+
+
+Per-Client AP Settings
+Add an AP Settings section inside each client's existing settings or profile page:
+
+Cycle Window (number input, days, default 14)
+Payment Day (dropdown: Monday–Friday)
+Approval Send Day (dropdown: Monday–Friday)
+Snooze behavior: toggle between "Auto next cycle" and "Manual date"
+Save button
+
+If no AP settings exist for a client yet, auto-create a record with defaults on first bill entry.
+
+Summary Cards (top of AP page)
+Show 4 cards:
+
+Total Outstanding — sum of all non-paid bills
+Due Soon — count + total of due_soon bills
+Awaiting Approval — count + total of sent_for_approval bills
+Approved & Ready to Pay — count + total of approved bills
+
+
+Notes
+
+This is Phase 1 only. Do not build the approval email or client portal yet — those are Phase 2
+All data in PostgreSQL, no localStorage
+Keep all styling consistent with the existing dashboard (dark teal #2B7A8B, bright teal #4AAFC4, Raleway font)
+Add the AP Queue to the existing dashboard sidebar navigation

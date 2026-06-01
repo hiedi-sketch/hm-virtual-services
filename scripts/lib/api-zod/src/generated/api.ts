@@ -826,3 +826,69 @@ export const ListTransactionsResponse = zod.object({
   imports: zod.array(TransactionImport),
   transactions: zod.array(TransactionItem),
 });
+
+export const ApBillStatus = zod.enum([
+  "upcoming", "due_soon", "sent_for_approval", "approved", "snoozed", "rejected", "paid",
+]);
+
+export const ApBillItem = zod.object({
+  id: zod.number(),
+  client_id: zod.number(),
+  client_name: zod.string().nullable().optional(),
+  vendor: zod.string(),
+  invoice_number: zod.string().nullable().optional(),
+  invoice_date: zod.string().nullable().optional(),
+  due_date: zod.string(),
+  amount: zod.number(),
+  category: zod.string().nullable().optional(),
+  status: ApBillStatus,
+  notes: zod.string().nullable().optional(),
+  attachment_url: zod.string().nullable().optional(),
+  snooze_until: zod.string().nullable().optional(),
+  client_response_note: zod.string().nullable().optional(),
+  created_at: zod.string().nullable().optional(),
+  updated_at: zod.string().nullable().optional(),
+});
+export const ListApBillsResponse = zod.array(ApBillItem);
+
+export const CreateApBillBody = zod.object({
+  client_id: zod.number(),
+  vendor: zod.string().min(1),
+  invoice_number: zod.string().optional().nullable(),
+  invoice_date: zod.string().optional().nullable(),
+  due_date: zod.string(),
+  amount: zod.number(),
+  category: zod.string().optional().nullable(),
+  notes: zod.string().optional().nullable(),
+  attachment_url: zod.string().optional().nullable(),
+});
+
+export const UpdateApBillBody = zod.object({
+  vendor: zod.string().optional(),
+  invoice_number: zod.string().optional().nullable(),
+  invoice_date: zod.string().optional().nullable(),
+  due_date: zod.string().optional(),
+  amount: zod.number().optional(),
+  category: zod.string().optional().nullable(),
+  status: ApBillStatus.optional(),
+  notes: zod.string().optional().nullable(),
+  attachment_url: zod.string().optional().nullable(),
+  snooze_until: zod.string().optional().nullable(),
+  client_response_note: zod.string().optional().nullable(),
+});
+
+export const ApClientSettingsItem = zod.object({
+  id: zod.number().optional(),
+  client_id: zod.number(),
+  cycle_window_days: zod.number(),
+  payment_day: zod.string(),
+  approval_send_day: zod.string(),
+  snooze_auto: zod.boolean(),
+});
+
+export const UpdateApClientSettingsBody = zod.object({
+  cycle_window_days: zod.number().int().min(1).optional(),
+  payment_day: zod.string().optional(),
+  approval_send_day: zod.string().optional(),
+  snooze_auto: zod.boolean().optional(),
+});

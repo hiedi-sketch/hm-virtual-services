@@ -32,6 +32,7 @@ import estimateResponseRouter from "./estimate-response";
 import payRouter from "./pay";
 import transactionsRouter from "./transactions";
 import onboardingRouter from "./onboarding";
+import apRouter from "./ap";
 
 const router: IRouter = Router();
 
@@ -68,5 +69,6 @@ router.use(estimateResponseRouter);
 router.use(payRouter);
 router.use(transactionsRouter);
 router.use(onboardingRouter);
+router.use(apRouter);
 
 export default router;

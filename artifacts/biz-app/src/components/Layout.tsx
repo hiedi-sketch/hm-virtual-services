@@ -16,6 +16,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,6 +31,7 @@ const ADMIN_NAV = [
   { href: "/transactions", label: "Transaction Questions",  icon: ArrowLeftRight },
   { href: "/app-tracker",  label: "App Dev Tracker",        icon: MonitorSmartphone },
   { href: "/leads",        label: "Leads",                  icon: Megaphone },
+  { href: "/ap-queue",     label: "AP Queue",               icon: Receipt },
   { href: "/team",         label: "Users",                  icon: UserCog },
   { href: "/settings",     label: "Settings",               icon: Settings },
 ];
