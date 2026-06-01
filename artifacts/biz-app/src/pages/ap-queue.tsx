@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useListClients } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Plus, Filter, DollarSign, Clock, CheckCircle2, AlertTriangle,
   ChevronDown, X, Pencil, Trash2, Send, Check, Ban,
-  RotateCcw, CalendarClock, Paperclip, ExternalLink, Eye,
+  RotateCcw, CalendarClock, Paperclip, ExternalLink, Eye, Upload,
 } from "lucide-react";
 
 const API = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -95,6 +95,8 @@ const EMPTY_BILL = {
   due_date: "", amount: "", category: "", notes: "", attachment_url: "",
 };
 
+type BillFormState = typeof EMPTY_BILL;
+
 export default function ApQueue() {
   const { toast } = useToast();
   const { data: clients = [] } = useListClients();
@@ -118,7 +120,9 @@ export default function ApQueue() {
   const [snoozeManual, setSnoozeManual] = useState(false);
   const [settings, setSettings] = useState<ApSettings | null>(null);
   const [settingsForm, setSettingsForm] = useState<Partial<ApSettings>>({});
-  const [billForm, setBillForm] = useState<typeof EMPTY_BILL>({ ...EMPTY_BILL });
+  const [billForm, setBillForm] = useState<BillFormState>({ ...EMPTY_BILL });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
 
   const fetchBills = useCallback(async () => {
@@ -189,6 +193,21 @@ export default function ApQueue() {
 
     setSaving(true);
     try {
+      // Upload file first if one was selected
+      let attachmentUrl = billForm.attachment_url || null;
+      if (selectedFile) {
+        const fd = new FormData();
+        fd.append("file", selectedFile);
+        fd.append("client_id", String(billForm.client_id));
+        const uploadRes = await fetch(`${API}/api/uploads`, { method: "POST", body: fd });
+        if (!uploadRes.ok) {
+          const err = await uploadRes.json().catch(() => ({}));
+          throw new Error(err.error ?? "File upload failed");
+        }
+        const uploadData = await uploadRes.json();
+        attachmentUrl = `${API}/api/uploads/${uploadData.id}/preview`;
+      }
+
       const payload = {
         client_id: Number(billForm.client_id),
         vendor: billForm.vendor,
@@ -198,7 +217,7 @@ export default function ApQueue() {
         amount: Number(billForm.amount),
         category: billForm.category || null,
         notes: billForm.notes || null,
-        attachment_url: billForm.attachment_url || null,
+        attachment_url: attachmentUrl,
       };
 
       if (billModal === "add") {
@@ -213,9 +232,10 @@ export default function ApQueue() {
         toast({ title: "Bill updated" });
       }
       setBillModal(null);
+      setSelectedFile(null);
       fetchBills();
-    } catch {
-      toast({ title: "Error saving bill", variant: "destructive" });
+    } catch (e: any) {
+      toast({ title: "Error saving bill", description: e.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -277,6 +297,7 @@ export default function ApQueue() {
 
   function openAddModal() {
     setBillForm({ ...EMPTY_BILL });
+    setSelectedFile(null);
     setBillModal("add");
   }
 
@@ -292,6 +313,7 @@ export default function ApQueue() {
       notes: bill.notes ?? "",
       attachment_url: bill.attachment_url ?? "",
     });
+    setSelectedFile(null);
     setBillModal(bill);
   }
 
@@ -512,13 +534,50 @@ export default function ApQueue() {
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Attachment URL</label>
+                <label className="block text-xs font-semibold text-slate-600 mb-1">Attachment</label>
                 <input
-                  value={billForm.attachment_url}
-                  onChange={e => setBillForm(f => ({ ...f, attachment_url: e.target.value }))}
-                  placeholder="https://… (link to PDF or document)"
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#266b75]/30"
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.png,image/png,application/pdf"
+                  className="hidden"
+                  onChange={e => setSelectedFile(e.target.files?.[0] ?? null)}
                 />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg border border-dashed border-slate-300 text-sm text-slate-500 hover:border-[#266b75] hover:text-[#266b75] transition-colors"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {selectedFile ? "Change file" : "Upload PDF or PNG"}
+                  </button>
+                  {selectedFile && (
+                    <div className="flex items-center gap-1.5 text-sm text-slate-700">
+                      <Paperclip className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="max-w-[180px] truncate">{selectedFile.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => { setSelectedFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
+                        className="text-slate-400 hover:text-slate-600"
+                        aria-label="Remove file"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  {!selectedFile && billForm.attachment_url && (
+                    <a
+                      href={billForm.attachment_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center gap-1 text-xs text-[#266b75] hover:underline"
+                      aria-label="View current attachment"
+                    >
+                      <Paperclip className="w-3 h-3" /> View current
+                    </a>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-1.5">PDF or PNG, max 10 MB</p>
               </div>
             </div>
             <div className="flex gap-3 justify-end pt-2 border-t border-slate-100">
