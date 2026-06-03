@@ -500,14 +500,37 @@ const Checklists = ({ apps, checklists, setChecklists }: { apps: AppEntry[]; che
 // ── Root page ────────────────────────────────────────────────────────────────
 export default function AppDevTracker() {
   const [tab, setTab] = useState("apps");
-  const [apps, setApps] = useState<AppEntry[]>(INITIAL_APPS);
-  const [changes, setChanges] = useState<ChangeEntry[]>([]);
-  const [checklists, setChecklists] = useState<ChecklistsState>({});
+  const [apps, setApps] = useState<AppEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem("hm_tracker_apps");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : INITIAL_APPS;
+    } catch { return INITIAL_APPS; }
+  });
+  const [changes, setChanges] = useState<ChangeEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem("hm_tracker_changes");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
+  const [checklists, setChecklists] = useState<ChecklistsState>(() => {
+    try {
+      const raw = localStorage.getItem("hm_tracker_checklists");
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  });
 
-  // Sync apps to localStorage so the detail page can read name/targetDate
+  // Sync all tracker state to localStorage
   useEffect(() => {
     localStorage.setItem("hm_tracker_apps", JSON.stringify(apps));
   }, [apps]);
+  useEffect(() => {
+    localStorage.setItem("hm_tracker_changes", JSON.stringify(changes));
+  }, [changes]);
+  useEffect(() => {
+    localStorage.setItem("hm_tracker_checklists", JSON.stringify(checklists));
+  }, [checklists]);
 
   const tabs = [
     { id: "apps", label: "App Pipeline", icon: "apps" },
