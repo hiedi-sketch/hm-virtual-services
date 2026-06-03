@@ -718,14 +718,15 @@ export default function AppDevTrackerDetail() {
         notes:           r.notes?.trim()              || undefined,
       });
     }
-    for (const [name, data] of sprintGroups) {
-      const existing = sprints.find(s => s.name === name);
-      if (existing) {
-        await updateSprint(existing.id, { tasks: [...(existing.tasks ?? []), ...data.tasks] });
-      } else {
-        await addSprint({ name, startDate: data.startDate, endDate: data.endDate, tasks: data.tasks });
-      }
-    }
+    await Promise.all(
+      Array.from(sprintGroups.entries()).map(([name, data]) => {
+        const existing = sprints.find(s => s.name === name);
+        if (existing) {
+          return updateSprint(existing.id, { tasks: [...(existing.tasks ?? []), ...data.tasks] });
+        }
+        return addSprint({ name, startDate: data.startDate, endDate: data.endDate, tasks: data.tasks });
+      })
+    );
     setImporting(false);
     setImportPreview(null);
   };
