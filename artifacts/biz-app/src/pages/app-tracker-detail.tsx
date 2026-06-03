@@ -75,6 +75,14 @@ const TIER_PALETTE: Record<DabTier, { bg: string; border: string; iconBg: string
   unknown: { bg: "#f8fafc", border: "#e2e8f0", iconBg: "#f1f5f9", iconStroke: "#94a3b8", headColor: "#64748b", subColor: "#94a3b8" },
 };
 
+// ── Pure helpers ──────────────────────────────────────────────────────────────
+// Firestore rejects documents containing `undefined` values — strip them first.
+function stripUndefined<T extends object>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as T;
+}
+
 // ── CSV helpers (module-level pure functions) ─────────────────────────────────
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/);
@@ -706,7 +714,7 @@ export default function AppDevTrackerDetail() {
       const status: TaskStatus = validStatuses.includes(r.status as TaskStatus) ? r.status as TaskStatus : "todo";
       const validPriorities = ["low","medium","high","critical"];
       const priority = validPriorities.includes(r.priority) ? r.priority as Task["priority"] : undefined;
-      sprintGroups.get(name)!.tasks.push({
+      sprintGroups.get(name)!.tasks.push(stripUndefined({
         id:              crypto.randomUUID(),
         title:           taskTitle,
         status,
@@ -722,7 +730,7 @@ export default function AppDevTrackerDetail() {
         claudePromptRef: r.claude_prompt_ref?.trim()  || undefined,
         description:     r.description?.trim()        || undefined,
         notes:           r.notes?.trim()              || undefined,
-      });
+      }));
     }
     try {
       await Promise.all(
