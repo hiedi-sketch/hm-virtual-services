@@ -691,11 +691,12 @@ export default function AppDevTrackerDetail() {
   const confirmImport = async () => {
     if (!importPreview) return;
     setImporting(true);
+    setImportError(null);
     const { rows } = importPreview;
     const sprintGroups = new Map<string, { startDate: string; endDate: string; tasks: Task[] }>();
     for (const r of rows) {
       const name = r.sprint_name?.trim();
-      if (!name || r.sprint_name?.startsWith("#")) continue;
+      if (!name) continue;
       if (!sprintGroups.has(name)) {
         sprintGroups.set(name, { startDate: r.sprint_start_date ?? "", endDate: r.sprint_end_date ?? "", tasks: [] });
       }
@@ -723,17 +724,24 @@ export default function AppDevTrackerDetail() {
         notes:           r.notes?.trim()              || undefined,
       });
     }
-    await Promise.all(
-      Array.from(sprintGroups.entries()).map(([name, data]) => {
-        const existing = sprints.find(s => s.name === name);
-        if (existing) {
-          return updateSprint(existing.id, { tasks: [...(existing.tasks ?? []), ...data.tasks] });
-        }
-        return addSprint({ name, startDate: data.startDate, endDate: data.endDate, tasks: data.tasks });
-      })
-    );
-    setImporting(false);
-    setImportPreview(null);
+    try {
+      await Promise.all(
+        Array.from(sprintGroups.entries()).map(([name, data]) => {
+          const existing = sprints.find(s => s.name === name);
+          if (existing) {
+            return updateSprint(existing.id, { tasks: [...(existing.tasks ?? []), ...data.tasks] });
+          }
+          return addSprint({ name, startDate: data.startDate, endDate: data.endDate, tasks: data.tasks });
+        })
+      );
+      setImportPreview(null);
+    } catch (err) {
+      console.error("Import failed:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setImportError(`Import failed: ${msg}`);
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleAddSprint = async () => {
