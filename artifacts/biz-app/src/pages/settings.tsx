@@ -15,6 +15,8 @@ import {
   X,
   Download,
   ExternalLink,
+  Mail,
+  Copy,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -46,16 +48,17 @@ interface CUList { id: string; name: string; folder?: { name: string } }
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
 
-type TabId = "account" | "asana" | "clickup" | "services" | "reports" | "api-keys" | "backup";
+type TabId = "account" | "asana" | "clickup" | "inbox" | "services" | "reports" | "api-keys" | "backup";
 
 const TABS: { id: TabId; label: string; icon: ElementType }[] = [
-  { id: "account",   label: "Account",   icon: User },
-  { id: "asana",     label: "Asana Sync", icon: Link2 },
-  { id: "clickup",   label: "ClickUp",   icon: Zap },
-  { id: "services",  label: "Services",  icon: Package },
-  { id: "reports",   label: "Reports",   icon: BarChart2 },
-  { id: "api-keys",  label: "API Keys",  icon: KeyRound },
-  { id: "backup",    label: "Backup",    icon: HardDriveDownload },
+  { id: "account",   label: "Account",      icon: User },
+  { id: "asana",     label: "Asana Sync",   icon: Link2 },
+  { id: "clickup",   label: "ClickUp",      icon: Zap },
+  { id: "inbox",     label: "RelayInbox",   icon: Mail },
+  { id: "services",  label: "Services",     icon: Package },
+  { id: "reports",   label: "Reports",      icon: BarChart2 },
+  { id: "api-keys",  label: "API Keys",     icon: KeyRound },
+  { id: "backup",    label: "Backup",       icon: HardDriveDownload },
 ];
 
 // ── Account / Change Password ─────────────────────────────────────────────────
@@ -403,6 +406,140 @@ function AsanaSection() {
           onImported={() => setShowImport(false)}
         />
       )}
+    </div>
+  );
+}
+
+// ── RelayInbox Section ─────────────────────────────────────────────────────────
+
+function RelayInboxSection() {
+  const { toast } = useToast();
+  const [hasSecret, setHasSecret] = useState(false);
+  const [secret, setSecret] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const webhookUrl = `${window.location.origin}/api/webhooks/relayinbox`;
+
+  useEffect(() => {
+    fetch("/api/settings/relayinbox", { credentials: "include" })
+      .then(r => r.json())
+      .then(d => setHasSecret(!!d.hasSecret))
+      .catch(() => {});
+  }, []);
+
+  function generateSecret() {
+    const arr = new Uint8Array(24);
+    crypto.getRandomValues(arr);
+    setSecret(Array.from(arr).map(b => b.toString(16).padStart(2, "0")).join(""));
+  }
+
+  async function saveSecret() {
+    if (!secret.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/settings/relayinbox", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ secret }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed to save");
+      setHasSecret(true);
+      setSecret("");
+      toast({ title: "Secret saved", description: "RelayInbox webhook is now protected." });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function copyUrl() {
+    navigator.clipboard.writeText(webhookUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">RelayInbox Webhook</h2>
+        <p className="text-sm text-slate-500 mt-0.5">
+          Convert emails into dashboard tasks with one click from RelayInbox.
+        </p>
+      </div>
+
+      {/* Step 1: Webhook URL */}
+      <div className="space-y-2">
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide block">
+          Step 1 — Your Webhook URL
+        </label>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 text-xs bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-slate-700 font-mono truncate">
+            {webhookUrl}
+          </code>
+          <button
+            onClick={copyUrl}
+            className="flex items-center gap-1.5 text-xs px-3 py-2.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? "Copied!" : "Copy"}
+          </button>
+        </div>
+        <p className="text-xs text-slate-400">
+          Paste this into RelayInbox → My Dashboard → Dashboard webhook URL.
+        </p>
+      </div>
+
+      {/* Step 2: Secret token */}
+      <div className="space-y-2">
+        <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+          Step 2 — Secret Token
+          {hasSecret && (
+            <span className="inline-flex items-center gap-1 text-emerald-600 font-medium normal-case text-xs">
+              <Check className="w-3 h-3" /> Configured
+            </span>
+          )}
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={secret}
+            onChange={e => setSecret(e.target.value)}
+            placeholder={hasSecret ? "Enter a new token to replace the existing one…" : "Generate or paste a secret token"}
+            className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+          />
+          <button
+            onClick={generateSecret}
+            className="text-xs px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+          >
+            Generate
+          </button>
+        </div>
+        <p className="text-xs text-slate-400">
+          Paste this same token into RelayInbox → My Dashboard → Secret token. It is sent as{" "}
+          <code className="font-mono text-slate-600">Authorization: Bearer …</code>
+        </p>
+        <button
+          onClick={saveSecret}
+          disabled={saving || !secret.trim()}
+          className="flex items-center gap-2 text-xs font-medium text-[#266b75] border border-[#266b75]/30 bg-[#266b75]/5 hover:bg-[#266b75]/10 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+          {saving ? "Saving…" : "Save Secret"}
+        </button>
+      </div>
+
+      {/* How it works */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+        <p className="text-xs font-semibold text-slate-700">What happens when you push a task from RelayInbox</p>
+        <ul className="text-xs text-slate-500 space-y-1 list-disc list-inside">
+          <li>A new task is created in your dashboard using the email subject as the title</li>
+          <li>The email snippet and sender details are saved as a comment on the task</li>
+          <li>The task starts as <strong className="text-slate-700">Not Started</strong> — assign a client and due date from the Task Manager</li>
+          <li>RelayInbox receives a link back to your Tasks page to confirm it was created</li>
+        </ul>
+      </div>
     </div>
   );
 }
@@ -770,6 +907,7 @@ export default function SettingsPage() {
           {activeTab === "account"  && <AccountSection />}
           {activeTab === "asana"    && <AsanaSection />}
           {activeTab === "clickup"  && <ClickUpSection />}
+          {activeTab === "inbox"    && <RelayInboxSection />}
           {activeTab === "services" && <Services />}
           {activeTab === "reports"  && <Reports />}
           {activeTab === "api-keys" && <ApiKeys />}
