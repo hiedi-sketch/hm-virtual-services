@@ -1,9 +1,10 @@
-import { useState, useRef, Fragment } from "react";
+import { useState, useRef, Fragment, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "wouter";
 import {
   useAppSprints, computeSprintStats, computeSchedule,
   Task, TaskStatus, Sprint, ScheduleEntry,
 } from "@/hooks/useAppSprints";
+import { useAppDocs, useAppNotes, fmtFileSize } from "@/hooks/useAppDocs";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const BRAND       = "#266b75";
@@ -632,6 +633,23 @@ export default function AppDevTrackerDetail() {
   };
 
   const { sprints, loading, error, addSprint, updateSprint, deleteSprint } = useAppSprints(appId);
+  const { docs, uploading, uploadProgress, error: docError, uploadDoc, deleteDoc } = useAppDocs(appId);
+  const { notes, setNotes, saving: notesSaving, saveNotes } = useAppNotes(appId);
+  const docFileInputRef = useRef<HTMLInputElement>(null);
+  const notesSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDocFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    await uploadDoc(file).catch(() => {});
+  };
+
+  const handleNotesChange = useCallback((text: string) => {
+    setNotes(text);
+    if (notesSaveTimer.current) clearTimeout(notesSaveTimer.current);
+    notesSaveTimer.current = setTimeout(() => saveNotes(text), 800);
+  }, [setNotes, saveNotes]);
 
   // ── Schedule computation (pure, runs on every render)
   const schedule = computeSchedule(sprints, dailyHours, appTargetDate);
@@ -818,10 +836,13 @@ export default function AppDevTrackerDetail() {
         </div>
       </div>
 
-      <div style={{ maxWidth: "1060px", margin: "0 auto", padding: "32px" }}>
+      <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "32px" }}>
+
+        {/* ── TOP ROW: Summary + Documents & Notes ── */}
+        <div style={{ display: "flex", gap: "24px", marginBottom: "32px", alignItems: "flex-start" }}>
 
         {/* ── SUMMARY SECTION ── */}
-        <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "18px", padding: "28px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", marginBottom: "32px" }}>
+        <div style={{ flex: "1 1 0", minWidth: 0, background: "#fff", border: "1px solid #e2e8f0", borderRadius: "18px", padding: "28px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
 
           {/* Header row with dailyHours setting */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap" as const, gap: "12px" }}>
@@ -939,7 +960,101 @@ export default function AppDevTrackerDetail() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
             {showTaskTable ? "Hide Task Table" : "View Full Task Table"}
           </button>
-        </div>
+        </div>{/* end summary card */}
+
+        {/* ── DOCUMENTS & NOTES PANEL ── */}
+        <div style={{ width: "340px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "20px" }}>
+
+          {/* Documents card */}
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "18px", padding: "22px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>Documents</div>
+              <button
+                onClick={() => docFileInputRef.current?.click()}
+                disabled={uploading}
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: uploading ? "#f1f5f9" : BRAND, border: "none", borderRadius: "8px", color: uploading ? "#94a3b8" : "#fff", padding: "7px 14px", fontSize: "12px", fontWeight: 600, cursor: uploading ? "not-allowed" : "pointer" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                {uploading ? "Uploading…" : "Upload"}
+              </button>
+              <input ref={docFileInputRef} type="file" style={{ display: "none" }} onChange={handleDocFileChange} />
+            </div>
+
+            {/* Upload progress bar */}
+            {uploading && uploadProgress !== null && (
+              <div style={{ marginBottom: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>
+                  <span>Uploading…</span><span>{uploadProgress}%</span>
+                </div>
+                <div style={{ height: "6px", background: "#f1f5f9", borderRadius: "3px", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${uploadProgress}%`, background: `linear-gradient(90deg, ${BRAND}, ${BRAND_LIGHT})`, borderRadius: "3px", transition: "width 0.2s" }} />
+                </div>
+              </div>
+            )}
+
+            {/* Doc error */}
+            {docError && (
+              <div style={{ fontSize: "12px", color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "7px", padding: "8px 10px", marginBottom: "12px" }}>{docError}</div>
+            )}
+
+            {/* Document list */}
+            {docs.length === 0 && !uploading ? (
+              <div style={{ textAlign: "center", padding: "24px 0", color: "#cbd5e1" }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: "8px", display: "block", margin: "0 auto 8px" }}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <div style={{ fontSize: "12px" }}>No documents yet</div>
+                <div style={{ fontSize: "11px", marginTop: "2px" }}>Upload files to attach them here</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {docs.map(d => (
+                  <div key={d.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px" }}>
+                    <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: BRAND_BG, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={BRAND} strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{d.name}</div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>{fmtFileSize(d.size)}</div>
+                    </div>
+                    <a href={d.url} target="_blank" rel="noopener noreferrer" title="Download" style={{ color: BRAND, flexShrink: 0 }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </a>
+                    <button onClick={() => deleteDoc(d)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", padding: "2px", flexShrink: 0 }}
+                      onMouseEnter={e => (e.currentTarget.style.color = "#dc2626")}
+                      onMouseLeave={e => (e.currentTarget.style.color = "#cbd5e1")}
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Notes card */}
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "18px", padding: "22px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+              <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>Notes</div>
+              {notesSaving && <span style={{ fontSize: "11px", color: "#94a3b8" }}>Saving…</span>}
+              {!notesSaving && notes && <span style={{ fontSize: "11px", color: "#16a34a" }}>Saved</span>}
+            </div>
+            <textarea
+              value={notes}
+              onChange={e => handleNotesChange(e.target.value)}
+              placeholder="Add notes, links, decisions, or anything relevant to this app…"
+              rows={10}
+              style={{
+                width: "100%", boxSizing: "border-box" as const, resize: "vertical" as const,
+                border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px",
+                fontSize: "13px", fontFamily: "'Inter',sans-serif", color: "#0f172a",
+                background: "#f8fafc", outline: "none", lineHeight: "1.6",
+              }}
+              onFocus={e => (e.target.style.borderColor = BRAND)}
+              onBlur={e => (e.target.style.borderColor = "#e2e8f0")}
+            />
+          </div>
+
+        </div>{/* end documents & notes panel */}
+        </div>{/* end top row flex */}
 
         {/* ── FULL TASK TABLE (toggle) ── */}
         {showTaskTable && (
