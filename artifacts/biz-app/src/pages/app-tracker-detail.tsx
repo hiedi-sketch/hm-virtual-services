@@ -13,7 +13,7 @@ const BRAND_BG    = "rgba(38,107,117,0.08)";
 
 // Updated colors: In Progress → yellow, Done → green (unchanged), Blocked → red
 const STATUS_MAP: Record<TaskStatus, { label: string; bg: string; color: string }> = {
-  "todo":        { label: "Not Started",  bg: "#f1f5f9", color: "#64748b" },
+  "todo":        { label: "Not Started",  bg: "#f1f5f9", color: "#0f172a" },
   "in-progress": { label: "In Progress",  bg: "#fffbeb", color: "#d97706" },
   "done":        { label: "Complete",     bg: "#f0fdf4", color: "#16a34a" },
   "blocked":     { label: "Blocked",      bg: "#fef2f2", color: "#dc2626" },
@@ -174,7 +174,7 @@ function StatCard({ label, value, sub, accent }: {
 
 // ── DaysChip — reused for table Days+/- column ────────────────────────────────
 function DaysChip({ days }: { days: number | null }) {
-  if (days === null) return <span style={{ color: "#cbd5e1", fontSize: "12px" }}>—</span>;
+  if (days === null) return <span style={{ color: "#0f172a", fontSize: "12px" }}>—</span>;
   if (days > 0)  return <span style={{ color: "#16a34a", fontSize: "12px", fontWeight: 700 }}>+{days}d</span>;
   if (days === 0) return <span style={{ color: "#d97706", fontSize: "12px", fontWeight: 700 }}>Today</span>;
   return <span style={{ color: "#dc2626", fontSize: "12px", fontWeight: 700 }}>{days}d</span>;
@@ -287,12 +287,12 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
               <div style={{ flex: 1, display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" as const }}>
                 <span style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a" }}>{sprint.name}</span>
                 {(sprint.startDate || sprint.endDate) && (
-                  <span style={{ fontSize: "11px", color: "#94a3b8" }}>
+                  <span style={{ fontSize: "11px", color: "#0f172a" }}>
                     {sprint.startDate}{sprint.startDate && sprint.endDate ? " → " : ""}{sprint.endDate}
                   </span>
                 )}
               </div>
-              <span style={{ fontSize: "11px", color: "#94a3b8" }}>{done}/{tasks.length} done</span>
+              <span style={{ fontSize: "11px", color: "#0f172a" }}>{done}/{tasks.length} done</span>
               <span style={{ fontSize: "11px", fontWeight: 700, color: pct === 100 ? "#16a34a" : BRAND, background: pct === 100 ? "#f0fdf4" : BRAND_BG, borderRadius: "20px", padding: "2px 10px" }}>{pct}%</span>
             </div>
 
@@ -310,7 +310,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                         { label: "Status",      width: "126px", align: "left" as const   },
                         { label: "Days +/-",    width: "84px",  align: "center" as const },
                       ].map(h => (
-                        <th key={h.label} style={{ padding: "9px 14px", width: h.width, textAlign: h.align, fontSize: "10px", fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase" as const, borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" as const }}>
+                        <th key={h.label} style={{ padding: "9px 14px", width: h.width, textAlign: h.align, fontSize: "10px", fontWeight: 700, color: "#0f172a", letterSpacing: "0.08em", textTransform: "uppercase" as const, borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" as const }}>
                           {h.label}
                         </th>
                       ))}
@@ -318,7 +318,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                   </thead>
                   <tbody>
                     {tasks.length === 0 && addingInSprint !== sprint.id && (
-                      <tr><td colSpan={7} style={{ padding: "22px", textAlign: "center" as const, color: "#94a3b8", fontSize: "13px", fontStyle: "italic" }}>No tasks — click + Add Task below.</td></tr>
+                      <tr><td colSpan={7} style={{ padding: "22px", textAlign: "center" as const, color: "#0f172a", fontSize: "13px", fontStyle: "italic" }}>No tasks — click + Add Task below.</td></tr>
                     )}
 
                     {tasks.map(task => {
@@ -338,7 +338,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                             style={{ cursor: "pointer", background: isExpanded ? "#f0fdf9" : "transparent", borderBottom: "1px solid #f1f5f9", transition: "background 0.15s" }}
                           >
                             <td style={{ padding: "10px 14px", textAlign: "center" as const }}>
-                              <span style={{ fontSize: "10px", fontFamily: "monospace", color: "#94a3b8", background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>{shortId}</span>
+                              <span style={{ fontSize: "10px", fontFamily: "monospace", color: "#0f172a", background: "#f1f5f9", padding: "2px 6px", borderRadius: "4px" }}>{shortId}</span>
                             </td>
                             <td style={{ padding: "10px 14px" }}>
                               <div style={{ fontSize: "13px", fontWeight: 500, color: task.status === "done" ? "#94a3b8" : "#0f172a", textDecoration: task.status === "done" ? "line-through" : "none" }}>{task.title}</div>
@@ -350,7 +350,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                                   </span>
                                 )}
                                 {computed?.estimatedDays != null && (
-                                  <span style={{ fontSize: "10px", color: "#94a3b8" }}>≈{computed.estimatedDays.toFixed(1)}d</span>
+                                  <span style={{ fontSize: "10px", color: "#0f172a" }}>≈{computed.estimatedDays.toFixed(1)}d</span>
                                 )}
                               </div>
                             </td>
@@ -361,13 +361,13 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                             <td style={{ padding: "10px 14px", fontSize: "12px", whiteSpace: "nowrap" as const }}>
                               {planDue
                                 ? <span style={{ color: "#334155" }}>{fmtDate(planDue)}</span>
-                                : <span style={{ color: "#cbd5e1" }}>—</span>}
+                                : <span style={{ color: "#0f172a" }}>—</span>}
                             </td>
                             {/* Adj Due — dependency-resolved */}
                             <td style={{ padding: "10px 14px", fontSize: "12px", whiteSpace: "nowrap" as const }}>
                               {adjDue
                                 ? <span style={{ color: task.status === "done" ? "#16a34a" : "#334155", fontWeight: adjDue !== planDue ? 600 : 400 }}>{fmtDate(adjDue)}</span>
-                                : <span style={{ color: "#cbd5e1" }}>—</span>}
+                                : <span style={{ color: "#0f172a" }}>—</span>}
                             </td>
                             <td style={{ padding: "10px 14px" }}>
                               <span style={{ background: sty.bg, color: sty.color, fontSize: "10px", fontWeight: 700, padding: "3px 10px", borderRadius: "20px", whiteSpace: "nowrap" as const }}>{sty.label}</span>
@@ -411,7 +411,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                                     })}
                                     <div style={{ flex: 1 }} />
                                     <button onClick={e => { e.stopPropagation(); setExpandedTasks(p => { const n = new Set(p); n.delete(task.id); return n; }); }}
-                                      style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#94a3b8", padding: "7px 12px", fontSize: "12px", cursor: "pointer" }}
+                                      style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#0f172a", padding: "7px 12px", fontSize: "12px", cursor: "pointer" }}
                                     >✕ Collapse</button>
                                   </div>
 
@@ -448,11 +448,11 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                                       <input type="date" style={INP} value={draft.plannedStartDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "plannedStartDate", e.target.value)} />
                                     </div>
                                     <div>
-                                      <label style={LBL}>Planned Due Date <span style={{ color: "#94a3b8", fontWeight: 400, textTransform: "none" as const, letterSpacing: 0, fontSize: "10px" }}>(auto if start+hrs set)</span></label>
+                                      <label style={LBL}>Planned Due Date <span style={{ color: "#0f172a", fontWeight: 400, textTransform: "none" as const, letterSpacing: 0, fontSize: "10px" }}>(auto if start+hrs set)</span></label>
                                       <input type="date" style={INP} value={draft.plannedDueDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "plannedDueDate", e.target.value)} />
                                     </div>
                                     <div>
-                                      <label style={LBL}>Adjusted Due Date <span style={{ color: "#94a3b8", fontWeight: 400, textTransform: "none" as const, letterSpacing: 0, fontSize: "10px" }}>(auto from deps)</span></label>
+                                      <label style={LBL}>Adjusted Due Date <span style={{ color: "#0f172a", fontWeight: 400, textTransform: "none" as const, letterSpacing: 0, fontSize: "10px" }}>(auto from deps)</span></label>
                                       <input type="date" style={INP} value={draft.adjustedDueDate ?? ""} onClick={e => e.stopPropagation()} onChange={e => setDraft(task.id, "adjustedDueDate", e.target.value)} />
                                     </div>
                                     <div>
@@ -482,7 +482,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                                       style={{ background: BRAND, border: "none", borderRadius: "8px", color: "#fff", padding: "8px 20px", fontSize: "12px", fontWeight: 600, cursor: "pointer", opacity: isSaving ? 0.7 : 1 }}
                                     >{isSaving ? "Saving…" : "Save Changes"}</button>
                                     <button onClick={e => { e.stopPropagation(); setExpandedTasks(p => { const n = new Set(p); n.delete(task.id); return n; }); }}
-                                      style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#64748b", padding: "8px 16px", fontSize: "12px", cursor: "pointer" }}
+                                      style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#0f172a", padding: "8px 16px", fontSize: "12px", cursor: "pointer" }}
                                     >Cancel</button>
                                   </div>
                                 </div>
@@ -523,7 +523,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                             </div>
                             <div style={{ display: "flex", gap: "6px", alignItems: "flex-end" }}>
                               <button onClick={() => handleAddTask(sprint)} style={{ background: BRAND, border: "none", borderRadius: "8px", color: "#fff", padding: "9px 16px", fontSize: "12px", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" as const }}>+ Add Task</button>
-                              <button onClick={() => { setAddingInSprint(null); setNewTaskDraft({}); }} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#64748b", padding: "9px 10px", fontSize: "12px", cursor: "pointer" }}>✕</button>
+                              <button onClick={() => { setAddingInSprint(null); setNewTaskDraft({}); }} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#0f172a", padding: "9px 10px", fontSize: "12px", cursor: "pointer" }}>✕</button>
                             </div>
                           </div>
                         </td>
@@ -532,7 +532,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                       <tr>
                         <td colSpan={7} style={{ padding: "8px 14px", borderTop: "1px solid #f8fafc" }}>
                           <button onClick={() => { setAddingInSprint(sprint.id); setNewTaskDraft({}); }}
-                            style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#94a3b8", padding: "6px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 500 }}
+                            style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#0f172a", padding: "6px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 500 }}
                           >
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                             Add Task
@@ -561,7 +561,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "16px", width: "100%", maxWidth: "440px", boxShadow: "0 20px 60px rgba(0,0,0,0.12)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px 14px", borderBottom: "1px solid #f1f5f9" }}>
               <span style={{ fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>New Sprint</span>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "#0f172a", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             </div>
@@ -824,14 +824,14 @@ export default function AppDevTrackerDetail() {
       {/* ── Header ── */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "20px 32px" }}>
         <div style={{ maxWidth: "1060px", margin: "0 auto" }}>
-          <button onClick={() => setLocation("/app-tracker")} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: "13px", fontWeight: 500, marginBottom: "14px", padding: 0 }}>
+          <button onClick={() => setLocation("/app-tracker")} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "none", border: "none", color: "#0f172a", cursor: "pointer", fontSize: "13px", fontWeight: 500, marginBottom: "14px", padding: 0 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
             Back to App Tracker
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" as const }}>
             <div style={{ fontSize: "22px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a", letterSpacing: "-0.3px" }}>{app?.name ?? `App #${appId}`}</div>
             {app?.stage && <span style={{ background: BRAND_BG, border: `1px solid ${BRAND}44`, borderRadius: "20px", padding: "3px 12px", fontSize: "11px", color: BRAND, fontWeight: 700, letterSpacing: "0.06em" }}>{app.stage}</span>}
-            {app?.description && <span style={{ fontSize: "13px", color: "#64748b" }}>{app.description}</span>}
+            {app?.description && <span style={{ fontSize: "13px", color: "#0f172a" }}>{app.description}</span>}
           </div>
         </div>
       </div>
@@ -848,7 +848,7 @@ export default function AppDevTrackerDetail() {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap" as const, gap: "12px" }}>
             <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>Summary</div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>Daily hours available:</span>
+              <span style={{ fontSize: "12px", color: "#0f172a", fontWeight: 500 }}>Daily hours available:</span>
               <input
                 type="number" min={0.5} max={24} step={0.5}
                 value={dailyHoursInput}
@@ -856,7 +856,7 @@ export default function AppDevTrackerDetail() {
                 onBlur={() => { const n = parseFloat(dailyHoursInput); if (!isNaN(n) && n > 0) saveDailyHours(n); else setDailyHoursInput(String(dailyHours)); }}
                 style={{ width: "60px", border: `1px solid ${BRAND}55`, borderRadius: "7px", padding: "5px 8px", fontSize: "13px", fontWeight: 600, color: BRAND, textAlign: "center" as const, outline: "none", background: BRAND_BG }}
               />
-              <span style={{ fontSize: "12px", color: "#94a3b8" }}>hrs/day</span>
+              <span style={{ fontSize: "12px", color: "#0f172a" }}>hrs/day</span>
             </div>
           </div>
 
@@ -864,25 +864,25 @@ export default function AppDevTrackerDetail() {
           <div style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
             {/* Editable Start Date */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#94a3b8", marginBottom: "8px" }}>Start Date</div>
+              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#0f172a", marginBottom: "8px" }}>Start Date</div>
               <input
                 type="date"
                 value={appStartDate}
                 onChange={e => { setAppStartDate(e.target.value); saveAppField("startDate", e.target.value); }}
                 style={{ width: "100%", border: "none", outline: "none", fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: appStartDate ? "#0f172a" : "#cbd5e1", background: "transparent", cursor: "pointer", padding: 0, boxSizing: "border-box" }}
               />
-              {!appStartDate && <div style={{ fontSize: "11px", color: "#cbd5e1", marginTop: "2px" }}>Click to set</div>}
+              {!appStartDate && <div style={{ fontSize: "11px", color: "#0f172a", marginTop: "2px" }}>Click to set</div>}
             </div>
             {/* Editable Target Date */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#94a3b8", marginBottom: "8px" }}>Original Target</div>
+              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#0f172a", marginBottom: "8px" }}>Original Target</div>
               <input
                 type="date"
                 value={appTargetDate}
                 onChange={e => { setAppTargetDate(e.target.value); saveAppField("targetDate", e.target.value); }}
                 style={{ width: "100%", border: "none", outline: "none", fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: appTargetDate ? "#0f172a" : "#cbd5e1", background: "transparent", cursor: "pointer", padding: 0, boxSizing: "border-box" }}
               />
-              {!appTargetDate && <div style={{ fontSize: "11px", color: "#cbd5e1", marginTop: "2px" }}>Click to set</div>}
+              {!appTargetDate && <div style={{ fontSize: "11px", color: "#0f172a", marginTop: "2px" }}>Click to set</div>}
             </div>
             <StatCard
               label="Projected Launch"
@@ -902,7 +902,7 @@ export default function AppDevTrackerDetail() {
           {/* Overall progress bar */}
           <div style={{ marginBottom: "20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "#64748b" }}>Overall Progress</span>
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "#0f172a" }}>Overall Progress</span>
               <span style={{ fontSize: "15px", fontWeight: 700, color: BRAND }}>{stats.total > 0 ? `${stats.pct}%` : "—"}</span>
             </div>
             <div style={{ height: "10px", background: "#f1f5f9", borderRadius: "5px", overflow: "hidden" }}>
@@ -915,10 +915,10 @@ export default function AppDevTrackerDetail() {
             <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "14px 18px", marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" as const }}>
-                  <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#94a3b8" }}>Current Sprint</span>
+                  <span style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#0f172a" }}>Current Sprint</span>
                   <span style={{ fontSize: "13px", fontWeight: 700, color: "#0f172a" }}>{currentSprint.name}</span>
                   {currentSprint.startDate && currentSprint.endDate && (
-                    <span style={{ fontSize: "11px", color: "#94a3b8" }}>{currentSprint.startDate} → {currentSprint.endDate}</span>
+                    <span style={{ fontSize: "11px", color: "#0f172a" }}>{currentSprint.startDate} → {currentSprint.endDate}</span>
                   )}
                 </div>
                 <span style={{ fontSize: "13px", fontWeight: 700, color: BRAND, flexShrink: 0 }}>{csPct}%</span>
@@ -926,7 +926,7 @@ export default function AppDevTrackerDetail() {
               <div style={{ height: "6px", background: "#e2e8f0", borderRadius: "3px", overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${csPct}%`, background: `linear-gradient(90deg, ${BRAND}, ${BRAND_LIGHT})`, borderRadius: "3px", transition: "width 0.4s" }} />
               </div>
-              <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "6px" }}>{csDone}/{csTasks.length} tasks complete</div>
+              <div style={{ fontSize: "11px", color: "#0f172a", marginTop: "6px" }}>{csDone}/{csTasks.length} tasks complete</div>
             </div>
           )}
 
@@ -983,7 +983,7 @@ export default function AppDevTrackerDetail() {
             {/* Upload progress bar */}
             {uploading && uploadProgress !== null && (
               <div style={{ marginBottom: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#64748b", marginBottom: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#0f172a", marginBottom: "4px" }}>
                   <span>Uploading…</span><span>{uploadProgress}%</span>
                 </div>
                 <div style={{ height: "6px", background: "#f1f5f9", borderRadius: "3px", overflow: "hidden" }}>
@@ -999,7 +999,7 @@ export default function AppDevTrackerDetail() {
 
             {/* Document list */}
             {docs.length === 0 && !uploading ? (
-              <div style={{ textAlign: "center", padding: "24px 0", color: "#cbd5e1" }}>
+              <div style={{ textAlign: "center", padding: "24px 0", color: "#0f172a" }}>
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ marginBottom: "8px", display: "block", margin: "0 auto 8px" }}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 <div style={{ fontSize: "12px" }}>No documents yet</div>
                 <div style={{ fontSize: "11px", marginTop: "2px" }}>Upload files to attach them here</div>
@@ -1013,12 +1013,12 @@ export default function AppDevTrackerDetail() {
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" as const }}>{d.name}</div>
-                      <div style={{ fontSize: "11px", color: "#94a3b8" }}>{fmtFileSize(d.size)}</div>
+                      <div style={{ fontSize: "11px", color: "#0f172a" }}>{fmtFileSize(d.size)}</div>
                     </div>
                     <a href={d.url} target="_blank" rel="noopener noreferrer" title="Download" style={{ color: BRAND, flexShrink: 0 }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </a>
-                    <button onClick={() => deleteDoc(d)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#cbd5e1", padding: "2px", flexShrink: 0 }}
+                    <button onClick={() => deleteDoc(d)} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "#0f172a", padding: "2px", flexShrink: 0 }}
                       onMouseEnter={e => (e.currentTarget.style.color = "#dc2626")}
                       onMouseLeave={e => (e.currentTarget.style.color = "#cbd5e1")}
                     >
@@ -1034,7 +1034,7 @@ export default function AppDevTrackerDetail() {
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "18px", padding: "22px", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
               <div style={{ fontSize: "13px", fontWeight: 700, color: BRAND, letterSpacing: "0.08em", textTransform: "uppercase" as const }}>Notes</div>
-              {notesSaving && <span style={{ fontSize: "11px", color: "#94a3b8" }}>Saving…</span>}
+              {notesSaving && <span style={{ fontSize: "11px", color: "#0f172a" }}>Saving…</span>}
               {!notesSaving && notes && <span style={{ fontSize: "11px", color: "#16a34a" }}>Saved</span>}
             </div>
             <textarea
@@ -1061,10 +1061,10 @@ export default function AppDevTrackerDetail() {
           <div ref={taskTableRef} style={{ marginBottom: "32px", scrollMarginTop: "24px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
               <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>Full Task Table</div>
-              <span style={{ fontSize: "12px", color: "#94a3b8" }}>Click a row to expand · Planned/Adj dates auto-calculated from start date + hours ÷ {dailyHours} hrs/day</span>
+              <span style={{ fontSize: "12px", color: "#0f172a" }}>Click a row to expand · Planned/Adj dates auto-calculated from start date + hours ÷ {dailyHours} hrs/day</span>
             </div>
             {loading ? (
-              <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>Loading…</div>
+              <div style={{ textAlign: "center", padding: "40px", color: "#0f172a" }}>Loading…</div>
             ) : (
               <TaskTable
                 sprints={sprints}
@@ -1088,7 +1088,7 @@ export default function AppDevTrackerDetail() {
 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" as const, gap: "8px" }}>
           <div style={{ fontSize: "16px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>
-            Sprints <span style={{ fontSize: "13px", color: "#94a3b8", fontWeight: 500 }}>({sprints.length})</span>
+            Sprints <span style={{ fontSize: "13px", color: "#0f172a", fontWeight: 500 }}>({sprints.length})</span>
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" as const }}>
             {importError && (
@@ -1117,7 +1117,7 @@ export default function AppDevTrackerDetail() {
           </div>
         </div>
 
-        {loading && <div style={{ textAlign: "center", padding: "60px 0", color: "#94a3b8", fontSize: "14px" }}>Loading sprints…</div>}
+        {loading && <div style={{ textAlign: "center", padding: "60px 0", color: "#0f172a", fontSize: "14px" }}>Loading sprints…</div>}
         {error   && <div style={{ textAlign: "center", padding: "60px 0", color: "#dc2626", fontSize: "14px" }}>Error: {error}</div>}
 
         {!loading && sprints.length === 0 && (
@@ -1126,7 +1126,7 @@ export default function AppDevTrackerDetail() {
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={BRAND} strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M9 14l2 2 4-4"/></svg>
             </div>
             <div style={{ fontSize: "16px", fontWeight: 600, color: "#334155", marginBottom: "6px" }}>No sprints yet</div>
-            <div style={{ fontSize: "13px", color: "#94a3b8" }}>Create your first sprint to start tracking tasks.</div>
+            <div style={{ fontSize: "13px", color: "#0f172a" }}>Create your first sprint to start tracking tasks.</div>
           </div>
         )}
 
@@ -1145,7 +1145,7 @@ export default function AppDevTrackerDetail() {
                       <span style={{ fontSize: "11px", fontWeight: 600, color: pct === 100 ? "#16a34a" : BRAND, background: pct === 100 ? "#f0fdf4" : BRAND_BG, borderRadius: "20px", padding: "2px 10px" }}>{pct}%</span>
                     </div>
                     {(sprint.startDate || sprint.endDate) && (
-                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px" }}>
+                      <div style={{ fontSize: "11px", color: "#0f172a", marginTop: "3px" }}>
                         {sprint.startDate && `Start: ${sprint.startDate}`}{sprint.startDate && sprint.endDate && " · "}{sprint.endDate && `End: ${sprint.endDate}`}
                       </div>
                     )}
@@ -1154,15 +1154,15 @@ export default function AppDevTrackerDetail() {
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ fontSize: "12px", color: "#94a3b8" }}>{done}/{tasks.length} done</span>
-                    <button onClick={() => deleteSprint(sprint.id)} title="Delete sprint" style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "7px", color: "#94a3b8", cursor: "pointer", padding: "5px", lineHeight: 0 }}>
+                    <span style={{ fontSize: "12px", color: "#0f172a" }}>{done}/{tasks.length} done</span>
+                    <button onClick={() => deleteSprint(sprint.id)} title="Delete sprint" style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "7px", color: "#0f172a", cursor: "pointer", padding: "5px", lineHeight: 0 }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="m19 6-.867 12.142A2 2 0 0 1 16.138 20H7.862a2 2 0 0 1-1.995-1.858L5 6"/><path d="M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                     </button>
                   </div>
                 </div>
                 <div style={{ padding: "8px 0" }}>
                   {tasks.length === 0 && addingTask !== sprint.id && (
-                    <div style={{ padding: "14px 20px", fontSize: "13px", color: "#cbd5e1", fontStyle: "italic" }}>No tasks yet — add one below.</div>
+                    <div style={{ padding: "14px 20px", fontSize: "13px", color: "#0f172a", fontStyle: "italic" }}>No tasks yet — add one below.</div>
                   )}
                   {tasks.map(task => {
                     const sty = STATUS_MAP[task.status] ?? STATUS_MAP["todo"];
@@ -1178,9 +1178,9 @@ export default function AppDevTrackerDetail() {
                         {(() => {
                           const c = schedule.taskDates.get(task.id);
                           const d = c?.adjustedDue ?? c?.plannedDue;
-                          return d ? <span style={{ fontSize: "11px", color: "#94a3b8", whiteSpace: "nowrap" as const }}>{fmtDate(d)}</span> : null;
+                          return d ? <span style={{ fontSize: "11px", color: "#0f172a", whiteSpace: "nowrap" as const }}>{fmtDate(d)}</span> : null;
                         })()}
-                        <button onClick={() => handleDeleteTask(sprint.id, tasks, task.id)} style={{ background: "none", border: "none", color: "#cbd5e1", cursor: "pointer", padding: "2px", lineHeight: 0, flexShrink: 0 }}>
+                        <button onClick={() => handleDeleteTask(sprint.id, tasks, task.id)} style={{ background: "none", border: "none", color: "#0f172a", cursor: "pointer", padding: "2px", lineHeight: 0, flexShrink: 0 }}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
                         </button>
                       </div>
@@ -1194,11 +1194,11 @@ export default function AppDevTrackerDetail() {
                         style={{ flex: 1, border: `1px solid ${BRAND}66`, borderRadius: "8px", padding: "8px 12px", fontSize: "13px", outline: "none", color: "#0f172a", background: "#fff" }}
                       />
                       <button onClick={() => handleAddTask(sprint.id, tasks)} style={{ background: BRAND, border: "none", borderRadius: "8px", color: "#fff", padding: "8px 14px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}>Add</button>
-                      <button onClick={() => { setAddingTask(null); setNewTaskTitle(""); }} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#64748b", padding: "8px 12px", fontSize: "12px", cursor: "pointer" }}>Cancel</button>
+                      <button onClick={() => { setAddingTask(null); setNewTaskTitle(""); }} style={{ background: "none", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#0f172a", padding: "8px 12px", fontSize: "12px", cursor: "pointer" }}>Cancel</button>
                     </div>
                   ) : (
                     <button onClick={() => setAddingTask(sprint.id)}
-                      style={{ display: "flex", alignItems: "center", gap: "6px", margin: "8px 20px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#94a3b8", padding: "7px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 500 }}
+                      style={{ display: "flex", alignItems: "center", gap: "6px", margin: "8px 20px", background: "none", border: "1px dashed #e2e8f0", borderRadius: "8px", color: "#0f172a", padding: "7px 14px", cursor: "pointer", fontSize: "12px", fontWeight: 500 }}
                     >
                       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                       Add task
@@ -1219,24 +1219,24 @@ export default function AppDevTrackerDetail() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px 14px", borderBottom: "1px solid #f1f5f9" }}>
               <div>
                 <div style={{ fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>Review Import</div>
-                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                <div style={{ fontSize: "12px", color: "#0f172a", marginTop: "2px" }}>
                   {importPreview.sprintRows.length} sprint{importPreview.sprintRows.length !== 1 ? "s" : ""} · {importPreview.sprintRows.reduce((a, b) => a + b.taskCount, 0)} tasks
                 </div>
               </div>
-              <button onClick={() => setImportPreview(null)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
+              <button onClick={() => setImportPreview(null)} style={{ background: "none", border: "none", color: "#0f172a", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
             </div>
 
             {/* Sprint list */}
             <div style={{ overflowY: "auto", flex: 1, padding: "16px 24px" }}>
-              <div style={{ fontSize: "11px", fontWeight: 700, color: "#94a3b8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "10px" }}>Sprints found in file</div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#0f172a", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "10px" }}>Sprints found in file</div>
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 {importPreview.sprintRows.map(s => (
                   <div key={s.name} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 14px", borderRadius: "10px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: "13px", fontWeight: 600, color: "#0f172a", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.name}</div>
-                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
+                      <div style={{ fontSize: "11px", color: "#0f172a", marginTop: "2px" }}>
                         {s.taskCount} task{s.taskCount !== 1 ? "s" : ""}
                         {s.startDate && ` · ${s.startDate}`}{s.endDate && ` → ${s.endDate}`}
                       </div>
@@ -1276,7 +1276,7 @@ export default function AppDevTrackerDetail() {
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "16px", width: "100%", maxWidth: "440px", boxShadow: "0 20px 60px rgba(0,0,0,0.12)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "20px 24px 14px", borderBottom: "1px solid #f1f5f9" }}>
               <span style={{ fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a" }}>New Sprint</span>
-              <button onClick={() => setShowSprintModal(false)} style={{ background: "none", border: "none", color: "#94a3b8", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
+              <button onClick={() => setShowSprintModal(false)} style={{ background: "none", border: "none", color: "#0f172a", cursor: "pointer", padding: "4px", lineHeight: 0 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
               </button>
             </div>

@@ -117,7 +117,7 @@ const AppCardFooter = ({ appId, targetDate }: { appId: number; targetDate: strin
       {/* Progress bar */}
       <div style={{ marginBottom: "10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" }}>
-          <span style={{ fontSize: "11px", fontWeight: 600, color: "#94a3b8", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>Task Progress</span>
+          <span style={{ fontSize: "11px", fontWeight: 600, color: "#0f172a", letterSpacing: "0.06em", textTransform: "uppercase" as const }}>Task Progress</span>
           <span style={{ fontSize: "12px", fontWeight: 700, color: BRAND }}>
             {loading ? "—" : stats.total > 0 ? `${stats.pct}%  (${stats.done}/${stats.total} tasks)` : "No tasks yet — open tracker to add sprints"}
           </span>
@@ -130,7 +130,7 @@ const AppCardFooter = ({ appId, targetDate }: { appId: number; targetDate: strin
       {/* Projected launch + days ahead/behind */}
       <div style={{ display: "flex", gap: "24px", flexWrap: "wrap" as const, marginBottom: "14px" }}>
         <div>
-          <span style={{ fontSize: "11px", color: "#94a3b8" }}>Projected Launch: </span>
+          <span style={{ fontSize: "11px", color: "#0f172a" }}>Projected Launch: </span>
           <span style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}>
             {loading || !stats.projectedDate
               ? "—"
@@ -139,7 +139,7 @@ const AppCardFooter = ({ appId, targetDate }: { appId: number; targetDate: strin
         </div>
         {stats.daysAheadBehind !== null && (
           <div>
-            <span style={{ fontSize: "11px", color: "#94a3b8" }}>vs. Target: </span>
+            <span style={{ fontSize: "11px", color: "#0f172a" }}>vs. Target: </span>
             <span style={{ fontSize: "12px", fontWeight: 700, color: stats.daysAheadBehind >= 0 ? "#16a34a" : "#dc2626" }}>
               {Math.abs(stats.daysAheadBehind)}d {stats.daysAheadBehind >= 0 ? "ahead ↑" : "behind ↓"}
             </span>
