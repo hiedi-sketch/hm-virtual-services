@@ -223,10 +223,19 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
 
   const saveTask = async (sprint: Sprint, taskId: string) => {
     setSavingTaskId(taskId);
-    const draft = taskDrafts[taskId] ?? {};
-    await updateSprint(sprint.id, { tasks: sprint.tasks.map(t => t.id === taskId ? { ...t, ...draft } : t) });
-    setSavingTaskId(null);
-    setExpandedTasks(p => { const n = new Set(p); n.delete(taskId); return n; });
+    try {
+      const draft = taskDrafts[taskId] ?? {};
+      const updatedTasks = sprint.tasks.map(t =>
+        t.id === taskId ? stripUndefined({ ...t, ...draft }) : t
+      );
+      await updateSprint(sprint.id, { tasks: updatedTasks });
+      setExpandedTasks(p => { const n = new Set(p); n.delete(taskId); return n; });
+    } catch (err) {
+      console.error("Save task failed:", err);
+      alert(`Failed to save task: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSavingTaskId(null);
+    }
   };
 
   const markTask = async (sprint: Sprint, taskId: string, status: TaskStatus) => {
