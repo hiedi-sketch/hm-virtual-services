@@ -78,7 +78,6 @@ const TIER_PALETTE: Record<DabTier, { bg: string; border: string; iconBg: string
 // ── CSV helpers (module-level pure functions) ─────────────────────────────────
 function parseCSV(text: string): Record<string, string>[] {
   const lines = text.split(/\r?\n/);
-  if (lines.length < 2) return [];
 
   const parseRow = (line: string): string[] => {
     const result: string[] = [];
@@ -99,9 +98,15 @@ function parseCSV(text: string): Record<string, string>[] {
     return result;
   };
 
-  const headers = parseRow(lines[0]).map(h => h.trim().toLowerCase().replace(/\s+/g, "_"));
-  return lines.slice(1)
-    .filter(l => l.trim())
+  // Find the first non-empty, non-comment line — that's the header
+  const headerIdx = lines.findIndex(l => l.trim() && !l.trim().startsWith("#"));
+  if (headerIdx === -1) return [];
+
+  const headers = parseRow(lines[headerIdx]).map(h => h.trim().toLowerCase().replace(/\s+/g, "_"));
+  if (!headers.includes("sprint_name") && !headers.includes("task_title")) return [];
+
+  return lines.slice(headerIdx + 1)
+    .filter(l => l.trim() && !l.trim().startsWith("#"))
     .map(line => {
       const vals = parseRow(line);
       const row: Record<string, string> = {};
@@ -658,8 +663,8 @@ export default function AppDevTrackerDetail() {
     reader.onload = (ev) => {
       try {
         const text = ev.target?.result as string;
-        const rows = parseCSV(text).filter(r => !r.sprint_name?.startsWith("#"));
-        if (!rows.length) { setImportError("No data rows found. Make sure the file matches the template."); return; }
+        const rows = parseCSV(text);
+        if (!rows.length) { setImportError("No data rows found — make sure the file has a 'sprint_name' and 'task_title' column header and at least one data row."); return; }
         const namesSeen = new Set<string>();
         const sprintRows: ImportSprintRow[] = [];
         for (const r of rows) {
