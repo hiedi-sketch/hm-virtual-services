@@ -22,24 +22,50 @@ const receiptUpload = multer({
   },
 });
 
-// Column name aliases — covers QBO exports, Chase, and common bank formats
-const COL_DATE = ["Date", "DATE", "date", "Transaction Date", "Posted Date"];
-const COL_TYPE = ["Transaction Type", "Type", "TRANSACTION TYPE", "transaction_type"];
-const COL_NUM  = ["Num", "NUM", "num", "Check Number", "Ref No.", "Check #"];
-const COL_NAME = ["Name", "NAME", "name", "Payee", "Vendor", "From/To", "Payee Name"];
-const COL_MEMO = ["Memo/Description", "Memo", "Description", "MEMO", "memo",
-                  "Bank description", "Bank Description", "Transaction Description", "Details"];
-const COL_ACCT     = ["Account", "ACCOUNT", "account"];
-const COL_CATEGORY = ["Match/Categorize", "Category", "Split", "QBO Match"];
-const COL_AMT  = ["Amount", "AMOUNT", "amount"];
-// Separate debit/credit columns (e.g. Chase: Spent / Received)
-const COL_DEBIT  = ["Debit", "DEBIT", "debit", "Spent", "Withdrawal", "Withdrawals", "Charges"];
-const COL_CREDIT = ["Credit", "CREDIT", "credit", "Received", "Deposit", "Deposits", "Payments"];
+// Column name aliases — case-insensitive matching is used, so only one case needed per variant.
+// Covers QBO exports, Chase, Bank of America, Wells Fargo, and common bank/accounting formats.
+const COL_DATE = [
+  "date", "transaction date", "posted date", "posting date", "trans date",
+  "effective date", "value date", "settlement date",
+];
+const COL_TYPE = ["transaction type", "type", "transaction_type", "trans type"];
+const COL_NUM  = ["num", "check number", "check #", "ref no.", "reference", "ref", "check no"];
+const COL_NAME = ["name", "payee", "vendor", "from/to", "payee name", "description", "merchant"];
+const COL_MEMO = [
+  "memo/description", "memo", "description", "bank description", "transaction description",
+  "details", "narrative", "particulars", "remarks",
+];
+const COL_ACCT     = ["account", "account name", "account number"];
+const COL_CATEGORY = ["match/categorize", "category", "split", "qbo match"];
+// Single combined amount column (positive = credit, negative = debit)
+const COL_AMT = ["amount", "transaction amount", "net amount", "total amount", "tran amount"];
+// Separate debit/credit columns — covers Chase (Spent/Received), QBO, and many banks
+const COL_DEBIT  = [
+  "debit", "spent", "withdrawal", "withdrawals", "charges", "charge",
+  "debit amount", "withdrawal amount", "amount debit", "dr", "dr.", "money out",
+  "payment out", "out", "paid out",
+];
+const COL_CREDIT = [
+  "credit", "received", "deposit", "deposits", "payments", "payment",
+  "credit amount", "deposit amount", "amount credit", "cr", "cr.", "money in",
+  "payment in", "in", "received in",
+];
 
+// Normalize a row so all keys are trimmed and lowercased for consistent matching.
+function normalizeRow(row: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k.trim().toLowerCase()] = v;
+  }
+  return out;
+}
+
+// Pick the first non-empty value from a normalized (lowercased-key) row.
 function pick(row: Record<string, any>, keys: string[]): string | null {
   for (const k of keys) {
-    if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== "") {
-      return String(row[k]).trim();
+    const v = row[k];
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      return String(v).trim();
     }
   }
   return null;
@@ -47,19 +73,23 @@ function pick(row: Record<string, any>, keys: string[]): string | null {
 
 function parseAmount(val: string | null): number | null {
   if (!val) return null;
-  const cleaned = val.replace(/[$,\s]/g, "").replace(/[()]/g, m => m === "(" ? "-" : "");
+  // Strip currency symbols, commas, spaces; convert parentheses to negative sign
+  const cleaned = val.replace(/[$£€,\s]/g, "").replace(/^\((.+)\)$/, "-$1");
   const n = parseFloat(cleaned);
   return isNaN(n) ? null : n;
 }
 
 // Resolve the net amount from a row, handling both combined and split debit/credit columns.
 function resolveAmount(row: Record<string, any>): number | null {
+  // Try combined amount column first
   const combined = pick(row, COL_AMT);
   if (combined !== null) return parseAmount(combined);
 
+  // Try split debit / credit columns
   const debit  = parseAmount(pick(row, COL_DEBIT));
   const credit = parseAmount(pick(row, COL_CREDIT));
 
+  // Some banks put 0.00 in the unused column — treat zero as absent
   if (credit !== null && credit !== 0) return Math.abs(credit);   // credit = positive
   if (debit  !== null && debit  !== 0) return -Math.abs(debit);   // debit  = negative
   return null;
@@ -68,8 +98,10 @@ function resolveAmount(row: Record<string, any>): number | null {
 function parseRows(buffer: Buffer, filename: string): Record<string, any>[] {
   const isXlsx = /\.(xlsx|xls)$/i.test(filename);
   const wb = XLSX.read(buffer, { type: "buffer", raw: !isXlsx });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: "" });
+  const ws = wb.Sheets[wb.SheetNames[0]!];
+  const raw = XLSX.utils.sheet_to_json<Record<string, any>>(ws, { defval: "" });
+  // Normalize all column header keys: trim whitespace and lowercase so matching is case-insensitive
+  return raw.map(normalizeRow);
 }
 
 // GET /api/transactions?client_id=X
