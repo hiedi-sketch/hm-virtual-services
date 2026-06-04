@@ -10,8 +10,8 @@ import {
   CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
   Plus, X, User, Sparkles, LayoutDashboard, Send,
   KeyRound, ShieldCheck, Paperclip, DollarSign,
-  MessageSquare, ChevronRight, Package, Eye, EyeOff,
-  Check, CreditCard, ThumbsDown, BookOpen, RefreshCw, Upload,
+  MessageSquare, ChevronRight, ChevronLeft, Package, Eye, EyeOff,
+  Check, CreditCard, ThumbsDown, BookOpen, RefreshCw, Upload, ArrowLeftRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DocumentsTab } from "@/components/DocumentsTab";
@@ -100,6 +100,15 @@ export default function ClientPortal() {
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [onboardEstimateId, setOnboardEstimateId] = useState<number | null>(null);
   const [declineEstimateId, setDeclineEstimateId] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("portal-sidebar-collapsed") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("portal-sidebar-collapsed", String(collapsed)); } catch {}
+  }, [collapsed]);
+  const COLLAPSED_W = 60;
+  const EXPANDED_W = 240;
+  const sidebarW = collapsed ? COLLAPSED_W : EXPANDED_W;
 
   // On mount: read ?onboard=ID or ?decline=ID from URL and auto-open the modal
   // Also auto-open transactions tab if navigating from email link (/client/transactions or ?tab=transactions)
@@ -209,61 +218,145 @@ export default function ClientPortal() {
     { key: "services", label: "Your Services", icon: <Sparkles className="w-4 h-4" /> },
     { key: "messages", label: "Messages", icon: <MessageSquare className="w-4 h-4" />, badge: unreadMessages || undefined },
     { key: "documents", label: "Documents", icon: <Paperclip className="w-4 h-4" /> },
-    { key: "transactions", label: "Transactions", icon: <BookOpen className="w-4 h-4" />, badge: awaitingTxCount || undefined },
+    { key: "transactions", label: "Transaction Review", icon: <ArrowLeftRight className="w-4 h-4" />, badge: awaitingTxCount || undefined },
     { key: "profile", label: "My Profile", icon: <User className="w-4 h-4" /> },
   ];
 
+  const firstName = user?.name?.split(" ")[0] || "there";
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-14">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2.5">
-              <img src="/hm-logo-full.png" alt="HM Virtual Services" className="h-8 w-8 object-contain shrink-0" />
-              <span className="text-sm font-semibold" style={{ color: "#266b75" }}>HM Virtual Services Business Suite</span>
-            </div>
-            <span className="text-slate-300 text-sm">·</span>
-            <span className="text-slate-500 text-sm">Client Portal</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-600 hidden sm:block">{user?.name}</span>
-            <button
-              onClick={logout}
-              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-900 transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign out</span>
-            </button>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: "#f8fafc" }}>
+      {/* ── Sidebar ── */}
+      <aside
+        style={{
+          width: sidebarW,
+          minWidth: sidebarW,
+          backgroundColor: "#266b75",
+          transition: "width 0.22s ease, min-width 0.22s ease",
+        }}
+        className="flex flex-col h-full z-30 overflow-hidden"
+      >
+        {/* Logo block */}
+        <div
+          className="shrink-0 flex flex-col items-center pt-3 pb-2 px-2"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+        >
+          <div
+            style={{
+              backgroundColor: "#ffffff",
+              borderRadius: 8,
+              padding: collapsed ? 4 : 8,
+              width: collapsed ? 44 : "100%",
+              transition: "width 0.22s ease, padding 0.22s ease",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <img
+              src="/hm-logo-cropped.png"
+              alt="HM Virtual Services"
+              style={{
+                width: collapsed ? 32 : "100%",
+                height: collapsed ? 32 : "auto",
+                objectFit: "contain",
+                transition: "width 0.22s ease, height 0.22s ease",
+                display: "block",
+              }}
+            />
           </div>
         </div>
-        {/* Tab nav */}
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex gap-0 overflow-x-auto no-scrollbar">
-            {TABS.map(tab => (
+
+        {/* User greeting */}
+        {!collapsed && (
+          <div
+            className="shrink-0 px-4 py-2.5"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <p className="text-sm font-semibold text-white truncate">Hi, {firstName}!</p>
+            <p className="text-xs truncate mt-0.5" style={{ color: "rgba(255,255,255,0.55)" }}>
+              Client Portal
+            </p>
+          </div>
+        )}
+
+        {/* Nav links */}
+        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+          {TABS.map(tab => {
+            const isActive = activeTab === tab.key;
+            return (
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === tab.key
-                    ? "border-primary text-primary"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
+                title={collapsed ? tab.label : undefined}
+                className={`w-full flex items-center rounded-lg transition-colors ${
+                  collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"
                 }`}
+                style={{
+                  backgroundColor: isActive ? "rgba(255,255,255,0.15)" : "transparent",
+                  color: isActive ? "#ffffff" : "rgba(255,255,255,0.72)",
+                }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)"; }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.backgroundColor = "transparent"; }}
               >
-                {tab.icon}
-                {tab.label}
+                <span style={{ flexShrink: 0, width: 18, height: 18, display: "flex", alignItems: "center" }}>
+                  {tab.icon}
+                </span>
+                {!collapsed && (
+                  <span className="text-sm font-medium whitespace-nowrap flex-1 text-left">{tab.label}</span>
+                )}
                 {tab.badge ? (
-                  <span className="ml-0.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none">
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none shrink-0">
                     {tab.badge}
                   </span>
                 ) : null}
               </button>
-            ))}
-          </nav>
-        </div>
-      </header>
+            );
+          })}
+        </nav>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Collapse toggle */}
+        <div className="shrink-0 px-2 pb-1">
+          <button
+            onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={`w-full flex items-center rounded-lg py-2 transition-colors ${
+              collapsed ? "justify-center px-0" : "gap-2 px-3"
+            }`}
+            style={{ color: "rgba(255,255,255,0.55)" }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.9)"; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.55)"; }}
+          >
+            {collapsed
+              ? <ChevronRight style={{ width: 16, height: 16, flexShrink: 0 }} />
+              : <><ChevronLeft style={{ width: 16, height: 16, flexShrink: 0 }} /><span className="text-xs font-medium">Collapse</span></>
+            }
+          </button>
+        </div>
+
+        {/* Bottom: logout */}
+        <div
+          className="shrink-0 py-2 px-2 space-y-0.5"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
+        >
+          <button
+            onClick={logout}
+            title="Sign out"
+            className={`w-full flex items-center rounded-lg py-2 transition-colors ${
+              collapsed ? "justify-center px-0" : "gap-3 px-3"
+            }`}
+            style={{ color: "rgba(255,255,255,0.6)" }}
+            onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.color = "rgba(255,255,255,0.9)"; }}
+            onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+          >
+            <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
+            {!collapsed && <span className="text-sm font-medium">Sign out</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Main content ── */}
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
         {activeTab === "overview" && (
           <OverviewTab
             user={user}
@@ -282,9 +375,11 @@ export default function ClientPortal() {
             unpaidInvoices={unpaidInvoices}
             paidInvoices={paidInvoices}
             todayStr={todayStr}
+            awaitingTxCount={awaitingTxCount}
             goToTasks={() => setActiveTab("tasks")}
             goToInvoices={() => setActiveTab("invoices")}
             goToTime={() => setActiveTab("time")}
+            goToTransactions={() => setActiveTab("transactions")}
           />
         )}
         {activeTab === "tasks" && (
@@ -327,7 +422,7 @@ export default function ClientPortal() {
         )}
       </main>
 
-      {/* ── Onboarding modal (from estimate Accept link) ─────────────── */}
+      {/* ── Onboarding modal ── */}
       {onboardEstimateId !== null && (
         <StartServicesModal
           estimateId={onboardEstimateId}
@@ -337,7 +432,7 @@ export default function ClientPortal() {
         />
       )}
 
-      {/* ── Decline modal (from estimate Decline link) ──────────────── */}
+      {/* ── Decline modal ── */}
       {declineEstimateId !== null && (
         <DeclineFeedbackModal
           estimateId={declineEstimateId}
@@ -357,7 +452,7 @@ function OverviewTab({
   user, clientRecord, hoursThisMonth, hoursBudget, hoursPct, hoursColor, vaServiceHours,
   pendingTasks, completedTasks, overdueTasks, overdueInvoices,
   totalOwed, totalPaid, unpaidInvoices, paidInvoices, todayStr,
-  goToTasks, goToInvoices, goToTime,
+  awaitingTxCount, goToTasks, goToInvoices, goToTime, goToTransactions,
 }: {
   user: any; clientRecord?: ClientRecord;
   hoursThisMonth: number; hoursBudget: number; hoursPct: number; hoursColor: string;
@@ -368,7 +463,8 @@ function OverviewTab({
   } | undefined;
   pendingTasks: any[]; completedTasks: any[]; overdueTasks: any[]; overdueInvoices: any[];
   totalOwed: number; totalPaid: number; unpaidInvoices: any[]; paidInvoices: any[];
-  todayStr: string; goToTasks: () => void; goToInvoices: () => void; goToTime: () => void;
+  todayStr: string; awaitingTxCount: number;
+  goToTasks: () => void; goToInvoices: () => void; goToTime: () => void; goToTransactions: () => void;
 }) {
   const hasBK = !!(clientRecord?.bk_fee || clientRecord?.service_type === "bookkeeping" || clientRecord?.service_type === "hybrid");
   const hasVA = !!(clientRecord?.va_hourly_rate || clientRecord?.service_type === "va" || clientRecord?.service_type === "hybrid");
@@ -413,6 +509,35 @@ function OverviewTab({
           <p className="text-sm text-amber-700 flex-1">{overdueTasks.length} task{overdueTasks.length !== 1 ? "s" : ""} past due date</p>
           <button onClick={goToTasks} className="text-xs font-medium text-amber-700 hover:text-amber-800 bg-amber-100 hover:bg-amber-200 px-2.5 py-1 rounded-lg transition-colors shrink-0">
             View
+          </button>
+        </div>
+      )}
+
+      {/* Outstanding Transactions card — only shown when there are pending items */}
+      {awaitingTxCount > 0 && (
+        <div
+          className="flex items-start gap-4 rounded-2xl border px-5 py-4 cursor-pointer hover:shadow-md transition-shadow"
+          style={{ backgroundColor: "#eef7f8", borderColor: "#7dbdc6" }}
+          onClick={goToTransactions}
+        >
+          <div className="p-2 rounded-xl shrink-0" style={{ backgroundColor: "#266b75" }}>
+            <ArrowLeftRight className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold" style={{ color: "#266b75" }}>
+              {awaitingTxCount} Outstanding Transaction{awaitingTxCount !== 1 ? "s" : ""} to Review
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: "#3a8a96" }}>
+              Your bookkeeper has flagged {awaitingTxCount === 1 ? "a transaction" : "transactions"} that need your input. Click to review and respond.
+            </p>
+          </div>
+          <button
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg shrink-0 transition-colors"
+            style={{ backgroundColor: "#266b75", color: "#ffffff" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#1d5260"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#266b75"; }}
+          >
+            Review Now
           </button>
         </div>
       )}
