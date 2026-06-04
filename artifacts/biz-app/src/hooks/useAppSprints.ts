@@ -151,12 +151,17 @@ export function computeSchedule(
 
   // projectedLaunchDate = latest adjustedDue across all tasks
   let projectedLaunchDate: Date | null = null;
-  for (const e of entries.values()) {
+  const dateDebug: string[] = [];
+  for (const [taskId, e] of entries.entries()) {
     const d = e.adjustedDue ?? e.plannedDue;
+    const t = byId.get(taskId);
+    dateDebug.push(`${t?.title?.slice(0,20) ?? taskId}: storedAdj=${t?.adjustedDueDate ?? "—"} computedAdj=${e.adjustedDue?.toISOString().slice(0,10) ?? "null"} planned=${e.plannedDue?.toISOString().slice(0,10) ?? "null"} used=${d?.toISOString().slice(0,10) ?? "null"}`);
     if (d && (!projectedLaunchDate || d > projectedLaunchDate)) {
       projectedLaunchDate = d;
     }
   }
+  console.log("[computeSchedule] Task dates:", dateDebug);
+  console.log("[computeSchedule] projectedLaunchDate:", projectedLaunchDate?.toISOString().slice(0,10) ?? "null");
 
   // daysAheadBehind: positive = ahead of target, negative = behind
   let daysAheadBehind: number | null = null;
@@ -217,6 +222,8 @@ export function useAppSprints(appId: number | string) {
       (snap) => {
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Sprint));
         data.sort((a, b) => a.name.localeCompare(b.name));
+        const taskSample = data.flatMap(s => s.tasks ?? []).slice(0, 5);
+        console.log("[useAppSprints] onSnapshot fired. Sprints:", data.length, "Sample tasks:", taskSample.map(t => ({ title: t.title, adjustedDueDate: t.adjustedDueDate ?? "(none)" })));
         setSprints(data);
         setLoading(false);
       },

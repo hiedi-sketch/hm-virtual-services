@@ -199,6 +199,7 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
   const [showModal,       setShowModal]       = useState(false);
   const [sprintForm,      setSprintForm]      = useState({ name: "", startDate: "", endDate: "" });
   const [sprintSaving,    setSprintSaving]    = useState(false);
+  const [saveError,       setSaveError]       = useState<string | null>(null);
 
   const filtered = activeFilter === "all" ? sprints : sprints.filter(s => s.id === activeFilter);
 
@@ -223,16 +224,18 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
 
   const saveTask = async (sprint: Sprint, taskId: string) => {
     setSavingTaskId(taskId);
+    setSaveError(null);
     try {
       const draft = taskDrafts[taskId] ?? {};
-      const updatedTasks = sprint.tasks.map(t =>
-        t.id === taskId ? stripUndefined({ ...t, ...draft }) : t
-      );
+      const merged = stripUndefined({ ...sprint.tasks.find(t => t.id === taskId)!, ...draft });
+      const updatedTasks = sprint.tasks.map(t => t.id === taskId ? merged : t);
+      console.log("[saveTask] Saving task:", taskId, "adjustedDueDate:", merged.adjustedDueDate ?? "(not set)", "Full merged:", merged);
       await updateSprint(sprint.id, { tasks: updatedTasks });
+      console.log("[saveTask] Save succeeded for task:", taskId);
       setExpandedTasks(p => { const n = new Set(p); n.delete(taskId); return n; });
     } catch (err) {
-      console.error("Save task failed:", err);
-      alert(`Failed to save task: ${err instanceof Error ? err.message : String(err)}`);
+      console.error("[saveTask] Save task failed:", err);
+      setSaveError(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setSavingTaskId(null);
     }
@@ -259,6 +262,12 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
 
   return (
     <div>
+      {saveError && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: "8px", color: "#dc2626", padding: "10px 16px", marginBottom: "14px", fontSize: "13px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>⚠️ {saveError}</span>
+          <button onClick={() => setSaveError(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "#dc2626", fontSize: "16px", lineHeight: 1 }}>✕</button>
+        </div>
+      )}
       {/* Filter tabs */}
       <div style={{ display: "flex", gap: "6px", marginBottom: "20px", flexWrap: "wrap" as const }}>
         {[{ id: "all", label: "All Sprints" }, ...sprints.map(s => ({ id: s.id, label: s.name }))].map(tab => {
@@ -664,8 +673,26 @@ export default function AppDevTrackerDetail() {
   const schedule = computeSchedule(sprints, dailyHours, appTargetDate);
   const stats    = computeSprintStats(sprints, appTargetDate);
 
-  // Prefer schedule-based projection; fall back to velocity-based
-  const projLaunch = schedule.projectedLaunchDate ?? stats.projectedDate;
+  // Direct fallback: scan all tasks for the latest adjustedDueDate or plannedDueDate
+  // This catches cases where computeSchedule misses dates (e.g. no start+hours combo)
+  const directMaxDate = (() => {
+    let max: Date | null = null;
+    for (const sprint of sprints) {
+      for (const task of sprint.tasks ?? []) {
+        const s = task.adjustedDueDate || task.plannedDueDate;
+        if (s) {
+          const d = new Date(s + (s.includes("T") ? "" : "T00:00:00"));
+          if (!isNaN(d.getTime()) && (!max || d > max)) max = d;
+        }
+      }
+    }
+    return max;
+  })();
+
+  console.log("[projLaunch] schedule:", schedule.projectedLaunchDate?.toISOString().slice(0,10) ?? "null", "direct:", directMaxDate?.toISOString().slice(0,10) ?? "null", "velocity:", stats.projectedDate?.toISOString().slice(0,10) ?? "null");
+
+  // Prefer schedule-based projection; fall back to direct max date; then velocity-based
+  const projLaunch = schedule.projectedLaunchDate ?? directMaxDate ?? stats.projectedDate;
   const dab        = schedule.daysAheadBehind ?? stats.daysAheadBehind;
   const dabTierKey = getDabTier(dab);
   const tier       = TIER_PALETTE[dabTierKey];
