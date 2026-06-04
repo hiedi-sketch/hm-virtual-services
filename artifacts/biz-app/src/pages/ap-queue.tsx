@@ -198,8 +198,7 @@ export default function ApQueue() {
       if (selectedFile) {
         const fd = new FormData();
         fd.append("file", selectedFile);
-        fd.append("client_id", String(billForm.client_id));
-        const uploadRes = await fetch(`${API}/api/uploads`, { method: "POST", body: fd });
+        const uploadRes = await fetch(`${API}/api/uploads?client_id=${billForm.client_id}`, { method: "POST", body: fd });
         if (!uploadRes.ok) {
           const err = await uploadRes.json().catch(() => ({}));
           throw new Error(err.error ?? "File upload failed");
@@ -221,11 +220,15 @@ export default function ApQueue() {
       };
 
       if (billModal === "add") {
-        await fetch(`${API}/api/ap/bills`, {
+        const createRes = await fetch(`${API}/api/ap/bills`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!createRes.ok) {
+          const err = await createRes.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to create bill");
+        }
         toast({ title: "Bill added" });
       } else {
         await patchBill((billModal as ApBill).id, payload);

@@ -83,9 +83,10 @@ router.post("/uploads", requireAuth, (req, res) => {
       }
       clientId = user.client_id;
     } else {
-      // admin / team_member must supply client_id in the form body
-      const rawId = req.body?.client_id;
-      clientId = parseInt(rawId, 10);
+      // admin / team_member must supply client_id as a query param (?client_id=N)
+      // or as a form field in the multipart body (legacy fallback)
+      const rawId = req.query["client_id"] ?? req.body?.client_id;
+      clientId = parseInt(rawId as string, 10);
       if (isNaN(clientId) || clientId <= 0) {
         fs.unlinkSync(req.file.path);
         res.status(400).json({ error: "client_id is required." });
