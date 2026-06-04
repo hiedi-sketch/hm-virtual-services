@@ -1984,8 +1984,11 @@ type FlaggedTx = {
   date: string | null;
   transaction_type: string | null;
   name: string | null;
+  memo: string | null;
   amount: number | null;
   account: string | null;
+  category: string | null;
+  internal_notes: string | null;
   flagged_question: string | null;
   question_sent_at: string | null;
   status: string;
@@ -2093,30 +2096,36 @@ function TransactionsPortalTab({ clientId }: { clientId?: number }) {
         const isDone = submitted[tx.id];
         return (
           <div key={tx.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isDone ? "border-emerald-200" : "border-slate-200"}`}>
-            {/* Transaction header */}
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="font-semibold text-slate-900 truncate">{tx.name || "Unknown Payee"}</p>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  {fmtTxDate(tx.date)}{tx.transaction_type ? ` · ${tx.transaction_type}` : ""}
-                  {tx.account ? ` · ${tx.account}` : ""}
-                </p>
+            {/* Transaction header — Payee + Amount */}
+            <div className="px-5 py-4 border-b border-slate-100">
+              <div className="flex items-start justify-between gap-3 mb-2.5">
+                <p className="font-semibold text-slate-900 text-base leading-snug">{tx.name || tx.memo || "Unknown Payee"}</p>
+                <div className="text-right shrink-0">
+                  <p className={`font-bold text-base tabular-nums ${(tx.amount ?? 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>
+                    {fmtTxAmount(tx.amount)}
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{(tx.amount ?? 0) < 0 ? "Debit" : "Credit"}</p>
+                </div>
               </div>
-              <div className="text-right shrink-0">
-                <p className={`font-bold text-base tabular-nums ${(tx.amount ?? 0) < 0 ? "text-red-600" : "text-emerald-700"}`}>
-                  {fmtTxAmount(tx.amount)}
-                </p>
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-500">
+                <span><span className="font-semibold text-slate-600">Date:</span> {fmtTxDate(tx.date)}</span>
+                {tx.category && (
+                  <span><span className="font-semibold text-slate-600">Category:</span> {tx.category}</span>
+                )}
+                {tx.account && (
+                  <span><span className="font-semibold text-slate-600">Account:</span> {tx.account}</span>
+                )}
               </div>
             </div>
 
-            {/* Question bubble */}
+            {/* Notes from bookkeeper */}
             <div className="px-5 py-4 bg-[#266b75]/5 border-b border-[#266b75]/10">
               <div className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-white text-xs font-bold" style={{ background: "#266b75" }}>H</div>
                 <div className="bg-white rounded-2xl rounded-tl-sm border border-[#266b75]/20 px-4 py-3 shadow-sm flex-1">
                   <p className="text-xs font-semibold mb-1" style={{ color: "#266b75" }}>Hiedi · HM Virtual Services</p>
-                  <p className="text-sm text-slate-800 leading-relaxed">
-                    {tx.flagged_question || "Could you please provide information about this transaction?"}
+                  <p className="text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                    {tx.internal_notes || tx.flagged_question || "Please review this transaction and provide any details that would help with categorization."}
                   </p>
                   {tx.question_sent_at && (
                     <p className="text-[10px] text-slate-400 mt-1.5">

@@ -382,6 +382,7 @@ function TransactionEditPanel({
   onUploadReceipt: (file: File) => Promise<void>;
 }) {
   const [memo, setMemo] = useState(tx.memo ?? "");
+  const [category, setCategory] = useState(tx.category ?? "");
   const [notes, setNotes] = useState(tx.internal_notes ?? "");
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   const [showReceiptPreview, setShowReceiptPreview] = useState(false);
@@ -389,6 +390,7 @@ function TransactionEditPanel({
   const receiptInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { setMemo(tx.memo ?? ""); }, [tx.memo]);
+  useEffect(() => { setCategory(tx.category ?? ""); }, [tx.category]);
   useEffect(() => { setNotes(tx.internal_notes ?? ""); }, [tx.internal_notes]);
 
   // Resolve actual mimetype via HEAD so we render image vs PDF correctly
@@ -475,18 +477,26 @@ function TransactionEditPanel({
 
           <div>
             <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Category</label>
-            <CategoryCell tx={tx} />
+            <input
+              type="text"
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              onBlur={() => { if (category !== (tx.category ?? "")) onSaveCategory(category); }}
+              onKeyDown={e => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setCategory(tx.category ?? ""); }}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75]"
+              placeholder="Enter category…"
+            />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Internal Notes</label>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Notes to Customer</label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
               onBlur={() => { if (notes !== (tx.internal_notes ?? "")) onSaveNotes(notes); }}
               rows={4}
               className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#266b75]/30 focus:border-[#266b75] resize-none"
-              placeholder="Add internal note…"
+              placeholder="Add a note for the client…"
             />
           </div>
 
@@ -613,17 +623,8 @@ function TransactionEditPanel({
         </div>
 
         {/* Footer actions */}
-        <div className="px-5 py-4 border-t border-slate-100 space-y-2">
+        <div className="px-5 py-4 border-t border-slate-100">
           <div className="flex gap-2">
-            {tx.status !== "resolved" && (
-              <button
-                onClick={onFlag}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border border-amber-200 bg-amber-50/50 text-amber-700 text-sm font-semibold hover:bg-amber-50 transition-colors"
-              >
-                <Flag className="w-4 h-4" />
-                {tx.status === "awaiting_response" || tx.status === "responded" ? "View Question" : "Flag for Client"}
-              </button>
-            )}
             {tx.status === "responded" && (
               <button
                 onClick={onResolve}
@@ -635,7 +636,7 @@ function TransactionEditPanel({
             )}
             <button
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors"
+              className="flex-1 px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors"
             >
               Close
             </button>
@@ -1252,7 +1253,7 @@ export default function TransactionsPage() {
                   <th className="px-4 py-3.5 w-36">Status</th>
                   <th className="px-4 py-3.5 w-28 text-right">Debit</th>
                   <th className="px-4 py-3.5 w-28 text-right">Credit</th>
-                  <th className="px-4 py-3.5 w-36">Internal Notes</th>
+                  <th className="px-4 py-3.5 w-36">Notes to Customer</th>
                   <th className="px-4 py-3.5 w-28 text-center">Actions</th>
                 </tr>
               </thead>
