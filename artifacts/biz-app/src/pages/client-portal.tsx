@@ -121,6 +121,9 @@ export default function ClientPortal() {
     if (window.location.pathname.includes("/client/transactions") || tabParam === "transactions") {
       setActiveTab("transactions");
       window.history.replaceState({}, "", "/portal");
+    } else if (window.location.pathname.includes("/client/ap") || tabParam === "ap") {
+      setActiveTab("ap");
+      window.history.replaceState({}, "", "/portal");
     } else if (onboard) {
       const id = Number(onboard);
       if (!isNaN(id) && id > 0) {

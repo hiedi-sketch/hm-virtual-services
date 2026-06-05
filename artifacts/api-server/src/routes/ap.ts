@@ -268,7 +268,7 @@ router.post("/ap/bills/:id/send-approval", requireAdmin, async (req, res) => {
   if (!row) return res.status(404).json({ error: "Bill not found" });
 
   const firstName = ((row.contact_name ?? row.client_name) ?? "").split(" ")[0] || "there";
-  const portalLink = "https://hmvirtualservices.com/portal";
+  const portalLink = "https://hmvirtualservices.com/client/ap";
   const now = new Date();
   const monthYear = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
@@ -320,7 +320,7 @@ router.post("/ap/bills/batch-send-approval", requireAdmin, async (req, res) => {
 
   const now = new Date();
   const monthYear = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const portalLink = "https://hmvirtualservices.com/portal";
+  const portalLink = "https://hmvirtualservices.com/client/ap";
   const results: { clientId: number; emailSent: boolean; emailAddress: string | null; emailError?: string }[] = [];
 
   for (const [clientId, clientRows] of byClient) {

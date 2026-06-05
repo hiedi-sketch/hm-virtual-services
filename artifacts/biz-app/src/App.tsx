@@ -156,6 +156,7 @@ function Router() {
         {user.role === "admin" && <Route path="/settings" component={SettingsPage} />}
         <Route path="/notifications" component={NotificationsPage} />
         <Route path="/client/transactions"><ClientPortal /></Route>
+        <Route path="/client/ap"><ClientPortal /></Route>
         <Route path="/client"><ClientPortal /></Route>
         <Route component={NotFound} />
       </Switch>
