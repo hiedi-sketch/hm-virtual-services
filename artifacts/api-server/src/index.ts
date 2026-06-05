@@ -4,10 +4,11 @@ import cron from "node-cron";
 import { runPush } from "./routes/asana";
 import { runClickUpPush } from "./routes/clickup";
 import { db } from "@workspace/db";
-import { tasksTable } from "@workspace/db";
+import { tasksTable, fileUploadsTable, apBillsTable } from "@workspace/db";
 import { eq, and, ne, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { notifyAdmins } from "./lib/notify";
+import { fixOrphanedFileRecords } from "./lib/gcsUpload";
 
 const rawPort = process.env["PORT"];
 
@@ -41,6 +42,7 @@ async function ensureSessionTable() {
 }
 
 ensureSessionTable()
+  .then(() => fixOrphanedFileRecords(db, { fileUploadsTable, apBillsTable }))
   .then(() => {
     app.listen(port, (err) => {
       if (err) {
@@ -51,7 +53,7 @@ ensureSessionTable()
     });
   })
   .catch((err) => {
-    logger.error({ err }, "Failed to ensure session table — aborting startup");
+    logger.error({ err }, "Failed startup tasks — aborting");
     process.exit(1);
   });
 

@@ -76,3 +76,54 @@ export async function migrateFileToGcs(
   await file.save(buffer, { contentType: mimetype, resumable: false });
   return `${GCS_PREFIX}${objectName}`;
 }
+
+/**
+ * Startup migration: for every file_uploads record without the gcs: prefix,
+ * check if the object already exists in GCS (migrated earlier from disk).
+ * - If found in GCS → update stored_name to gcs: prefix.
+ * - If not found (file is permanently lost) → clear attachment_url on any
+ *   ap_bills that reference it, then delete the orphaned file record.
+ */
+export async function fixOrphanedFileRecords(db: any, schema: any): Promise<void> {
+  const { fileUploadsTable, apBillsTable } = schema;
+  const { eq, like, notLike, sql } = await import("drizzle-orm");
+
+  const oldRecords: { id: number; stored_name: string }[] = await db
+    .select({ id: fileUploadsTable.id, stored_name: fileUploadsTable.stored_name })
+    .from(fileUploadsTable)
+    .where(notLike(fileUploadsTable.stored_name, "gcs:%"));
+
+  if (oldRecords.length === 0) return;
+
+  console.log(`[startup-migration] checking ${oldRecords.length} legacy file record(s)…`);
+
+  for (const record of oldRecords) {
+    const objectName = `uploads/${record.stored_name}`;
+    const b = bucket();
+    const file = b.file(objectName);
+    let inGcs = false;
+    try {
+      const [exists] = await file.exists();
+      inGcs = exists;
+    } catch {
+      inGcs = false;
+    }
+
+    if (inGcs) {
+      const newName = `${GCS_PREFIX}${objectName}`;
+      await db.update(fileUploadsTable)
+        .set({ stored_name: newName })
+        .where(eq(fileUploadsTable.id, record.id));
+      console.log(`[startup-migration] restored #${record.id} → ${newName}`);
+    } else {
+      // File is permanently lost — clear ap_bills attachment_url only.
+      // Leave the file_uploads record so documents/other refs aren't broken.
+      await db.update(apBillsTable)
+        .set({ attachment_url: null })
+        .where(like(apBillsTable.attachment_url, `%/uploads/${record.id}/%`));
+      console.log(`[startup-migration] cleared lost file #${record.id} (${record.stored_name}) from ap_bills`);
+    }
+  }
+
+  console.log("[startup-migration] done.");
+}
