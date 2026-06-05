@@ -5,6 +5,7 @@ import {
   Plus, Filter, DollarSign, Clock, CheckCircle2, AlertTriangle,
   ChevronDown, X, Pencil, Trash2, Send, Check, Ban,
   RotateCcw, CalendarClock, Paperclip, ExternalLink, Eye, Upload,
+  Mail, MailCheck, Square, CheckSquare,
 } from "lucide-react";
 
 const API = import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -124,6 +125,26 @@ export default function ApQueue() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
+
+  // multi-select for batch send
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [sendingId, setSendingId] = useState<number | null>(null);
+  const [batchSending, setBatchSending] = useState(false);
+
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    if (selectedIds.size === displayedBills.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(displayedBills.map(b => b.id)));
+    }
+  }
 
   const fetchBills = useCallback(async () => {
     setLoading(true);
@@ -298,6 +319,52 @@ export default function ApQueue() {
     }
   }
 
+  async function sendApproval(bill: ApBill) {
+    setSendingId(bill.id);
+    try {
+      const res = await fetch(`${API}/api/ap/bills/${bill.id}/send-approval`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      toast({
+        title: data.emailSent ? "Approval email sent!" : "Status updated",
+        description: data.emailSent
+          ? `Email sent to ${data.emailAddress}`
+          : "Bill marked as Sent for Approval (no email — client has no email address)",
+      });
+      fetchBills();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSendingId(null);
+    }
+  }
+
+  async function batchSendApproval() {
+    if (selectedIds.size === 0) return;
+    setBatchSending(true);
+    try {
+      const res = await fetch(`${API}/api/ap/bills/batch-send-approval`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ bill_ids: Array.from(selectedIds) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      const sent = (data.results as any[]).filter(r => r.emailSent).length;
+      const total = (data.results as any[]).length;
+      toast({
+        title: `Approval email${sent !== 1 ? "s" : ""} sent`,
+        description: `${sent} of ${total} client${total !== 1 ? "s" : ""} emailed successfully`,
+      });
+      setSelectedIds(new Set());
+      fetchBills();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setBatchSending(false);
+    }
+  }
+
   function openAddModal() {
     setBillForm({ ...EMPTY_BILL });
     setSelectedFile(null);
@@ -409,6 +476,27 @@ export default function ApQueue() {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-4 bg-[#266b75] text-white px-5 py-3 rounded-xl shadow-md">
+          <span className="text-sm font-semibold">{selectedIds.size} bill{selectedIds.size !== 1 ? "s" : ""} selected</span>
+          <button
+            onClick={batchSendApproval}
+            disabled={batchSending}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-[#266b75] text-sm font-semibold hover:bg-[#eef7f8] transition-colors disabled:opacity-50"
+          >
+            <Mail className="w-4 h-4" />
+            {batchSending ? "Sending…" : "Send Approval Email"}
+          </button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="ml-auto text-white/70 hover:text-white transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Bills Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {loading ? (
@@ -423,6 +511,17 @@ export default function ApQueue() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100 bg-slate-50">
+                  <th className="px-4 py-3 w-10">
+                    <button
+                      onClick={toggleSelectAll}
+                      className="text-slate-400 hover:text-[#266b75] transition-colors"
+                      title={selectedIds.size === displayedBills.length ? "Deselect all" : "Select all"}
+                    >
+                      {selectedIds.size === displayedBills.length && displayedBills.length > 0
+                        ? <CheckSquare className="w-4 h-4 text-[#266b75]" />
+                        : <Square className="w-4 h-4" />}
+                    </button>
+                  </th>
                   {["Client", "Vendor", "Invoice #", "Inv. Date", "Due Date", "Amount", "Category", "Status", "Actions"].map(h => (
                     <th key={h} className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-4 py-3 whitespace-nowrap">{h}</th>
                   ))}
@@ -433,6 +532,8 @@ export default function ApQueue() {
                   <BillRow
                     key={bill.id}
                     bill={bill}
+                    selected={selectedIds.has(bill.id)}
+                    onToggleSelect={() => toggleSelect(bill.id)}
                     onEdit={() => openEditModal(bill)}
                     onDelete={() => deleteBill(bill.id)}
                     onSetStatus={(s) => setStatus(bill, s)}
@@ -440,6 +541,8 @@ export default function ApQueue() {
                     onSnooze={() => { setSnoozeModal(bill); setSnoozeDate(""); setSnoozeManual(false); }}
                     onViewNote={() => setNoteViewModal(bill)}
                     onSettings={() => openSettings(bill.client_id)}
+                    onSendApproval={() => sendApproval(bill)}
+                    sendingApproval={sendingId === bill.id}
                   />
                 ))}
               </tbody>
@@ -834,8 +937,10 @@ function Receipt({ className }: { className?: string }) {
   );
 }
 
-function BillRow({ bill, onEdit, onDelete, onSetStatus, onReject, onSnooze, onViewNote, onSettings }: {
+function BillRow({ bill, selected, onToggleSelect, onEdit, onDelete, onSetStatus, onReject, onSnooze, onViewNote, onSettings, onSendApproval, sendingApproval }: {
   bill: ApBill;
+  selected: boolean;
+  onToggleSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onSetStatus: (s: BillStatus) => void;
@@ -843,15 +948,25 @@ function BillRow({ bill, onEdit, onDelete, onSetStatus, onReject, onSnooze, onVi
   onSnooze: () => void;
   onViewNote: () => void;
   onSettings: () => void;
+  onSendApproval: () => void;
+  sendingApproval: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
     <tr
-      className="hover:bg-[#eef7f8] transition-colors cursor-pointer"
+      className={`transition-colors cursor-pointer ${selected ? "bg-[#eef7f8]" : "hover:bg-[#eef7f8]"}`}
       onClick={onEdit}
       title="Click to edit this bill"
     >
+      {/* Checkbox */}
+      <td className="px-4 py-3 w-10" onClick={e => { e.stopPropagation(); onToggleSelect(); }}>
+        <button className="text-slate-400 hover:text-[#266b75] transition-colors">
+          {selected
+            ? <CheckSquare className="w-4 h-4 text-[#266b75]" />
+            : <Square className="w-4 h-4" />}
+        </button>
+      </td>
       <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">
         {bill.client_name ?? `Client ${bill.client_id}`}
       </td>
@@ -865,10 +980,23 @@ function BillRow({ bill, onEdit, onDelete, onSetStatus, onReject, onSnooze, onVi
       <td className="px-4 py-3 text-slate-500">{bill.category || "—"}</td>
       <td className="px-4 py-3"><StatusBadge status={bill.status} /></td>
       <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center gap-1">
-          {/* Contextual primary actions */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {/* Send / Resend approval email */}
+          {bill.status !== "paid" && (
+            <ActionBtn
+              onClick={onSendApproval}
+              disabled={sendingApproval}
+              label={bill.status === "sent_for_approval" ? "Resend" : "Send Now"}
+              icon={bill.status === "sent_for_approval"
+                ? <MailCheck className="w-3.5 h-3.5" />
+                : <Mail className="w-3.5 h-3.5" />}
+              color="teal"
+            />
+          )}
+
+          {/* Contextual status actions */}
           {bill.status === "due_soon" && (
-            <ActionBtn onClick={() => onSetStatus("sent_for_approval")} label="Mark as Sent" icon={<Send className="w-3.5 h-3.5" />} color="blue" />
+            <ActionBtn onClick={() => onSetStatus("sent_for_approval")} label="Mark Sent" icon={<Send className="w-3.5 h-3.5" />} color="blue" />
           )}
           {bill.status === "sent_for_approval" && (<>
             <ActionBtn onClick={() => onSetStatus("approved")} label="Approve" icon={<Check className="w-3.5 h-3.5" />} color="green" />
@@ -876,10 +1004,10 @@ function BillRow({ bill, onEdit, onDelete, onSetStatus, onReject, onSnooze, onVi
             <ActionBtn onClick={onReject} label="Reject" icon={<Ban className="w-3.5 h-3.5" />} color="red" />
           </>)}
           {bill.status === "approved" && (
-            <ActionBtn onClick={() => onSetStatus("paid")} label="Mark as Paid" icon={<CheckCircle2 className="w-3.5 h-3.5" />} color="green" />
+            <ActionBtn onClick={() => onSetStatus("paid")} label="Mark Paid" icon={<CheckCircle2 className="w-3.5 h-3.5" />} color="green" />
           )}
           {bill.status === "snoozed" && (
-            <ActionBtn onClick={() => onSetStatus("due_soon")} label="Re-enter Cycle" icon={<RotateCcw className="w-3.5 h-3.5" />} color="teal" />
+            <ActionBtn onClick={() => onSetStatus("due_soon")} label="Re-enter" icon={<RotateCcw className="w-3.5 h-3.5" />} color="teal" />
           )}
           {bill.status === "rejected" && (
             <ActionBtn onClick={onViewNote} label="View Note" icon={<Eye className="w-3.5 h-3.5" />} color="red" />
@@ -927,8 +1055,8 @@ function BillRow({ bill, onEdit, onDelete, onSetStatus, onReject, onSnooze, onVi
   );
 }
 
-function ActionBtn({ onClick, label, icon, color }: {
-  onClick: () => void; label: string; icon: React.ReactNode; color: string;
+function ActionBtn({ onClick, label, icon, color, disabled }: {
+  onClick: () => void; label: string; icon: React.ReactNode; color: string; disabled?: boolean;
 }) {
   const colors: Record<string, string> = {
     blue: "bg-blue-50 text-blue-700 hover:bg-blue-100",
@@ -940,12 +1068,13 @@ function ActionBtn({ onClick, label, icon, color }: {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       title={label}
       aria-label={label}
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors ${colors[color] ?? colors.teal}`}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${colors[color] ?? colors.teal}`}
     >
       {icon}
-      <span className="hidden sm:inline">{label}</span>
+      <span className="hidden sm:inline">{disabled ? "Sending…" : label}</span>
     </button>
   );
 }
