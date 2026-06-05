@@ -2403,6 +2403,8 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   paid:              { label: "Paid",                   color: "#1e3a5f", bg: "#dbeafe" },
 };
 
+type SnoozeOption = "next_cycle" | "due_date" | "custom";
+
 function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
   const { data: bills = [], isLoading } = useQuery<any[]>({
     queryKey: ["my-ap-bills"],
@@ -2413,8 +2415,10 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
 
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [rejectNote, setRejectNote] = useState<Record<number, string>>({});
-  const [confirming, setConfirming] = useState<Record<number, "reject" | null>>({});
+  const [confirming, setConfirming] = useState<Record<number, "reject" | "snooze" | null>>({});
   const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
+  const [snoozeOption, setSnoozeOption] = useState<Record<number, SnoozeOption>>({});
+  const [customDate, setCustomDate] = useState<Record<number, string>>({});
 
   const pending = bills.filter(b => b.status === "sent_for_approval");
   const history = bills.filter(b => b.status !== "sent_for_approval");
@@ -2428,6 +2432,8 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
     return `${Number(m)}/${Number(d)}/${y}`;
   };
 
+  const clearConfirm = (id: number) => setConfirming(p => ({ ...p, [id]: null }));
+
   async function respond(id: number, action: "approve" | "reject", note?: string) {
     setSubmitting(p => ({ ...p, [id]: true }));
     try {
@@ -2440,8 +2446,30 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
       if (!res.ok) throw new Error(await res.text());
       toast({ title: action === "approve" ? "Bill approved!" : "Bill rejected.", description: "Your response has been recorded." });
       queryClient.invalidateQueries({ queryKey: ["my-ap-bills"] });
-      setConfirming(p => ({ ...p, [id]: null }));
+      clearConfirm(id);
       setRejectNote(p => ({ ...p, [id]: "" }));
+    } catch {
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setSubmitting(p => ({ ...p, [id]: false }));
+    }
+  }
+
+  async function snooze(id: number) {
+    const opt = snoozeOption[id] ?? "next_cycle";
+    if (opt === "custom" && !customDate[id]) return;
+    setSubmitting(p => ({ ...p, [id]: true }));
+    try {
+      const res = await fetch(`/api/ap/bills/${id}/client-snooze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ snooze_option: opt, custom_date: customDate[id] }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast({ title: "Bill snoozed.", description: "Your bookkeeper has been notified." });
+      queryClient.invalidateQueries({ queryKey: ["my-ap-bills"] });
+      clearConfirm(id);
     } catch {
       toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
     } finally {
@@ -2502,6 +2530,9 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
                           {bill.category || "Uncategorized"} · Due {fmtDate(bill.due_date)}
                         </p>
                       </div>
+                      {bill.attachment_url && (
+                        <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0" title="Has attachment" />
+                      )}
                       <span className="text-base font-bold text-amber-800 shrink-0">{fmt(bill.amount)}</span>
                       <ChevronDown
                         className={`w-4 h-4 text-slate-400 transition-transform shrink-0 ${expanded[bill.id] ? "rotate-180" : ""}`}
@@ -2543,6 +2574,7 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
                           )}
                         </div>
 
+                        {/* Bookkeeper note */}
                         {bill.notes && (
                           <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
                             <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Bookkeeper Note</p>
@@ -2550,14 +2582,30 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
                           </div>
                         )}
 
-                        {/* Reject note input */}
+                        {/* Attachment */}
+                        {bill.attachment_url && (
+                          <div>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Attachment</p>
+                            <a
+                              href={bill.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-sm text-slate-700 font-medium transition-colors"
+                            >
+                              <Paperclip className="w-4 h-4 text-slate-500 shrink-0" />
+                              View Attachment
+                            </a>
+                          </div>
+                        )}
+
+                        {/* ── Reject panel ── */}
                         {confirming[bill.id] === "reject" && (
-                          <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                              Reason for rejection <span className="font-normal text-slate-400 normal-case">(optional)</span>
+                          <div className="space-y-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+                            <label className="text-xs font-semibold text-red-700 uppercase tracking-wider">
+                              Reason for rejection <span className="font-normal text-red-400 normal-case">(optional)</span>
                             </label>
                             <textarea
-                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+                              className="w-full border border-red-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
                               rows={2}
                               placeholder="Let your bookkeeper know why you're rejecting this bill…"
                               value={rejectNote[bill.id] ?? ""}
@@ -2566,8 +2614,57 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
                           </div>
                         )}
 
-                        {/* Action buttons */}
-                        <div className="flex items-center gap-3">
+                        {/* ── Snooze panel ── */}
+                        {confirming[bill.id] === "snooze" && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 space-y-3">
+                            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Snooze until…</p>
+                            <div className="flex flex-col gap-2">
+                              {(
+                                [
+                                  { value: "next_cycle", label: "Next Payment Cycle", sub: "Your bookkeeper's next scheduled payment run" },
+                                  { value: "due_date",   label: "On Due Date",         sub: `Remind again on ${fmtDate(bill.due_date)}` },
+                                  { value: "custom",     label: "Choose a Date",       sub: "Pick a specific date" },
+                                ] as { value: SnoozeOption; label: string; sub: string }[]
+                              ).map(opt => (
+                                <label
+                                  key={opt.value}
+                                  className={`flex items-start gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors ${
+                                    (snoozeOption[bill.id] ?? "next_cycle") === opt.value
+                                      ? "border-[#266b75] bg-[#eef7f8]"
+                                      : "border-slate-200 bg-white hover:bg-slate-50"
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name={`snooze-${bill.id}`}
+                                    value={opt.value}
+                                    checked={(snoozeOption[bill.id] ?? "next_cycle") === opt.value}
+                                    onChange={() => setSnoozeOption(p => ({ ...p, [bill.id]: opt.value }))}
+                                    className="mt-0.5 accent-[#266b75]"
+                                  />
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-700">{opt.label}</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">{opt.sub}</p>
+                                  </div>
+                                </label>
+                              ))}
+                            </div>
+
+                            {/* Custom date picker */}
+                            {(snoozeOption[bill.id] ?? "next_cycle") === "custom" && (
+                              <input
+                                type="date"
+                                min={new Date().toISOString().split("T")[0]}
+                                value={customDate[bill.id] ?? ""}
+                                onChange={e => setCustomDate(p => ({ ...p, [bill.id]: e.target.value }))}
+                                className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#266b75]/30"
+                              />
+                            )}
+                          </div>
+                        )}
+
+                        {/* ── Action buttons ── */}
+                        <div className="flex flex-wrap items-center gap-3">
                           {confirming[bill.id] === "reject" ? (
                             <>
                               <button
@@ -2578,10 +2675,22 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
                                 {submitting[bill.id] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ThumbsDown className="w-3.5 h-3.5" />}
                                 Confirm Rejection
                               </button>
+                              <button onClick={() => clearConfirm(bill.id)} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                                Cancel
+                              </button>
+                            </>
+                          ) : confirming[bill.id] === "snooze" ? (
+                            <>
                               <button
-                                onClick={() => setConfirming(p => ({ ...p, [bill.id]: null }))}
-                                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                                onClick={() => snooze(bill.id)}
+                                disabled={submitting[bill.id] || ((snoozeOption[bill.id] ?? "next_cycle") === "custom" && !customDate[bill.id])}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
+                                style={{ backgroundColor: "#266b75" }}
                               >
+                                {submitting[bill.id] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Clock className="w-3.5 h-3.5" />}
+                                Confirm Snooze
+                              </button>
+                              <button onClick={() => clearConfirm(bill.id)} className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors">
                                 Cancel
                               </button>
                             </>
@@ -2595,6 +2704,12 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
                               >
                                 {submitting[bill.id] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                                 Approve
+                              </button>
+                              <button
+                                onClick={() => setConfirming(p => ({ ...p, [bill.id]: "snooze" }))}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 border border-slate-200 hover:bg-slate-100 transition-colors"
+                              >
+                                <Clock className="w-3.5 h-3.5" /> Snooze
                               </button>
                               <button
                                 onClick={() => setConfirming(p => ({ ...p, [bill.id]: "reject" }))}
@@ -2625,20 +2740,39 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
                   return (
                     <div
                       key={bill.id}
-                      className="rounded-xl border border-slate-200 bg-white flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
-                      onClick={() => setExpanded(p => ({ ...p, [bill.id]: !p[bill.id] }))}
+                      className="rounded-xl border border-slate-200 bg-white flex items-center gap-3 px-4 py-3"
                     >
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-700 truncate">{bill.vendor}</p>
                         <p className="text-xs text-slate-400 mt-0.5">Due {fmtDate(bill.due_date)} · {bill.category || "Uncategorized"}</p>
+                        {bill.snooze_until && bill.status === "snoozed" && (
+                          <p className="text-xs text-slate-400 mt-0.5">Snoozed until {fmtDate(bill.snooze_until)}</p>
+                        )}
+                        {bill.client_response_note && (
+                          <p className="text-xs text-slate-500 mt-0.5 italic">"{bill.client_response_note}"</p>
+                        )}
                       </div>
-                      <span className="text-sm font-bold text-slate-600 shrink-0">{fmt(bill.amount)}</span>
-                      <span
-                        className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0"
-                        style={{ color: s.color, backgroundColor: s.bg }}
-                      >
-                        {s.label}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {bill.attachment_url && (
+                          <a
+                            href={bill.attachment_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="text-slate-400 hover:text-slate-600 transition-colors"
+                            title="View attachment"
+                          >
+                            <Paperclip className="w-3.5 h-3.5" />
+                          </a>
+                        )}
+                        <span className="text-sm font-bold text-slate-600">{fmt(bill.amount)}</span>
+                        <span
+                          className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                          style={{ color: s.color, backgroundColor: s.bg }}
+                        >
+                          {s.label}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}

@@ -373,6 +373,45 @@ router.post("/ap/bills/:id/snooze", requireAuth, async (req, res) => {
   res.json(updated);
 });
 
+// POST /ap/bills/:id/client-snooze — client snoozes a bill (ownership-checked)
+router.post("/ap/bills/:id/client-snooze", requireAuth, async (req, res) => {
+  const user = (req as any).session?.user;
+  if (!user?.client_id) return res.status(403).json({ error: "Client access only" });
+
+  const id = Number(req.params.id);
+  const { snooze_option, custom_date } = req.body as {
+    snooze_option: "next_cycle" | "due_date" | "custom";
+    custom_date?: string;
+  };
+
+  const [bill] = await db.select().from(apBillsTable)
+    .where(and(eq(apBillsTable.id, id), eq(apBillsTable.client_id, user.client_id)));
+
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
+  if (!["sent_for_approval", "snoozed"].includes(bill.status)) {
+    return res.status(409).json({ error: "Bill cannot be snoozed in its current state" });
+  }
+
+  let snoozeDate: string;
+  if (snooze_option === "due_date") {
+    snoozeDate = bill.due_date;
+  } else if (snooze_option === "custom" && custom_date) {
+    snoozeDate = custom_date;
+  } else {
+    const [settings] = await db.select().from(apClientSettingsTable)
+      .where(eq(apClientSettingsTable.client_id, user.client_id));
+    const payDay = settings?.payment_day ?? "tuesday";
+    snoozeDate = nextCycleDate(payDay);
+  }
+
+  const [updated] = await db.update(apBillsTable)
+    .set({ status: "snoozed", snooze_until: snoozeDate, updated_at: new Date() })
+    .where(eq(apBillsTable.id, id))
+    .returning();
+
+  res.json(updated);
+});
+
 // GET /ap/bills/my-bills — client-facing: returns this client's non-upcoming bills
 router.get("/ap/bills/my-bills", requireAuth, async (req, res) => {
   const user = (req as any).session?.user;
