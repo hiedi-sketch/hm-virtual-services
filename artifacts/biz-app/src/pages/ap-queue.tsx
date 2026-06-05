@@ -847,7 +847,11 @@ function BillRow({ bill, onEdit, onDelete, onSetStatus, onReject, onSnooze, onVi
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <tr className="hover:bg-slate-50/60 transition-colors">
+    <tr
+      className="hover:bg-[#eef7f8] transition-colors cursor-pointer"
+      onClick={onEdit}
+      title="Click to edit this bill"
+    >
       <td className="px-4 py-3 font-medium text-slate-800 whitespace-nowrap">
         {bill.client_name ?? `Client ${bill.client_id}`}
       </td>
@@ -860,7 +864,7 @@ function BillRow({ bill, onEdit, onDelete, onSetStatus, onReject, onSnooze, onVi
       <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">{fmt(bill.amount)}</td>
       <td className="px-4 py-3 text-slate-500">{bill.category || "—"}</td>
       <td className="px-4 py-3"><StatusBadge status={bill.status} /></td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
         <div className="flex items-center gap-1">
           {/* Contextual primary actions */}
           {bill.status === "due_soon" && (
