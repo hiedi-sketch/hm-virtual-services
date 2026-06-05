@@ -2,16 +2,16 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { randomUUID } from "crypto";
 import { db } from "@workspace/db";
-import { fileUploadsTable, clientsTable } from "@workspace/db";
-import { eq, desc, and } from "drizzle-orm";
+import { fileUploadsTable } from "@workspace/db";
+import { eq, desc } from "drizzle-orm";
 import { requireAuth } from "../middleware/auth";
 import { logAudit } from "../lib/audit";
+import { uploadToGcs, streamFromGcs, deleteFromGcs, GCS_PREFIX } from "../lib/gcsUpload";
 
 const router: IRouter = Router();
 
-// Uploads directory lives alongside the built dist/ folder
+// Legacy disk directory — still used as a fallback for pre-GCS files
 const UPLOADS_DIR = path.resolve(process.cwd(), "uploads");
 fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -21,38 +21,52 @@ const ALLOWED_MIMETYPES = new Set([
   "image/png",
   "image/gif",
   "image/webp",
-  "application/msword",                                                        // .doc
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",  // .docx
-  "application/vnd.ms-excel",                                                 // .xls
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",       // .xlsx
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "text/csv",
   "text/plain",
 ]);
 
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${randomUUID()}${ext}`);
-  },
-});
-
+// Memory storage — files are buffered in RAM and pushed to GCS
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
     if (ALLOWED_MIMETYPES.has(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error(`File type not allowed. Accepted: PDF, images, Word, Excel, CSV, TXT.`));
+      cb(new Error("File type not allowed. Accepted: PDF, images, Word, Excel, CSV, TXT."));
     }
   },
 });
 
-// POST /api/uploads — upload a file
-// Client: uses their own client_id from session; admin/team: must pass client_id in form
+// ── Serve helper ────────────────────────────────────────────────────────────
+async function serveFile(
+  record: { stored_name: string; original_name: string; mimetype: string },
+  res: any,
+  disposition: "inline" | "attachment"
+) {
+  if (record.stored_name.startsWith(GCS_PREFIX)) {
+    // New GCS-backed file
+    await streamFromGcs(record.stored_name, res, disposition, record.original_name, record.mimetype);
+  } else {
+    // Legacy disk file
+    const filePath = path.join(UPLOADS_DIR, record.stored_name);
+    if (!fs.existsSync(filePath)) {
+      res.status(404).json({ error: "File missing from storage" });
+      return;
+    }
+    res.setHeader("Content-Disposition", `${disposition}; filename="${record.original_name}"`);
+    res.setHeader("Content-Type", record.mimetype);
+    res.sendFile(filePath);
+  }
+}
+
+// POST /api/uploads — upload a file (stored in GCS)
 router.post("/uploads", requireAuth, (req, res) => {
   upload.single("file")(req, res, async (err) => {
     if (err instanceof multer.MulterError) {
@@ -77,31 +91,34 @@ router.post("/uploads", requireAuth, (req, res) => {
 
     if (user.role === "client") {
       if (!user.client_id) {
-        fs.unlinkSync(req.file.path);
         res.status(403).json({ error: "No client account linked." });
         return;
       }
       clientId = user.client_id;
     } else {
-      // admin / team_member must supply client_id as a query param (?client_id=N)
-      // or as a form field in the multipart body (legacy fallback)
       const rawId = req.query["client_id"] ?? req.body?.client_id;
       clientId = parseInt(rawId as string, 10);
       if (isNaN(clientId) || clientId <= 0) {
-        fs.unlinkSync(req.file.path);
         res.status(400).json({ error: "client_id is required." });
         return;
       }
     }
 
     try {
+      // Upload buffer to GCS
+      const gcsStoredName = await uploadToGcs(
+        req.file.buffer,
+        req.file.mimetype,
+        req.file.originalname
+      );
+
       const [record] = await db
         .insert(fileUploadsTable)
         .values({
           client_id: clientId,
           uploaded_by_user_id: user.id,
           original_name: req.file.originalname,
-          stored_name: req.file.filename,
+          stored_name: gcsStoredName,
           mimetype: req.file.mimetype,
           size_bytes: req.file.size,
         })
@@ -113,15 +130,13 @@ router.post("/uploads", requireAuth, (req, res) => {
       });
 
       res.status(201).json(record);
-    } catch (dbErr) {
-      fs.unlinkSync(req.file.path);
-      throw dbErr;
+    } catch (uploadErr: any) {
+      res.status(500).json({ error: `Upload failed: ${uploadErr?.message ?? "unknown error"}` });
     }
   });
 });
 
 // GET /api/uploads — list uploads
-// Clients see only their own; admin/team can filter by ?client_id=
 router.get("/uploads", requireAuth, async (req, res) => {
   const user = req.session.user!;
 
@@ -154,7 +169,7 @@ router.get("/uploads", requireAuth, async (req, res) => {
   res.json(rows);
 });
 
-// GET /api/uploads/:id/download — serve the file
+// GET /api/uploads/:id/download
 router.get("/uploads/:id/download", requireAuth, async (req, res) => {
   const id = parseInt(req.params["id"]!);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -168,24 +183,15 @@ router.get("/uploads/:id/download", requireAuth, async (req, res) => {
 
   if (!record) { res.status(404).json({ error: "File not found" }); return; }
 
-  // Clients can only download their own files
   if (user.role === "client" && record.client_id !== user.client_id) {
     res.status(403).json({ error: "Forbidden" });
     return;
   }
 
-  const filePath = path.join(UPLOADS_DIR, record.stored_name);
-  if (!fs.existsSync(filePath)) {
-    res.status(404).json({ error: "File missing from storage" });
-    return;
-  }
-
-  res.setHeader("Content-Disposition", `attachment; filename="${record.original_name}"`);
-  res.setHeader("Content-Type", record.mimetype);
-  res.sendFile(filePath);
+  await serveFile(record, res, "attachment");
 });
 
-// GET /api/uploads/:id/preview — serve inline (no download prompt)
+// GET /api/uploads/:id/preview — serve inline
 router.get("/uploads/:id/preview", requireAuth, async (req, res) => {
   const id = parseInt(req.params["id"]!);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -203,12 +209,7 @@ router.get("/uploads/:id/preview", requireAuth, async (req, res) => {
     res.status(403).json({ error: "Forbidden" }); return;
   }
 
-  const filePath = path.join(UPLOADS_DIR, record.stored_name);
-  if (!fs.existsSync(filePath)) { res.status(404).json({ error: "File missing from storage" }); return; }
-
-  res.setHeader("Content-Disposition", `inline; filename="${record.original_name}"`);
-  res.setHeader("Content-Type", record.mimetype);
-  res.sendFile(filePath);
+  await serveFile(record, res, "inline");
 });
 
 // DELETE /api/uploads/:id — admin only
@@ -229,8 +230,12 @@ router.delete("/uploads/:id", requireAuth, async (req, res) => {
 
   await db.delete(fileUploadsTable).where(eq(fileUploadsTable.id, id));
 
-  const filePath = path.join(UPLOADS_DIR, record.stored_name);
-  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  if (record.stored_name.startsWith(GCS_PREFIX)) {
+    await deleteFromGcs(record.stored_name).catch(() => {});
+  } else {
+    const filePath = path.join(UPLOADS_DIR, record.stored_name);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
 
   logAudit("file_upload", id, "deleted", `File "${record.original_name}" deleted`, {
     id: user.id,
