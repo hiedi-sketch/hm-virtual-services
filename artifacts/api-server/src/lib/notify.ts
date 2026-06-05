@@ -12,7 +12,10 @@ export type NotifyType =
   | "task_assigned"
   | "task_comment"
   | "new_message"
-  | "task_reset";
+  | "task_reset"
+  | "ap_bill_response"
+  | "ap_bill_status_changed"
+  | "transaction_responded";
 
 interface CreateNotificationOpts {
   userId: number;

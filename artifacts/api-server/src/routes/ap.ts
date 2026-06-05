@@ -6,6 +6,7 @@ import { apBillsTable, apClientSettingsTable, clientsTable } from "@workspace/db
 import { eq, and, inArray } from "drizzle-orm";
 import * as zod from "zod";
 import { sendMail, template } from "../lib/mailer";
+import { notifyAdmins } from "../lib/notify";
 
 const router = Router();
 
@@ -409,6 +410,15 @@ router.post("/ap/bills/:id/client-snooze", requireAuth, async (req, res) => {
     .where(eq(apBillsTable.id, id))
     .returning();
 
+  // Notify admins
+  notifyAdmins({
+    type: "ap_bill_response",
+    title: "AP Bill Snoozed",
+    message: `Client snoozed "${bill.vendor}" (${bill.amount}) — status updated to Snoozed.`,
+    entityType: "ap_bill",
+    entityId: id,
+  });
+
   res.json(updated);
 });
 
@@ -463,6 +473,64 @@ router.post("/ap/bills/:id/client-respond", requireAuth, async (req, res) => {
     })
     .where(eq(apBillsTable.id, id))
     .returning();
+
+  // Notify admins
+  notifyAdmins({
+    type: "ap_bill_response",
+    title: action === "approve" ? "AP Bill Approved" : "AP Bill Rejected",
+    message: action === "approve"
+      ? `Client approved "${bill.vendor}" (${bill.amount}).`
+      : `Client rejected "${bill.vendor}" (${bill.amount})${note ? `: "${note}"` : "."}`,
+    entityType: "ap_bill",
+    entityId: id,
+  });
+
+  res.json(updated);
+});
+
+// PATCH /ap/bills/:id/client-status — client changes a rejected/snoozed bill status
+router.patch("/ap/bills/:id/client-status", requireAuth, async (req, res) => {
+  const user = (req as any).session?.user;
+  if (!user?.client_id) return res.status(403).json({ error: "Client access only" });
+
+  const id = Number(req.params.id);
+  const { new_status, note } = req.body as {
+    new_status: "sent_for_approval" | "approved";
+    note?: string;
+  };
+
+  if (!["sent_for_approval", "approved"].includes(new_status)) {
+    return res.status(400).json({ error: "new_status must be 'sent_for_approval' or 'approved'" });
+  }
+
+  const [bill] = await db.select().from(apBillsTable)
+    .where(and(eq(apBillsTable.id, id), eq(apBillsTable.client_id, user.client_id)));
+
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
+  if (!["rejected", "snoozed"].includes(bill.status)) {
+    return res.status(409).json({ error: "Only rejected or snoozed bills can be updated" });
+  }
+
+  const [updated] = await db.update(apBillsTable)
+    .set({
+      status: new_status,
+      client_response_note: note ?? null,
+      snooze_until: new_status === "approved" ? null : bill.snooze_until,
+      updated_at: new Date(),
+    })
+    .where(eq(apBillsTable.id, id))
+    .returning();
+
+  // Notify admins of the status change
+  notifyAdmins({
+    type: "ap_bill_status_changed",
+    title: "AP Bill Status Updated by Client",
+    message: new_status === "approved"
+      ? `Client approved "${bill.vendor}" (${bill.amount}) — previously ${bill.status}.`
+      : `Client re-submitted "${bill.vendor}" (${bill.amount}) for approval — previously ${bill.status}.`,
+    entityType: "ap_bill",
+    entityId: id,
+  });
 
   res.json(updated);
 });

@@ -9,6 +9,7 @@ import { transactionsTable, transactionImportsTable, clientsTable, fileUploadsTa
 import { eq, and, inArray } from "drizzle-orm";
 import { requireAdmin, requireAuth } from "../middleware/auth";
 import { sendMail, template } from "../lib/mailer";
+import { notifyAdmins } from "../lib/notify";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -403,6 +404,15 @@ router.patch("/transactions/:id/respond", requireAuth, receiptUpload.single("rec
     .returning();
 
   if (!updated) return res.status(404).json({ error: "Transaction not found or already responded" });
+
+  // Notify admins that the client has responded
+  notifyAdmins({
+    type: "transaction_responded",
+    title: "Transaction Response Received",
+    message: `Client responded to a flagged transaction: "${response.slice(0, 80)}${response.length > 80 ? "…" : ""}"`,
+    entityType: "transaction",
+    entityId: txId,
+  });
 
   res.json(updated);
 });

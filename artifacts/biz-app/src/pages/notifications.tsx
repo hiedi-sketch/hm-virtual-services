@@ -27,15 +27,18 @@ type TypeConfig = {
 };
 
 const TYPE_CONFIG: Record<string, TypeConfig> = {
-  overdue_task:     { icon: AlertCircle,   color: "text-red-600",     bg: "bg-red-50",          label: "Overdue Task" },
-  task_assigned:    { icon: ClipboardList, color: "text-[#266b75]",   bg: "bg-[#266b75]/10",    label: "Task Assigned" },
-  task_comment:     { icon: MessageSquare, color: "text-amber-600",   bg: "bg-amber-50",         label: "Task Comment" },
-  new_message:      { icon: MessageSquare, color: "text-violet-600",  bg: "bg-violet-50",        label: "New Message" },
-  invoice_created:  { icon: FileText,      color: "text-blue-600",    bg: "bg-blue-50",          label: "Invoice Created" },
-  invoice_updated:  { icon: FileText,      color: "text-emerald-600", bg: "bg-emerald-50",       label: "Invoice Updated" },
-  invoice_sent:     { icon: Send,          color: "text-[#266b75]",   bg: "bg-[#266b75]/10",    label: "Invoice Sent" },
-  invoice_reminder: { icon: AlertCircle,   color: "text-amber-600",   bg: "bg-amber-50",         label: "Invoice Reminder" },
-  service_request:  { icon: Sparkles,      color: "text-violet-600",  bg: "bg-violet-50",        label: "Client Request" },
+  overdue_task:           { icon: AlertCircle,   color: "text-red-600",     bg: "bg-red-50",          label: "Overdue Task" },
+  task_assigned:          { icon: ClipboardList, color: "text-[#266b75]",   bg: "bg-[#266b75]/10",    label: "Task Assigned" },
+  task_comment:           { icon: MessageSquare, color: "text-amber-600",   bg: "bg-amber-50",         label: "Task Comment" },
+  new_message:            { icon: MessageSquare, color: "text-violet-600",  bg: "bg-violet-50",        label: "New Message" },
+  invoice_created:        { icon: FileText,      color: "text-blue-600",    bg: "bg-blue-50",          label: "Invoice Created" },
+  invoice_updated:        { icon: FileText,      color: "text-emerald-600", bg: "bg-emerald-50",       label: "Invoice Updated" },
+  invoice_sent:           { icon: Send,          color: "text-[#266b75]",   bg: "bg-[#266b75]/10",    label: "Invoice Sent" },
+  invoice_reminder:       { icon: AlertCircle,   color: "text-amber-600",   bg: "bg-amber-50",         label: "Invoice Reminder" },
+  service_request:        { icon: Sparkles,      color: "text-violet-600",  bg: "bg-violet-50",        label: "Client Request" },
+  ap_bill_response:       { icon: CheckCircle2,  color: "text-[#266b75]",   bg: "bg-[#266b75]/10",    label: "AP Bill Response" },
+  ap_bill_status_changed: { icon: RefreshCw,     color: "text-amber-600",   bg: "bg-amber-50",         label: "AP Status Changed" },
+  transaction_responded:  { icon: CheckCircle2,  color: "text-emerald-600", bg: "bg-emerald-50",       label: "Transaction Response" },
 };
 
 const DEFAULT_CONFIG: TypeConfig = {

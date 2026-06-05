@@ -2419,6 +2419,7 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
   const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
   const [snoozeOption, setSnoozeOption] = useState<Record<number, SnoozeOption>>({});
   const [customDate, setCustomDate] = useState<Record<number, string>>({});
+  const [editing, setEditing] = useState<Record<number, boolean>>({});
 
   const pending = bills.filter(b => b.status === "sent_for_approval");
   const history = bills.filter(b => b.status !== "sent_for_approval");
@@ -2470,6 +2471,29 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
       toast({ title: "Bill snoozed.", description: "Your bookkeeper has been notified." });
       queryClient.invalidateQueries({ queryKey: ["my-ap-bills"] });
       clearConfirm(id);
+    } catch {
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setSubmitting(p => ({ ...p, [id]: false }));
+    }
+  }
+
+  async function changeStatus(id: number, newStatus: "sent_for_approval" | "approved") {
+    setSubmitting(p => ({ ...p, [id]: true }));
+    try {
+      const res = await fetch(`/api/ap/bills/${id}/client-status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ new_status: newStatus }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast({
+        title: newStatus === "approved" ? "Bill approved!" : "Bill re-submitted.",
+        description: "Your bookkeeper has been notified.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["my-ap-bills"] });
+      setEditing(p => ({ ...p, [id]: false }));
     } catch {
       toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
     } finally {
@@ -2737,42 +2761,84 @@ function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
               <div className="space-y-2">
                 {history.map(bill => {
                   const s = STATUS_LABELS[bill.status] ?? { label: bill.status, color: "#6b7280", bg: "#f3f4f6" };
+                  const canEdit = bill.status === "rejected" || bill.status === "snoozed";
+                  const isEditing = editing[bill.id];
                   return (
                     <div
                       key={bill.id}
-                      className="rounded-xl border border-slate-200 bg-white flex items-center gap-3 px-4 py-3"
+                      className="rounded-xl border border-slate-200 bg-white overflow-hidden"
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-slate-700 truncate">{bill.vendor}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">Due {fmtDate(bill.due_date)} · {bill.category || "Uncategorized"}</p>
-                        {bill.snooze_until && bill.status === "snoozed" && (
-                          <p className="text-xs text-slate-400 mt-0.5">Snoozed until {fmtDate(bill.snooze_until)}</p>
-                        )}
-                        {bill.client_response_note && (
-                          <p className="text-xs text-slate-500 mt-0.5 italic">"{bill.client_response_note}"</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {bill.attachment_url && (
-                          <a
-                            href={bill.attachment_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="text-slate-400 hover:text-slate-600 transition-colors"
-                            title="View attachment"
+                      <div className="flex items-center gap-3 px-4 py-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-700 truncate">{bill.vendor}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Due {fmtDate(bill.due_date)} · {bill.category || "Uncategorized"}</p>
+                          {bill.snooze_until && bill.status === "snoozed" && (
+                            <p className="text-xs text-slate-400 mt-0.5">Snoozed until {fmtDate(bill.snooze_until)}</p>
+                          )}
+                          {bill.client_response_note && (
+                            <p className="text-xs text-slate-500 mt-0.5 italic">"{bill.client_response_note}"</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {bill.attachment_url && (
+                            <a
+                              href={bill.attachment_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className="text-slate-400 hover:text-slate-600 transition-colors"
+                              title="View attachment"
+                            >
+                              <Paperclip className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                          <span className="text-sm font-bold text-slate-600">{fmt(bill.amount)}</span>
+                          <span
+                            className="text-xs font-semibold px-2 py-0.5 rounded-full"
+                            style={{ color: s.color, backgroundColor: s.bg }}
                           >
-                            <Paperclip className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                        <span className="text-sm font-bold text-slate-600">{fmt(bill.amount)}</span>
-                        <span
-                          className="text-xs font-semibold px-2 py-0.5 rounded-full"
-                          style={{ color: s.color, backgroundColor: s.bg }}
-                        >
-                          {s.label}
-                        </span>
+                            {s.label}
+                          </span>
+                          {canEdit && (
+                            <button
+                              onClick={() => setEditing(p => ({ ...p, [bill.id]: !p[bill.id] }))}
+                              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                            >
+                              {isEditing ? "Cancel" : "Edit"}
+                            </button>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Edit panel for rejected/snoozed bills */}
+                      {canEdit && isEditing && (
+                        <div className="border-t border-slate-100 px-4 py-3 bg-slate-50">
+                          <p className="text-xs text-slate-500 mb-2.5">
+                            {bill.status === "rejected"
+                              ? "Changed your mind? You can approve this bill or re-submit it for your bookkeeper's review."
+                              : "Ready to act on this bill? You can approve it now or send it back for your bookkeeper's review."}
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              onClick={() => changeStatus(bill.id, "approved")}
+                              disabled={submitting[bill.id]}
+                              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
+                              style={{ backgroundColor: "#266b75" }}
+                            >
+                              {submitting[bill.id] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => changeStatus(bill.id, "sent_for_approval")}
+                              disabled={submitting[bill.id]}
+                              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-sm font-semibold text-slate-600 border border-slate-200 bg-white hover:bg-slate-100 transition-colors disabled:opacity-50"
+                            >
+                              {submitting[bill.id] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                              Re-submit for Review
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
