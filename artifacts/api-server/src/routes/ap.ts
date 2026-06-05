@@ -373,4 +373,59 @@ router.post("/ap/bills/:id/snooze", requireAuth, async (req, res) => {
   res.json(updated);
 });
 
+// GET /ap/bills/my-bills — client-facing: returns this client's non-upcoming bills
+router.get("/ap/bills/my-bills", requireAuth, async (req, res) => {
+  const user = (req as any).session?.user;
+  if (!user?.client_id) return res.status(403).json({ error: "Client access only" });
+
+  await runAutoTransitions([user.client_id]);
+
+  const bills = await db
+    .select()
+    .from(apBillsTable)
+    .where(and(
+      eq(apBillsTable.client_id, user.client_id),
+    ));
+
+  // Only show bills that have been sent for approval or beyond (not internal "upcoming")
+  const visible = bills.filter(b =>
+    ["sent_for_approval", "approved", "snoozed", "rejected", "paid"].includes(b.status)
+  );
+
+  res.json(visible.sort((a, b) => a.due_date.localeCompare(b.due_date)));
+});
+
+// POST /ap/bills/:id/client-respond — client approves or rejects a bill
+router.post("/ap/bills/:id/client-respond", requireAuth, async (req, res) => {
+  const user = (req as any).session?.user;
+  if (!user?.client_id) return res.status(403).json({ error: "Client access only" });
+
+  const id = Number(req.params.id);
+  const { action, note } = req.body as { action: "approve" | "reject"; note?: string };
+
+  if (!["approve", "reject"].includes(action)) {
+    return res.status(400).json({ error: "action must be 'approve' or 'reject'" });
+  }
+
+  const [bill] = await db.select().from(apBillsTable)
+    .where(and(eq(apBillsTable.id, id), eq(apBillsTable.client_id, user.client_id)));
+
+  if (!bill) return res.status(404).json({ error: "Bill not found" });
+  if (bill.status !== "sent_for_approval") {
+    return res.status(409).json({ error: "Bill is not awaiting approval" });
+  }
+
+  const newStatus = action === "approve" ? "approved" : "rejected";
+  const [updated] = await db.update(apBillsTable)
+    .set({
+      status: newStatus,
+      client_response_note: note ?? null,
+      updated_at: new Date(),
+    })
+    .where(eq(apBillsTable.id, id))
+    .returning();
+
+  res.json(updated);
+});
+
 export default router;

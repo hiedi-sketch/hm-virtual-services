@@ -89,7 +89,7 @@ const serviceSchema = z.object({
   message: z.string().min(10, "Please include some detail (at least 10 characters)"),
 });
 
-type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents" | "messages" | "time" | "transactions";
+type Tab = "overview" | "tasks" | "invoices" | "profile" | "services" | "documents" | "messages" | "time" | "transactions" | "ap";
 
 // ================================================================
 export default function ClientPortal() {
@@ -210,6 +210,14 @@ export default function ClientPortal() {
   });
   const awaitingTxCount = flaggedTxsData?.transactions?.length ?? 0;
 
+  const { data: myApBills = [] } = useQuery<any[]>({
+    queryKey: ["my-ap-bills"],
+    queryFn: () => fetch("/api/ap/bills/my-bills", { credentials: "include" }).then(r => r.ok ? r.json() : []),
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  });
+  const pendingApCount = myApBills.filter((b: any) => b.status === "sent_for_approval").length;
+
   const TABS: { key: Tab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { key: "overview", label: "Overview", icon: <LayoutDashboard className="w-4 h-4" /> },
     { key: "tasks", label: "Your Tasks", icon: <CheckSquare className="w-4 h-4" />, badge: pendingTasks.length || undefined },
@@ -219,6 +227,7 @@ export default function ClientPortal() {
     { key: "messages", label: "Messages", icon: <MessageSquare className="w-4 h-4" />, badge: unreadMessages || undefined },
     { key: "documents", label: "Documents", icon: <Paperclip className="w-4 h-4" /> },
     { key: "transactions", label: "Transaction Review", icon: <ArrowLeftRight className="w-4 h-4" />, badge: awaitingTxCount || undefined },
+    { key: "ap", label: "Accounts Payable", icon: <BookOpen className="w-4 h-4" />, badge: pendingApCount || undefined },
     { key: "profile", label: "My Profile", icon: <User className="w-4 h-4" /> },
   ];
 
@@ -376,10 +385,12 @@ export default function ClientPortal() {
             paidInvoices={paidInvoices}
             todayStr={todayStr}
             awaitingTxCount={awaitingTxCount}
+            pendingApCount={pendingApCount}
             goToTasks={() => setActiveTab("tasks")}
             goToInvoices={() => setActiveTab("invoices")}
             goToTime={() => setActiveTab("time")}
             goToTransactions={() => setActiveTab("transactions")}
+            goToAp={() => setActiveTab("ap")}
           />
         )}
         {activeTab === "tasks" && (
@@ -417,6 +428,9 @@ export default function ClientPortal() {
         {activeTab === "transactions" && (
           <TransactionsPortalTab clientId={clientId} />
         )}
+        {activeTab === "ap" && (
+          <ApPortalTab queryClient={queryClient} toast={toast} />
+        )}
         {activeTab === "profile" && (
           <ProfileTab user={user} refreshUser={refreshUser} toast={toast} />
         )}
@@ -452,7 +466,7 @@ function OverviewTab({
   user, clientRecord, hoursThisMonth, hoursBudget, hoursPct, hoursColor, vaServiceHours,
   pendingTasks, completedTasks, overdueTasks, overdueInvoices,
   totalOwed, totalPaid, unpaidInvoices, paidInvoices, todayStr,
-  awaitingTxCount, goToTasks, goToInvoices, goToTime, goToTransactions,
+  awaitingTxCount, pendingApCount, goToTasks, goToInvoices, goToTime, goToTransactions, goToAp,
 }: {
   user: any; clientRecord?: ClientRecord;
   hoursThisMonth: number; hoursBudget: number; hoursPct: number; hoursColor: string;
@@ -463,8 +477,9 @@ function OverviewTab({
   } | undefined;
   pendingTasks: any[]; completedTasks: any[]; overdueTasks: any[]; overdueInvoices: any[];
   totalOwed: number; totalPaid: number; unpaidInvoices: any[]; paidInvoices: any[];
-  todayStr: string; awaitingTxCount: number;
-  goToTasks: () => void; goToInvoices: () => void; goToTime: () => void; goToTransactions: () => void;
+  todayStr: string; awaitingTxCount: number; pendingApCount: number;
+  goToTasks: () => void; goToInvoices: () => void; goToTime: () => void;
+  goToTransactions: () => void; goToAp: () => void;
 }) {
   const hasBK = !!(clientRecord?.bk_fee || clientRecord?.service_type === "bookkeeping" || clientRecord?.service_type === "hybrid");
   const hasVA = !!(clientRecord?.va_hourly_rate || clientRecord?.service_type === "va" || clientRecord?.service_type === "hybrid");
@@ -538,6 +553,32 @@ function OverviewTab({
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#266b75"; }}
           >
             Review Now
+          </button>
+        </div>
+      )}
+
+      {/* Accounts Payable card — only shown when there are bills awaiting approval */}
+      {pendingApCount > 0 && (
+        <div
+          className="flex items-start gap-4 rounded-2xl border px-5 py-4 cursor-pointer hover:shadow-md transition-shadow"
+          style={{ backgroundColor: "#fefce8", borderColor: "#fbbf24" }}
+          onClick={goToAp}
+        >
+          <div className="p-2 rounded-xl shrink-0" style={{ backgroundColor: "#b45309" }}>
+            <DollarSign className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-amber-800">
+              {pendingApCount} Bill{pendingApCount !== 1 ? "s" : ""} Pending Your Approval
+            </p>
+            <p className="text-xs mt-0.5 text-amber-700">
+              {pendingApCount === 1 ? "A bill requires" : "Bills require"} your review and approval before payment can be processed.
+            </p>
+          </div>
+          <button
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg shrink-0 transition-colors bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            Review Bills
           </button>
         </div>
       )}
@@ -2347,6 +2388,265 @@ function TransactionsPortalTab({ clientId }: { clientId?: number }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ================================================================
+// ACCOUNTS PAYABLE PORTAL TAB
+// ================================================================
+const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  sent_for_approval: { label: "Awaiting Your Approval", color: "#92400e", bg: "#fef3c7" },
+  approved:          { label: "Approved",               color: "#166534", bg: "#dcfce7" },
+  snoozed:           { label: "Snoozed",                color: "#6b7280", bg: "#f3f4f6" },
+  rejected:          { label: "Rejected",               color: "#991b1b", bg: "#fee2e2" },
+  paid:              { label: "Paid",                   color: "#1e3a5f", bg: "#dbeafe" },
+};
+
+function ApPortalTab({ queryClient, toast }: { queryClient: any; toast: any }) {
+  const { data: bills = [], isLoading } = useQuery<any[]>({
+    queryKey: ["my-ap-bills"],
+    queryFn: () =>
+      fetch("/api/ap/bills/my-bills", { credentials: "include" }).then(r => r.ok ? r.json() : []),
+    staleTime: 30 * 1000,
+  });
+
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const [rejectNote, setRejectNote] = useState<Record<number, string>>({});
+  const [confirming, setConfirming] = useState<Record<number, "reject" | null>>({});
+  const [submitting, setSubmitting] = useState<Record<number, boolean>>({});
+
+  const pending = bills.filter(b => b.status === "sent_for_approval");
+  const history = bills.filter(b => b.status !== "sent_for_approval");
+
+  const fmt = (v: any) =>
+    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(v) || 0);
+
+  const fmtDate = (s: string) => {
+    if (!s) return "—";
+    const [y, m, d] = s.split("-");
+    return `${Number(m)}/${Number(d)}/${y}`;
+  };
+
+  async function respond(id: number, action: "approve" | "reject", note?: string) {
+    setSubmitting(p => ({ ...p, [id]: true }));
+    try {
+      const res = await fetch(`/api/ap/bills/${id}/client-respond`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action, note }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast({ title: action === "approve" ? "Bill approved!" : "Bill rejected.", description: "Your response has been recorded." });
+      queryClient.invalidateQueries({ queryKey: ["my-ap-bills"] });
+      setConfirming(p => ({ ...p, [id]: null }));
+      setRejectNote(p => ({ ...p, [id]: "" }));
+    } catch {
+      toast({ title: "Something went wrong", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setSubmitting(p => ({ ...p, [id]: false }));
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-slate-400">
+        <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Loading your bills…
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold text-slate-800">Accounts Payable</h2>
+        <p className="text-sm text-slate-500 mt-1">
+          Review and approve bills before your bookkeeper processes payment.
+        </p>
+      </div>
+
+      {/* Pending section */}
+      {pending.length === 0 && history.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-center rounded-2xl border border-slate-200 bg-white">
+          <div className="p-3 rounded-full mb-3" style={{ backgroundColor: "#eef7f8" }}>
+            <BookOpen className="w-7 h-7" style={{ color: "#266b75" }} />
+          </div>
+          <p className="text-sm font-semibold text-slate-600">No bills to review right now.</p>
+          <p className="text-xs text-slate-400 mt-1">Bills your bookkeeper sends for approval will appear here.</p>
+        </div>
+      ) : (
+        <>
+          {pending.length > 0 && (
+            <section>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-amber-700 mb-3">
+                Awaiting Your Approval ({pending.length})
+              </h3>
+              <div className="space-y-3">
+                {pending.map(bill => (
+                  <div
+                    key={bill.id}
+                    className="rounded-2xl border bg-white overflow-hidden"
+                    style={{ borderColor: "#fbbf24" }}
+                  >
+                    {/* Row summary */}
+                    <div
+                      className="flex items-center gap-3 px-5 py-4 cursor-pointer select-none"
+                      style={{ backgroundColor: "#fffbeb" }}
+                      onClick={() => setExpanded(p => ({ ...p, [bill.id]: !p[bill.id] }))}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-800 text-sm truncate">{bill.vendor}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          {bill.category || "Uncategorized"} · Due {fmtDate(bill.due_date)}
+                        </p>
+                      </div>
+                      <span className="text-base font-bold text-amber-800 shrink-0">{fmt(bill.amount)}</span>
+                      <ChevronDown
+                        className={`w-4 h-4 text-slate-400 transition-transform shrink-0 ${expanded[bill.id] ? "rotate-180" : ""}`}
+                      />
+                    </div>
+
+                    {/* Expanded detail */}
+                    {expanded[bill.id] && (
+                      <div className="px-5 pb-5 pt-3 space-y-4 border-t border-amber-100">
+                        {/* Details grid */}
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                          <div>
+                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Vendor</span>
+                            <p className="text-slate-700 mt-0.5">{bill.vendor}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Amount</span>
+                            <p className="text-slate-700 mt-0.5">{fmt(bill.amount)}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Due Date</span>
+                            <p className="text-slate-700 mt-0.5">{fmtDate(bill.due_date)}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Category</span>
+                            <p className="text-slate-700 mt-0.5">{bill.category || "—"}</p>
+                          </div>
+                          {bill.payment_method && (
+                            <div>
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Payment Method</span>
+                              <p className="text-slate-700 mt-0.5">{bill.payment_method}</p>
+                            </div>
+                          )}
+                          {bill.recurring && (
+                            <div>
+                              <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Frequency</span>
+                              <p className="text-slate-700 mt-0.5 capitalize">{bill.frequency || "Recurring"}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {bill.notes && (
+                          <div className="rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+                            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Bookkeeper Note</p>
+                            <p className="text-sm text-slate-700">{bill.notes}</p>
+                          </div>
+                        )}
+
+                        {/* Reject note input */}
+                        {confirming[bill.id] === "reject" && (
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                              Reason for rejection <span className="font-normal text-slate-400 normal-case">(optional)</span>
+                            </label>
+                            <textarea
+                              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 resize-none"
+                              rows={2}
+                              placeholder="Let your bookkeeper know why you're rejecting this bill…"
+                              value={rejectNote[bill.id] ?? ""}
+                              onChange={e => setRejectNote(p => ({ ...p, [bill.id]: e.target.value }))}
+                            />
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-3">
+                          {confirming[bill.id] === "reject" ? (
+                            <>
+                              <button
+                                onClick={() => respond(bill.id, "reject", rejectNote[bill.id])}
+                                disabled={submitting[bill.id]}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold bg-red-600 hover:bg-red-700 text-white transition-colors disabled:opacity-50"
+                              >
+                                {submitting[bill.id] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ThumbsDown className="w-3.5 h-3.5" />}
+                                Confirm Rejection
+                              </button>
+                              <button
+                                onClick={() => setConfirming(p => ({ ...p, [bill.id]: null }))}
+                                className="px-4 py-2 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => respond(bill.id, "approve")}
+                                disabled={submitting[bill.id]}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-colors disabled:opacity-50"
+                                style={{ backgroundColor: "#266b75" }}
+                              >
+                                {submitting[bill.id] ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => setConfirming(p => ({ ...p, [bill.id]: "reject" }))}
+                                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold text-red-700 border border-red-200 hover:bg-red-50 transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" /> Reject
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* History section */}
+          {history.length > 0 && (
+            <section>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-3">
+                Bill History
+              </h3>
+              <div className="space-y-2">
+                {history.map(bill => {
+                  const s = STATUS_LABELS[bill.status] ?? { label: bill.status, color: "#6b7280", bg: "#f3f4f6" };
+                  return (
+                    <div
+                      key={bill.id}
+                      className="rounded-xl border border-slate-200 bg-white flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50 transition-colors"
+                      onClick={() => setExpanded(p => ({ ...p, [bill.id]: !p[bill.id] }))}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-slate-700 truncate">{bill.vendor}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">Due {fmtDate(bill.due_date)} · {bill.category || "Uncategorized"}</p>
+                      </div>
+                      <span className="text-sm font-bold text-slate-600 shrink-0">{fmt(bill.amount)}</span>
+                      <span
+                        className="text-xs font-semibold px-2 py-0.5 rounded-full shrink-0"
+                        style={{ color: s.color, backgroundColor: s.bg }}
+                      >
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </>
+      )}
     </div>
   );
 }
