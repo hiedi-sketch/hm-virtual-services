@@ -5,7 +5,7 @@ import {
   Filter, Plus, Play, Pause, Square, Loader2, Pencil,
   ChevronRight, ChevronDown, Check, CheckCheck, X, Trash2, ClipboardList,
   ArrowUpDown, ArrowUp, ArrowDown, Download, ExternalLink, RefreshCw,
-  Pin, PinOff, ListOrdered, GripVertical,
+  Pin, PinOff, ListOrdered, GripVertical, Tag, FolderOpen,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,13 @@ interface ApiClient {
   id: number;
   name: string;
   contact_name: string | null;
+}
+
+interface TaskLabel {
+  id: string;
+  name: string;
+  type: "label" | "folder";
+  color: string;
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -1687,6 +1694,15 @@ export default function Tasks() {
     },
   });
 
+  const { data: taskLabels = [], refetch: refetchLabels } = useQuery<TaskLabel[]>({
+    queryKey: ["task-labels"],
+    queryFn: async () => {
+      const res = await fetch("/api/tasks/labels", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+  });
+
   // ── Inline edit trigger ────────────────────────────────────────────────────
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
 
@@ -1716,6 +1732,12 @@ export default function Tasks() {
   const [bulkClientId, setBulkClientId] = useState("");
   const [bulkServiceType, setBulkServiceType] = useState("");
   const [bulkAssigned, setBulkAssigned] = useState("");
+  const [bulkLabelId, setBulkLabelId] = useState("");
+  const [bulkMoveFolderId, setBulkMoveFolderId] = useState("");
+  const [showNewLabel, setShowNewLabel] = useState<"add" | "move" | null>(null);
+  const [newLabelName, setNewLabelName] = useState("");
+  const [newLabelType, setNewLabelType] = useState<"label" | "folder">("label");
+  const [isSavingLabel, setIsSavingLabel] = useState(false);
 
   const today = new Date().toLocaleDateString("sv-SE");
 
@@ -1841,8 +1863,34 @@ export default function Tasks() {
     }
   }, [selectedIds, tasks, patchTask, toast]);
 
+  const handleCreateLabel = useCallback(async (forAction: "add" | "move") => {
+    if (!newLabelName.trim()) return;
+    setIsSavingLabel(true);
+    try {
+      const res = await fetch("/api/tasks/labels", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newLabelName.trim(), type: newLabelType, color: "#266b75" }),
+      });
+      if (!res.ok) throw new Error("Failed to create label");
+      const created: TaskLabel = await res.json();
+      await refetchLabels();
+      if (forAction === "add") setBulkLabelId(created.id);
+      else setBulkMoveFolderId(created.id);
+      setShowNewLabel(null);
+      setNewLabelName("");
+      toast({ title: `${newLabelType === "folder" ? "Folder" : "Label"} "${created.name}" created` });
+    } catch {
+      toast({ title: "Failed to create label", variant: "destructive" });
+    } finally {
+      setIsSavingLabel(false);
+    }
+  }, [newLabelName, newLabelType, refetchLabels, toast]);
+
   const handleBulkAction = useCallback(async (
-    action: "delete" | "update_status" | "update_client" | "update_service_type" | "update_assigned",
+    action: "delete" | "update_status" | "update_client" | "update_service_type" | "update_assigned" | "add_label" | "move_to_folder",
+    labelOverride?: string,
   ) => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
@@ -1858,6 +1906,8 @@ export default function Tasks() {
       if (action === "update_client")       body.client_id    = Number(bulkClientId);
       if (action === "update_service_type") body.service_type = bulkServiceType;
       if (action === "update_assigned")     body.assigned_to  = bulkAssigned;
+      if (action === "add_label")           body.label        = labelOverride;
+      if (action === "move_to_folder")      body.label        = labelOverride;
 
       const res = await fetch("/api/tasks/bulk", {
         method: "POST",
@@ -2905,6 +2955,131 @@ export default function Tasks() {
               {isBulkActing ? <Loader2 className="w-3 h-3 animate-spin" /> : <ListOrdered className="w-3 h-3" />}
               Add to Queue
             </button>
+
+            {/* ── Add to Label/Folder ─────────────────────────────────────── */}
+            <div className="flex items-center gap-1.5">
+              <Tag className="w-3 h-3 text-white/70 shrink-0" />
+              <span className="text-xs text-white/70 font-medium whitespace-nowrap">Add to:</span>
+              <select
+                value={bulkLabelId}
+                onChange={e => setBulkLabelId(e.target.value)}
+                className="text-xs text-slate-800 bg-white border-0 rounded px-2 py-1 outline-none max-w-[120px]"
+              >
+                <option value="">— pick —</option>
+                {taskLabels.filter(l => l.type === "label").length > 0 && (
+                  <optgroup label="Labels">
+                    {taskLabels.filter(l => l.type === "label").map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {taskLabels.filter(l => l.type === "folder").length > 0 && (
+                  <optgroup label="Folders">
+                    {taskLabels.filter(l => l.type === "folder").map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <button
+                onClick={() => {
+                  const lbl = taskLabels.find(l => l.id === bulkLabelId);
+                  if (!lbl) return;
+                  handleBulkAction("add_label", lbl.name).then(() => setBulkLabelId(""));
+                }}
+                disabled={isBulkActing || !bulkLabelId}
+                className="text-xs font-medium bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                Apply
+              </button>
+              <button
+                onClick={() => { setShowNewLabel(showNewLabel === "add" ? null : "add"); setNewLabelName(""); }}
+                title="Create new label/folder"
+                className="flex items-center text-white/70 hover:text-white transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* ── Move to Label/Folder ────────────────────────────────────── */}
+            <div className="flex items-center gap-1.5">
+              <FolderOpen className="w-3 h-3 text-white/70 shrink-0" />
+              <span className="text-xs text-white/70 font-medium whitespace-nowrap">Move to:</span>
+              <select
+                value={bulkMoveFolderId}
+                onChange={e => setBulkMoveFolderId(e.target.value)}
+                className="text-xs text-slate-800 bg-white border-0 rounded px-2 py-1 outline-none max-w-[120px]"
+              >
+                <option value="">— pick —</option>
+                {taskLabels.filter(l => l.type === "label").length > 0 && (
+                  <optgroup label="Labels">
+                    {taskLabels.filter(l => l.type === "label").map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {taskLabels.filter(l => l.type === "folder").length > 0 && (
+                  <optgroup label="Folders">
+                    {taskLabels.filter(l => l.type === "folder").map(l => (
+                      <option key={l.id} value={l.id}>{l.name}</option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+              <button
+                onClick={() => {
+                  const lbl = taskLabels.find(l => l.id === bulkMoveFolderId);
+                  if (!lbl) return;
+                  handleBulkAction("move_to_folder", lbl.name).then(() => setBulkMoveFolderId(""));
+                }}
+                disabled={isBulkActing || !bulkMoveFolderId}
+                className="text-xs font-medium bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+              >
+                Apply
+              </button>
+              <button
+                onClick={() => { setShowNewLabel(showNewLabel === "move" ? null : "move"); setNewLabelName(""); }}
+                title="Create new label/folder"
+                className="flex items-center text-white/70 hover:text-white transition-colors"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* ── Inline create label form ────────────────────────────────── */}
+            {showNewLabel && (
+              <div className="flex items-center gap-1.5 bg-white/10 rounded-lg px-3 py-1.5 w-full">
+                <input
+                  autoFocus
+                  value={newLabelName}
+                  onChange={e => setNewLabelName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && newLabelName.trim()) handleCreateLabel(showNewLabel); if (e.key === "Escape") setShowNewLabel(null); }}
+                  placeholder="Name…"
+                  className="text-xs text-slate-800 bg-white rounded px-2 py-1 outline-none w-32"
+                />
+                <select
+                  value={newLabelType}
+                  onChange={e => setNewLabelType(e.target.value as "label" | "folder")}
+                  className="text-xs text-slate-800 bg-white border-0 rounded px-2 py-1 outline-none"
+                >
+                  <option value="label">Label</option>
+                  <option value="folder">Folder</option>
+                </select>
+                <button
+                  onClick={() => handleCreateLabel(showNewLabel)}
+                  disabled={isSavingLabel || !newLabelName.trim()}
+                  className="text-xs font-medium bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded transition-colors disabled:opacity-50"
+                >
+                  {isSavingLabel ? <Loader2 className="w-3 h-3 animate-spin inline" /> : "Save"}
+                </button>
+                <button
+                  onClick={() => { setShowNewLabel(null); setNewLabelName(""); }}
+                  className="text-white/70 hover:text-white transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* Delete */}
             <button

@@ -307,17 +307,74 @@ router.post("/tasks/spawn-recurring", requireAuth, async (req, res) => {
   res.json(spawned);
 });
 
+// ── GET /api/tasks/labels ─────────────────────────────────────────────────────
+// Returns the account-level labels and folders.
+router.get("/tasks/labels", requireRole("admin"), async (req, res) => {
+  const [row] = await db
+    .select({ value: appSettingsTable.value })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.key, "task_labels"))
+    .limit(1);
+  res.json(row ? JSON.parse(row.value) : []);
+});
+
+// ── POST /api/tasks/labels ────────────────────────────────────────────────────
+// Creates a new account-level label or folder.
+router.post("/tasks/labels", requireRole("admin"), async (req, res) => {
+  const schema = z.object({
+    name:  z.string().min(1).max(50),
+    type:  z.enum(["label", "folder"]),
+    color: z.string().default("#266b75"),
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.errors[0]?.message ?? "Invalid input" });
+    return;
+  }
+  const [row] = await db
+    .select({ value: appSettingsTable.value })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.key, "task_labels"))
+    .limit(1);
+  const labels: { id: string; name: string; type: string; color: string }[] = row ? JSON.parse(row.value) : [];
+  const { randomUUID } = await import("crypto");
+  const newLabel = { id: randomUUID(), ...parsed.data };
+  labels.push(newLabel);
+  await db.insert(appSettingsTable)
+    .values({ key: "task_labels", value: JSON.stringify(labels) })
+    .onConflictDoUpdate({ target: appSettingsTable.key, set: { value: JSON.stringify(labels) } });
+  res.json(newLabel);
+});
+
+// ── DELETE /api/tasks/labels/:labelId ─────────────────────────────────────────
+// Removes an account-level label or folder.
+router.delete("/tasks/labels/:labelId", requireRole("admin"), async (req, res) => {
+  const { labelId } = req.params;
+  const [row] = await db
+    .select({ value: appSettingsTable.value })
+    .from(appSettingsTable)
+    .where(eq(appSettingsTable.key, "task_labels"))
+    .limit(1);
+  const labels: { id: string }[] = row ? JSON.parse(row.value) : [];
+  const filtered = labels.filter(l => l.id !== labelId);
+  await db.insert(appSettingsTable)
+    .values({ key: "task_labels", value: JSON.stringify(filtered) })
+    .onConflictDoUpdate({ target: appSettingsTable.key, set: { value: JSON.stringify(filtered) } });
+  res.json({ ok: true });
+});
+
 // ── POST /api/tasks/bulk ─────────────────────────────────────────────────────
 // Performs a bulk action on a list of task IDs.
-// Supported actions: "delete" | "update_status" | "update_client" | "update_service_type" | "update_assigned"
+// Supported actions: "delete" | "update_status" | "update_client" | "update_service_type" | "update_assigned" | "add_label" | "move_to_folder"
 router.post("/tasks/bulk", requireRole("admin"), async (req, res) => {
   const schema = z.object({
-    action:       z.enum(["delete", "update_status", "update_client", "update_service_type", "update_assigned"]),
+    action:       z.enum(["delete", "update_status", "update_client", "update_service_type", "update_assigned", "add_label", "move_to_folder"]),
     ids:          z.array(z.number().int().positive()).min(1).max(500),
     status:       z.string().optional(),
     client_id:    z.number().int().positive().optional(),
     service_type: z.enum(["Bookkeeping", "Virtual Assistant", "Family"]).optional(),
     assigned_to:  z.string().optional(),
+    label:        z.string().optional(),
   });
 
   const parsed = schema.safeParse(req.body);
@@ -326,7 +383,7 @@ router.post("/tasks/bulk", requireRole("admin"), async (req, res) => {
     return;
   }
 
-  const { action, ids, status, client_id, service_type, assigned_to } = parsed.data;
+  const { action, ids, status, client_id, service_type, assigned_to, label } = parsed.data;
   const actor = req.session.user;
 
   if (action === "delete") {
@@ -384,6 +441,50 @@ router.post("/tasks/bulk", requireRole("admin"), async (req, res) => {
     if (!assigned_to) { res.status(400).json({ error: "assigned_to is required" }); return; }
     await db.update(tasksTable).set({ assigned_to }).where(inArray(tasksTable.id, ids));
     logAudit("task", 0, "bulk_assigned", `${ids.length} tasks → assigned_to "${assigned_to}"`, { id: actor?.id, name: actor?.name });
+    res.json({ affected: ids.length });
+    return;
+  }
+
+  if (action === "add_label") {
+    if (!label) { res.status(400).json({ error: "label is required" }); return; }
+    const currentTasks = await db
+      .select({ id: tasksTable.id, tags: tasksTable.tags })
+      .from(tasksTable)
+      .where(inArray(tasksTable.id, ids));
+    for (const task of currentTasks) {
+      const existing = task.tags ? task.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
+      if (!existing.includes(label)) {
+        existing.push(label);
+        await db.update(tasksTable).set({ tags: existing.join(", ") }).where(eq(tasksTable.id, task.id));
+      }
+    }
+    logAudit("task", 0, "bulk_add_label", `${ids.length} tasks → add label "${label}"`, { id: actor?.id, name: actor?.name });
+    res.json({ affected: ids.length });
+    return;
+  }
+
+  if (action === "move_to_folder") {
+    if (!label) { res.status(400).json({ error: "label is required" }); return; }
+    // Load all managed label names so we can strip them and replace with the new one
+    const [settingsRow] = await db
+      .select({ value: appSettingsTable.value })
+      .from(appSettingsTable)
+      .where(eq(appSettingsTable.key, "task_labels"))
+      .limit(1);
+    const allManagedNames: string[] = settingsRow
+      ? (JSON.parse(settingsRow.value) as { name: string }[]).map(l => l.name)
+      : [];
+    const currentTasks = await db
+      .select({ id: tasksTable.id, tags: tasksTable.tags })
+      .from(tasksTable)
+      .where(inArray(tasksTable.id, ids));
+    for (const task of currentTasks) {
+      const existing = task.tags ? task.tags.split(",").map(t => t.trim()).filter(Boolean) : [];
+      const kept = existing.filter(t => !allManagedNames.includes(t));
+      kept.push(label);
+      await db.update(tasksTable).set({ tags: kept.join(", ") }).where(eq(tasksTable.id, task.id));
+    }
+    logAudit("task", 0, "bulk_move_folder", `${ids.length} tasks → move to folder "${label}"`, { id: actor?.id, name: actor?.name });
     res.json({ affected: ids.length });
     return;
   }
