@@ -4,7 +4,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-export type TaskStatus = "todo" | "in-progress" | "done" | "blocked";
+export type TaskStatus = "todo" | "in-progress" | "ready-for-testing" | "done" | "blocked";
 
 export type Task = {
   id: string;

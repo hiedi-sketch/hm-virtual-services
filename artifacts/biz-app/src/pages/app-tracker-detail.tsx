@@ -13,14 +13,15 @@ const BRAND_BG    = "rgba(38,107,117,0.08)";
 
 // Updated colors: In Progress → yellow, Done → green (unchanged), Blocked → red
 const STATUS_MAP: Record<TaskStatus, { label: string; bg: string; color: string }> = {
-  "todo":        { label: "Not Started",  bg: "#f1f5f9", color: "#0f172a" },
-  "in-progress": { label: "In Progress",  bg: "#fffbeb", color: "#d97706" },
-  "done":        { label: "Complete",     bg: "#f0fdf4", color: "#16a34a" },
-  "blocked":     { label: "Blocked",      bg: "#fef2f2", color: "#dc2626" },
+  "todo":              { label: "Not Started",       bg: "#f1f5f9", color: "#0f172a" },
+  "in-progress":       { label: "In Progress",       bg: "#fffbeb", color: "#d97706" },
+  "ready-for-testing": { label: "Ready for Testing", bg: "#eff6ff", color: "#2563eb" },
+  "done":              { label: "Complete",           bg: "#f0fdf4", color: "#16a34a" },
+  "blocked":           { label: "Blocked",            bg: "#fef2f2", color: "#dc2626" },
 };
 
 const CYCLE: Record<TaskStatus, TaskStatus> = {
-  "todo": "in-progress", "in-progress": "done", "done": "todo", "blocked": "todo",
+  "todo": "in-progress", "in-progress": "ready-for-testing", "ready-for-testing": "done", "done": "todo", "blocked": "todo",
 };
 
 const LBL: React.CSSProperties = {
@@ -413,9 +414,10 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
                                   {/* Action buttons */}
                                   <div style={{ display: "flex", gap: "8px", marginBottom: "18px", flexWrap: "wrap" as const }}>
                                     {([
-                                      { status: "in-progress" as TaskStatus, label: "Mark In Progress", onBg: "#d97706", offBg: "#fffbeb", offColor: "#d97706" },
-                                      { status: "done"        as TaskStatus, label: "Mark Complete",    onBg: "#16a34a", offBg: "#f0fdf4", offColor: "#16a34a" },
-                                      { status: "blocked"     as TaskStatus, label: "Mark Blocked",     onBg: "#dc2626", offBg: "#fef2f2", offColor: "#dc2626" },
+                                      { status: "in-progress"       as TaskStatus, label: "Mark In Progress",       onBg: "#d97706", offBg: "#fffbeb", offColor: "#d97706" },
+                                      { status: "ready-for-testing" as TaskStatus, label: "Ready for Testing",      onBg: "#2563eb", offBg: "#eff6ff", offColor: "#2563eb" },
+                                      { status: "done"              as TaskStatus, label: "Mark Complete",           onBg: "#16a34a", offBg: "#f0fdf4", offColor: "#16a34a" },
+                                      { status: "blocked"           as TaskStatus, label: "Mark Blocked",            onBg: "#dc2626", offBg: "#fef2f2", offColor: "#dc2626" },
                                     ] as const).map(btn => {
                                       const active = draft.status === btn.status;
                                       return (
@@ -784,7 +786,7 @@ export default function AppDevTrackerDetail() {
       }
       const taskTitle = r.task_title?.trim();
       if (!taskTitle) continue;
-      const validStatuses: TaskStatus[] = ["todo","in-progress","done","blocked"];
+      const validStatuses: TaskStatus[] = ["todo","in-progress","ready-for-testing","done","blocked"];
       const status: TaskStatus = validStatuses.includes(r.status as TaskStatus) ? r.status as TaskStatus : "todo";
       const validPriorities = ["low","medium","high","critical"];
       const priority = validPriorities.includes(r.priority) ? r.priority as Task["priority"] : undefined;
