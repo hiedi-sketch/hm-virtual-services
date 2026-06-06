@@ -160,7 +160,7 @@ const AppCardFooter = ({ appId, targetDate }: { appId: number; targetDate: strin
 };
 
 // ── App Tracker tab ──────────────────────────────────────────────────────────
-type AppEntry = { id: number; name: string; stage: string; description: string; startDate: string; targetDate: string; devChecklist: Record<string, boolean>; maintenanceChecklist: Record<string, boolean> };
+type AppEntry = { id: number; name: string; stage: string; description: string; startDate: string; targetDate: string; launchDate?: string; devChecklist: Record<string, boolean>; maintenanceChecklist: Record<string, boolean> };
 
 const AppTrackerTab = ({ apps, setApps }: { apps: AppEntry[]; setApps: React.Dispatch<React.SetStateAction<AppEntry[]>> }) => {
   const [showModal, setShowModal] = useState(false);
@@ -173,7 +173,12 @@ const AppTrackerTab = ({ apps, setApps }: { apps: AppEntry[]; setApps: React.Dis
     setShowModal(false);
   };
 
-  const updateStage = (id: number, stage: string) => setApps(prev => prev.map(a => a.id === id ? { ...a, stage } : a));
+  const updateStage = (id: number, stage: string) =>
+    setApps(prev => prev.map(a => {
+      if (a.id !== id) return a;
+      const today = new Date().toISOString().split("T")[0];
+      return { ...a, stage, ...(stage === "Live" && !a.launchDate ? { launchDate: today } : {}) };
+    }));
   const deleteApp = (id: number) => setApps(prev => prev.filter(a => a.id !== id));
 
   return (
@@ -204,7 +209,10 @@ const AppTrackerTab = ({ apps, setApps }: { apps: AppEntry[]; setApps: React.Dis
               {app.description && <p style={{ color: "#334155", fontSize: "14px", margin: "0 0 12px" }}>{app.description}</p>}
               <div style={{ display: "flex", gap: "20px", flexWrap: "wrap" }}>
                 {app.startDate && <span style={{ fontSize: "12px", color: "#334155" }}>Started: <span style={{ color: "#334155" }}>{app.startDate}</span></span>}
-                {app.targetDate && <span style={{ fontSize: "12px", color: "#334155" }}>Target: <span style={{ color: "#334155" }}>{app.targetDate}</span></span>}
+                {app.stage === "Live"
+                  ? app.launchDate && <span style={{ fontSize: "12px", color: "#16a34a", fontWeight: 600 }}>Launched: <span>{app.launchDate}</span></span>
+                  : app.targetDate && <span style={{ fontSize: "12px", color: "#334155" }}>Target: <span style={{ color: "#334155" }}>{app.targetDate}</span></span>
+                }
               </div>
               <div style={{ marginTop: "12px" }}>
                 <label style={{ ...labelStyle, marginBottom: "4px" }}>Move to Stage</label>

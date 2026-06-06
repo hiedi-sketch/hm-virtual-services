@@ -607,7 +607,13 @@ function TaskTable({ sprints, taskDates, updateSprint, addSprint }: TaskTablePro
 }
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
-type AppRecord = { id: number; name: string; stage: string; description: string; startDate?: string; targetDate?: string; dailyHoursAvailable?: number };
+const DEV_STAGES = ["Concept", "Planning", "In Development", "Testing", "Staging", "Live", "On Hold"];
+const STAGE_COLORS: Record<string, string> = {
+  "Concept": "#94a3b8", "Planning": "#fb923c", "In Development": "#facc15",
+  "Testing": "#34d399", "Staging": "#60a5fa", "Live": "#4ade80", "On Hold": "#f87171",
+};
+
+type AppRecord = { id: number; name: string; stage: string; description: string; startDate?: string; targetDate?: string; launchDate?: string; dailyHoursAvailable?: number };
 
 export default function AppDevTrackerDetail() {
   const params = useParams<{ id: string }>();
@@ -623,9 +629,13 @@ export default function AppDevTrackerDetail() {
   };
   const app = loadApp();
 
+  // App stage — editable, persisted to localStorage
+  const [appStage, setAppStage] = useState<string>(app?.stage ?? "");
+
   // App date fields — editable inline, persisted to localStorage
   const [appStartDate,  setAppStartDate]  = useState<string>(app?.startDate  ?? "");
   const [appTargetDate, setAppTargetDate] = useState<string>(app?.targetDate ?? "");
+  const [appLaunchDate, setAppLaunchDate] = useState<string>(app?.launchDate ?? "");
 
   const saveAppField = (field: keyof AppRecord, value: string) => {
     const raw  = localStorage.getItem("hm_tracker_apps");
@@ -633,6 +643,16 @@ export default function AppDevTrackerDetail() {
     localStorage.setItem("hm_tracker_apps", JSON.stringify(
       list.map(a => String(a.id) === appId ? { ...a, [field]: value } : a)
     ));
+  };
+
+  const changeStage = (newStage: string) => {
+    setAppStage(newStage);
+    saveAppField("stage", newStage);
+    if (newStage === "Live" && !appLaunchDate) {
+      const today = new Date().toISOString().split("T")[0];
+      setAppLaunchDate(today);
+      saveAppField("launchDate", today);
+    }
   };
 
   // dailyHoursAvailable — editable per-app setting
@@ -866,7 +886,19 @@ export default function AppDevTrackerDetail() {
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: "14px", flexWrap: "wrap" as const }}>
             <div style={{ fontSize: "22px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: "#0f172a", letterSpacing: "-0.3px" }}>{app?.name ?? `App #${appId}`}</div>
-            {app?.stage && <span style={{ background: BRAND_BG, border: `1px solid ${BRAND}44`, borderRadius: "20px", padding: "3px 12px", fontSize: "11px", color: BRAND, fontWeight: 700, letterSpacing: "0.06em" }}>{app.stage}</span>}
+            <select
+              value={appStage}
+              onChange={e => changeStage(e.target.value)}
+              style={{
+                background: (STAGE_COLORS[appStage] ?? "#94a3b8") + "18",
+                border: `1px solid ${(STAGE_COLORS[appStage] ?? "#94a3b8")}66`,
+                borderRadius: "20px", padding: "3px 12px", fontSize: "11px",
+                color: STAGE_COLORS[appStage] ?? "#94a3b8", fontWeight: 700,
+                letterSpacing: "0.06em", cursor: "pointer", outline: "none",
+              }}
+            >
+              {DEV_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
             {app?.description && <span style={{ fontSize: "13px", color: "#0f172a" }}>{app.description}</span>}
           </div>
         </div>
@@ -896,7 +928,7 @@ export default function AppDevTrackerDetail() {
             </div>
           </div>
 
-          {/* Row 1 — Date cards (Start + Target editable inline) */}
+          {/* Row 1 — Date cards (Start + Target/Launch editable inline) */}
           <div style={{ display: "flex", gap: "12px", marginBottom: "12px" }}>
             {/* Editable Start Date */}
             <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
@@ -909,17 +941,30 @@ export default function AppDevTrackerDetail() {
               />
               {!appStartDate && <div style={{ fontSize: "11px", color: "#0f172a", marginTop: "2px" }}>Click to set</div>}
             </div>
-            {/* Editable Target Date */}
-            <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-              <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#0f172a", marginBottom: "8px" }}>Original Target</div>
-              <input
-                type="date"
-                value={appTargetDate}
-                onChange={e => { setAppTargetDate(e.target.value); saveAppField("targetDate", e.target.value); }}
-                style={{ width: "100%", border: "none", outline: "none", fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: appTargetDate ? "#0f172a" : "#cbd5e1", background: "transparent", cursor: "pointer", padding: 0, boxSizing: "border-box" }}
-              />
-              {!appTargetDate && <div style={{ fontSize: "11px", color: "#0f172a", marginTop: "2px" }}>Click to set</div>}
-            </div>
+            {/* Launch Date (when Live) or Original Target */}
+            {appStage === "Live" ? (
+              <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#16a34a", marginBottom: "8px" }}>Launch Date</div>
+                <input
+                  type="date"
+                  value={appLaunchDate}
+                  onChange={e => { setAppLaunchDate(e.target.value); saveAppField("launchDate", e.target.value); }}
+                  style={{ width: "100%", border: "none", outline: "none", fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: appLaunchDate ? "#16a34a" : "#bbf7d0", background: "transparent", cursor: "pointer", padding: 0, boxSizing: "border-box" }}
+                />
+                {!appLaunchDate && <div style={{ fontSize: "11px", color: "#16a34a", marginTop: "2px" }}>Click to set</div>}
+              </div>
+            ) : (
+              <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "14px", padding: "18px 20px", flex: 1, minWidth: 0, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: "10px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: "#0f172a", marginBottom: "8px" }}>Original Target</div>
+                <input
+                  type="date"
+                  value={appTargetDate}
+                  onChange={e => { setAppTargetDate(e.target.value); saveAppField("targetDate", e.target.value); }}
+                  style={{ width: "100%", border: "none", outline: "none", fontSize: "17px", fontWeight: 700, fontFamily: "'Plus Jakarta Sans',sans-serif", color: appTargetDate ? "#0f172a" : "#cbd5e1", background: "transparent", cursor: "pointer", padding: 0, boxSizing: "border-box" }}
+                />
+                {!appTargetDate && <div style={{ fontSize: "11px", color: "#0f172a", marginTop: "2px" }}>Click to set</div>}
+              </div>
+            )}
             <StatCard
               label="Projected Launch"
               value={loading ? "Loading…" : fmtDate(projLaunch)}
