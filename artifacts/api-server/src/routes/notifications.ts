@@ -51,7 +51,9 @@ router.post("/notifications/overdue-tasks", requireAdmin, async (req, res) => {
       title: tasksTable.title,
       due_date: tasksTable.due_date,
       client_id: tasksTable.client_id,
+      assigned_to: tasksTable.assigned_to,
       client_name: clientsTable.name,
+      client_contact_name: clientsTable.contact_name,
       client_email: clientsTable.email,
     })
     .from(tasksTable)
@@ -70,10 +72,13 @@ router.post("/notifications/overdue-tasks", requireAdmin, async (req, res) => {
 
   let sent = 0;
 
-  // Group tasks by client and notify each client
+  // Group tasks by client, then filter to only tasks assigned to the client
   const byClient = new Map<number, typeof overdueTasks>();
   for (const t of overdueTasks) {
     if (!t.client_id) continue;
+    // Only include tasks explicitly assigned to the client contact
+    const clientRef = t.client_contact_name || t.client_name;
+    if (!t.assigned_to || !clientRef || t.assigned_to !== clientRef) continue;
     const existing = byClient.get(t.client_id) ?? [];
     existing.push(t);
     byClient.set(t.client_id, existing);
@@ -81,7 +86,7 @@ router.post("/notifications/overdue-tasks", requireAdmin, async (req, res) => {
 
   for (const [, tasks] of byClient) {
     const email = tasks[0]?.client_email;
-    const name = tasks[0]?.client_name ?? "there";
+    const name = (tasks[0]?.client_contact_name || tasks[0]?.client_name) ?? "there";
     if (!email) continue;
 
     const taskList = tasks

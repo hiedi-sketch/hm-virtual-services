@@ -211,9 +211,9 @@ router.post("/tasks", requireAuth, async (req, res) => {
   const actor = req.session.user;
   logAudit("task", task.id, "created", `Task "${task.title}" created`, { id: actor?.id, name: actor?.name });
 
-  // Fire-and-forget: email the client only when no team member is assigned
-  // (if assigned_to is set, a team member is handling it — client doesn't need to know)
-  if (task?.client_id && !task.assigned_to) {
+  // Fire-and-forget: email the client only when the task is explicitly assigned to them
+  // (task.client_name maps to contact_name — if assigned_to matches, the client has an action item)
+  if (task?.client_id && task.assigned_to && task.client_name && task.assigned_to === task.client_name) {
     (async () => {
       try {
         const [client] = await db
