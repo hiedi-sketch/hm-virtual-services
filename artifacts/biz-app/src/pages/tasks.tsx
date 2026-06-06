@@ -1990,7 +1990,18 @@ export default function Tasks() {
       // Tasks held in "Tasks to Process" (pending the Process button) stay out of the main table
       if (pendingProcessing.includes(t.id)) return false;
       if (t.status !== "Completed" && t.client_name !== "Family" && (!t.client_id || !t.service_type)) return false;
-      if (q && !t.title.toLowerCase().includes(q)) return false;
+      if (q) {
+        const haystack = [
+          t.title,
+          t.client_name,
+          t.service_type,
+          t.status,
+          t.assigned_to,
+          t.description,
+          t.notes,
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       if (clientFilter !== "all" && t.client_name !== clientFilter) return false;
       if (serviceFilter !== "all" && t.service_type !== serviceFilter) return false;
       if (statusFilter === "incomplete" && t.status === "Completed") return false;
@@ -2027,7 +2038,7 @@ export default function Tasks() {
       }
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [tasks, pendingProcessing, clientFilter, serviceFilter, statusFilter, dueDateFilter, sortField, sortDir, today]);
+  }, [tasks, pendingProcessing, searchQuery, clientFilter, serviceFilter, statusFilter, dueDateFilter, sortField, sortDir, today]);
 
   const toProcess = useMemo(() =>
     tasks.filter(t =>
