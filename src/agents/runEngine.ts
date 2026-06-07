@@ -1,18 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk';
 import pool from '../db/pool.js';
 import { getToolByName } from './toolRegistry.js';
+import { executeToolCall } from './toolHandlers.js';
+
+export { executeToolCall };
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const MAX_TOOL_ITERATIONS = 5;
-
-// Stub — real implementations live in toolHandlers.ts (not built yet)
-export async function executeToolCall(
-  toolName: string,
-  toolInput: any,
-): Promise<any> {
-  return { result: 'stub: tool not yet implemented' };
-}
 
 export async function getMemory(agentId: string, clientId: string): Promise<string> {
   return '';
