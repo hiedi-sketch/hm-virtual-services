@@ -1,5 +1,5 @@
 -- Migration: agent layer tables
--- Depends on: clients table with uuid primary key
+-- Depends on: clients table (SERIAL integer primary key)
 
 -- ============================================================
 -- Trigger function: stamp updated_at on row modification
@@ -17,7 +17,7 @@ $$ LANGUAGE plpgsql;
 -- ============================================================
 CREATE TABLE agents (
   id            uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
-  client_id     uuid          NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  client_id     INTEGER       NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   name          varchar(100)  NOT NULL,
   description   text,
   system_prompt text          NOT NULL,
@@ -76,7 +76,7 @@ CREATE INDEX agent_runs_status_idx   ON agent_runs(status);
 CREATE TABLE agent_memory (
   id         uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
   agent_id   uuid         NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  client_id  uuid         NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  client_id  INTEGER      NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
   key        varchar(200) NOT NULL,
   value      text,
   updated_at timestamptz  NOT NULL DEFAULT now(),
