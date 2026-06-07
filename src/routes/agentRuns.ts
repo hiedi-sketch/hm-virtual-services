@@ -1,9 +1,9 @@
-import { Router } from 'express';
-import { runAgent } from '../runEngine.js';
+import { Router, Request, Response } from 'express';
+import { runAgent } from '../agents/runEngine.js';
 
 const router = Router();
 
-router.post('/agents/run/:id', async (req, res) => {
+router.post('/agents/run/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   const { triggerType = 'manual', input = {} } = req.body as {
     triggerType?: string;
