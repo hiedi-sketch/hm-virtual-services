@@ -1,6 +1,6 @@
 const express = require('express');
 const OAuthClient = require('intuit-oauth');
-const db = require('../../db/database');
+const { pool } = require('../../db/database');
 const { authenticateToken, requireAdmin } = require('../../middleware/auth');
 const { encrypt, decrypt } = require('../../utils/crypto');
 
@@ -15,45 +15,45 @@ function makeOAuthClient() {
   });
 }
 
-function getTokenRow() {
-  return db.prepare("SELECT * FROM oauth_tokens WHERE provider = 'qbo'").get();
+async function getTokenRow() {
+  const { rows } = await pool.query("SELECT * FROM oauth_tokens WHERE provider = 'qbo'");
+  return rows[0] || null;
 }
 
-function saveTokens(tokenData, realmId) {
+async function saveTokens(tokenData, realmId) {
   const encrypted = encrypt(JSON.stringify(tokenData));
   const expiresAt = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString();
-  db.prepare(`
+  await pool.query(`
     INSERT INTO oauth_tokens (provider, realm_id, access_token, refresh_token, expires_at, token_data, updated_at)
-    VALUES ('qbo', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    ON CONFLICT(provider) DO UPDATE SET
-      realm_id = excluded.realm_id,
-      access_token = excluded.access_token,
-      refresh_token = excluded.refresh_token,
-      expires_at = excluded.expires_at,
-      token_data = excluded.token_data,
-      updated_at = CURRENT_TIMESTAMP
-  `).run(
+    VALUES ('qbo', $1, $2, $3, $4, $5, NOW())
+    ON CONFLICT (provider) DO UPDATE SET
+      realm_id = EXCLUDED.realm_id,
+      access_token = EXCLUDED.access_token,
+      refresh_token = EXCLUDED.refresh_token,
+      expires_at = EXCLUDED.expires_at,
+      token_data = EXCLUDED.token_data,
+      updated_at = NOW()
+  `, [
     realmId,
     encrypt(tokenData.access_token),
     encrypt(tokenData.refresh_token),
     expiresAt,
-    encrypted
-  );
+    encrypted,
+  ]);
 }
 
 async function getValidClient() {
-  const row = getTokenRow();
+  const row = await getTokenRow();
   if (!row) throw new Error('QuickBooks not connected');
 
   const tokenData = JSON.parse(decrypt(row.token_data));
   const client = makeOAuthClient();
   client.setToken(tokenData);
 
-  // Refresh if expired or expiring within 5 min
   if (new Date(row.expires_at) < new Date(Date.now() + 5 * 60 * 1000)) {
     const refreshed = await client.refresh();
     const newData = refreshed.getJson();
-    saveTokens(newData, row.realm_id);
+    await saveTokens(newData, row.realm_id);
     client.setToken(newData);
   }
 
@@ -68,7 +68,6 @@ function qboBaseUrl(realmId) {
   return `${base}/v3/company/${realmId}`;
 }
 
-// OAuth flow — no auth required on these two endpoints
 router.get('/auth-url', authenticateToken, requireAdmin, (req, res) => {
   const client = makeOAuthClient();
   const authUri = client.authorizeUri({
@@ -85,7 +84,7 @@ router.get('/callback', async (req, res) => {
     const authResponse = await client.createToken(req.url);
     const tokenData = authResponse.getJson();
     const realmId = req.query.realmId;
-    saveTokens(tokenData, realmId);
+    await saveTokens(tokenData, realmId);
     res.redirect(`${frontendUrl}/admin/settings?qbo=connected`);
   } catch (err) {
     console.error('QBO callback error:', err.message);
@@ -93,27 +92,29 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-// All routes below require auth
 router.use(authenticateToken, requireAdmin);
 
-router.get('/status', (req, res) => {
-  const row = getTokenRow();
-  const configured = !!(process.env.QBO_CLIENT_ID && process.env.QBO_CLIENT_ID !== 'YOUR_QBO_CLIENT_ID');
-  res.json({
-    data: {
-      configured,
-      connected: !!row,
-      realmId: row?.realm_id,
-      expiresAt: row?.expires_at,
-      lastUpdated: row?.updated_at,
-    }
-  });
+router.get('/status', async (req, res) => {
+  try {
+    const row = await getTokenRow();
+    const configured = !!(process.env.QBO_CLIENT_ID && process.env.QBO_CLIENT_ID !== 'YOUR_QBO_CLIENT_ID');
+    res.json({
+      data: {
+        configured,
+        connected: !!row,
+        realmId: row?.realm_id,
+        expiresAt: row?.expires_at,
+        lastUpdated: row?.updated_at,
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Search QBO customers
 router.get('/customers', async (req, res) => {
-  const { search } = req.query;
   try {
+    const { search } = req.query;
     const { client, realmId } = await getValidClient();
     const query = search
       ? `SELECT * FROM Customer WHERE DisplayName LIKE '%${search.replace(/'/g, '')}%' MAXRESULTS 20`
@@ -139,13 +140,13 @@ router.get('/customers', async (req, res) => {
   }
 });
 
-// Sync invoice statuses from QBO (read-only — only updates local status)
 router.post('/sync-invoices', async (req, res) => {
   try {
     const { client, realmId } = await getValidClient();
 
-    // Get all local clients that have a QBO customer ID
-    const linkedClients = db.prepare('SELECT id, qbo_customer_id FROM clients WHERE qbo_customer_id IS NOT NULL AND qbo_customer_id != ""').all();
+    const { rows: linkedClients } = await pool.query(
+      "SELECT id, qbo_customer_id FROM clients WHERE qbo_customer_id IS NOT NULL AND qbo_customer_id != ''"
+    );
     if (!linkedClients.length) {
       return res.json({ message: 'No clients linked to QBO. Add QBO Customer IDs to clients first.' });
     }
@@ -160,14 +161,14 @@ router.post('/sync-invoices', async (req, res) => {
       const data = response.getJson();
       const paidInvoices = data.QueryResponse?.Invoice || [];
 
-      // Match by amount + approximate date and mark paid locally if not already
       for (const qboInv of paidInvoices) {
         const amount = parseFloat(qboInv.TotalAmt);
-        const localInv = db.prepare(`
-          SELECT * FROM invoices WHERE client_id = ? AND total = ? AND status != 'paid'
-        `).get(lc.id, amount);
-        if (localInv) {
-          db.prepare("UPDATE invoices SET status = 'paid', paid_at = CURRENT_TIMESTAMP WHERE id = ?").run(localInv.id);
+        const { rows } = await pool.query(
+          "SELECT * FROM invoices WHERE client_id = $1 AND total = $2 AND status != 'paid'",
+          [lc.id, amount]
+        );
+        if (rows[0]) {
+          await pool.query("UPDATE invoices SET status = 'paid', paid_at = NOW() WHERE id = $1", [rows[0].id]);
           syncedCount++;
         }
       }
@@ -179,18 +180,25 @@ router.post('/sync-invoices', async (req, res) => {
   }
 });
 
-// Link a local client to a QBO customer
-router.put('/clients/:clientId/link', (req, res) => {
-  const { qbo_customer_id } = req.body;
-  const client = db.prepare('SELECT id FROM clients WHERE id = ?').get(req.params.clientId);
-  if (!client) return res.status(404).json({ error: 'Client not found' });
-  db.prepare('UPDATE clients SET qbo_customer_id = ? WHERE id = ?').run(qbo_customer_id || null, req.params.clientId);
-  res.json({ message: 'QBO customer linked' });
+router.put('/clients/:clientId/link', async (req, res) => {
+  try {
+    const { qbo_customer_id } = req.body;
+    const { rows } = await pool.query('SELECT id FROM clients WHERE id = $1', [req.params.clientId]);
+    if (!rows[0]) return res.status(404).json({ error: 'Client not found' });
+    await pool.query('UPDATE clients SET qbo_customer_id = $1 WHERE id = $2', [qbo_customer_id || null, req.params.clientId]);
+    res.json({ message: 'QBO customer linked' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-router.delete('/disconnect', (req, res) => {
-  db.prepare("DELETE FROM oauth_tokens WHERE provider = 'qbo'").run();
-  res.json({ message: 'QuickBooks disconnected' });
+router.delete('/disconnect', async (req, res) => {
+  try {
+    await pool.query("DELETE FROM oauth_tokens WHERE provider = 'qbo'");
+    res.json({ message: 'QuickBooks disconnected' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 module.exports = router;
