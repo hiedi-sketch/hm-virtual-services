@@ -12,6 +12,7 @@ const NAV = [
   { to: '/admin/messages', label: 'Messages', icon: '✉' },
   { to: '/admin/reports', label: 'Reports', icon: '📊' },
   { to: '/admin/settings', label: 'Settings', icon: '⚙' },
+  { to: '/print', label: 'Print Shop', icon: '🖨' },
 ];
 
 export default function AdminSidebar({ collapsed, setCollapsed }) {

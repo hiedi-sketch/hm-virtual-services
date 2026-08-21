@@ -51,3 +51,16 @@
     @apply bg-white/15 text-white;
   }
 }
+
+/* Barcode labels print on their own, with nothing else on the page. */
+@media print {
+  body { background: #fff; }
+  body * { visibility: hidden; }
+  #print-label, #print-label * { visibility: visible; }
+  #print-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+  }
+}

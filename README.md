@@ -87,3 +87,84 @@ npm run dev     # Starts app on http://localhost:5173
 - **Backend:** Node.js · Express · better-sqlite3 · JWT · multer · pdfkit
 - **Font:** Raleway (Google Fonts)
 - **Brand Colors:** Primary Teal #2B7A8B · Accent #4AAFC4 · Silver #B0B5BC · Greige #D8D3CC · Linen #EDE9E3
+
+---
+
+## 3D Print Shop (`/print`)
+
+A second workspace in the same app for running the 3D printing business. Same login,
+same deploy — sign in as admin and open **Print Shop** from the sidebar, or go straight
+to `/print`. The layout collapses to a tab strip on iPad so the whole thing works on a
+touch screen at the bench.
+
+### Tabs
+
+| Tab | What it does |
+|-----|--------------|
+| **Dashboard** | Open orders, queue load, reorder list, inventory value. Light for now — more panels to come. |
+| **Orders** | Customer orders, retail or wholesale pricing, promised vs projected ship date, one tap to send to the queue. |
+| **Catalog** | Items for sale, components used inside other items, and tools. Pick what each item is made of and the cost, wholesale and retail prices fall out. SKU + barcode generated automatically. |
+| **Filament** | Colour library with per-spool tracking (new / opened / ordered / empty), grams on hand, what the queue will consume, reorder flag and a vendor reorder link. |
+| **Materials** | Same idea for magnets, hardware, packaging — anything bought by the pack. |
+| **Queue** | Jobs in print order with projected ship dates, priority, and the stock the queue will run into. |
+| **Settings** | The rates and markups every cost, price and ship date is derived from. |
+
+### How a price is worked out
+
+For one unit of an item:
+
+```
+filament (grams ÷ 1000 × cost per kg)
++ materials (quantity × pack cost ÷ pack size)
++ sub-items (recursively costed)
++ bought-in cost
++ machine time (print minutes ÷ units per print ÷ 60 × machine rate)
++ labor (finishing minutes ÷ 60 × your hourly rate)
+= direct cost
++ failed-print allowance (direct cost × failure rate %)
++ packaging (finished products only)
++ overhead (× overhead %)
+= unit cost
+
+suggested wholesale = unit cost × (1 + wholesale markup %)      rounded up
+suggested retail    = suggested wholesale × retail multiplier   rounded up
+```
+
+Any item can override its cost, wholesale or retail individually. Everything else
+recalculates the moment a rate changes in Settings.
+
+### Ship dates
+
+The queue is walked in print order (rush first, then position). Cumulative print hours
+are divided by `print hours per day × printers` to find when each job comes off the
+printer; finishing days are added on top. The promised date is never earlier than
+`order date + turnaround min days`, and anything landing past `order date + turnaround
+max days` is flagged at risk.
+
+### Barcodes and scanning
+
+- Every filament, material and catalog item gets a SKU (`HM-PRD-0001`) that doubles as
+  its **Code 128** barcode. Individual spools get their own tag (`SPL-000001`).
+- **Label** on any row opens a printable label with the barcode rendered as SVG.
+- **Scan** (top right, on every tab) opens the camera. On an iPad this is the scanner —
+  point it at a spool tag or shelf label and receive stock, mark a spool opened, weigh
+  a partial spool, or set a counted quantity.
+- The scan box is always focused, so a USB or Bluetooth wedge scanner works on the
+  desktop with no camera at all, and codes can be typed by hand.
+- The camera needs an `https://` origin. It works on the deployed site and on
+  `localhost`; over plain http on a LAN address, use the wedge/manual box.
+- Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
+  scanning the box you just opened finds the right record.
+
+### Stock movement
+
+Marking a queue job **done** is what moves stock: filament grams come off the open
+spools (opening a new one automatically when needed), materials come off the shelf, and
+finished units are added to the item's inventory. Every movement is written to
+`print_stock_log`.
+
+### API
+
+All routes live under `/api/print` and are admin-only:
+`settings`, `filaments`, `materials`, `catalog`, `orders`, `queue`, `scan`, `dashboard`.
+Tables are prefixed `print_` and are created on server start by `server/db/print-schema.js`.
