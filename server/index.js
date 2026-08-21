@@ -1,6 +1,5 @@
 require('dotenv').config();
 require('./db/schema');
-require('./db/print-schema');
 
 const express = require('express');
 const cors = require('cors');
@@ -30,7 +29,6 @@ app.use('/api/documents', require('./routes/documents'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/settings', require('./routes/settings'));
-app.use('/api/print', require('./routes/print'));
 app.use('/api/integrations/asana', require('./routes/integrations/asana'));
 app.use('/api/integrations/clickup', require('./routes/integrations/clickup'));
 app.use('/api/integrations/qbo', require('./routes/integrations/qbo'));

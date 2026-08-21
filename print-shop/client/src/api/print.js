@@ -1,0 +1,76 @@
+import api from './axios';
+
+const unwrap = (p) => p.then((r) => r.data.data);
+
+export const printApi = {
+  dashboard: () => unwrap(api.get('/dashboard')),
+
+  changePassword: (body) => api.put('/auth/password', body).then((r) => r.data),
+
+  getSettings: () => unwrap(api.get('/settings')),
+  saveSettings: (body) => unwrap(api.put('/settings', body)),
+
+  filaments: (params) => unwrap(api.get('/filaments', { params })),
+  filament: (id) => unwrap(api.get(`/filaments/${id}`)),
+  createFilament: (body) => unwrap(api.post('/filaments', body)),
+  updateFilament: (id, body) => unwrap(api.put(`/filaments/${id}`, body)),
+  deleteFilament: (id) => api.delete(`/filaments/${id}`),
+  addSpools: (id, body) => unwrap(api.post(`/filaments/${id}/spools`, body)),
+  updateSpool: (spoolId, body) => unwrap(api.put(`/filaments/spools/${spoolId}`, body)),
+  deleteSpool: (spoolId) => unwrap(api.delete(`/filaments/spools/${spoolId}`)),
+  consumeFilament: (id, body) => unwrap(api.post(`/filaments/${id}/consume`, body)),
+
+  materials: (params) => unwrap(api.get('/materials', { params })),
+  createMaterial: (body) => unwrap(api.post('/materials', body)),
+  updateMaterial: (id, body) => unwrap(api.put(`/materials/${id}`, body)),
+  deleteMaterial: (id) => api.delete(`/materials/${id}`),
+  adjustMaterial: (id, body) => unwrap(api.post(`/materials/${id}/adjust`, body)),
+
+  catalog: (params) => unwrap(api.get('/catalog', { params })),
+  catalogOptions: () => unwrap(api.get('/catalog/options')),
+  item: (id) => unwrap(api.get(`/catalog/${id}`)),
+  previewItem: (body) => unwrap(api.post('/catalog/preview', body)),
+  createItem: (body) => unwrap(api.post('/catalog', body)),
+  updateItem: (id, body) => unwrap(api.put(`/catalog/${id}`, body)),
+  deleteItem: (id) => api.delete(`/catalog/${id}`),
+  adjustItem: (id, body) => unwrap(api.post(`/catalog/${id}/adjust`, body)),
+
+  orders: (params) => unwrap(api.get('/orders', { params })),
+  order: (id) => unwrap(api.get(`/orders/${id}`)),
+  createOrder: (body) => unwrap(api.post('/orders', body)),
+  updateOrder: (id, body) => unwrap(api.put(`/orders/${id}`, body)),
+  deleteOrder: (id) => api.delete(`/orders/${id}`),
+  queueOrder: (id, body) => api.post(`/orders/${id}/queue`, body).then((r) => r.data),
+  suggestShipDate: (params) => unwrap(api.get('/orders/suggest-ship-date', { params })),
+
+  queue: () => unwrap(api.get('/queue')),
+  addToQueue: (body) => unwrap(api.post('/queue', body)),
+  updateQueue: (id, body) => unwrap(api.put(`/queue/${id}`, body)),
+  removeFromQueue: (id) => unwrap(api.delete(`/queue/${id}`)),
+  reorderQueue: (ids) => unwrap(api.put('/queue/reorder/positions', { ids })),
+  shortages: () => unwrap(api.get('/queue/shortages')),
+
+  scanLookup: (code) => unwrap(api.post('/scan/lookup', { code })),
+  scanAction: (body) => api.post('/scan/action', body).then((r) => r.data),
+};
+
+export const money = (n) =>
+  (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
+export const grams = (n) => {
+  const value = Number(n) || 0;
+  return value >= 1000 ? `${(value / 1000).toFixed(2)} kg` : `${Math.round(value)} g`;
+};
+
+export const hoursMinutes = (minutes) => {
+  const total = Math.round(Number(minutes) || 0);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  if (!h) return `${m}m`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+};
+
+export const shortDate = (value) =>
+  value ? new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
+
+export default printApi;

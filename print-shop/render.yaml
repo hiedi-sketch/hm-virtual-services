@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: print-shop
+    env: node
+    rootDir: print-shop
+    plan: starter
+    buildCommand: npm run build
+    startCommand: npm start
+    # SQLite lives on a disk so inventory survives a redeploy.
+    disk:
+      name: print-shop-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /var/data/print_shop.sqlite
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

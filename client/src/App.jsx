@@ -3,7 +3,6 @@ import { AuthProvider } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AdminLayout from './components/layout/AdminLayout';
 import ClientLayout from './components/layout/ClientLayout';
-import PrintLayout from './components/layout/PrintLayout';
 
 import Login from './pages/Login';
 
@@ -21,15 +20,6 @@ import AdminDocuments from './pages/admin/Documents';
 import AdminMessages from './pages/admin/Messages';
 import AdminReports from './pages/admin/Reports';
 import AdminSettings from './pages/admin/Settings';
-
-// 3D print shop pages
-import PrintDashboard from './pages/print/Dashboard';
-import PrintOrders from './pages/print/Orders';
-import PrintCatalog from './pages/print/Catalog';
-import PrintFilament from './pages/print/Filament';
-import PrintMaterials from './pages/print/Materials';
-import PrintQueue from './pages/print/Queue';
-import PrintSettings from './pages/print/Settings';
 
 // Client pages
 import ClientDashboard from './pages/client/Dashboard';
@@ -70,24 +60,6 @@ export default function App() {
             <Route path="messages" element={<AdminMessages />} />
             <Route path="reports" element={<AdminReports />} />
             <Route path="settings" element={<AdminSettings />} />
-          </Route>
-
-          {/* 3D print shop */}
-          <Route
-            path="/print"
-            element={
-              <ProtectedRoute role="admin">
-                <PrintLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<PrintDashboard />} />
-            <Route path="orders" element={<PrintOrders />} />
-            <Route path="catalog" element={<PrintCatalog />} />
-            <Route path="filament" element={<PrintFilament />} />
-            <Route path="materials" element={<PrintMaterials />} />
-            <Route path="queue" element={<PrintQueue />} />
-            <Route path="settings" element={<PrintSettings />} />
           </Route>
 
           {/* Client portal */}
