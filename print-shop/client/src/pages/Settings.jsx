@@ -43,6 +43,35 @@ const GROUPS = [
   },
 ];
 
+function BackupCard() {
+  const [busy, setBusy] = useState(false);
+
+  async function download() {
+    setBusy(true);
+    try {
+      const name = await printApi.downloadBackup();
+      toast.success(`Saved ${name}`);
+    } catch {
+      toast.error('Could not build the backup');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card !p-4">
+      <p className="font-bold text-primary text-sm mb-1">Backup</p>
+      <p className="text-xs text-gray-500 mb-3">
+        Downloads the whole shop — catalog, filament, materials, orders and queue — as a single
+        SQLite file. Worth doing before a big change, and every so often regardless.
+      </p>
+      <button onClick={download} className="btn-secondary" disabled={busy}>
+        {busy ? 'Preparing…' : 'Download a backup'}
+      </button>
+    </div>
+  );
+}
+
 function AccountCard() {
   const { user, logout } = useAuth();
   const [passwords, setPasswords] = useState({ current_password: '', new_password: '', confirm: '' });
@@ -77,7 +106,7 @@ function AccountCard() {
       <p className="text-xs text-gray-500 mb-3">
         Signed in as {user?.email}. Changing the password signs out every other device.
       </p>
-      <form onSubmit={changePassword} className="grid sm:grid-cols-3 gap-3 items-end">
+      <form onSubmit={changePassword} className="grid sm:grid-cols-3 gap-3 items-start">
         <Field label="Current password">
           <input
             type="password"
@@ -186,6 +215,7 @@ export default function PrintSettings() {
       </form>
 
       <AccountCard />
+      <BackupCard />
     </div>
   );
 }

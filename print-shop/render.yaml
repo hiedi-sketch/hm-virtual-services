@@ -1,25 +1,40 @@
+# Deploys the Print Shop as a single Render web service: the Express server
+# serves the built React client, so there is one URL and one HTTPS certificate.
+#
+# The Starter plan is required, not a preference — free instances get no
+# persistent disk, so a SQLite database on one is erased on every deploy.
 services:
   - type: web
     name: print-shop
-    env: node
-    rootDir: print-shop
+    runtime: node
     plan: starter
+    rootDir: print-shop
     buildCommand: npm run build
     startCommand: npm start
-    # SQLite lives on a disk so inventory survives a redeploy.
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+    # Inventory lives here, outside the container filesystem, so it survives
+    # deploys and restarts.
     disk:
       name: print-shop-data
       mountPath: /var/data
       sizeGB: 1
+
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "22"
       - key: DB_PATH
         value: /var/data/print_shop.sqlite
+      # Render generates these once and keeps them; never set them by hand.
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
+      # Prompted for at deploy time. Only used the first time the database is
+      # created — after that, change the password in Settings → Account.
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD

@@ -3,10 +3,15 @@
   "version": "1.0.0",
   "description": "3D print shop — catalog costing, filament and material inventory, production queue",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
-    "install:all": "npm install --prefix server && npm install --prefix client",
-    "build": "npm run install:all && npm run build --prefix client",
+    "build": "npm run build:server && npm run build:client",
+    "build:server": "npm install --prefix server --omit=dev",
+    "build:client": "npm install --prefix client --include=dev && npm run build --prefix client",
     "start": "node server/index.js",
-    "dev": "echo \"Run 'npm run dev --prefix server' and 'npm run dev --prefix client' in two terminals\""
+    "dev:server": "npm run dev --prefix server",
+    "dev:client": "npm run dev --prefix client"
   }
 }

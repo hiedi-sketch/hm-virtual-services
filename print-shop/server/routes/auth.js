@@ -6,6 +6,40 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+// ── Login throttling ─────────────────────────────────────────────────────────
+// This app is reachable from the open internet behind a single password, so
+// slow down anyone guessing at it. In-memory is fine for a one-instance shop.
+// Tuned so a fat-fingered password at the bench does not lock the shop out for
+// long, while still making a guessing run impractical.
+const WINDOW_MS = 10 * 60 * 1000;
+const MAX_ATTEMPTS = 10;
+const attempts = new Map();
+
+function attemptKey(req) {
+  return `${req.ip}|${String(req.body?.email || '').toLowerCase()}`;
+}
+
+function throttled(key) {
+  const now = Date.now();
+  const record = attempts.get(key);
+  if (!record || now > record.resetAt) return false;
+  return record.count >= MAX_ATTEMPTS;
+}
+
+function recordFailure(key) {
+  const now = Date.now();
+  const record = attempts.get(key);
+  if (!record || now > record.resetAt) {
+    attempts.set(key, { count: 1, resetAt: now + WINDOW_MS });
+  } else {
+    record.count += 1;
+  }
+  // Drop expired entries so a long-running process does not grow unbounded.
+  if (attempts.size > 500) {
+    for (const [k, v] of attempts) if (now > v.resetAt) attempts.delete(k);
+  }
+}
+
 const accessToken = (user) =>
   jwt.sign({ id: user.id, email: user.email, name: user.name }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_ACCESS_EXPIRES || '15m',
@@ -20,10 +54,17 @@ router.post('/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
+  const key = attemptKey(req);
+  if (throttled(key)) {
+    return res.status(429).json({ error: 'Too many attempts. Wait 10 minutes and try again.' });
+  }
+
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(String(email).toLowerCase());
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    recordFailure(key);
     return res.status(401).json({ error: 'That email and password do not match' });
   }
+  attempts.delete(key);
 
   const refresh = refreshToken(user);
   // Sessions are long-lived on purpose: this runs on a tablet at the bench.

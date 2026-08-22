@@ -7,6 +7,23 @@ export const printApi = {
 
   changePassword: (body) => api.put('/auth/password', body).then((r) => r.data),
 
+  // The download needs the auth header, so it comes back as a blob rather than
+  // a plain link the browser would fetch unauthenticated.
+  downloadBackup: async () => {
+    const response = await api.get('/backup', { responseType: 'blob' });
+    const name = /filename="?([^"]+)"?/.exec(response.headers['content-disposition'] || '')?.[1]
+      || 'print-shop-backup.sqlite';
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    return name;
+  },
+
   getSettings: () => unwrap(api.get('/settings')),
   saveSettings: (body) => unwrap(api.put('/settings', body)),
 

@@ -15,5 +15,6 @@ router.use('/orders', require('./orders'));
 router.use('/queue', require('./queue'));
 router.use('/scan', require('./scan'));
 router.use('/dashboard', require('./dashboard'));
+router.use('/backup', require('./backup'));
 
 module.exports = router;
