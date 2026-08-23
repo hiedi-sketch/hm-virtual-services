@@ -73,7 +73,7 @@ another device on the same Wi-Fi — handy for testing, but see the camera note 
 | **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. |
 | **Filament** | Colour library with per-spool tracking, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
 | **Materials** | The same for magnets, hardware, packaging — anything bought by the pack. |
-| **Queue** | Jobs in print order with projected ship dates, priorities, and the stock the queue will run short of. |
+| **Queue** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
 | **Settings** | Every rate, markup and turnaround figure the app calculates from. |
 
 ---
@@ -134,12 +134,43 @@ actually hit given what is already queued.
 
 ---
 
+## Starting a print
+
+**Start print** on a queued job opens its pick list — everything to gather before the
+printer runs, in three groups:
+
+- **Filament**, with the grams needed and which spool to take them off. The oldest open
+  spool comes first, and a spool that has to be unsealed is flagged.
+- **Parts off the shelf** — components in the recipe that are already made. Anything in
+  stock is pulled rather than reprinted, and only the shortfall goes through the printer.
+- **Materials** — hardware, magnets, packaging.
+
+Tick lines off by tapping them, or hit **Scan to tick off** and scan each thing as you
+pick it up; the scanner stays open until the list is done. Scanning something that is
+not on the list says so rather than ticking the wrong line. Progress is stored per job,
+so the screen can sleep, or you can walk away and come back.
+
+Anything the shop is short of is flagged in red, and starting with items still
+outstanding asks first.
+
+**Rebuild list** recalculates against current stock — worth it if the recipe or the
+shelf changed after the list was first made.
+
+Because the list decides what gets pulled rather than printed, its filament and material
+figures are what the machine will actually use — and completing the job deducts exactly
+those lines, so the pick list and the stock movement can never disagree.
+
+---
+
 ## Stock movement
 
 Marking a queue job **done** is what moves stock: filament grams come off the open
 spools (opening a fresh one automatically when needed), materials come off the shelf,
-and finished units are added to the item's inventory. Every movement is appended to
-`stock_log`.
+components pulled from stock are deducted, and finished units are added to the item's
+inventory. Every movement is appended to `stock_log`.
+
+A job with a pick list is completed against that list. A job without one falls back to
+costing the recipe out in full, treating every component as printed.
 
 ---
 
@@ -261,6 +292,7 @@ print-shop/
 │   │                         queue, scan, dashboard, backup
 │   └── utils/
 │       ├── costing.js        Recursive cost roll-up and price suggestions
+│       ├── picklist.js       What to gather for a job, and which spools to pull
 │       ├── planning.js       Queue scheduling, ship-date projection, stock summaries
 │       └── sku.js            SKU, spool tag and order number generation
 └── client/

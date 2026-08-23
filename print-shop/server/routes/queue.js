@@ -5,6 +5,7 @@ const {
   scheduleQueue, orderProjections, estimatedMinutes, filamentSummary, materialSummary,
 } = require('../utils/planning');
 const { logStock } = require('./helpers');
+const { ensurePicks, readPicks } = require('../utils/picklist');
 
 const router = express.Router();
 
@@ -60,6 +61,79 @@ router.post('/', (req, res) => {
 
   res.status(201).json({ data: queuePayload() });
 });
+
+/** Take grams off the open spools, opening a sealed one when needed. */
+function drawFilament(filamentId, grams, reference) {
+  const f = db.prepare('SELECT * FROM filaments WHERE id = ?').get(filamentId);
+  if (!f || !grams) return;
+  const fullGrams = (f.spool_size_kg || 1) * 1000;
+  const todayStr = new Date().toISOString().slice(0, 10);
+  let remaining = grams;
+
+  while (remaining > 0) {
+    let spool = db.prepare(`
+      SELECT * FROM filament_spools
+       WHERE filament_id = ? AND status = 'opened' AND IFNULL(grams_remaining, 0) > 0
+       ORDER BY opened_at, id LIMIT 1
+    `).get(f.id);
+
+    if (!spool) {
+      const fresh = db.prepare(
+        "SELECT * FROM filament_spools WHERE filament_id = ? AND status = 'new' ORDER BY id LIMIT 1"
+      ).get(f.id);
+      if (!fresh) break;
+      db.prepare(
+        "UPDATE filament_spools SET status='opened', grams_remaining=?, opened_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?"
+      ).run(fullGrams, todayStr, fresh.id);
+      spool = { ...fresh, grams_remaining: fullGrams };
+    }
+
+    const take = Math.min(remaining, spool.grams_remaining);
+    const left = spool.grams_remaining - take;
+    db.prepare(`
+      UPDATE filament_spools
+         SET grams_remaining=?, status = CASE WHEN ? <= 0 THEN 'empty' ELSE 'opened' END,
+             emptied_at = CASE WHEN ? <= 0 THEN ? ELSE emptied_at END, updated_at = CURRENT_TIMESTAMP
+       WHERE id=?
+    `).run(left, left, left, todayStr, spool.id);
+    remaining -= take;
+  }
+  logStock('filament', f.id, -(grams - Math.max(0, remaining)), 'g', 'print completed', reference);
+}
+
+/**
+ * Complete a job against its pick list. Because the list already decided which
+ * components come off the shelf instead of being printed, its filament and
+ * material figures are what the machine actually used — so the deduction
+ * matches what was gathered.
+ */
+function completeFromPicks(entry, picks) {
+  const reference = `Queue #${entry.id}`;
+
+  for (const line of picks) {
+    if (line.line_type === 'filament') {
+      drawFilament(line.ref_id, line.quantity, reference);
+    } else if (line.line_type === 'material') {
+      const m = db.prepare('SELECT * FROM materials WHERE id = ?').get(line.ref_id);
+      if (!m) continue;
+      db.prepare('UPDATE materials SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run((m.qty_on_hand || 0) - line.quantity, m.id);
+      logStock('material', m.id, -line.quantity, m.unit, 'print completed', reference);
+    } else {
+      // A part pulled from the shelf rather than printed.
+      const sub = db.prepare('SELECT * FROM items WHERE id = ?').get(line.ref_id);
+      if (!sub) continue;
+      db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run((sub.qty_on_hand || 0) - line.quantity, sub.id);
+      logStock('item', sub.id, -line.quantity, 'each', 'used in print', reference);
+    }
+  }
+
+  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(entry.item_id);
+  db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run((item.qty_on_hand || 0) + (entry.quantity || 0), item.id);
+  logStock('item', item.id, entry.quantity || 0, 'each', 'print completed', reference);
+}
 
 /**
  * Finishing a print is what actually draws stock down: filament off the open
@@ -150,7 +224,10 @@ router.put('/:id', (req, res) => {
     }
     if (justCompleted) {
       db.prepare('UPDATE queue_jobs SET completed_at = CURRENT_TIMESTAMP WHERE id = ?').run(entry.id);
-      completeEntry({ ...entry, ...req.body, id: entry.id });
+      const picks = db.prepare('SELECT * FROM queue_picks WHERE queue_id = ?').all(entry.id);
+      const merged = { ...entry, ...req.body, id: entry.id };
+      if (picks.length) completeFromPicks(merged, picks);
+      else completeEntry(merged);
     }
 
     // When the last job on an order lands, the order is ready to pack.
@@ -183,6 +260,85 @@ router.put('/reorder/positions', (req, res) => {
   const update = db.prepare('UPDATE queue_jobs SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
   db.transaction(() => ids.forEach((id, index) => update.run(index + 1, id)))();
   res.json({ data: queuePayload() });
+});
+
+// ── Pick list ────────────────────────────────────────────────────────────────
+
+function pickListPayload(entry) {
+  const lines = readPicks(entry.id);
+  return {
+    queue_id: entry.id,
+    item_name: db.prepare('SELECT name FROM items WHERE id = ?').get(entry.item_id)?.name,
+    quantity: entry.quantity,
+    status: entry.status,
+    lines,
+    total: lines.length,
+    picked: lines.filter((l) => l.picked).length,
+    short: lines.filter((l) => l.short_by > 0).length,
+  };
+}
+
+/** Everything to gather for a job, built on first ask and kept thereafter. */
+router.get('/:id/picklist', (req, res) => {
+  const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Queue job not found' });
+  ensurePicks(entry);
+  res.json({ data: pickListPayload(entry) });
+});
+
+/** Rebuild from current stock — useful if the recipe or shelf changed. */
+router.delete('/:id/picklist', (req, res) => {
+  const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Queue job not found' });
+  db.prepare('DELETE FROM queue_picks WHERE queue_id = ?').run(entry.id);
+  ensurePicks(entry);
+  res.json({ data: pickListPayload(entry) });
+});
+
+router.put('/picks/:pickId', (req, res) => {
+  const pick = db.prepare('SELECT * FROM queue_picks WHERE id = ?').get(req.params.pickId);
+  if (!pick) return res.status(404).json({ error: 'That line is not on the list' });
+
+  const picked = req.body.picked ? 1 : 0;
+  db.prepare('UPDATE queue_picks SET picked = ?, picked_at = ? WHERE id = ?')
+    .run(picked, picked ? new Date().toISOString() : null, pick.id);
+
+  const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(pick.queue_id);
+  res.json({ data: pickListPayload(entry) });
+});
+
+/** Tick a line off by scanning whatever is in your hand. */
+router.post('/:id/picklist/scan', (req, res) => {
+  const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Queue job not found' });
+  ensurePicks(entry);
+
+  const code = String(req.body.code || '').trim();
+  if (!code) return res.status(400).json({ error: 'Nothing scanned' });
+
+  const lines = readPicks(entry.id);
+  const matches = lines.filter((l) => (l.codes || []).includes(code));
+
+  if (!matches.length) {
+    return res.status(404).json({
+      error: 'That is not on this list',
+      code,
+      data: pickListPayload(entry),
+    });
+  }
+
+  const line = matches.find((l) => !l.picked) || matches[0];
+  const already = !!line.picked;
+  if (!already) {
+    db.prepare('UPDATE queue_picks SET picked = 1, picked_at = ? WHERE id = ?')
+      .run(new Date().toISOString(), line.id);
+  }
+
+  res.json({
+    data: pickListPayload(entry),
+    matched: { id: line.id, label: line.label, quantity: line.quantity, unit: line.unit },
+    message: already ? `${line.label} was already ticked off` : `${line.label} — collected`,
+  });
 });
 
 /** What the queue will burn versus what is actually on the shelf. */

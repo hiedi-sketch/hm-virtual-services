@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
 import printApi, { describeError, grams, hoursMinutes, shortDate } from '../api/print';
 import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
+import PickList from '../components/PickList';
 
 const STATUS_TONE = { queued: 'gray', printing: 'blue', post_processing: 'violet', done: 'green', cancelled: 'gray' };
 const STATUS_LABEL = { queued: 'Queued', printing: 'Printing', post_processing: 'Finishing', done: 'Done', cancelled: 'Cancelled' };
@@ -21,6 +22,7 @@ export default function Queue() {
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ item_id: '', quantity: 1, priority: 'normal', filament_id: '', printer: '', order_id: '' });
+  const [picking, setPicking] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -191,11 +193,16 @@ export default function Queue() {
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
-                {NEXT_STATUS[entry.status] && (
+                {entry.status === 'queued' ? (
+                  <button className="btn-primary !py-1 !px-3" onClick={() => setPicking(entry)}>
+                    Start print
+                  </button>
+                ) : NEXT_STATUS[entry.status] ? (
                   <button className="btn-primary !py-1 !px-3" onClick={() => setStatus(entry, NEXT_STATUS[entry.status])}>
                     {NEXT_LABEL[entry.status]}
                   </button>
-                )}
+                ) : null}
+                <button className="btn-ghost !py-1 !px-2" onClick={() => setPicking(entry)}>Pick list</button>
                 <select
                   className="input !w-auto !py-1 !px-2 text-xs"
                   value={entry.priority}
@@ -229,6 +236,15 @@ export default function Queue() {
           </div>
         </div>
       )}
+
+      <PickList
+        open={!!picking}
+        queueId={picking?.id}
+        onClose={() => setPicking(null)}
+        onStart={async () => {
+          if (picking.status === 'queued') await setStatus(picking, 'printing');
+        }}
+      />
 
       <Modal open={adding} onClose={() => setAdding(false)} title="Add to the queue">
         <form onSubmit={addJob} className="space-y-4">

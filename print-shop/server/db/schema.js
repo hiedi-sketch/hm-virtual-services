@@ -173,6 +173,22 @@ function createSchema() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- What a print job needs gathered, and what has been gathered so far.
+    -- Written once when the pick list is first built, so the tick marks
+    -- survive the screen going to sleep mid-collection.
+    CREATE TABLE IF NOT EXISTS queue_picks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      queue_id INTEGER NOT NULL REFERENCES queue_jobs(id) ON DELETE CASCADE,
+      line_type TEXT NOT NULL CHECK(line_type IN ('filament','material','item')),
+      ref_id INTEGER NOT NULL,
+      quantity REAL NOT NULL DEFAULT 0,
+      unit TEXT,
+      spool_id INTEGER REFERENCES filament_spools(id),
+      picked INTEGER NOT NULL DEFAULT 0,
+      picked_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS stock_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       entity_type TEXT NOT NULL CHECK(entity_type IN ('filament','material','item')),
@@ -190,6 +206,7 @@ function createSchema() {
     CREATE INDEX IF NOT EXISTS idx_queue_jobs_order ON queue_jobs(order_id);
     CREATE INDEX IF NOT EXISTS idx_queue_jobs_status ON queue_jobs(status);
     CREATE INDEX IF NOT EXISTS idx_stock_log_entity ON stock_log(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_queue_picks_queue ON queue_picks(queue_id);
     CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
   `);
 

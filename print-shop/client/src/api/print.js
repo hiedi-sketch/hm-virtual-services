@@ -67,6 +67,11 @@ export const printApi = {
   reorderQueue: (ids) => unwrap(api.put('/queue/reorder/positions', { ids })),
   shortages: () => unwrap(api.get('/queue/shortages')),
 
+  pickList: (id) => unwrap(api.get(`/queue/${id}/picklist`)),
+  rebuildPickList: (id) => unwrap(api.delete(`/queue/${id}/picklist`)),
+  setPicked: (pickId, picked) => unwrap(api.put(`/queue/picks/${pickId}`, { picked })),
+  scanPick: (id, code) => api.post(`/queue/${id}/picklist/scan`, { code }).then((r) => r.data),
+
   scanLookup: (code) => unwrap(api.post('/scan/lookup', { code })),
   scanAction: (body) => api.post('/scan/action', body).then((r) => r.data),
 };

@@ -56,6 +56,19 @@ export default function BarcodeScanner({ open, onClose, onScan, title = 'Scan', 
     onScan(value);
   }
 
+  // The scanner opens on top of a dialog that also closes on Escape. Claim the
+  // key first so one press closes the scanner and leaves the dialog alone.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [open, onClose]);
+
   useEffect(() => {
     if (!open) return undefined;
     setManual('');
