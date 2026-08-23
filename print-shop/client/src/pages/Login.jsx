@@ -25,7 +25,13 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-linen flex items-center justify-center p-4">
+    <div
+      className="min-h-screen bg-linen flex items-center justify-center px-4"
+      style={{
+        paddingTop: 'calc(1rem + var(--safe-top))',
+        paddingBottom: 'calc(1rem + var(--safe-bottom))',
+      }}
+    >
       <div className="w-full max-w-sm">
         <div className="text-center mb-6">
           <div className="w-14 h-14 rounded-2xl bg-primary text-white text-2xl flex items-center justify-center mx-auto mb-3">

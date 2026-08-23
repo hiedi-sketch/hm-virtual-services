@@ -3,6 +3,17 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * iOS draws a home-screen web app under the status bar and home indicator.
+   * These hold the size of those strips so the app's own chrome can sit clear
+   * of them; they are 0 everywhere else. Routed through variables rather than
+   * env() directly so the insets can be simulated when testing.
+   */
+  :root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   html {
     font-family: 'Raleway', sans-serif;
     /* Keep iOS from zooming when a numeric field is focused. */
@@ -52,6 +63,16 @@
   }
   .sidebar-link.active {
     @apply bg-white/15 text-white;
+  }
+}
+
+@layer components {
+  .pad-safe-top { padding-top: var(--safe-top); }
+  .pad-safe-bottom { padding-bottom: var(--safe-bottom); }
+
+  /* The wide layout puts content beside the sidebar, so it needs the inset too. */
+  @media (min-width: 1024px) {
+    .lg-pad-safe-top { padding-top: var(--safe-top); }
   }
 }
 

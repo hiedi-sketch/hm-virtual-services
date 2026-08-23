@@ -19,7 +19,13 @@ export default function Modal({ open, onClose, title, children, size = 'md' }) {
   const sizeMap = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center px-2 sm:px-4 overflow-y-auto"
+      style={{
+        paddingTop: 'calc(0.5rem + var(--safe-top))',
+        paddingBottom: 'calc(0.5rem + var(--safe-bottom))',
+      }}
+    >
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative bg-white rounded-2xl shadow-xl w-full ${sizeMap[size]} my-4 max-h-[92vh] overflow-y-auto`}>
         {title && (

@@ -33,8 +33,20 @@ function Shell({ refreshKey, refresh }) {
 
   return (
     <div className="lg:flex min-h-screen bg-linen">
+      {/*
+        On a home-screen install the page runs under the status bar. Painting
+        that strip the same teal as the rest of the chrome keeps iOS's white
+        clock and battery readable over it. It collapses to nothing in a
+        browser tab and on every other platform.
+      */}
+      <div
+        className="fixed top-0 inset-x-0 z-40 bg-primary pointer-events-none"
+        style={{ height: 'var(--safe-top)' }}
+        aria-hidden="true"
+      />
+
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex flex-col bg-primary w-56 shrink-0 sticky top-0 h-screen">
+      <aside className="hidden lg:flex flex-col bg-primary w-56 shrink-0 sticky top-0 h-screen pad-safe-top">
         <div className="px-4 py-5 border-b border-white/10">
           <p className="text-white font-bold text-sm leading-tight">Print Shop</p>
           <p className="text-white/60 text-xs">Inventory &amp; production</p>
@@ -56,7 +68,7 @@ function Shell({ refreshKey, refresh }) {
       </aside>
 
       {/* iPad / phone header + tab strip */}
-      <div className="lg:hidden sticky top-0 z-30 bg-primary">
+      <div className="lg:hidden sticky top-0 z-30 bg-primary pad-safe-top">
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <p className="text-white font-bold text-sm leading-tight">Print Shop</p>
@@ -82,7 +94,7 @@ function Shell({ refreshKey, refresh }) {
         </nav>
       </div>
 
-      <main className="flex-1 min-w-0">
+      <main className="flex-1 min-w-0 lg-pad-safe-top pad-safe-bottom">
         {/* Desktop scan bar */}
         <div className="hidden lg:flex justify-end px-6 pt-6">
           <ScanButton />

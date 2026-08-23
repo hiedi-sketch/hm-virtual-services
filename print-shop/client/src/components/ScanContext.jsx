@@ -171,13 +171,16 @@ export function ScanProvider({ children, onStockChange }) {
       {match && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setMatch(null)} />
-          <div className="relative bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl">
+          <div className="relative bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-linen">
               <h2 className="text-sm font-bold text-primary uppercase tracking-wide">Scanned</h2>
               <button onClick={() => setMatch(null)} className="text-silver hover:text-gray-600 text-2xl leading-none">×</button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div
+              className="p-5 space-y-4"
+              style={{ paddingBottom: 'calc(1.25rem + var(--safe-bottom))' }}
+            >
               <ResultCard match={match} />
 
               {actions.some((a) => a.qtyLabel) && (
