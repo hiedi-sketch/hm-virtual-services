@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import printApi, { grams, hoursMinutes, money, shortDate } from '../api/print';
-import { EmptyState, Pill, StatCard } from '../components/ui';
+import printApi, { describeError, grams, hoursMinutes, money, shortDate } from '../api/print';
+import { EmptyState, LoadError, Pill, StatCard } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
 
 export default function PrintDashboard() {
@@ -10,13 +10,17 @@ export default function PrintDashboard() {
   const { scan } = useScanner();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       setData(await printApi.dashboard());
-    } catch {
-      toast.error('Could not load the dashboard');
+    } catch (err) {
+      const message = describeError(err, 'Could not load the dashboard');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -24,6 +28,9 @@ export default function PrintDashboard() {
 
   useEffect(() => { load(); }, [load, refreshKey]);
 
+  if (error && !data) {
+    return <LoadError message={error} onRetry={load} what="the dashboard" />;
+  }
   if (loading || !data) {
     return <div className="card text-center py-12 text-sm text-gray-500">Loading…</div>;
   }

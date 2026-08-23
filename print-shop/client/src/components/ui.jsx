@@ -31,6 +31,18 @@ export function EmptyState({ title, children, action }) {
   );
 }
 
+export function LoadError({ message, onRetry, what = 'this page' }) {
+  return (
+    <div className="card border-l-4 border-red-400">
+      <p className="font-bold text-primary">Could not load {what}</p>
+      <p className="text-sm text-gray-600 mt-1">{message}</p>
+      {onRetry && (
+        <button className="btn-primary mt-4" onClick={onRetry}>Try again</button>
+      )}
+    </div>
+  );
+}
+
 export function Field({ label, children, hint, className = '' }) {
   return (
     <div className={className}>

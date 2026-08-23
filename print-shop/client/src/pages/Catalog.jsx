@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
-import printApi, { hoursMinutes, money } from '../api/print';
-import { EmptyState, Field, LabelModal, Pill, StatCard } from '../components/ui';
+import printApi, { describeError, hoursMinutes, money } from '../api/print';
+import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
 
 const TYPES = [
@@ -34,6 +34,7 @@ export default function Catalog() {
   const [items, setItems] = useState([]);
   const [options, setOptions] = useState({ filaments: [], materials: [], items: [] });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
 
@@ -48,12 +49,15 @@ export default function Catalog() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const [list, opts] = await Promise.all([printApi.catalog(), printApi.catalogOptions()]);
       setItems(list);
       setOptions(opts);
-    } catch {
-      toast.error('Could not load the catalog');
+    } catch (err) {
+      const message = describeError(err, 'Could not load the catalog');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -106,8 +110,8 @@ export default function Catalog() {
         })),
       });
       setEditing(item.id);
-    } catch {
-      toast.error('Could not open that item');
+    } catch (err) {
+      toast.error(describeError(err, 'Could not open that item'));
     }
   }
 
@@ -243,7 +247,9 @@ export default function Catalog() {
         />
       </div>
 
-      {loading ? (
+      {error && !items.length ? (
+        <LoadError message={error} onRetry={load} what="the catalog" />
+      ) : loading ? (
         <div className="card text-center py-12 text-sm text-gray-500">Loading…</div>
       ) : !visible.length ? (
         <EmptyState

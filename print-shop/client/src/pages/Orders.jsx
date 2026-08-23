@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
-import printApi, { money, shortDate } from '../api/print';
-import { EmptyState, Field, Pill, StatCard } from '../components/ui';
+import printApi, { describeError, money, shortDate } from '../api/print';
+import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
 
 const STATUS_TONE = {
   new: 'blue', in_production: 'amber', ready: 'violet', shipped: 'green', completed: 'green', cancelled: 'gray',
@@ -31,6 +31,7 @@ export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -40,6 +41,7 @@ export default function Orders() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const [list, items] = await Promise.all([
         printApi.orders(filter ? { status: filter } : undefined),
@@ -47,8 +49,10 @@ export default function Orders() {
       ]);
       setOrders(list);
       setCatalog(items);
-    } catch {
-      toast.error('Could not load orders');
+    } catch (err) {
+      const message = describeError(err, 'Could not load orders');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -211,7 +215,9 @@ export default function Orders() {
         ))}
       </div>
 
-      {loading ? (
+      {error && !orders.length ? (
+        <LoadError message={error} onRetry={load} what="orders" />
+      ) : loading ? (
         <div className="card text-center py-12 text-sm text-gray-500">Loading…</div>
       ) : !orders.length ? (
         <EmptyState title="No orders yet" action={<button className="btn-primary" onClick={openNew}>Add an order</button>}>

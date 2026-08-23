@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
-import printApi, { money } from '../api/print';
-import { EmptyState, Field, LabelModal, Pill, StatCard, StockBar, StockLegend } from '../components/ui';
+import printApi, { describeError, money } from '../api/print';
+import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard, StockBar, StockLegend } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
 
 const UNITS = ['each', 'set', 'pair', 'g', 'ml', 'cm', 'in', 'sheet', 'yard', 'pack'];
@@ -20,6 +20,7 @@ export default function Materials() {
 
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(BLANK);
   const [saving, setSaving] = useState(false);
@@ -29,10 +30,13 @@ export default function Materials() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       setMaterials(await printApi.materials());
-    } catch {
-      toast.error('Could not load materials');
+    } catch (err) {
+      const message = describeError(err, 'Could not load materials');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -121,7 +125,9 @@ export default function Materials() {
 
       <div className="card !p-4"><StockLegend /></div>
 
-      {loading ? (
+      {error && !materials.length ? (
+        <LoadError message={error} onRetry={load} what="materials" />
+      ) : loading ? (
         <div className="card text-center py-12 text-sm text-gray-500">Loading…</div>
       ) : !materials.length ? (
         <EmptyState

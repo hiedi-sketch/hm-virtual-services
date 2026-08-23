@@ -4,13 +4,15 @@ import { Toaster } from 'react-hot-toast';
 import App from './App';
 import './index.css';
 
-// Registering a (cache-free) service worker is what lets Android and desktop
-// browsers offer "Install app". iOS installs from Share → Add to Home Screen
-// without one.
-if ('serviceWorker' in navigator && window.isSecureContext) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => { /* not fatal */ });
-  });
+// There used to be a service worker here, purely so Chrome would offer an
+// "Install app" button. It also sat in front of every API request, which is a
+// bad trade for something iOS never needed — it installs from Share → Add to
+// Home Screen regardless. A registered worker survives its script being
+// deleted, so any copy still installed has to be removed explicitly.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations?.()
+    .then((registrations) => registrations.forEach((r) => r.unregister()))
+    .catch(() => { /* nothing to clean up */ });
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(

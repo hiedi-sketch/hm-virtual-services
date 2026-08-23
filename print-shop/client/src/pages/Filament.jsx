@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
-import printApi, { grams, money, shortDate } from '../api/print';
-import { EmptyState, Field, LabelModal, Pill, StatCard, StockBar, StockLegend } from '../components/ui';
+import printApi, { describeError, grams, money, shortDate } from '../api/print';
+import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard, StockBar, StockLegend } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
 
 const MATERIAL_TYPES = ['PLA', 'PLA+', 'Silk PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'Nylon', 'PC', 'Wood Fill', 'Resin'];
@@ -21,6 +21,7 @@ export default function Filament() {
 
   const [filaments, setFilaments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [expanded, setExpanded] = useState(null);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(BLANK);
@@ -31,10 +32,13 @@ export default function Filament() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       setFilaments(await printApi.filaments());
-    } catch {
-      toast.error('Could not load the filament library');
+    } catch (err) {
+      const message = describeError(err, 'Could not load the filament library');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -169,7 +173,9 @@ export default function Filament() {
 
       <div className="card !p-4"><StockLegend /></div>
 
-      {loading ? (
+      {error && !filaments.length ? (
+        <LoadError message={error} onRetry={load} what="the filament library" />
+      ) : loading ? (
         <div className="card text-center py-12 text-sm text-gray-500">Loading…</div>
       ) : !filaments.length ? (
         <EmptyState

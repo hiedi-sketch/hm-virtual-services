@@ -71,6 +71,31 @@ export const printApi = {
   scanAction: (body) => api.post('/scan/action', body).then((r) => r.data),
 };
 
+/**
+ * Turn an axios failure into something that tells you what to do about it.
+ * The pages used to swallow these entirely, which made every problem look
+ * identical from the outside.
+ */
+export function describeError(err, fallback = 'Something went wrong') {
+  if (!err) return fallback;
+
+  // No response at all: the request never reached the server.
+  if (!err.response) {
+    if (err.code === 'ECONNABORTED') return 'The server took too long to answer. Try again.';
+    return 'Could not reach the server. Check your connection, then try again.';
+  }
+
+  const status = err.response.status;
+  const serverSaid = err.response.data?.error;
+
+  if (status === 401) return 'Your session ended. Sign in again.';
+  if (status === 403) return serverSaid || 'That is not allowed.';
+  if (status === 404) return serverSaid || 'That is not there any more.';
+  if (status === 429) return serverSaid || 'Too many requests. Wait a moment.';
+  if (status >= 500) return serverSaid ? `Server error: ${serverSaid}` : `Server error (${status}).`;
+  return serverSaid || fallback;
+}
+
 export const money = (n) =>
   (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 

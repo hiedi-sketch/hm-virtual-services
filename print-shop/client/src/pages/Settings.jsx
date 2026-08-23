@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import printApi, { money } from '../api/print';
-import { Field } from '../components/ui';
+import printApi, { describeError, money } from '../api/print';
+import { Field, LoadError } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 
 const GROUPS = [
@@ -51,8 +51,8 @@ function BackupCard() {
     try {
       const name = await printApi.downloadBackup();
       toast.success(`Saved ${name}`);
-    } catch {
-      toast.error('Could not build the backup');
+    } catch (err) {
+      toast.error(describeError(err, 'Could not build the backup'));
     } finally {
       setBusy(false);
     }
@@ -151,10 +151,20 @@ function AccountCard() {
 export default function PrintSettings() {
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
-  useEffect(() => {
-    printApi.getSettings().then(setForm).catch(() => toast.error('Could not load settings'));
+  const load = useCallback(async () => {
+    setError('');
+    try {
+      setForm(await printApi.getSettings());
+    } catch (err) {
+      const message = describeError(err, 'Could not load settings');
+      setError(message);
+      toast.error(message);
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   async function save(e) {
     e.preventDefault();
@@ -163,12 +173,13 @@ export default function PrintSettings() {
       setForm(await printApi.saveSettings(form));
       toast.success('Settings saved — every price recalculates from here');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Could not save settings');
+      toast.error(describeError(err, 'Could not save settings'));
     } finally {
       setSaving(false);
     }
   }
 
+  if (error && !form) return <LoadError message={error} onRetry={load} what="settings" />;
   if (!form) return <div className="card text-center py-12 text-sm text-gray-500">Loading…</div>;
 
   const exampleCost = 10;

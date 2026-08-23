@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
-import printApi, { grams, hoursMinutes, shortDate } from '../api/print';
-import { EmptyState, Field, Pill, StatCard } from '../components/ui';
+import printApi, { describeError, grams, hoursMinutes, shortDate } from '../api/print';
+import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
 
 const STATUS_TONE = { queued: 'gray', printing: 'blue', post_processing: 'violet', done: 'green', cancelled: 'gray' };
 const STATUS_LABEL = { queued: 'Queued', printing: 'Printing', post_processing: 'Finishing', done: 'Done', cancelled: 'Cancelled' };
@@ -18,11 +18,13 @@ export default function Queue() {
   const [options, setOptions] = useState({ items: [], filaments: [] });
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ item_id: '', quantity: 1, priority: 'normal', filament_id: '', printer: '', order_id: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const [queue, short, opts, orderList] = await Promise.all([
         printApi.queue(), printApi.shortages(), printApi.catalogOptions(), printApi.orders(),
@@ -31,8 +33,10 @@ export default function Queue() {
       setShortages(short);
       setOptions(opts);
       setOrders(orderList.filter((o) => ['new', 'in_production'].includes(o.status)));
-    } catch {
-      toast.error('Could not load the production queue');
+    } catch (err) {
+      const message = describeError(err, 'Could not load the production queue');
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -53,8 +57,8 @@ export default function Queue() {
   async function setPriority(entry, priority) {
     try {
       setData(await printApi.updateQueue(entry.id, { priority }));
-    } catch {
-      toast.error('Could not change the priority');
+    } catch (err) {
+      toast.error(describeError(err, 'Could not change the priority'));
     }
   }
 
@@ -98,6 +102,9 @@ export default function Queue() {
     }
   }
 
+  if (error && !data) {
+    return <LoadError message={error} onRetry={load} what="the production queue" />;
+  }
   if (loading || !data) {
     return <div className="card text-center py-12 text-sm text-gray-500">Loading the queue…</div>;
   }
