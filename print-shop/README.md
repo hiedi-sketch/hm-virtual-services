@@ -6,6 +6,8 @@ material inventory, barcode scanning, and a production queue that projects ship 
 It has its own database, its own login and its own deploy. Nothing is shared with the
 HM Virtual Services app that happens to live in the same repository.
 
+**Live at https://print-shop-u4kd.onrender.com**
+
 ---
 
 ## Quick start
@@ -240,6 +242,11 @@ wake, which is miserable when you are stood at a printer with a spool in your ha
    generate them and never paste them anywhere.
 
 6. **Create Web Service**. The first build takes a few minutes.
+
+### The live service
+
+This shop runs at **https://print-shop-u4kd.onrender.com** — Render service `print-shop`,
+built from the `print-shop` root directory of this repository.
 
 ### After the first deploy
 
