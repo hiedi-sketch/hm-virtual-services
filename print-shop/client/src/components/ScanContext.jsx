@@ -1,11 +1,12 @@
 import { createContext, lazy, Suspense, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import printApi, { grams, money } from '../api/print';
+import printApi, { describeError, grams, money } from '../api/print';
 
 // The decoding library is large; keep it out of the initial bundle so the
 // iPad loads the shop fast and only pays for it when a scan starts.
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
 import { Field, Pill } from './ui';
+import UnknownCode from './UnknownCode';
 
 const ScanContext = createContext(null);
 
@@ -102,6 +103,7 @@ export function ScanProvider({ children, onStockChange }) {
   const [open, setOpen] = useState(false);
   const [config, setConfig] = useState({});
   const [match, setMatch] = useState(null);
+  const [unknown, setUnknown] = useState(null);
   const [quantity, setQuantity] = useState('1');
   const [busy, setBusy] = useState(false);
   const handlerRef = useRef(null);
@@ -110,6 +112,7 @@ export function ScanProvider({ children, onStockChange }) {
     handlerRef.current = options.onCode || null;
     setConfig(options);
     setMatch(null);
+    setUnknown(null);
     setOpen(true);
   }, []);
 
@@ -124,10 +127,18 @@ export function ScanProvider({ children, onStockChange }) {
     try {
       const found = await printApi.scanLookup(code);
       setMatch(found);
+      setUnknown(null);
       setQuantity('1');
       setOpen(false);
     } catch (err) {
-      toast.error(err.response?.data?.error || 'That code is not in the shop yet');
+      if (err.response?.status === 404) {
+        // Never seen this code before — offer to make it mean something.
+        setUnknown(code);
+        setMatch(null);
+        setOpen(false);
+        return;
+      }
+      toast.error(describeError(err, 'Could not look that code up'));
     }
   }
 
@@ -168,19 +179,44 @@ export function ScanProvider({ children, onStockChange }) {
         </Suspense>
       )}
 
-      {match && (
+      {(match || unknown) && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={() => setMatch(null)} />
+          <div
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+            onClick={() => { setMatch(null); setUnknown(null); }}
+          />
           <div className="relative bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-linen">
-              <h2 className="text-sm font-bold text-primary uppercase tracking-wide">Scanned</h2>
-              <button onClick={() => setMatch(null)} className="text-silver hover:text-gray-600 text-2xl leading-none">×</button>
+              <h2 className="text-sm font-bold text-primary uppercase tracking-wide">
+                {unknown ? 'Not in the shop yet' : 'Scanned'}
+              </h2>
+              <button
+                onClick={() => { setMatch(null); setUnknown(null); }}
+                className="text-silver hover:text-gray-600 text-2xl leading-none"
+              >
+                ×
+              </button>
             </div>
 
             <div
               className="p-5 space-y-4"
               style={{ paddingBottom: 'calc(1.25rem + var(--safe-bottom))' }}
             >
+              {unknown ? (
+                <UnknownCode
+                  code={unknown}
+                  onCancel={() => setUnknown(null)}
+                  onScanAgain={() => { setUnknown(null); scan(config); }}
+                  onResolved={(next) => {
+                    setUnknown(null);
+                    setMatch(next);
+                    setQuantity('1');
+                    toast.success('Added — it will scan straight to this from now on');
+                    onStockChange?.();
+                  }}
+                />
+              ) : (
+              <>
               <ResultCard match={match} />
 
               {actions.some((a) => a.qtyLabel) && (
@@ -217,6 +253,8 @@ export function ScanProvider({ children, onStockChange }) {
                 </button>
                 <button onClick={() => setMatch(null)} className="btn-ghost">Done</button>
               </div>
+              </>
+              )}
             </div>
           </div>
         </div>

@@ -132,6 +132,12 @@ actually hit given what is already queued.
 - Scanning resolves to receive / open / weigh / count actions on the spot.
 - Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
   scanning a box you just opened finds the right record.
+- **Scanning something the shop has never seen** offers to add it there and then — a
+  short form for a new filament or material, in stock as soon as it is saved. It also
+  offers to attach the code to something already stocked, which is the answer to
+  scanning a colour you have had for months but never recorded the maker's barcode for.
+  Without that, scanning a familiar spool would quietly create a duplicate. One code can
+  only ever point at one thing.
 - The decoding library is lazy-loaded, so it is only downloaded when a scan starts.
 
 ---

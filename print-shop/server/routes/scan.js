@@ -53,6 +53,51 @@ router.post('/lookup', (req, res) => {
   res.json({ data: match });
 });
 
+const TABLES = { filament: 'filaments', material: 'materials', item: 'items' };
+
+/** Everything a stray barcode could be attached to. */
+router.get('/targets', (req, res) => {
+  res.json({
+    data: {
+      filament: db.prepare('SELECT id, brand, material_type, color_name FROM filaments ORDER BY brand, color_name').all()
+        .map((f) => ({ id: f.id, label: `${f.brand} ${f.material_type} — ${f.color_name}` })),
+      material: db.prepare('SELECT id, name FROM materials ORDER BY name').all()
+        .map((m) => ({ id: m.id, label: m.name })),
+      item: db.prepare('SELECT id, name, sku FROM items ORDER BY name').all()
+        .map((i) => ({ id: i.id, label: `${i.name} (${i.sku})` })),
+    },
+  });
+});
+
+/**
+ * Put a scanned code onto something already in the shop, so the same scan
+ * finds it next time. This is the answer to scanning a spool of a colour you
+ * already stock but had not recorded the manufacturer's barcode for.
+ */
+router.post('/link', (req, res) => {
+  const { type, id } = req.body;
+  const table = TABLES[type];
+  if (!table) return res.status(400).json({ error: 'Type must be filament, material or item' });
+
+  const code = String(req.body.code || '').trim();
+  if (!code) return res.status(400).json({ error: 'No code to link' });
+
+  const row = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id);
+  if (!row) return res.status(404).json({ error: 'That is not in the shop' });
+
+  // One code must never point at two things, or scanning becomes a coin toss.
+  const clash = resolve(code);
+  if (clash) return res.status(400).json({ error: 'That code already belongs to something else' });
+
+  db.prepare(`UPDATE ${table} SET vendor_barcode = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+    .run(code, id);
+
+  res.json({
+    data: resolve(code),
+    message: `${row.color_name || row.name} will come up when you scan that from now on`,
+  });
+});
+
 const VALID_ACTIONS = ['receive', 'open', 'consume', 'count', 'empty'];
 
 router.post('/action', (req, res) => {

@@ -74,6 +74,8 @@ export const printApi = {
 
   scanLookup: (code) => unwrap(api.post('/scan/lookup', { code })),
   scanAction: (body) => api.post('/scan/action', body).then((r) => r.data),
+  scanTargets: () => unwrap(api.get('/scan/targets')),
+  scanLink: (body) => api.post('/scan/link', body).then((r) => r.data),
 };
 
 /**
