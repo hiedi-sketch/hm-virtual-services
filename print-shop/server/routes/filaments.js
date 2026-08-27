@@ -2,7 +2,8 @@ const express = require('express');
 const db = require('../db/database');
 const { nextSku, nextSpoolCode, defaultBarcode } = require('../utils/sku');
 const { filamentSummary } = require('../utils/planning');
-const { logStock } = require('./helpers');
+const { locationLists, occupancy, normalise, isKnown } = require('../utils/locations');
+const { logStock, logEvent } = require('./helpers');
 
 const router = express.Router();
 
@@ -10,6 +11,11 @@ router.get('/', (req, res) => {
   const list = filamentSummary();
   const filtered = req.query.needs_reorder === '1' ? list.filter((f) => f.needs_reorder) : list;
   res.json({ data: filtered });
+});
+
+/** The rack: every slot and whatever is sitting in it. */
+router.get('/locations', (req, res) => {
+  res.json({ data: { ...occupancy(), lists: locationLists() } });
 });
 
 router.get('/:id', (req, res) => {
@@ -178,6 +184,70 @@ router.put('/spools/:spoolId', (req, res) => {
 
   const [updated] = filamentSummary(spool.filament_id);
   res.json({ data: updated });
+});
+
+/**
+ * Put a spool somewhere — a shelf slot or an AMS bay. One spool per slot, so
+ * moving into an occupied one says what is already there; sending swap turns
+ * the occupant out first, which is exactly what changing an AMS bay is.
+ */
+router.put('/spools/:spoolId/location', (req, res) => {
+  const spool = db.prepare('SELECT * FROM filament_spools WHERE id = ?').get(req.params.spoolId);
+  if (!spool) return res.status(404).json({ error: 'Spool not found' });
+
+  const location = normalise(req.body.location);
+  if (location && !isKnown(location)) {
+    return res.status(400).json({ error: `There is no location called ${location}` });
+  }
+  if (location === spool.location) {
+    const [filament] = filamentSummary(spool.filament_id);
+    return res.json({ data: filament, message: 'Already there' });
+  }
+
+  let displaced = null;
+  if (location) {
+    const occupant = db.prepare(
+      'SELECT s.*, f.color_name, f.brand FROM filament_spools s JOIN filaments f ON f.id = s.filament_id WHERE s.location = ?'
+    ).get(location);
+
+    if (occupant && occupant.id !== spool.id) {
+      if (!req.body.swap) {
+        return res.status(409).json({
+          error: `${location} already holds ${occupant.brand} ${occupant.color_name} (${occupant.spool_code})`,
+          occupied_by: {
+            spool_id: occupant.id,
+            spool_code: occupant.spool_code,
+            label: `${occupant.brand} ${occupant.color_name}`,
+          },
+        });
+      }
+      displaced = occupant;
+    }
+  }
+
+  const move = db.transaction(() => {
+    if (displaced) {
+      db.prepare('UPDATE filament_spools SET location = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(displaced.id);
+    }
+    db.prepare('UPDATE filament_spools SET location = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(location, spool.id);
+    logEvent('filament', spool.filament_id,
+      `moved ${spool.location || 'nowhere'} → ${location || 'nowhere'}`, spool.spool_code);
+  });
+  move();
+
+  const [filament] = filamentSummary(spool.filament_id);
+  res.json({
+    data: filament,
+    displaced: displaced && {
+      spool_code: displaced.spool_code,
+      label: `${displaced.brand} ${displaced.color_name}`,
+    },
+    message: location
+      ? `${spool.spool_code} is in ${location}`
+      : `${spool.spool_code} is no longer assigned a place`,
+  });
 });
 
 router.delete('/spools/:spoolId', (req, res) => {

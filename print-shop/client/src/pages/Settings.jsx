@@ -33,6 +33,13 @@ const GROUPS = [
     ],
   },
   {
+    title: 'Where filament lives',
+    fields: [
+      { key: 'shelf_locations', label: 'Shelf slots', type: 'text', hint: 'Comma separated. Add more as the shelf grows.' },
+      { key: 'ams_slots', label: 'Printer (AMS) slots', type: 'text', hint: 'The bays a spool can be loaded into.' },
+    ],
+  },
+  {
     title: 'Production planning',
     fields: [
       { key: 'turnaround_min_days', label: 'Turnaround — fastest (days)', type: 'number', step: '1' },

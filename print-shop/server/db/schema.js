@@ -249,6 +249,9 @@ function createSchema() {
     ['print_hours_per_day', '18'],
     ['finishing_days', '1'],
     ['printer_count', '1'],
+    // Where spools live. Editable, because shelves grow.
+    ['shelf_locations', 'A1,A2,A3,A4,A5,A6,B1,B2,B3'],
+    ['ams_slots', 'AMS1,AMS2,AMS3,AMS4'],
   ];
   const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of defaults) insert.run(key, value);
@@ -265,6 +268,8 @@ function createSchema() {
     'ALTER TABLE order_items ADD COLUMN shopify_line_item_id TEXT',
     // What a print run is for, which decides where the finished units go.
     "ALTER TABLE queue_jobs ADD COLUMN purpose TEXT DEFAULT NULL",
+    // Where this physical spool is right now: a shelf slot or an AMS slot.
+    'ALTER TABLE filament_spools ADD COLUMN location TEXT DEFAULT NULL',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
@@ -272,6 +277,8 @@ function createSchema() {
 
   // Indexes over the columns added above, once they are guaranteed to exist.
   for (const sql of [
+    // One spool per slot: a cubby and an AMS bay each hold exactly one.
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_spool_location ON filament_spools(location) WHERE location IS NOT NULL',
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_shopify ON orders(shopify_order_id) WHERE shopify_order_id IS NOT NULL',
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_items_shopify_variant ON items(shopify_variant_id) WHERE shopify_variant_id IS NOT NULL',
   ]) {

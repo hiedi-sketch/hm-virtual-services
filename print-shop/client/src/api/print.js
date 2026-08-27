@@ -44,6 +44,10 @@ export const printApi = {
   deleteSpool: (spoolId) => unwrap(api.delete(`/filaments/spools/${spoolId}`)),
   consumeFilament: (id, body) => unwrap(api.post(`/filaments/${id}/consume`, body)),
 
+  spoolLocations: () => unwrap(api.get('/filaments/locations')),
+  moveSpool: (spoolId, location, swap) =>
+    api.put(`/filaments/spools/${spoolId}/location`, { location, swap }).then((r) => r.data),
+
   materials: (params) => unwrap(api.get('/materials', { params })),
   createMaterial: (body) => unwrap(api.post('/materials', body)),
   updateMaterial: (id, body) => unwrap(api.put(`/materials/${id}`, body)),

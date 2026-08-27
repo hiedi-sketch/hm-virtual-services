@@ -73,7 +73,7 @@ another device on the same Wi-Fi — handy for testing, but see the camera note 
 | **Dashboard** | Open orders, queue load, reorder list, inventory value. Deliberately light — more panels to come. |
 | **Orders** | Customer orders at retail or wholesale prices, promised vs projected ship date, one tap to send to the queue. |
 | **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. |
-| **Filament** | Colour library with per-spool tracking, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
+| **Filament** | Colour library with per-spool tracking, where each spool is, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
 | **Materials** | The same for magnets, hardware, packaging — anything bought by the pack. |
 | **Queue** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
 | **Settings** | Every rate, markup and turnaround figure the app calculates from, plus the Shopify connection, your password and backups. |
@@ -201,6 +201,34 @@ you can set a newer version in Settings without a code change.
 
 Pushing the other way — creating Shopify products from this catalog, and updating
 Shopify stock levels when a print finishes — is not built. Both are pulls only for now.
+
+---
+
+## Where spools are
+
+Every physical spool can be given a place: a shelf slot (`A1`–`A6`, `B1`–`B3` out of the
+box) or a bay in the printer (`AMS1`–`AMS4`). Both lists are editable in
+**Settings → Where filament lives**, so the shelf can grow without a code change.
+
+Location sits on the **spool**, not the colour — three blacks can be in `A3`, `B1` and
+`AMS2` at once, and you need to know which one to reach for.
+
+The everyday move looks like this: Beige is in `A1`, you are about to print with it, so
+you tap its `A1` chip, tap `AMS2`, and it is loaded. Chips are shown on the colour and on
+each spool; the ones in the printer are filled in, the ones on the shelf are not, so a
+glance tells you what is loaded.
+
+**Where things are** on the Filament tab opens the whole rack — every slot, what is in
+it, and how much is left on each spool. Scanning a spool also offers to move it, which
+is usually the quickest route with the spool already in your hand.
+
+A slot holds one spool. Moving into an occupied one names what is already there and
+offers to swap; the spool that comes out is left without a place so it cannot be
+silently lost. Moves are recorded in `stock_log`, so a spool's history shows where it has
+been as well as what has been used off it.
+
+If a slot is removed from Settings while something is still parked in it, that spool is
+listed separately under **Slots no longer on the list** rather than disappearing.
 
 ---
 

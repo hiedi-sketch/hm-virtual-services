@@ -5,6 +5,7 @@ import Modal from '../components/Modal';
 import printApi, { describeError, grams, money, shortDate } from '../api/print';
 import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard, StockBar, StockLegend } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
+import LocationPicker from '../components/LocationPicker';
 
 const MATERIAL_TYPES = ['PLA', 'PLA+', 'Silk PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'Nylon', 'PC', 'Wood Fill', 'Resin'];
 
@@ -29,6 +30,8 @@ export default function Filament() {
   const [label, setLabel] = useState(null);
   const [spoolTarget, setSpoolTarget] = useState(null);
   const [spoolForm, setSpoolForm] = useState({ count: 1, status: 'new', expected_at: '', order_reference: '' });
+  const [placing, setPlacing] = useState(null);
+  const [showRack, setShowRack] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -148,7 +151,8 @@ export default function Filament() {
           <h1 className="text-2xl font-bold text-primary">Filament</h1>
           <p className="text-sm text-gray-500">Every colour you stock, what is left, and what the queue will eat.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-secondary" onClick={() => setShowRack(true)}>Where things are</button>
           <button
             className="btn-secondary"
             onClick={() => scan({ title: 'Scan a spool', hint: 'Scan a spool tag to open it, or a shelf label to add stock' })}
@@ -203,6 +207,20 @@ export default function Filament() {
                   <p className="text-xs text-gray-500">
                     {f.brand} · {f.spool_size_kg}kg spools · {money(f.cost_per_kg)}/kg · <span className="font-mono">{f.sku}</span>
                   </p>
+                  {f.spools.some((s) => s.location) && (
+                    <p className="flex flex-wrap items-center gap-1 mt-1.5">
+                      {f.spools.filter((s) => s.location).map((s) => (
+                        <button
+                          key={s.id}
+                          onClick={() => setPlacing({ ...s, label: `${f.brand} ${f.color_name}` })}
+                          className={`badge font-mono ${s.location.startsWith('AMS') ? 'bg-primary text-white' : 'bg-linen text-primary'}`}
+                          title={`${s.spool_code} — tap to move`}
+                        >
+                          {s.location}
+                        </button>
+                      ))}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold text-primary leading-tight">{grams(f.grams_on_hand)}</p>
@@ -253,6 +271,16 @@ export default function Filament() {
                   {f.spools.map((s) => (
                     <div key={s.id} className="flex flex-wrap items-center gap-2 text-xs">
                       <span className="font-mono text-gray-600 w-24">{s.spool_code}</span>
+                      <button
+                        onClick={() => setPlacing({ ...s, label: `${f.brand} ${f.color_name}` })}
+                        className={`badge font-mono ${
+                          s.location
+                            ? s.location.startsWith('AMS') ? 'bg-primary text-white' : 'bg-linen text-primary'
+                            : 'bg-white text-silver border border-dashed border-silver'
+                        }`}
+                      >
+                        {s.location || 'no place'}
+                      </button>
                       <Pill tone={s.status === 'new' ? 'teal' : s.status === 'opened' ? 'blue' : s.status === 'ordered' ? 'violet' : 'gray'}>
                         {s.status}
                       </Pill>
@@ -394,6 +422,13 @@ export default function Filament() {
           </div>
         </form>
       </Modal>
+
+      <LocationPicker
+        open={!!placing || showRack}
+        spool={placing}
+        onClose={() => { setPlacing(null); setShowRack(false); }}
+        onMoved={() => { load(); refresh(); }}
+      />
 
       <LabelModal open={!!label} onClose={() => setLabel(null)} {...(label || {})} />
     </div>

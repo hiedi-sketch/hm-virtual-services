@@ -7,6 +7,7 @@ import printApi, { describeError, grams, money } from '../api/print';
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
 import { Field, Pill } from './ui';
 import UnknownCode from './UnknownCode';
+import LocationPicker from './LocationPicker';
 
 const ScanContext = createContext(null);
 
@@ -54,6 +55,7 @@ function ResultCard({ match }) {
           <p className="text-xs text-gray-600">
             Spool <span className="font-mono">{match.spool.spool_code}</span> — {match.spool.status}
             {match.spool.grams_remaining != null && ` · ${grams(match.spool.grams_remaining)} left`}
+            {match.spool.location ? ` · in ${match.spool.location}` : ' · no place yet'}
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
@@ -104,6 +106,7 @@ export function ScanProvider({ children, onStockChange }) {
   const [config, setConfig] = useState({});
   const [match, setMatch] = useState(null);
   const [unknown, setUnknown] = useState(null);
+  const [placing, setPlacing] = useState(null);
   const [quantity, setQuantity] = useState('1');
   const [busy, setBusy] = useState(false);
   const handlerRef = useRef(null);
@@ -179,6 +182,20 @@ export function ScanProvider({ children, onStockChange }) {
         </Suspense>
       )}
 
+      {placing && (
+        <LocationPicker
+          open
+          spool={placing}
+          onClose={() => setPlacing(null)}
+          onMoved={async () => {
+            setPlacing(null);
+            onStockChange?.();
+            // Keep the sheet showing the truth after the spool has moved.
+            try { setMatch(await printApi.scanLookup(match.code)); } catch { /* leave as is */ }
+          }}
+        />
+      )}
+
       {(match || unknown) && (
         <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
@@ -229,6 +246,18 @@ export function ScanProvider({ children, onStockChange }) {
                     className="input text-lg"
                   />
                 </Field>
+              )}
+
+              {match.type === 'filament_spool' && (
+                <button
+                  className="btn-secondary w-full !py-3"
+                  onClick={() => setPlacing({
+                    ...match.spool,
+                    label: `${match.filament.brand} ${match.filament.color_name}`,
+                  })}
+                >
+                  {match.spool.location ? `Move it out of ${match.spool.location}` : 'Give it a place on the rack'}
+                </button>
               )}
 
               <div className="grid grid-cols-2 gap-2">
