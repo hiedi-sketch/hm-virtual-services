@@ -16,5 +16,6 @@ router.use('/queue', require('./queue'));
 router.use('/scan', require('./scan'));
 router.use('/dashboard', require('./dashboard'));
 router.use('/backup', require('./backup'));
+router.use('/shopify', require('./shopify'));
 
 module.exports = router;

@@ -76,7 +76,7 @@ another device on the same Wi-Fi — handy for testing, but see the camera note 
 | **Filament** | Colour library with per-spool tracking, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
 | **Materials** | The same for magnets, hardware, packaging — anything bought by the pack. |
 | **Queue** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
-| **Settings** | Every rate, markup and turnaround figure the app calculates from. |
+| **Settings** | Every rate, markup and turnaround figure the app calculates from, plus the Shopify connection, your password and backups. |
 
 ---
 
@@ -139,6 +139,68 @@ actually hit given what is already queued.
   Without that, scanning a familiar spool would quietly create a duplicate. One code can
   only ever point at one thing.
 - The decoding library is lazy-loaded, so it is only downloaded when a scan starts.
+
+---
+
+## Shopify
+
+Connect a store from **Settings → Shopify** and pull products and orders in from it.
+
+### Connecting
+
+In your Shopify admin: **Settings → Apps and sales channels → Develop apps**, create an
+app, give it the `read_products` and `read_orders` scopes, install it, and copy the
+Admin API access token. Paste that and your store address into Settings here.
+
+The token is encrypted before it is stored and is never sent back to the browser — the
+settings page only ever shows the first and last few characters. Encryption is keyed on
+`SECRETS_KEY` if set, otherwise derived from `JWT_SECRET`; rotate `JWT_SECRET` and the
+token has to be entered again. `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ACCESS_TOKEN`
+environment variables take priority over anything stored, if you would rather keep the
+credentials in Render.
+
+**Test connection** confirms the token works and names the shop it belongs to.
+
+### Pulling products
+
+Matched on SKU, and deliberately additive:
+
+- A Shopify variant whose SKU already exists here **keeps its local name, prices and
+  recipe** and only gains the Shopify link. Nothing you have costed is overwritten.
+- A variant with no match is created as a product with its SKU, barcode and Shopify
+  price as its retail override, and no recipe — add filament, materials and print time
+  to make costing work.
+- A variant with **no SKU in Shopify** is skipped and reported. Give it a SKU in Shopify
+  and pull again.
+
+Running it twice changes nothing the second time.
+
+### Pulling orders
+
+Orders arrive with status **New**. Nothing is queued automatically — you look at an
+order and press *Send to queue* yourself, so no order reaches a printer unseen.
+
+Line items match to catalog items by Shopify variant, then by SKU. A line that matches
+nothing is still recorded on the order as text, so the order total is right, but it
+cannot be queued until some catalog item carries that SKU. Those lines are listed after
+every sync.
+
+The first pull takes the last 30 days; after that each run picks up from the end of the
+last successful one. Orders already brought in are skipped rather than duplicated.
+
+Note that a Shopify app only sees the last 60 days of orders unless it has been granted
+`read_all_orders`.
+
+### API version
+
+Shopify retires API versions on a rolling schedule. The default is set in
+`server/utils/shopify.js`; if Shopify starts refusing it, the sync says so plainly and
+you can set a newer version in Settings without a code change.
+
+### Not done yet
+
+Pushing the other way — creating Shopify products from this catalog, and updating
+Shopify stock levels when a print finishes — is not built. Both are pulls only for now.
 
 ---
 
@@ -302,7 +364,9 @@ print-shop/
 │   ├── db/schema.js          Every table, created on start; seeds settings + first account
 │   ├── middleware/auth.js    JWT check
 │   ├── routes/               auth, settings, filaments, materials, catalog, orders,
-│   │                         queue, scan, dashboard, backup
+│   │                         queue, scan, dashboard, backup, shopify
+│   ├── services/
+│   │   └── shopify-sync.js   Pulling products and orders in from Shopify
 │   └── utils/
 │       ├── costing.js        Recursive cost roll-up and price suggestions
 │       ├── picklist.js       What to gather for a job, and which spools to pull

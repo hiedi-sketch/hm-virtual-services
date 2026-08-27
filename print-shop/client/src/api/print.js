@@ -25,6 +25,13 @@ export const printApi = {
   },
 
   getSettings: () => unwrap(api.get('/settings')),
+
+  shopify: () => unwrap(api.get('/shopify')),
+  saveShopify: (body) => unwrap(api.put('/shopify', body)),
+  disconnectShopify: () => unwrap(api.delete('/shopify')),
+  testShopify: () => api.post('/shopify/test').then((r) => r.data),
+  pullShopifyProducts: (body) => api.post('/shopify/pull/products', body || {}).then((r) => r.data),
+  pullShopifyOrders: (body) => api.post('/shopify/pull/orders', body || {}).then((r) => r.data),
   saveSettings: (body) => unwrap(api.put('/settings', body)),
 
   filaments: (params) => unwrap(api.get('/filaments', { params })),

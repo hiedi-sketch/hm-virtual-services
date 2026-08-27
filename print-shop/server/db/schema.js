@@ -189,6 +189,25 @@ function createSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Third-party settings and credentials. Kept out of the general settings
+    -- table because that one is returned wholesale to the browser.
+    CREATE TABLE IF NOT EXISTS integrations (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      provider TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      ok INTEGER NOT NULL DEFAULT 0,
+      summary TEXT,
+      error TEXT,
+      started_at DATETIME,
+      finished_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS stock_log (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       entity_type TEXT NOT NULL CHECK(entity_type IN ('filament','material','item')),
@@ -238,9 +257,25 @@ function createSchema() {
   const alterations = [
     'ALTER TABLE items ADD COLUMN lead_time_days INTEGER DEFAULT 0',
     'ALTER TABLE orders ADD COLUMN shipping_total REAL DEFAULT 0',
+    // Shopify links. Kept as text: Shopify ids are GIDs, not numbers.
+    'ALTER TABLE items ADD COLUMN shopify_product_id TEXT',
+    'ALTER TABLE items ADD COLUMN shopify_variant_id TEXT',
+    'ALTER TABLE items ADD COLUMN shopify_inventory_item_id TEXT',
+    'ALTER TABLE orders ADD COLUMN shopify_order_id TEXT',
+    'ALTER TABLE order_items ADD COLUMN shopify_line_item_id TEXT',
+    // What a print run is for, which decides where the finished units go.
+    "ALTER TABLE queue_jobs ADD COLUMN purpose TEXT DEFAULT NULL",
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
+  }
+
+  // Indexes over the columns added above, once they are guaranteed to exist.
+  for (const sql of [
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_shopify ON orders(shopify_order_id) WHERE shopify_order_id IS NOT NULL',
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_items_shopify_variant ON items(shopify_variant_id) WHERE shopify_variant_id IS NOT NULL',
+  ]) {
+    try { db.exec(sql); } catch { /* index already there */ }
   }
 
   // First boot on a fresh database creates the single shop account.

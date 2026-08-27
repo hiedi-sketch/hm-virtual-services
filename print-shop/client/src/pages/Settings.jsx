@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import printApi, { describeError, money } from '../api/print';
 import { Field, LoadError } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
+import ShopifyCard from '../components/ShopifyCard';
 
 const GROUPS = [
   {
@@ -225,6 +226,7 @@ export default function PrintSettings() {
         </div>
       </form>
 
+      <ShopifyCard />
       <AccountCard />
       <BackupCard />
     </div>
