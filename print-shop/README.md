@@ -129,7 +129,13 @@ actually hit given what is already queued.
   so it prints crisply at any size with no image assets.
 - **Scan** is on every tab. It opens the camera, and the same dialog keeps a focused
   text box so a USB or Bluetooth wedge scanner — or typing — works identically.
-- Scanning resolves to receive / open / weigh / count actions on the spot.
+- Scanning a filament — its shelf label, its vendor barcode, or one spool's own tag —
+  offers the three things you do with a spool in your hand:
+  - **Receiving** — how many spools, and where they go, in one step.
+  - **Open one** — takes a sealed spool and marks it opened.
+  - **Move** — pick which spool (skipped when a spool's own tag was scanned), then pick
+    where it is going. This is the `A1` → `AMS2` move you make before every print.
+- Materials and catalog items keep the plain receive / use / count actions.
 - Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
   scanning a box you just opened finds the right record.
 - **Scanning something the shop has never seen** offers to add it there and then — a
@@ -210,8 +216,20 @@ Every physical spool can be given a place: a shelf slot (`A1`–`A6`, `B1`–`B3
 box) or a bay in the printer (`AMS1`–`AMS4`). Both lists are editable in
 **Settings → Where filament lives**, so the shelf can grow without a code change.
 
+The two kinds behave differently, because the shelf and the printer do:
+
+- **An AMS bay holds one spool.** Moving into a loaded bay names what is in it and offers
+  to swap; the spool that comes out is left without a place so it shows up as needing
+  one. This is enforced in the database, not just the screen.
+- **A shelf slot holds as many as fit.** Four blacks can sit in `B2` together, and moving
+  another one in asks nothing.
+
 Location sits on the **spool**, not the colour — three blacks can be in `A3`, `B1` and
 `AMS2` at once, and you need to know which one to reach for.
+
+A place can be set when the filament is first added ("where they go" on the add form,
+which puts the whole batch on a shelf slot), when more spools are received, and per
+spool from the edit form.
 
 The everyday move looks like this: Beige is in `A1`, you are about to print with it, so
 you tap its `A1` chip, tap `AMS2`, and it is loaded. Chips are shown on the colour and on
@@ -219,13 +237,10 @@ each spool; the ones in the printer are filled in, the ones on the shelf are not
 glance tells you what is loaded.
 
 **Where things are** on the Filament tab opens the whole rack — every slot, what is in
-it, and how much is left on each spool. Scanning a spool also offers to move it, which
-is usually the quickest route with the spool already in your hand.
+it, and how much is left on each spool.
 
-A slot holds one spool. Moving into an occupied one names what is already there and
-offers to swap; the spool that comes out is left without a place so it cannot be
-silently lost. Moves are recorded in `stock_log`, so a spool's history shows where it has
-been as well as what has been used off it.
+Moves are recorded in `stock_log`, so a spool's history shows where it has been as well
+as what has been used off it.
 
 If a slot is removed from Settings while something is still parked in it, that spool is
 listed separately under **Slots no longer on the list** rather than disappearing.

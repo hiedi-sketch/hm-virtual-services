@@ -2,10 +2,36 @@ const express = require('express');
 const db = require('../db/database');
 const { nextSku, nextSpoolCode, defaultBarcode } = require('../utils/sku');
 const { filamentSummary } = require('../utils/planning');
-const { locationLists, occupancy, normalise, isKnown } = require('../utils/locations');
+const { locationLists, occupancy, normalise, isKnown, kindOf } = require('../utils/locations');
 const { logStock, logEvent } = require('./helpers');
 
 const router = express.Router();
+
+/**
+ * Put newly created spools somewhere. A shelf slot takes the lot; an AMS bay
+ * takes one, so the rest are left unplaced rather than pretending they fit.
+ */
+function placeNewSpools(spoolIds, rawLocation) {
+  const location = normalise(rawLocation);
+  if (!location || !isKnown(location) || !spoolIds.length) return { placed: 0, location: null };
+
+  const kind = kindOf(location);
+  const ids = kind === 'ams' ? spoolIds.slice(0, 1) : spoolIds;
+
+  if (kind === 'ams') {
+    // Whatever was loaded comes out; it cannot be in two places.
+    db.prepare(
+      "UPDATE filament_spools SET location = NULL, location_kind = NULL WHERE location = ? AND location_kind = 'ams'"
+    ).run(location);
+  }
+
+  const update = db.prepare(
+    'UPDATE filament_spools SET location = ?, location_kind = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  );
+  for (const id of ids) update.run(location, kind, id);
+
+  return { placed: ids.length, location, kind, left_over: spoolIds.length - ids.length };
+}
 
 router.get('/', (req, res) => {
   const list = filamentSummary();
@@ -53,12 +79,14 @@ router.post('/', (req, res) => {
     ).lastInsertRowid;
 
     const count = Number(initial_spools) || 0;
+    const createdSpools = [];
     for (let i = 0; i < count; i += 1) {
-      db.prepare(`
+      createdSpools.push(db.prepare(`
         INSERT INTO filament_spools (filament_id, status, spool_code, purchase_cost, purchased_at)
         VALUES (?, ?, ?, ?, DATE('now'))
-      `).run(id, initial_status, nextSpoolCode(), (cost_per_kg || 0) * (spool_size_kg || 1));
+      `).run(id, initial_status, nextSpoolCode(), (cost_per_kg || 0) * (spool_size_kg || 1)).lastInsertRowid);
     }
+    if (initial_status !== 'ordered') placeNewSpools(createdSpools, req.body.location);
     return id;
   });
 
@@ -124,8 +152,9 @@ router.post('/:id/spools', (req, res) => {
   const cost = purchase_cost != null ? purchase_cost : (filament.cost_per_kg || 0) * (filament.spool_size_kg || 1);
 
   const add = db.transaction(() => {
+    const createdSpools = [];
     for (let i = 0; i < qty; i += 1) {
-      db.prepare(`
+      createdSpools.push(db.prepare(`
         INSERT INTO filament_spools
           (filament_id, status, spool_code, grams_remaining, purchase_cost,
            purchased_at, opened_at, expected_at, order_reference, notes)
@@ -137,8 +166,9 @@ router.post('/:id/spools', (req, res) => {
         purchased_at || (status === 'ordered' ? null : new Date().toISOString().slice(0, 10)),
         status === 'opened' ? new Date().toISOString().slice(0, 10) : null,
         expected_at || null, order_reference || null, notes || null
-      );
+      ).lastInsertRowid);
     }
+    if (status !== 'ordered') placeNewSpools(createdSpools, req.body.location);
     logStock('filament', filament.id, qty * (filament.spool_size_kg || 1) * 1000, 'g',
       status === 'ordered' ? 'spools ordered' : 'spools received', order_reference);
   });
@@ -187,9 +217,9 @@ router.put('/spools/:spoolId', (req, res) => {
 });
 
 /**
- * Put a spool somewhere — a shelf slot or an AMS bay. One spool per slot, so
- * moving into an occupied one says what is already there; sending swap turns
- * the occupant out first, which is exactly what changing an AMS bay is.
+ * Put a spool somewhere. An AMS bay physically takes one spool, so moving into
+ * an occupied one says what is loaded and offers to swap. A shelf slot is just
+ * a shelf — several spools can sit in it, and nothing needs turning out.
  */
 router.put('/spools/:spoolId/location', (req, res) => {
   const spool = db.prepare('SELECT * FROM filament_spools WHERE id = ?').get(req.params.spoolId);
@@ -204,16 +234,20 @@ router.put('/spools/:spoolId/location', (req, res) => {
     return res.json({ data: filament, message: 'Already there' });
   }
 
+  const kind = location ? kindOf(location) : null;
   let displaced = null;
-  if (location) {
-    const occupant = db.prepare(
-      'SELECT s.*, f.color_name, f.brand FROM filament_spools s JOIN filaments f ON f.id = s.filament_id WHERE s.location = ?'
-    ).get(location);
 
-    if (occupant && occupant.id !== spool.id) {
+  if (kind === 'ams') {
+    const occupant = db.prepare(`
+      SELECT s.*, f.color_name, f.brand FROM filament_spools s
+        JOIN filaments f ON f.id = s.filament_id
+       WHERE s.location = ? AND s.location_kind = 'ams' AND s.id <> ?
+    `).get(location, spool.id);
+
+    if (occupant) {
       if (!req.body.swap) {
         return res.status(409).json({
-          error: `${location} already holds ${occupant.brand} ${occupant.color_name} (${occupant.spool_code})`,
+          error: `${location} is loaded with ${occupant.brand} ${occupant.color_name} (${occupant.spool_code})`,
           occupied_by: {
             spool_id: occupant.id,
             spool_code: occupant.spool_code,
@@ -227,11 +261,13 @@ router.put('/spools/:spoolId/location', (req, res) => {
 
   const move = db.transaction(() => {
     if (displaced) {
-      db.prepare('UPDATE filament_spools SET location = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .run(displaced.id);
+      db.prepare(
+        'UPDATE filament_spools SET location = NULL, location_kind = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+      ).run(displaced.id);
     }
-    db.prepare('UPDATE filament_spools SET location = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run(location, spool.id);
+    db.prepare(
+      'UPDATE filament_spools SET location = ?, location_kind = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run(location, kind, spool.id);
     logEvent('filament', spool.filament_id,
       `moved ${spool.location || 'nowhere'} → ${location || 'nowhere'}`, spool.spool_code);
   });

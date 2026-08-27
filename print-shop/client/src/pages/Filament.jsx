@@ -9,11 +9,29 @@ import LocationPicker from '../components/LocationPicker';
 
 const MATERIAL_TYPES = ['PLA', 'PLA+', 'Silk PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'Nylon', 'PC', 'Wood Fill', 'Resin'];
 
+function LocationSelect({ slots, value, onChange }) {
+  return (
+    <select className="input" value={value || ''} onChange={(e) => onChange(e.target.value)}>
+      <option value="">No place yet</option>
+      {slots.ams?.length > 0 && (
+        <optgroup label="In the printer">
+          {slots.ams.map((code) => <option key={code} value={code}>{code}</option>)}
+        </optgroup>
+      )}
+      {slots.shelf?.length > 0 && (
+        <optgroup label="On the shelf">
+          {slots.shelf.map((code) => <option key={code} value={code}>{code}</option>)}
+        </optgroup>
+      )}
+    </select>
+  );
+}
+
 const BLANK = {
   color_name: '', brand: '', material_type: 'PLA', color_hex: '#2B7A8B',
   spool_size_kg: 1, cost_per_kg: '', reorder_point_spools: 1,
   vendor_name: '', vendor_url: '', vendor_sku: '', vendor_barcode: '',
-  notes: '', initial_spools: 0,
+  notes: '', initial_spools: 0, location: '',
 };
 
 export default function Filament() {
@@ -29,9 +47,10 @@ export default function Filament() {
   const [saving, setSaving] = useState(false);
   const [label, setLabel] = useState(null);
   const [spoolTarget, setSpoolTarget] = useState(null);
-  const [spoolForm, setSpoolForm] = useState({ count: 1, status: 'new', expected_at: '', order_reference: '' });
+  const [spoolForm, setSpoolForm] = useState({ count: 1, status: 'new', expected_at: '', order_reference: '', location: '' });
   const [placing, setPlacing] = useState(null);
   const [showRack, setShowRack] = useState(false);
+  const [slots, setSlots] = useState({ shelf: [], ams: [] });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -48,6 +67,13 @@ export default function Filament() {
   }, []);
 
   useEffect(() => { load(); }, [load, refreshKey]);
+
+  // The slot lists are editable in Settings, so read them rather than assume.
+  useEffect(() => {
+    printApi.spoolLocations()
+      .then((rack) => setSlots(rack.lists))
+      .catch(() => { /* the picker will report it if it matters */ });
+  }, [refreshKey]);
 
   function openNew() {
     setForm(BLANK);
@@ -104,11 +130,39 @@ export default function Filament() {
       });
       toast.success(spoolForm.status === 'ordered' ? 'Order logged' : 'Spools added');
       setSpoolTarget(null);
-      setSpoolForm({ count: 1, status: 'new', expected_at: '', order_reference: '' });
+      setSpoolForm({ count: 1, status: 'new', expected_at: '', order_reference: '', location: '' });
       load();
       refresh();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not add those spools');
+    }
+  }
+
+  async function moveSpoolTo(spool, location) {
+    try {
+      const response = await printApi.moveSpool(spool.id, location || null);
+      toast.success(response.message);
+      setForm((f) => ({
+        ...f,
+        spools: (f.spools || []).map((sp) => (sp.id === spool.id ? { ...sp, location: location || null } : sp)),
+      }));
+      load();
+      refresh();
+    } catch (err) {
+      const occupant = err.response?.data?.occupied_by;
+      if (err.response?.status === 409 && occupant
+          && window.confirm(`${location} is loaded with ${occupant.label}. Take that one out and load this instead?`)) {
+        const response = await printApi.moveSpool(spool.id, location, true);
+        toast.success(response.message);
+        setForm((f) => ({
+          ...f,
+          spools: (f.spools || []).map((sp) => (sp.id === spool.id ? { ...sp, location } : sp)),
+        }));
+        load();
+        refresh();
+        return;
+      }
+      toast.error(describeError(err, 'Could not move that spool'));
     }
   }
 
@@ -353,9 +407,19 @@ export default function Filament() {
               <input type="number" step="0.25" className="input" value={form.reorder_point_spools} onChange={(e) => setForm({ ...form, reorder_point_spools: e.target.value })} />
             </Field>
             {editing === 'new' && (
-              <Field label="Spools on hand now">
-                <input type="number" className="input" value={form.initial_spools} onChange={(e) => setForm({ ...form, initial_spools: e.target.value })} />
-              </Field>
+              <>
+                <Field label="Spools on hand now">
+                  <input type="number" className="input" value={form.initial_spools} onChange={(e) => setForm({ ...form, initial_spools: e.target.value })} />
+                </Field>
+                <Field
+                  label="Where they go"
+                  hint={form.location.startsWith('AMS') && Number(form.initial_spools) > 1
+                    ? 'An AMS bay holds one — the rest are left without a place.'
+                    : 'A shelf slot holds as many as you like.'}
+                >
+                  <LocationSelect slots={slots} value={form.location} onChange={(v) => setForm({ ...form, location: v })} />
+                </Field>
+              </>
             )}
             <Field label="Vendor">
               <input className="input" value={form.vendor_name || ''} onChange={(e) => setForm({ ...form, vendor_name: e.target.value })} />
@@ -381,6 +445,25 @@ export default function Filament() {
               </Field>
             )}
           </div>
+          {editing !== 'new' && form.spools?.length > 0 && (
+            <div className="border border-linen rounded-xl p-4 space-y-2">
+              <p className="font-bold text-primary text-sm">Where its spools are</p>
+              {form.spools.filter((sp) => sp.status !== 'empty').map((sp) => (
+                <div key={sp.id} className="grid grid-cols-12 gap-2 items-center">
+                  <span className="col-span-5 font-mono text-xs text-gray-600">{sp.spool_code}</span>
+                  <span className="col-span-7">
+                    <LocationSelect
+                      slots={slots}
+                      value={sp.location || ''}
+                      onChange={(v) => moveSpoolTo(sp, v)}
+                    />
+                  </span>
+                </div>
+              ))}
+              <p className="text-[11px] text-gray-400">Changing one moves it straight away.</p>
+            </div>
+          )}
+
           <Field label="Notes">
             <textarea className="input" rows={2} value={form.notes || ''} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
@@ -405,6 +488,11 @@ export default function Filament() {
                 <option value="ordered">Ordered — on its way</option>
               </select>
             </Field>
+            {spoolForm.status !== 'ordered' && (
+              <Field label="Where they go" className="col-span-2">
+                <LocationSelect slots={slots} value={spoolForm.location} onChange={(v) => setSpoolForm({ ...spoolForm, location: v })} />
+              </Field>
+            )}
             {spoolForm.status === 'ordered' && (
               <>
                 <Field label="Expected">

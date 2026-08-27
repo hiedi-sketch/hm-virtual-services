@@ -270,15 +270,28 @@ function createSchema() {
     "ALTER TABLE queue_jobs ADD COLUMN purpose TEXT DEFAULT NULL",
     // Where this physical spool is right now: a shelf slot or an AMS slot.
     'ALTER TABLE filament_spools ADD COLUMN location TEXT DEFAULT NULL',
+    // Which kind of place that is. An AMS bay takes one spool; a shelf slot
+    // takes as many as fit, so the exclusivity rule needs to know which.
+    "ALTER TABLE filament_spools ADD COLUMN location_kind TEXT DEFAULT NULL",
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
   }
 
   // Indexes over the columns added above, once they are guaranteed to exist.
+  // Spools placed before shelves could hold more than one need a kind.
+  try {
+    db.prepare(`
+      UPDATE filament_spools
+         SET location_kind = CASE WHEN location LIKE 'AMS%' THEN 'ams' ELSE 'shelf' END
+       WHERE location IS NOT NULL AND location_kind IS NULL
+    `).run();
+  } catch { /* column not there yet on a brand new database */ }
+
   for (const sql of [
-    // One spool per slot: a cubby and an AMS bay each hold exactly one.
-    'CREATE UNIQUE INDEX IF NOT EXISTS idx_spool_location ON filament_spools(location) WHERE location IS NOT NULL',
+    // Exclusivity applies to AMS bays only — a shelf slot holds a stack.
+    'DROP INDEX IF EXISTS idx_spool_location',
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_spool_ams_bay ON filament_spools(location) WHERE location_kind = 'ams' AND location IS NOT NULL",
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_shopify ON orders(shopify_order_id) WHERE shopify_order_id IS NOT NULL',
     'CREATE UNIQUE INDEX IF NOT EXISTS idx_items_shopify_variant ON items(shopify_variant_id) WHERE shopify_variant_id IS NOT NULL',
   ]) {

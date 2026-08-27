@@ -8,22 +8,13 @@ const BarcodeScanner = lazy(() => import('./BarcodeScanner'));
 import { Field, Pill } from './ui';
 import UnknownCode from './UnknownCode';
 import LocationPicker from './LocationPicker';
+import ScanFilamentActions from './ScanFilamentActions';
 
 const ScanContext = createContext(null);
 
 export const useScanner = () => useContext(ScanContext);
 
 const ACTIONS = {
-  filament: [
-    { key: 'receive', label: 'Add spools', qtyLabel: 'Spools', defaultQty: 1 },
-    { key: 'open', label: 'Mark one opened', qtyLabel: null },
-  ],
-  filament_spool: [
-    { key: 'open', label: 'Mark opened', qtyLabel: null },
-    { key: 'count', label: 'Set grams left', qtyLabel: 'Grams remaining', defaultQty: 500 },
-    { key: 'consume', label: 'Log grams used', qtyLabel: 'Grams used', defaultQty: 50 },
-    { key: 'empty', label: 'Mark empty', qtyLabel: null },
-  ],
   material: [
     { key: 'receive', label: 'Receive', qtyLabel: 'Quantity', defaultQty: 1 },
     { key: 'consume', label: 'Use', qtyLabel: 'Quantity', defaultQty: 1 },
@@ -165,6 +156,7 @@ export function ScanProvider({ children, onStockChange }) {
 
   const value = useMemo(() => ({ scan }), [scan]);
   const actions = match ? ACTIONS[match.type] || [] : [];
+  const isFilament = match?.type === 'filament' || match?.type === 'filament_spool';
 
   return (
     <ScanContext.Provider value={value}>
@@ -236,6 +228,18 @@ export function ScanProvider({ children, onStockChange }) {
               <>
               <ResultCard match={match} />
 
+              {isFilament ? (
+                <ScanFilamentActions
+                  match={match}
+                  onChanged={async () => {
+                    onStockChange?.();
+                    try { setMatch(await printApi.scanLookup(match.code)); } catch { /* keep what we have */ }
+                  }}
+                  onDone={() => setMatch(null)}
+                />
+              ) : (
+              <>
+
               {actions.some((a) => a.qtyLabel) && (
                 <Field label="Quantity">
                   <input
@@ -246,18 +250,6 @@ export function ScanProvider({ children, onStockChange }) {
                     className="input text-lg"
                   />
                 </Field>
-              )}
-
-              {match.type === 'filament_spool' && (
-                <button
-                  className="btn-secondary w-full !py-3"
-                  onClick={() => setPlacing({
-                    ...match.spool,
-                    label: `${match.filament.brand} ${match.filament.color_name}`,
-                  })}
-                >
-                  {match.spool.location ? `Move it out of ${match.spool.location}` : 'Give it a place on the rack'}
-                </button>
               )}
 
               <div className="grid grid-cols-2 gap-2">
@@ -282,6 +274,8 @@ export function ScanProvider({ children, onStockChange }) {
                 </button>
                 <button onClick={() => setMatch(null)} className="btn-ghost">Done</button>
               </div>
+              </>
+              )}
               </>
               )}
             </div>

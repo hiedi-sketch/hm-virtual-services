@@ -37,6 +37,16 @@ function isKnown(location) {
   return allLocations().includes(normalise(location));
 }
 
+/** 'ams' for a printer bay, 'shelf' for a shelf slot, null if unrecognised. */
+function kindOf(location) {
+  const code = normalise(location);
+  if (!code) return null;
+  const { shelf, ams } = locationLists();
+  if (ams.includes(code)) return 'ams';
+  if (shelf.includes(code)) return 'shelf';
+  return null;
+}
+
 /** Every slot with whatever is sitting in it — the rack at a glance. */
 function occupancy() {
   const { shelf, ams } = locationLists();
@@ -48,27 +58,30 @@ function occupancy() {
      WHERE s.location IS NOT NULL
   `).all();
 
-  const byLocation = new Map(spools.map((s) => [s.location, s]));
-  const describe = (code, kind) => {
-    const spool = byLocation.get(code);
-    return {
-      code,
-      kind,
-      spool: spool
-        ? {
-            id: spool.id,
-            spool_code: spool.spool_code,
-            status: spool.status,
-            filament_id: spool.filament_id,
-            label: `${spool.brand} ${spool.material_type} — ${spool.color_name}`,
-            color_hex: spool.color_hex,
-            grams_remaining: spool.grams_remaining != null
-              ? spool.grams_remaining
-              : (spool.status === 'new' ? (spool.spool_size_kg || 1) * 1000 : 0),
-          }
-        : null,
-    };
-  };
+  // A shelf slot can hold a stack; an AMS bay holds one. Both come back as a
+  // list so the two read the same way, with capacity saying which is which.
+  const byLocation = new Map();
+  for (const spool of spools) {
+    if (!byLocation.has(spool.location)) byLocation.set(spool.location, []);
+    byLocation.get(spool.location).push({
+      id: spool.id,
+      spool_code: spool.spool_code,
+      status: spool.status,
+      filament_id: spool.filament_id,
+      label: `${spool.brand} ${spool.material_type} — ${spool.color_name}`,
+      color_hex: spool.color_hex,
+      grams_remaining: spool.grams_remaining != null
+        ? spool.grams_remaining
+        : (spool.status === 'new' ? (spool.spool_size_kg || 1) * 1000 : 0),
+    });
+  }
+
+  const describe = (code, kind) => ({
+    code,
+    kind,
+    capacity: kind === 'ams' ? 1 : null,
+    spools: byLocation.get(code) || [],
+  });
 
   // A spool parked somewhere no longer on the list still has to be findable.
   const known = new Set([...shelf, ...ams]);
@@ -87,4 +100,7 @@ function occupancy() {
   };
 }
 
-module.exports = { locationLists, allLocations, normalise, isKnown, occupancy, DEFAULT_SHELF, DEFAULT_AMS };
+module.exports = {
+  locationLists, allLocations, normalise, isKnown, kindOf, occupancy,
+  DEFAULT_SHELF, DEFAULT_AMS,
+};
