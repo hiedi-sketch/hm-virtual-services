@@ -231,12 +231,50 @@ function computeItemPricing(item, cost, settings = getSettings()) {
 }
 
 /** Cost + pricing for one item, ready to hand to the UI. */
+/** The places this shop sells, in the order they should be shown. */
+function salesChannels() {
+  const raw = db.prepare("SELECT value FROM settings WHERE key = 'sales_channels'").get()?.value;
+  return String(raw ?? 'Shopify,Faire,Etsy,Amazon')
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean);
+}
+
+/**
+ * What an item makes on each channel. Channels with no price set still appear,
+ * so the gap is visible rather than absent.
+ */
+function channelPricing(itemId, unitCost) {
+  const stored = new Map(
+    db.prepare('SELECT channel, price FROM item_channel_prices WHERE item_id = ?').all(itemId)
+      .map((r) => [r.channel, r.price])
+  );
+
+  return salesChannels().map((channel) => {
+    const price = stored.get(channel);
+    const set = price != null;
+    return {
+      channel,
+      price: set ? round2(price) : null,
+      profit: set ? round2(price - unitCost) : null,
+      margin_percent: set && price > 0 ? round2(((price - unitCost) / price) * 100) : null,
+      below_cost: set ? price < unitCost : false,
+    };
+  });
+}
+
 function priceItem(itemId, settings = getSettings()) {
   const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId);
   if (!item) return null;
   const breakdown = computeItemCost(itemId, settings);
   const pricing = computeItemPricing(item, breakdown.total_cost, settings);
-  return { ...item, cost_breakdown: breakdown, unit_cost: breakdown.total_cost, ...pricing };
+  return {
+    ...item,
+    cost_breakdown: breakdown,
+    unit_cost: breakdown.total_cost,
+    ...pricing,
+    channel_prices: channelPricing(itemId, breakdown.total_cost),
+  };
 }
 
 /**
@@ -290,6 +328,8 @@ function materialDemandForItem(itemId, seen = new Set()) {
 
 module.exports = {
   getSettings,
+  salesChannels,
+  channelPricing,
   computeItemCost,
   previewItemCost,
   computeItemPricing,

@@ -128,6 +128,17 @@ function createSchema() {
       notes TEXT
     );
 
+    -- What a product sells for on each place you sell it. A table rather than
+    -- columns so a new marketplace is a settings change, not a migration.
+    CREATE TABLE IF NOT EXISTS item_channel_prices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      channel TEXT NOT NULL,
+      price REAL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(item_id, channel)
+    );
+
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_number TEXT UNIQUE NOT NULL,
@@ -250,6 +261,7 @@ function createSchema() {
     ['finishing_days', '1'],
     ['printer_count', '1'],
     // Where spools live. Editable, because shelves grow.
+    ['sales_channels', 'Shopify,Faire,Etsy,Amazon'],
     ['shelf_locations', 'A1,A2,A3,A4,A5,A6,B1,B2,B3'],
     ['ams_slots', 'AMS1,AMS2,AMS3,AMS4'],
   ];

@@ -102,7 +102,24 @@ suggested retail    = suggested wholesale × retail multiplier   rounded up
 ```
 
 Any item can override its cost, wholesale or retail individually. Everything else
-recalculates the moment a rate changes in Settings. The item editor previews the same
+recalculates the moment a rate changes in Settings.
+
+### What it actually sells for
+
+Those three figures are what an item *should* fetch. Underneath them, each product also
+carries the price you really charge on each place you sell — Shopify, Faire, Etsy and
+Amazon out of the box, editable in **Settings → sales channels**, so a new marketplace
+is a settings change rather than a migration.
+
+Each one shows the profit and margin it leaves against the unit cost, and a price below
+what the item costs to make is called out in red on the form and on the catalog card. A
+channel with no price set still appears, so the gap is visible rather than absent.
+
+Margins here are against the unit cost only — before that channel takes its own cut, so
+the real figure is lower than the one shown. Clearing a box removes that channel's price
+rather than storing a zero.
+
+Pulling a new product in from Shopify records its Shopify price as that channel's price. The item editor previews the same
 server-side calculation as you type, so what you see is what gets saved.
 
 An item's bill of materials can reference another catalog item, and those are costed

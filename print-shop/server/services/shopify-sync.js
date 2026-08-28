@@ -145,7 +145,7 @@ async function pullProducts({ dryRun = false } = {}) {
 
         if (!dryRun) {
           try {
-            db.prepare(`
+            const newId = db.prepare(`
               INSERT INTO items
                 (name, item_type, sku, barcode, retail_override, qty_on_hand, is_active,
                  shopify_product_id, shopify_variant_id, shopify_inventory_item_id, notes)
@@ -156,7 +156,16 @@ async function pullProducts({ dryRun = false } = {}) {
               linkFields.shopify_product_id, linkFields.shopify_variant_id,
               linkFields.shopify_inventory_item_id,
               'Pulled from Shopify. Add its filament, materials and print time to get costing.'
-            );
+            ).lastInsertRowid;
+
+            // Shopify's own price is exactly what the Shopify channel means.
+            if (price) {
+              db.prepare(`
+                INSERT INTO item_channel_prices (item_id, channel, price)
+                VALUES (?, 'Shopify', ?)
+                ON CONFLICT(item_id, channel) DO NOTHING
+              `).run(newId, price);
+            }
           } catch (err) {
             result.skipped.push({ name: label, reason: String(err.message).includes('UNIQUE') ? 'SKU or barcode already used here' : err.message });
             continue;

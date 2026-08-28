@@ -22,7 +22,7 @@ const BLANK = {
   qty_on_hand: 0, reorder_point: 0, purchase_cost: '',
   cost_override: '', wholesale_override: '', retail_override: '',
   vendor_name: '', vendor_url: '', sku: '', barcode: '', notes: '',
-  components: [],
+  components: [], channel_prices: {},
 };
 
 const QTY_UNIT = { filament: 'grams', material: 'units', item: 'each' };
@@ -32,7 +32,7 @@ export default function Catalog() {
   const { scan } = useScanner();
 
   const [items, setItems] = useState([]);
-  const [options, setOptions] = useState({ filaments: [], materials: [], items: [] });
+  const [options, setOptions] = useState({ filaments: [], materials: [], items: [], channels: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -88,7 +88,7 @@ export default function Catalog() {
   }, [items, typeFilter, search]);
 
   function openNew() {
-    setForm(BLANK);
+    setForm({ ...BLANK, channel_prices: {} });
     setPreview(null);
     setEditing('new');
   }
@@ -108,6 +108,9 @@ export default function Catalog() {
         components: (full.components || []).map((c) => ({
           component_type: c.component_type, ref_id: c.ref_id, quantity: c.quantity,
         })),
+        channel_prices: Object.fromEntries(
+          (full.channel_prices || []).filter((c) => c.price != null).map((c) => [c.channel, c.price])
+        ),
       });
       setEditing(item.id);
     } catch (err) {
@@ -306,6 +309,20 @@ export default function Catalog() {
                 </div>
               )}
 
+              {i.item_type !== 'tool' && i.channel_prices?.some((c) => c.price != null) && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {i.channel_prices.filter((c) => c.price != null).map((c) => (
+                    <span
+                      key={c.channel}
+                      className={`badge ${c.below_cost ? 'bg-red-100 text-red-700' : 'bg-linen text-primary'}`}
+                      title={c.below_cost ? 'Below what it costs to make' : `${money(c.profit)} profit · ${c.margin_percent}% margin`}
+                    >
+                      {c.channel} {money(c.price)}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <button className="btn-ghost !py-1 !px-2" onClick={() => { setAdjust(i); setAdjustForm({ mode: 'receive', quantity: 1 }); }}>Adjust stock</button>
                 <button
@@ -469,6 +486,46 @@ export default function Catalog() {
                 </p>
               </>
             )}
+
+            <div className="border-t border-greige/60 pt-3">
+              <p className="font-bold text-primary text-sm">What it sells for</p>
+              <p className="text-xs text-gray-500 mb-2">
+                Your actual price on each place you sell. Margin is against the unit cost above,
+                before that channel takes its cut.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(options.channels || []).map((channel) => {
+                  const raw = form.channel_prices?.[channel];
+                  const value = raw === '' || raw == null ? null : Number(raw);
+                  const cost = preview?.unit_cost ?? 0;
+                  const priced = value != null && Number.isFinite(value);
+                  return (
+                    <div key={channel}>
+                      <label className="label">{channel}</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        className="input"
+                        placeholder="—"
+                        value={raw ?? ''}
+                        onChange={(e) => setForm({
+                          ...form,
+                          channel_prices: { ...form.channel_prices, [channel]: e.target.value },
+                        })}
+                      />
+                      {priced && (
+                        <p className={`text-[11px] mt-1 ${value < cost ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                          {value < cost
+                            ? `${money(cost - value)} under cost`
+                            : `${money(value - cost)} · ${Math.round(((value - cost) / value) * 100)}%`}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
 
             <div className="grid sm:grid-cols-3 gap-3">
               <Field label="Override cost" hint="Leave blank to use the calculation.">

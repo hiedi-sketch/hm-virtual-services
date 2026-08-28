@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('../db/database');
 const { nextSku, defaultBarcode } = require('../utils/sku');
-const { getSettings, priceItem, computeItemCost, previewItemCost } = require('../utils/costing');
+const { getSettings, priceItem, computeItemCost, previewItemCost, salesChannels } = require('../utils/costing');
 const { materialSummary, filamentSummary } = require('../utils/planning');
 const { logStock, applyUpdate } = require('./helpers');
 
@@ -48,6 +48,28 @@ function decorateComponents(itemId) {
       missing: !i,
     };
   });
+}
+
+/**
+ * Save what a product sells for per channel. A blank or removed price clears
+ * that channel rather than leaving a stale number behind.
+ */
+function saveChannelPrices(itemId, prices) {
+  if (!prices || typeof prices !== 'object') return;
+  const known = new Set(salesChannels());
+  const upsert = db.prepare(`
+    INSERT INTO item_channel_prices (item_id, channel, price, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(item_id, channel) DO UPDATE SET price = excluded.price, updated_at = CURRENT_TIMESTAMP
+  `);
+  const clear = db.prepare('DELETE FROM item_channel_prices WHERE item_id = ? AND channel = ?');
+
+  for (const [channel, raw] of Object.entries(prices)) {
+    if (!known.has(channel)) continue;
+    const value = raw === '' || raw == null ? null : Number(raw);
+    if (value == null || !Number.isFinite(value)) clear.run(itemId, channel);
+    else upsert.run(itemId, channel, value);
+  }
 }
 
 function replaceComponents(itemId, components) {
@@ -100,6 +122,7 @@ router.get('/options', (req, res) => {
       })),
       items: db.prepare("SELECT id, name, sku, item_type FROM items WHERE item_type IN ('component','product') ORDER BY name").all()
         .map((i) => ({ id: i.id, label: `${i.name} (${i.sku})`, item_type: i.item_type })),
+      channels: salesChannels(),
       settings: getSettings(),
     },
   });
@@ -133,6 +156,7 @@ router.post('/', (req, res) => {
         `INSERT INTO items (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`
       ).run(...keys.map((k) => body[k])).lastInsertRowid;
       replaceComponents(id, components);
+      saveChannelPrices(id, req.body.channel_prices);
       if (body.qty_on_hand) logStock('item', id, body.qty_on_hand, 'each', 'opening stock');
       return id;
     });
@@ -154,6 +178,7 @@ router.put('/:id', (req, res) => {
   const update = db.transaction(() => {
     applyUpdate('items', req.params.id, EDITABLE, req.body);
     if (Array.isArray(req.body.components)) replaceComponents(Number(req.params.id), req.body.components);
+    saveChannelPrices(Number(req.params.id), req.body.channel_prices);
   });
 
   try {

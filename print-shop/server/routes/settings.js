@@ -4,7 +4,7 @@ const { getSettings, NUMERIC_DEFAULTS } = require('../utils/costing');
 
 const router = express.Router();
 
-const ALLOWED = ['shop_name', 'sku_prefix', 'shelf_locations', 'ams_slots', ...Object.keys(NUMERIC_DEFAULTS)];
+const ALLOWED = ['shop_name', 'sku_prefix', 'shelf_locations', 'ams_slots', 'sales_channels', ...Object.keys(NUMERIC_DEFAULTS)];
 
 router.get('/', (req, res) => res.json({ data: getSettings() }));
 
