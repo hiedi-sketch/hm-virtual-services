@@ -3,6 +3,8 @@ const shopify = require('../utils/shopify');
 const sync = require('../services/shopify-sync');
 const poll = require('../services/shopify-poll');
 const oauthState = require('../services/oauth-state');
+const inventory = require('../services/inventory-sync');
+const db = require('../db/database');
 
 const router = express.Router();
 
@@ -177,6 +179,71 @@ router.post('/sweep', async (req, res) => {
   res.json({
     data: result,
     message: `${result.created.length} new order(s), ${result.already_here} already here`,
+  });
+});
+
+// ── Stock going back the other way ──────────────────────────────────────────
+
+function saveSetting(key, value) {
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+  `).run(key, value == null ? null : String(value));
+}
+
+/** Where the store keeps stock, so a figure can be written to the right one. */
+router.get('/locations', async (req, res) => {
+  try {
+    res.json({ data: await shopify.fetchLocations() });
+  } catch (err) {
+    res.status(err.status || 502).json({ error: err.message, detail: err.detail });
+  }
+});
+
+/** Whether stock is pushed, where to, and what is waiting to go. */
+router.get('/inventory', (req, res) => {
+  res.json({ data: inventory.status() });
+});
+
+router.put('/inventory', (req, res) => {
+  if (req.body.enabled !== undefined) saveSetting('shopify_push_inventory', req.body.enabled ? '1' : '0');
+  if (req.body.location_id !== undefined) saveSetting('shopify_location_id', req.body.location_id || null);
+  if (req.body.quantity_name !== undefined) {
+    const name = ['available', 'on_hand'].includes(req.body.quantity_name) ? req.body.quantity_name : 'available';
+    saveSetting('shopify_quantity_name', name);
+  }
+
+  // Turning it on means Shopify is behind on everything, not just what has
+  // moved since — so queue the lot.
+  let queued = 0;
+  if (req.body.enabled) queued = inventory.markAll();
+
+  const status = inventory.status();
+  res.json({
+    data: status,
+    message: req.body.enabled
+      ? `Stock will be pushed to Shopify — ${queued} product(s) queued`
+      : 'Stock is no longer pushed to Shopify',
+  });
+});
+
+/** Send what is waiting now rather than on the timer. */
+router.post('/inventory/push', async (req, res) => {
+  if (!inventory.enabled()) {
+    return res.status(400).json({ error: 'Turn stock pushing on and choose a location first' });
+  }
+  if (req.body.all) inventory.markAll();
+
+  const result = await inventory.flush({ force: !!req.body.all });
+  if (!result) return res.status(400).json({ error: 'Nothing to push' });
+  if (result.failed.length) {
+    return res.status(502).json({ error: result.failed[0].reason, data: result });
+  }
+  res.json({
+    data: result,
+    message: result.pushed.length
+      ? `${result.pushed.length} product(s) updated in Shopify`
+      : `Nothing to change${result.skipped ? ` — ${result.skipped} already matched` : ''}`,
   });
 });
 

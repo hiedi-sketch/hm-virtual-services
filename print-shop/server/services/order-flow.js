@@ -1,6 +1,7 @@
 const db = require('../db/database');
 const { estimatedMinutes } = require('../utils/planning');
 const { indexOf, nextStage, stageInfo, isValid, CHAIN } = require('../utils/order-stages');
+const { logStock } = require('../routes/helpers');
 
 /**
  * Moving an order along happens from three places — a scan of the printed
@@ -83,6 +84,10 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
     // a printer. Doing it here means the ticket scan and the button agree.
     if (to === 'queued') queued = enqueueOrder(order.id, priority);
 
+    // Shipping is what takes the goods out of the building. Printing puts them
+    // on the shelf; without this the on-hand figure only ever climbs.
+    if (to === 'shipped') shipStock(order.id);
+
     const shippedDate = to === 'shipped'
       ? (order.shipped_date || new Date().toISOString().slice(0, 10))
       : order.shipped_date;
@@ -95,6 +100,11 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
   });
   apply();
 
+  // Both the shelf and what is spoken for can have moved, and either changes
+  // what the store may still sell. Required lazily: the inventory sync reads
+  // this module, and loading it up top would be a circle.
+  require('./inventory-sync').orderChanged(order.id);
+
   const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
   const label = stageInfo(to).label;
   return {
@@ -102,6 +112,64 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
     moved: true,
     queued,
     message: queued ? `${label} — ${queued} item(s) queued` : label,
+  };
+}
+
+/**
+ * Take an order's goods out of stock, once. The event log is the record of
+ * whether it has already happened, so an order shipped, put back and shipped
+ * again does not draw the stock down twice.
+ */
+function shipStock(orderId) {
+  const already = db.prepare(`
+    SELECT COUNT(*) AS count FROM order_events
+     WHERE order_id = ? AND to_status = 'shipped'
+  `).get(orderId).count;
+  if (already > 0) return 0;
+
+  const lines = db.prepare(`
+    SELECT oi.item_id, oi.quantity, i.qty_on_hand
+      FROM order_items oi JOIN items i ON oi.item_id = i.id
+     WHERE oi.order_id = ? AND i.item_type <> 'tool'
+  `).all(orderId);
+
+  const order = db.prepare('SELECT order_number FROM orders WHERE id = ?').get(orderId);
+  const update = db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+
+  let shipped = 0;
+  for (const line of lines) {
+    const qty = Number(line.quantity) || 0;
+    if (!qty) continue;
+    // Allowed to go negative: the shelf disagreeing with the count is a thing
+    // to see, not a thing to quietly round away.
+    update.run((line.qty_on_hand || 0) - qty, line.item_id);
+    logStock('item', line.item_id, -qty, 'each', 'shipped', order?.order_number || `Order ${orderId}`);
+    shipped += 1;
+  }
+  return shipped;
+}
+
+/**
+ * What is physically here, less what is already sold and waiting to go out.
+ * This is the number a shop can still sell — the figure Shopify wants, and the
+ * reason mirroring a raw on-hand count would oversell between a sale and its
+ * shipment.
+ */
+function sellableQuantity(itemId) {
+  const item = db.prepare('SELECT qty_on_hand FROM items WHERE id = ?').get(itemId);
+  if (!item) return null;
+
+  const reserved = db.prepare(`
+    SELECT IFNULL(SUM(oi.quantity), 0) AS reserved
+      FROM order_items oi JOIN orders o ON oi.order_id = o.id
+     WHERE oi.item_id = ?
+       AND o.status NOT IN ('shipped', 'completed', 'cancelled')
+  `).get(itemId).reserved;
+
+  return {
+    on_hand: item.qty_on_hand || 0,
+    reserved,
+    sellable: (item.qty_on_hand || 0) - reserved,
   };
 }
 
@@ -161,4 +229,7 @@ function advanceTo(orderId, to, { source = 'app', note = null } = {}) {
   return setStatus(orderId, to, { source, note });
 }
 
-module.exports = { logEvent, events, enqueueOrder, setStatus, advance, advanceTo, DOUBLE_SCAN_SECONDS };
+module.exports = {
+  logEvent, events, enqueueOrder, setStatus, advance, advanceTo,
+  shipStock, sellableQuantity, DOUBLE_SCAN_SECONDS,
+};

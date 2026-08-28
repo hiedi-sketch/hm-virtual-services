@@ -7,6 +7,7 @@ const {
 const { logStock } = require('./helpers');
 const { ensurePicks, readPicks } = require('../utils/picklist');
 const flow = require('../services/order-flow');
+const inventory = require('../services/inventory-sync');
 
 const router = express.Router();
 
@@ -127,6 +128,7 @@ function completeFromPicks(entry, picks) {
       db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
         .run((sub.qty_on_hand || 0) - line.quantity, sub.id);
       logStock('item', sub.id, -line.quantity, 'each', 'used in print', reference);
+      inventory.markChanged(sub.id);
     }
   }
 
@@ -134,6 +136,7 @@ function completeFromPicks(entry, picks) {
   db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run((item.qty_on_hand || 0) + (entry.quantity || 0), item.id);
   logStock('item', item.id, entry.quantity || 0, 'each', 'print completed', reference);
+  inventory.changed(item.id);
 }
 
 /**
@@ -204,6 +207,7 @@ function completeEntry(entry) {
   db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run((item.qty_on_hand || 0) + qty, item.id);
   logStock('item', item.id, qty, 'each', 'print completed', reference);
+  inventory.changed(item.id);
 }
 
 router.put('/:id', (req, res) => {

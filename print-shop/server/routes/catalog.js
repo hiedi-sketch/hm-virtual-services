@@ -5,6 +5,7 @@ const { getSettings, priceItem, computeItemCost, previewItemCost, salesChannels 
 const { materialSummary, filamentSummary } = require('../utils/planning');
 const { logStock, applyUpdate } = require('./helpers');
 const { planImport, applyImport } = require('../services/catalog-import');
+const inventory = require('../services/inventory-sync');
 
 const router = express.Router();
 
@@ -222,6 +223,10 @@ router.put('/:id', (req, res) => {
   }
 
   const item = priceItem(Number(req.params.id));
+  // Editing the on-hand figure by hand is a stock change like any other.
+  if (req.body.qty_on_hand !== undefined && Number(req.body.qty_on_hand) !== existing.qty_on_hand) {
+    inventory.changed(item.id);
+  }
   res.json({ data: { ...item, components: decorateComponents(item.id) } });
 });
 
@@ -261,6 +266,7 @@ router.post('/:id/adjust', (req, res) => {
   db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
     .run((item.qty_on_hand || 0) + change, item.id);
   logStock('item', item.id, change, 'each', reason || mode, reference);
+  inventory.changed(item.id);
 
   res.json({ data: priceItem(item.id) });
 });

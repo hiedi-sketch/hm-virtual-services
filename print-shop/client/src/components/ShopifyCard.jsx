@@ -62,6 +62,8 @@ export default function ShopifyCard() {
   const [push, setPush] = useState(null);
   const [redirectUri, setRedirectUri] = useState('');
   const [outcome, setOutcome] = useState(null);
+  const [stock, setStock] = useState(null);
+  const [locations, setLocations] = useState([]);
 
   const load = useCallback(async () => {
     try {
@@ -86,6 +88,12 @@ export default function ShopifyCard() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (config?.configured) loadPush(); }, [config?.configured, loadPush]);
+
+  const loadStock = useCallback(async () => {
+    try { setStock(await printApi.shopifyInventory()); } catch { setStock(null); }
+    try { setLocations(await printApi.shopifyLocations()); } catch { setLocations([]); }
+  }, []);
+  useEffect(() => { if (config?.configured) loadStock(); }, [config?.configured, loadStock]);
   useEffect(() => {
     printApi.shopifyRedirectUri().then((d) => setRedirectUri(d.redirect_uri)).catch(() => {});
   }, []);
@@ -341,6 +349,106 @@ export default function ShopifyCard() {
             >
               {busy === 'sweep' ? 'Checking…' : 'Check for missed orders'}
             </button>
+          </div>
+
+          {/* ── Stock going the other way ─────────────────────────── */}
+          <div className="border-t border-linen pt-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold text-primary text-sm">Stock back to Shopify</p>
+              {stock?.enabled ? <Pill tone="green">On</Pill> : <Pill tone="gray">Off</Pill>}
+              {stock?.waiting > 0 && <Pill tone="amber">{stock.waiting} waiting</Pill>}
+            </div>
+            <p className="text-xs text-gray-500">
+              This shop decides what the store has. Every time stock moves here — a print run
+              finishing, a count, a receipt, an order shipping — Shopify is told the new figure.
+              What gets sent is what is still <span className="font-semibold">sellable</span>: what is on
+              the shelf, less what is already sold and waiting to go out. That is what keeps a sale
+              from being offered twice in the gap between someone buying and you posting it.
+            </p>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="Where the stock lives" hint="The Shopify location the figure is written to.">
+                <select
+                  className="input"
+                  value={stock?.location_id || ''}
+                  onChange={(e) => run('loc', () => printApi.saveShopifyInventory({ location_id: e.target.value }), loadStock)}
+                >
+                  <option value="">Choose a location…</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}{l.fulfils_online ? '' : ' (not online orders)'}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Which figure to set" hint="Available is what a shopper can buy. Change this only if Shopify refuses it.">
+                <select
+                  className="input"
+                  value={stock?.quantity_name || 'available'}
+                  onChange={(e) => run('qty', () => printApi.saveShopifyInventory({ quantity_name: e.target.value }), loadStock)}
+                >
+                  <option value="available">Available to sell</option>
+                  <option value="on_hand">On hand</option>
+                </select>
+              </Field>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {stock?.push_on ? (
+                <button
+                  className="btn-secondary"
+                  disabled={!!busy}
+                  onClick={() => run('stockoff', () => printApi.saveShopifyInventory({ enabled: false }), loadStock)}
+                >
+                  Stop pushing stock
+                </button>
+              ) : (
+                <button
+                  className="btn-primary"
+                  disabled={!!busy || !stock?.location_id}
+                  title={stock?.location_id ? '' : 'Choose a location first'}
+                  onClick={() => run('stockon', () => printApi.saveShopifyInventory({ enabled: true }), loadStock)}
+                >
+                  {busy === 'stockon' ? 'Turning it on…' : 'Push stock to Shopify'}
+                </button>
+              )}
+              <button
+                className="btn-ghost"
+                disabled={!!busy || !stock?.enabled}
+                onClick={() => run('pushnow', () => printApi.pushShopifyInventory({ all: true }), loadStock)}
+              >
+                {busy === 'pushnow' ? 'Sending…' : 'Send every product now'}
+              </button>
+            </div>
+
+            {stock?.next?.length > 0 && (
+              <div className="text-xs border border-linen rounded-lg p-2.5">
+                <p className="font-semibold text-primary mb-1">Waiting to go</p>
+                <ul className="space-y-0.5 text-gray-600">
+                  {stock.next.map((n) => (
+                    <li key={n.item_id} className="flex flex-wrap gap-2">
+                      <span className="text-gray-800">{n.name}</span>
+                      <span className="ml-auto">
+                        {n.on_hand} on the shelf
+                        {n.reserved > 0 && ` less ${n.reserved} sold`}
+                        {' → '}
+                        <span className="font-semibold">{n.quantity}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {stock?.stuck?.length > 0 && (
+              <div className="text-xs text-red-700 border border-red-200 bg-red-50 rounded-lg p-2.5">
+                <p className="font-semibold mb-1">Not getting through</p>
+                <p>{stock.stuck[0].last_error}</p>
+                <p className="text-red-600 mt-1">
+                  {stock.stuck.length} product(s) are still queued and will go as soon as that is fixed.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="border-t border-linen pt-3">

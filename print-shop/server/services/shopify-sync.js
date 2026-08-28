@@ -293,7 +293,10 @@ function saveOrder(prepared) {
     return orderId;
   });
 
-  return create();
+  const orderId = create();
+  // A sale reserves stock here, which changes what the store may still sell.
+  require('./inventory-sync').orderChanged(orderId);
+  return orderId;
 }
 
 

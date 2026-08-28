@@ -190,6 +190,16 @@ function createSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- Items whose stock figure has moved since Shopify last heard about it.
+    -- An outbox rather than a straight call: a push that fails because Shopify
+    -- is briefly unreachable must not lose the change that caused it.
+    CREATE TABLE IF NOT EXISTS inventory_outbox (
+      item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+      queued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      last_error TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS queue_jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
@@ -289,6 +299,9 @@ function createSchema() {
     ['sales_channels', 'Shopify,Faire,Etsy,Amazon'],
     ['shelf_locations', 'A1,A2,A3,A4,A5,A6,B1,B2,B3'],
     ['ams_slots', 'AMS1,AMS2,AMS3,AMS4'],
+    // Which Shopify figure the push sets, and whether it pushes at all.
+    ['shopify_push_inventory', '0'],
+    ['shopify_quantity_name', 'available'],
   ];
   const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of defaults) insert.run(key, value);
@@ -312,6 +325,9 @@ function createSchema() {
     "ALTER TABLE filament_spools ADD COLUMN location_kind TEXT DEFAULT NULL",
     // The code printed on an order ticket, scanned to move it a stage on.
     'ALTER TABLE orders ADD COLUMN barcode TEXT',
+    // The last figure Shopify was told, so a push that changes nothing is skipped.
+    'ALTER TABLE items ADD COLUMN shopify_pushed_quantity INTEGER',
+    'ALTER TABLE items ADD COLUMN shopify_pushed_at DATETIME',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }

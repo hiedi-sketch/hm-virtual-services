@@ -72,7 +72,7 @@ another device on the same Wi-Fi — handy for testing, but see the camera note 
 |-----|--------------|
 | **Dashboard** | Open orders, queue load, reorder list, inventory value. Deliberately light — more panels to come. |
 | **Orders** | Customer orders at retail or wholesale prices, promised vs projected ship date, printable tickets, and a seven-stage pipeline moved along by scanning. |
-| **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. Import a product list from a CSV. |
+| **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. Shop photos on the cards, and import a product list from a CSV. |
 | **Filament** | Colour library with per-spool tracking, where each spool is, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
 | **Materials** | The same for magnets, hardware, packaging — anything bought by the pack. |
 | **Queue** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
@@ -231,8 +231,9 @@ does the whole handshake itself; no token is ever typed in or shown.
 In Shopify's Dev Dashboard, create an app, then release a version whose configuration
 carries:
 
-- the access scopes `read_products` and `read_orders` (add `read_all_orders` for orders
-  older than 60 days);
+- the access scopes `read_products`, `read_orders` and `write_inventory` (add
+  `read_all_orders` for orders older than 60 days). The write scope does one job: putting
+  this shop's stock figure back on the store;
 - an **allowed redirection URL** of `https://your-shop-address/api/shopify/oauth/callback`.
   Settings shows the exact address to copy; Shopify refuses the connect unless it matches
   character for character.
@@ -350,11 +351,49 @@ Shopify retires API versions on a rolling schedule. The default is set in
 `server/utils/shopify.js`; if Shopify starts refusing it, the sync says so plainly and
 you can set a newer version in Settings without a code change.
 
+### Stock going back the other way
+
+**Settings → Shopify → Push stock to Shopify** makes this shop the master: whatever it
+says is on the shelf decides what the store sells. Pick the Shopify location to write to,
+turn it on, and every stock movement here reaches Shopify shortly after — a print run
+finishing, a count, a receipt, a spool of parts consumed, an order shipping.
+
+**What is sent is not the raw on-hand count.** It is what is still *sellable*:
+
+```
+on the shelf  −  already sold and not yet shipped
+```
+
+Those two numbers differ for exactly as long as an order sits between its sale and its
+shipment, and that gap is where a naive mirror oversells. Shopify decrements when someone
+buys; this shop decrements when you ship. Sending the raw count in between would put back
+the unit Shopify had just taken away and offer it to a second customer. Sending the
+sellable figure holds steady across both events:
+
+| | on the shelf | sold, unshipped | sent to Shopify |
+|---|---|---|---|
+| Print 20 for stock | 32 | 0 | **32** |
+| Someone buys one | 32 | 1 | **31** |
+| You ship it | 31 | 0 | **31** |
+
+Orders placed here count as reserved too, so ten promised to a wholesale customer are not
+offered online as well.
+
+**Details worth knowing.** A figure that has not moved since the last push is not re-sent.
+A shelf gone negative is sent as zero, while staying negative here where it is a problem
+you can see. Products Shopify has never heard of are skipped. Changes queue in an outbox
+and are retried, so a push that fails while Shopify is unreachable is not lost — anything
+stuck is shown with its reason under the toggle. **Send every product now** reconciles the
+whole catalog, which is also what happens the moment you turn it on.
+
+If Shopify refuses the write, the app is missing `write_inventory`: release a new version
+carrying it and press **Connect to Shopify** again. Which figure gets set — *available* or
+*on hand* — is a dropdown, because a store not tracking them separately needs the other.
+
 ### Not done yet
 
-Pushing the other way — creating Shopify products from this catalog, and updating
-Shopify stock levels when a print finishes — is not built. Products and orders come in;
-nothing goes out.
+Creating Shopify products from this catalog is not built. Products and orders come in,
+stock goes out; nothing else does.
 
 ---
 
@@ -665,6 +704,7 @@ print-shop/
 │   ├── services/
 │   │   ├── order-flow.js     Moving an order along, and what each stage does
 │   │   ├── oauth-state.js    One-time nonces tying a Shopify connect to its start
+│   │   ├── inventory-sync.js Stock back to Shopify: sellable figure, outbox, retries
 │   │   ├── shopify-sync.js   Pulling products and orders in, and taking webhooks
 │   │   ├── shopify-poll.js   The sweep that catches orders a webhook missed
 │   │   ├── catalog-import.js Reading a product list out of a CSV

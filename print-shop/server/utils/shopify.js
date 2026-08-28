@@ -4,9 +4,10 @@ const { encrypt, decrypt, maskToken } = require('./secrets');
 
 const DEFAULT_API_VERSION = '2026-01';
 
-// What the shop asks Shopify for. Reading products and orders is the whole of
-// it — nothing here writes back to the store.
-const OAUTH_SCOPES = ['read_products', 'read_orders'];
+// What the shop asks Shopify for. The write scope is there for one job only:
+// putting this shop's stock figure back on the store. Shopify grants the
+// matching read with every write scope.
+const OAUTH_SCOPES = ['read_products', 'read_orders', 'write_inventory'];
 
 // ── Stored configuration ─────────────────────────────────────────────────────
 
@@ -323,6 +324,76 @@ function missingScopes(granted) {
   return OAUTH_SCOPES.filter((s) => !have.has(s));
 }
 
+// ── Inventory ────────────────────────────────────────────────────────────────
+
+const LOCATIONS_QUERY = `
+  query locations {
+    locations(first: 20, includeInactive: false) {
+      nodes { id name isActive fulfillsOnlineOrders }
+    }
+  }
+`;
+
+const SET_QUANTITIES = `
+  mutation setQuantities($input: InventorySetQuantitiesInput!) {
+    inventorySetQuantities(input: $input) {
+      inventoryAdjustmentGroup { createdAt reason }
+      userErrors { field message }
+    }
+  }
+`;
+
+async function fetchLocations() {
+  const data = await graphql(LOCATIONS_QUERY);
+  return (data?.locations?.nodes || []).map((l) => ({
+    id: l.id,
+    name: l.name,
+    active: l.isActive,
+    fulfils_online: l.fulfillsOnlineOrders,
+  }));
+}
+
+/**
+ * Set the stock figure for a batch of items at one location.
+ *
+ * `entries` are { inventoryItemId, quantity }. Shopify is told to ignore the
+ * quantity it currently holds: this shop is the one deciding the number, and a
+ * compare-and-set would fail every time something sold mid-push.
+ *
+ * Which figure is being set — what is sellable, or what is physically on the
+ * shelf — is a setting rather than a constant, because a shop that does not
+ * track "available" separately needs the other one.
+ */
+async function setInventory(entries, { locationId, name = 'available', reason = 'correction' } = {}) {
+  if (!locationId) throw new ShopifyError('No Shopify location chosen to write stock to', { status: 400 });
+  if (!entries.length) return { updated: 0 };
+
+  const data = await graphql(SET_QUANTITIES, {
+    input: {
+      name,
+      reason,
+      ignoreCompareQuantity: true,
+      quantities: entries.map((e) => ({
+        inventoryItemId: e.inventoryItemId,
+        locationId,
+        quantity: Math.max(0, Math.round(e.quantity)),
+      })),
+    },
+  });
+
+  const errors = data?.inventorySetQuantities?.userErrors || [];
+  if (errors.length) {
+    const message = errors.map((e) => e.message).join('; ');
+    throw new ShopifyError(
+      /scope|access|permission/i.test(message)
+        ? 'Shopify would not let the app write stock. Release a new app version with the write_inventory scope, then press Connect to Shopify again.'
+        : `Shopify refused the stock update: ${message}`,
+      { status: 400 }
+    );
+  }
+  return { updated: entries.length };
+}
+
 // ── Webhooks ─────────────────────────────────────────────────────────────────
 
 /** The topics that keep orders here in step with orders there. */
@@ -430,6 +501,8 @@ async function removeOrderWebhooks() {
 module.exports = {
   DEFAULT_API_VERSION,
   OAUTH_SCOPES,
+  fetchLocations,
+  setInventory,
   authorizeUrl,
   verifyOAuthCallback,
   exchangeCode,

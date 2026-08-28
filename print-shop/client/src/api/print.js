@@ -38,6 +38,10 @@ export const printApi = {
   enableShopifyWebhooks: (body) => api.post('/shopify/webhooks', body || {}).then((r) => r.data),
   disableShopifyWebhooks: () => api.delete('/shopify/webhooks').then((r) => r.data),
   sweepShopifyOrders: () => api.post('/shopify/sweep').then((r) => r.data),
+  shopifyLocations: () => unwrap(api.get('/shopify/locations')),
+  shopifyInventory: () => unwrap(api.get('/shopify/inventory')),
+  saveShopifyInventory: (body) => api.put('/shopify/inventory', body).then((r) => r.data),
+  pushShopifyInventory: (body) => api.post('/shopify/inventory/push', body || {}).then((r) => r.data),
   saveSettings: (body) => unwrap(api.put('/settings', body)),
 
   filaments: (params) => unwrap(api.get('/filaments', { params })),

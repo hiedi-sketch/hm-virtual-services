@@ -6,6 +6,7 @@ const { priceItem } = require('../utils/costing');
 const { logStock } = require('./helpers');
 const flow = require('../services/order-flow');
 const stages = require('../utils/order-stages');
+const inventory = require('../services/inventory-sync');
 
 const router = express.Router();
 
@@ -242,6 +243,7 @@ router.post('/action', (req, res) => {
       .run(Math.max(0, (row.qty_on_order || 0) - Math.abs(qty)), row.id);
   }
   logStock(isMaterial ? 'material' : 'item', row.id, change, isMaterial ? row.unit : 'each', `${action} by scan`, reference);
+  if (!isMaterial) inventory.changed(row.id);
 
   const data = isMaterial
     ? { type: 'material', code: match.code, material: materialSummary(row.id)[0] }
