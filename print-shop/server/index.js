@@ -45,6 +45,11 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 // and proves itself with the signature on its body instead.
 app.use('/api/shopify/webhook', require('./routes/shopify-webhook'));
 
+// Shopify redirects her browser back here after she approves the app; a
+// redirect cannot carry a sign-in, so this one proves itself with a one-time
+// nonce and Shopify's signature instead.
+app.use('/api/shopify/oauth', require('./routes/shopify-oauth'));
+
 app.use('/api', require('./routes'));
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such endpoint' }));
 

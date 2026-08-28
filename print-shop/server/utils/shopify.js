@@ -4,6 +4,10 @@ const { encrypt, decrypt, maskToken } = require('./secrets');
 
 const DEFAULT_API_VERSION = '2026-01';
 
+// What the shop asks Shopify for. Reading products and orders is the whole of
+// it — nothing here writes back to the store.
+const OAUTH_SCOPES = ['read_products', 'read_orders'];
+
 // ── Stored configuration ─────────────────────────────────────────────────────
 
 function readSetting(key) {
@@ -38,17 +42,21 @@ function getConfig() {
   // Signs the webhooks Shopify pushes at us. Shopify calls it the API secret
   // key; it is not the access token and cannot be derived from it.
   const secret = process.env.SHOPIFY_API_SECRET || decrypt(readSetting('shopify_api_secret'));
+  // The app's client ID. Public by nature — it travels in the authorize URL —
+  // so unlike the token and secret it is stored as it comes.
+  const apiKey = process.env.SHOPIFY_API_KEY || readSetting('shopify_api_key');
   return {
     domain,
     token,
     apiVersion,
     secret,
+    apiKey,
     configured: !!(domain && token),
     fromEnvironment: !!(process.env.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_ACCESS_TOKEN),
   };
 }
 
-function saveConfig({ domain, token, apiVersion, secret }) {
+function saveConfig({ domain, token, apiVersion, secret, apiKey }) {
   if (domain !== undefined) {
     const clean = normaliseDomain(domain);
     if (domain && !clean) {
@@ -68,6 +76,9 @@ function saveConfig({ domain, token, apiVersion, secret }) {
   if (secret !== undefined && secret !== '') {
     writeSetting('shopify_api_secret', secret === null ? null : encrypt(String(secret).trim()));
   }
+  if (apiKey !== undefined) {
+    writeSetting('shopify_api_key', apiKey ? String(apiKey).trim() : null);
+  }
   return getConfig();
 }
 
@@ -82,6 +93,9 @@ function publicConfig() {
     from_environment: config.fromEnvironment,
     default_api_version: DEFAULT_API_VERSION,
     has_secret: !!config.secret,
+    api_key: config.apiKey || null,
+    can_connect: !!(config.domain && config.apiKey && config.secret),
+    scopes: OAUTH_SCOPES.join(','),
   };
 }
 
@@ -141,7 +155,7 @@ async function graphql(query, variables = {}, { attempt = 0 } = {}) {
 
   if (response.status === 401 || response.status === 403) {
     throw new ShopifyError(
-      'Shopify rejected the access token. Check it is right and that the app has read_products and read_orders.',
+      'Shopify rejected the access token. Reconnect from Settings, and check the app has read_products and read_orders.',
       { status: 401 }
     );
   }
@@ -211,6 +225,102 @@ async function paginate(query, variables, pick, { pageLimit = 40 } = {}) {
 async function testConnection() {
   const data = await graphql(`{ shop { name myshopifyDomain currencyCode } }`);
   return data.shop;
+}
+
+// ── Connecting (OAuth) ───────────────────────────────────────────────────────
+
+/**
+ * Shopify stopped letting merchants create the old admin custom apps, which
+ * handed you a token to paste. An app made in the Dev Dashboard authorises the
+ * normal way instead: send her to Shopify, she approves, Shopify sends her
+ * back with a code, and the code is swapped for a token she never sees.
+ */
+
+/** Where Shopify sends her to approve. */
+function authorizeUrl({ shop, redirectUri, state, scopes = OAUTH_SCOPES }) {
+  const domain = normaliseDomain(shop);
+  if (!domain) throw new ShopifyError('That does not look like a Shopify store address', { status: 400 });
+
+  const { apiKey } = getConfig();
+  if (!apiKey) throw new ShopifyError('Add your app\'s client ID first', { status: 400 });
+
+  const query = new URLSearchParams({
+    client_id: apiKey,
+    scope: scopes.join(','),
+    redirect_uri: redirectUri,
+    state,
+    // Omitting grant_options[] asks for an offline token: one that keeps
+    // working when nobody is signed in, which is what a background sync needs.
+  });
+  return `https://${domain}/admin/oauth/authorize?${query}`;
+}
+
+/**
+ * Shopify signs the parameters it sends back. Everything except the signature
+ * itself goes into the digest, sorted by key.
+ */
+function verifyOAuthCallback(query) {
+  const { secret } = getConfig();
+  if (!secret) return false;
+
+  const { hmac, signature, ...rest } = query;
+  if (!hmac) return false;
+
+  const message = Object.keys(rest)
+    .sort()
+    .map((key) => `${encodeURIComponent(key).replace(/%20/g, '+')}=${encodeURIComponent(rest[key]).replace(/%20/g, '+')}`)
+    .join('&');
+
+  const expected = crypto.createHmac('sha256', secret).update(message).digest('hex');
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(String(hmac), 'utf8');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+/** Swap the one-time code for the token the shop will keep using. */
+async function exchangeCode({ shop, code }) {
+  const domain = normaliseDomain(shop);
+  if (!domain) throw new ShopifyError('That does not look like a Shopify store address', { status: 400 });
+
+  const { apiKey, secret } = getConfig();
+  if (!apiKey || !secret) throw new ShopifyError('The app\'s client ID and secret must both be set', { status: 400 });
+
+  const origin = process.env.SHOPIFY_API_BASE || `https://${domain}`;
+  let response;
+  try {
+    response = await fetch(`${origin}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ client_id: apiKey, client_secret: secret, code }),
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch (err) {
+    throw new ShopifyError(`Could not reach ${domain} to finish connecting`, { status: 504, detail: err.message });
+  }
+
+  const text = await response.text();
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new ShopifyError('Shopify sent something that was not JSON', { status: 502, detail: text.slice(0, 200) });
+  }
+
+  if (!response.ok || !body.access_token) {
+    // The usual cause is a client secret that does not match the client ID.
+    throw new ShopifyError(
+      body?.error_description || body?.error || 'Shopify would not issue a token',
+      { status: 400, detail: text.slice(0, 200) }
+    );
+  }
+
+  return { token: body.access_token, scopes: body.scope || '', domain };
+}
+
+/** Which of the scopes we asked for the token actually carries. */
+function missingScopes(granted) {
+  const have = new Set(String(granted || '').split(',').map((s) => s.trim()).filter(Boolean));
+  return OAUTH_SCOPES.filter((s) => !have.has(s));
 }
 
 // ── Webhooks ─────────────────────────────────────────────────────────────────
@@ -297,7 +407,7 @@ async function registerOrderWebhooks(callbackUrl) {
         /access|scope|permission/i.test(message)
           // A webhook topic is governed by the scope of the thing it is about:
           // orders/* need read_orders. There is no separate webhook scope.
-          ? 'Shopify would not let the app subscribe. Give your custom app the read_orders scope, save it, then reinstall it and paste the new access token in — a token issued before a scope was added does not gain it.'
+          ? 'Shopify would not let the app subscribe. The app needs the read_orders scope: release a new version carrying it in the Dev Dashboard, then press Connect to Shopify again — a token issued before a scope was added does not gain it.'
           : `Shopify refused the ${topic} subscription: ${message}`,
         { status: 400 }
       );
@@ -319,6 +429,11 @@ async function removeOrderWebhooks() {
 
 module.exports = {
   DEFAULT_API_VERSION,
+  OAUTH_SCOPES,
+  authorizeUrl,
+  verifyOAuthCallback,
+  exchangeCode,
+  missingScopes,
   ORDER_TOPICS,
   verifyWebhook,
   listWebhooks,

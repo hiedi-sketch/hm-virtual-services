@@ -56,16 +56,22 @@ function Result({ result }) {
 /** Connect a Shopify store and pull products and orders in from it. */
 export default function ShopifyCard() {
   const [config, setConfig] = useState(null);
-  const [form, setForm] = useState({ domain: '', token: '', api_version: '', secret: '' });
+  const [form, setForm] = useState({ domain: '', token: '', api_version: '', secret: '', api_key: '' });
   const [busy, setBusy] = useState('');
   const [result, setResult] = useState(null);
   const [push, setPush] = useState(null);
+  const [redirectUri, setRedirectUri] = useState('');
 
   const load = useCallback(async () => {
     try {
       const next = await printApi.shopify();
       setConfig(next);
-      setForm((f) => ({ ...f, domain: next.domain || '', api_version: next.api_version || '' }));
+      setForm((f) => ({
+        ...f,
+        domain: next.domain || '',
+        api_version: next.api_version || '',
+        api_key: next.api_key || '',
+      }));
     } catch (err) {
       toast.error(describeError(err, 'Could not load the Shopify settings'));
     }
@@ -79,6 +85,36 @@ export default function ShopifyCard() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (config?.configured) loadPush(); }, [config?.configured, loadPush]);
+  useEffect(() => {
+    printApi.shopifyRedirectUri().then((d) => setRedirectUri(d.redirect_uri)).catch(() => {});
+  }, []);
+
+  // Coming back from Shopify, the result is in the address bar. Read it, say
+  // so, and tidy the URL so a refresh does not repeat the message.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get('shopify');
+    if (!outcome) return;
+
+    if (outcome === 'connected') toast.success('Connected to Shopify');
+    else if (outcome === 'partial') toast(params.get('reason') || 'Connected, but not with everything asked for', { icon: '⚠️' });
+    else toast.error(params.get('reason') || 'Shopify did not finish connecting');
+
+    window.history.replaceState({}, '', window.location.pathname);
+    load();
+  }, [load]);
+
+  async function connect() {
+    setBusy('connect');
+    try {
+      const { data } = await printApi.startShopifyConnect({ shop: form.domain });
+      // Leaving the app entirely: Shopify wants the top window, not a frame.
+      window.location.assign(data.url);
+    } catch (err) {
+      toast.error(describeError(err, 'Could not start connecting'));
+      setBusy('');
+    }
+  }
 
   async function run(label, fn, onDone) {
     setBusy(label);
@@ -121,11 +157,20 @@ export default function ShopifyCard() {
       </div>
 
       <p className="text-xs text-gray-500">
-        Create a custom app in your Shopify admin (Settings → Apps and sales channels → Develop apps),
-        give it the <span className="font-mono">read_products</span> and <span className="font-mono">read_orders</span> scopes,
-        install it, and paste its Admin API access token here. The token is encrypted before it is stored
-        and never sent back to this page.
+        In Shopify, open the <span className="font-mono">Dev Dashboard</span> and create an app.
+        Release a version whose scopes include <span className="font-mono">read_products</span> and{' '}
+        <span className="font-mono">read_orders</span>, and whose allowed redirect URLs include the
+        address below. Then paste the app&apos;s client ID and secret here and press Connect —
+        Shopify will ask you to approve, and the token is handled for you.
       </p>
+
+      {redirectUri && (
+        <div className="text-xs bg-linen rounded-lg p-2.5 space-y-1">
+          <p className="font-semibold text-primary">Allowed redirection URL</p>
+          <p className="font-mono break-all text-gray-600">{redirectUri}</p>
+          <p className="text-gray-500">Shopify refuses to connect unless this exact address is on its list.</p>
+        </div>
+      )}
 
       <form onSubmit={save} className="grid sm:grid-cols-2 gap-3">
         <Field label="Store address" hint="mystore.myshopify.com">
@@ -136,24 +181,19 @@ export default function ShopifyCard() {
             onChange={(e) => setForm({ ...form, domain: e.target.value })}
           />
         </Field>
-        <Field
-          label="Admin API access token"
-          hint={config.token_hint ? `Stored: ${config.token_hint}. Leave blank to keep it.` : 'Starts with shpat_'}
-        >
+        <Field label="Client ID" hint="From the app's settings in the Dev Dashboard.">
           <input
-            type="password"
             className="input font-mono"
             autoComplete="off"
-            placeholder={config.token_hint ? '••••••••' : 'shpat_…'}
-            value={form.token}
-            onChange={(e) => setForm({ ...form, token: e.target.value })}
+            value={form.api_key}
+            onChange={(e) => setForm({ ...form, api_key: e.target.value })}
           />
         </Field>
         <Field
-          label="API secret key"
+          label="Client secret"
           hint={config.has_secret
-            ? 'Stored. Leave blank to keep it. Only needed for live order push.'
-            : 'From the same app, under API credentials. Needed to prove a pushed order really came from Shopify.'}
+            ? 'Stored. Leave blank to keep it.'
+            : 'Next to the client ID. Also what signs orders pushed to you.'}
         >
           <input
             type="password"
@@ -171,11 +211,20 @@ export default function ShopifyCard() {
             onChange={(e) => setForm({ ...form, api_version: e.target.value })}
           />
         </Field>
-        <div className="flex items-end gap-2">
-          <button type="submit" className="btn-primary" disabled={!!busy}>Save</button>
+        <div className="sm:col-span-2 flex flex-wrap items-end gap-2">
+          <button type="submit" className="btn-secondary" disabled={!!busy}>Save</button>
           <button
             type="button"
-            className="btn-secondary"
+            className="btn-primary"
+            disabled={!!busy || !form.domain || !(form.api_key || config.api_key) || !(form.secret || config.has_secret)}
+            onClick={connect}
+            title={config.can_connect ? '' : 'Save your store address, client ID and secret first'}
+          >
+            {busy === 'connect' ? 'Off to Shopify…' : config.configured ? 'Reconnect to Shopify' : 'Connect to Shopify'}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
             disabled={!!busy || !config.configured}
             onClick={() => run('test', printApi.testShopify)}
           >
@@ -183,6 +232,35 @@ export default function ShopifyCard() {
           </button>
         </div>
       </form>
+
+      <details className="text-xs">
+        <summary className="cursor-pointer text-gray-500 hover:text-primary">
+          I already have an access token to paste
+        </summary>
+        <div className="pt-2">
+          <p className="text-gray-500 mb-2">
+            Older stores could make an app in the admin that handed you a token starting{' '}
+            <span className="font-mono">shpat_</span>. If you have one, it still works — paste it
+            here instead of connecting.
+          </p>
+          <Field
+            label="Admin API access token"
+            hint={config.token_hint ? `Stored: ${config.token_hint}. Leave blank to keep it.` : 'Starts with shpat_'}
+          >
+            <input
+              type="password"
+              className="input font-mono"
+              autoComplete="off"
+              placeholder={config.token_hint ? '••••••••' : 'shpat_…'}
+              value={form.token}
+              onChange={(e) => setForm({ ...form, token: e.target.value })}
+            />
+          </Field>
+          <button type="button" className="btn-secondary mt-2" disabled={!!busy} onClick={save}>
+            Save the token
+          </button>
+        </div>
+      </details>
 
       {config.configured && (
         <div className="border-t border-linen pt-3 space-y-3">

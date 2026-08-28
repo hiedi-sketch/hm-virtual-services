@@ -2,6 +2,7 @@ const express = require('express');
 const shopify = require('../utils/shopify');
 const sync = require('../services/shopify-sync');
 const poll = require('../services/shopify-poll');
+const oauthState = require('../services/oauth-state');
 
 const router = express.Router();
 
@@ -17,6 +18,7 @@ router.put('/', (req, res) => {
       token: req.body.token,
       apiVersion: req.body.api_version,
       secret: req.body.secret,
+      apiKey: req.body.api_key,
     });
     res.json({ data: shopify.publicConfig(), message: 'Saved' });
   } catch (err) {
@@ -25,7 +27,7 @@ router.put('/', (req, res) => {
 });
 
 router.delete('/', (req, res) => {
-  shopify.saveConfig({ domain: null, token: null, secret: null });
+  shopify.saveConfig({ domain: null, token: null, secret: null, apiKey: null });
   res.json({ data: shopify.publicConfig(), message: 'Disconnected from Shopify' });
 });
 
@@ -71,14 +73,49 @@ router.post('/pull/orders', async (req, res) => {
 });
 
 /**
+ * Begin connecting. Only someone signed in here can start a round trip, which
+ * is what makes the unauthenticated callback safe to have at all.
+ */
+router.post('/oauth/start', (req, res) => {
+  const config = shopify.getConfig();
+  const domain = shopify.normaliseDomain(req.body.shop || config.domain);
+  if (!domain) {
+    return res.status(400).json({ error: 'Enter your store address first, like mystore.myshopify.com' });
+  }
+  if (!config.apiKey || !config.secret) {
+    return res.status(400).json({ error: 'Save your app\'s client ID and client secret first' });
+  }
+
+  try {
+    const redirectUri = `${publicOrigin(req)}/api/shopify/oauth/callback`;
+    const url = shopify.authorizeUrl({
+      shop: domain,
+      redirectUri,
+      state: oauthState.issue(domain),
+    });
+    res.json({ data: { url, redirect_uri: redirectUri }, message: 'Off to Shopify' });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+/** The address Shopify must be told to allow, shown so it can be copied. */
+router.get('/oauth/redirect-uri', (req, res) => {
+  res.json({ data: { redirect_uri: `${publicOrigin(req)}/api/shopify/oauth/callback` } });
+});
+
+/**
  * Where this shop is reachable from the outside, which is what Shopify has to
  * be told to push to. Behind Render's proxy the request host is the public
  * one, so it can be read off rather than configured.
  */
+function publicOrigin(req) {
+  const base = process.env.PUBLIC_URL || `${req.protocol}://${req.get('host')}`;
+  return String(base).replace(/\/+$/, '');
+}
+
 function callbackUrl(req) {
-  const configured = process.env.PUBLIC_URL;
-  const base = configured || `${req.protocol}://${req.get('host')}`;
-  return `${String(base).replace(/\/+$/, '')}/api/shopify/webhook`;
+  return `${publicOrigin(req)}/api/shopify/webhook`;
 }
 
 /** What Shopify is currently set up to push here, if anything. */

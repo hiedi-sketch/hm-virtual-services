@@ -180,6 +180,16 @@ function createSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- One row per Shopify connect attempt, alive for minutes. The callback
+    -- comes back from Shopify with no sign-in behind it, so this nonce is what
+    -- proves the round trip started here rather than somewhere else.
+    CREATE TABLE IF NOT EXISTS oauth_states (
+      state TEXT PRIMARY KEY,
+      provider TEXT NOT NULL DEFAULT 'shopify',
+      shop TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS queue_jobs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,

@@ -32,6 +32,8 @@ export const printApi = {
   testShopify: () => api.post('/shopify/test').then((r) => r.data),
   pullShopifyProducts: (body) => api.post('/shopify/pull/products', body || {}).then((r) => r.data),
   pullShopifyOrders: (body) => api.post('/shopify/pull/orders', body || {}).then((r) => r.data),
+  shopifyRedirectUri: () => unwrap(api.get('/shopify/oauth/redirect-uri')),
+  startShopifyConnect: (body) => api.post('/shopify/oauth/start', body || {}).then((r) => r.data),
   shopifyWebhooks: () => unwrap(api.get('/shopify/webhooks')),
   enableShopifyWebhooks: (body) => api.post('/shopify/webhooks', body || {}).then((r) => r.data),
   disableShopifyWebhooks: () => api.delete('/shopify/webhooks').then((r) => r.data),

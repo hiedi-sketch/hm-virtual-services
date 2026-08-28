@@ -224,25 +224,53 @@ Connect a store from **Settings → Shopify** and pull products and orders in fr
 
 ### Connecting
 
-In your Shopify admin: **Settings → Apps and sales channels → Develop apps**, create an
-app, give it the `read_products` and `read_orders` scopes, install it, and copy the
-Admin API access token. Paste that and your store address into Settings here.
+Shopify retired the admin-created custom app — the kind that handed you a token to paste —
+so an app is now made in the **Dev Dashboard** and authorises the ordinary way. The shop
+does the whole handshake itself; no token is ever typed in or shown.
 
-The token is encrypted before it is stored and is never sent back to the browser — the
-settings page only ever shows the first and last few characters. Encryption is keyed on
-`SECRETS_KEY` if set, otherwise derived from `JWT_SECRET`; rotate `JWT_SECRET` and the
-token has to be entered again. `SHOPIFY_STORE_DOMAIN` and `SHOPIFY_ACCESS_TOKEN`
-environment variables take priority over anything stored, if you would rather keep the
-credentials in Render.
+In Shopify's Dev Dashboard, create an app, then release a version whose configuration
+carries:
+
+- the access scopes `read_products` and `read_orders` (add `read_all_orders` for orders
+  older than 60 days);
+- an **allowed redirection URL** of `https://your-shop-address/api/shopify/oauth/callback`.
+  Settings shows the exact address to copy; Shopify refuses the connect unless it matches
+  character for character.
+
+Then paste the app's **client ID** and **client secret** into Settings here and press
+**Connect to Shopify**. Shopify asks you to approve, sends you back, and the shop swaps
+the one-time code for a token it stores encrypted.
+
+Both the token and the secret are encrypted before storage and never sent back to the
+browser — the settings page only ever shows the first and last few characters of a token.
+Encryption is keyed on `SECRETS_KEY` if set, otherwise derived from `JWT_SECRET`; rotate
+`JWT_SECRET` and you reconnect. `SHOPIFY_STORE_DOMAIN`, `SHOPIFY_API_KEY`,
+`SHOPIFY_API_SECRET` and `SHOPIFY_ACCESS_TOKEN` environment variables take priority over
+anything stored, if you would rather keep the credentials in Render.
+
+The client secret does double duty: it completes the handshake, and it is what signs the
+orders Shopify pushes here. One value, set once.
 
 **Test connection** confirms the token works and names the shop it belongs to.
 
-For live order push (below) the app also needs its **API secret key** — the value on the
-same *API credentials* screen as the access token, not the token itself. It is encrypted
-the same way, and `SHOPIFY_API_SECRET` overrides it.
+#### How the callback is kept safe
 
-No extra scope is needed to subscribe: a webhook topic is governed by the scope of the
-thing it is about, so `read_orders` covers the `orders/*` topics.
+Shopify sends you back to `/api/shopify/oauth/callback`, and a browser redirect cannot
+carry a sign-in — so like the webhook, that route sits outside the login. Three things
+stand in for one, and all three must hold before anything is stored:
+
+1. the `state` nonce was issued by this shop, within fifteen minutes, and is unused —
+   it is deleted on first sight, so a replayed callback finds nothing;
+2. the store it comes back for is the store that nonce was issued for;
+3. the parameters carry Shopify's signature, made with the client secret and compared in
+   constant time.
+
+Only a signed-in session can mint a nonce, which is what makes an open callback safe.
+Approving with fewer scopes than were asked for is reported rather than left to fail on
+the first sync.
+
+**If you already have a `shpat_` token** from an app made under the old system, it still
+works. *I already have an access token to paste* in Settings takes it.
 
 ### Pulling products
 
@@ -287,10 +315,11 @@ failed retries. It creates nothing that is already here, so a sweep that finds n
 does nothing. Set `SHOPIFY_POLL_MINUTES` to change the interval, or to `0` to turn it
 off. **Check for missed orders** runs it on demand.
 
-If Shopify refuses the subscription, the usual cause is `read_orders` missing from the
-app, or an access token issued before that scope was added — a token does not gain
-scopes granted after it was created. Add the scope, save, reinstall the app, and paste
-the new token in.
+No extra scope is needed to subscribe: a webhook topic is governed by the scope of the
+thing it is about, so `read_orders` covers the `orders/*` topics. If Shopify refuses the
+subscription, the usual cause is `read_orders` missing from the app, or a token issued
+before that scope was added — a token does not gain scopes granted later. Release a new
+app version carrying the scope, then press **Connect to Shopify** again.
 
 **If you would rather not let the app subscribe at all**, create the webhook by hand in
 **Settings → Notifications → Webhooks** in your Shopify admin, pointing at the same
@@ -631,9 +660,11 @@ print-shop/
 │   ├── middleware/auth.js    JWT check
 │   ├── routes/               auth, settings, filaments, materials, catalog, orders,
 │   │                         queue, scan, dashboard, backup, shopify,
-│   │                         shopify-webhook (the one route outside the sign-in)
+│   │                         shopify-webhook + shopify-oauth (the two routes
+│   │                         outside the sign-in, each proving itself instead)
 │   ├── services/
 │   │   ├── order-flow.js     Moving an order along, and what each stage does
+│   │   ├── oauth-state.js    One-time nonces tying a Shopify connect to its start
 │   │   ├── shopify-sync.js   Pulling products and orders in, and taking webhooks
 │   │   ├── shopify-poll.js   The sweep that catches orders a webhook missed
 │   │   ├── catalog-import.js Reading a product list out of a CSV
