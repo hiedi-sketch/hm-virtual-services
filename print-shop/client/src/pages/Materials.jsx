@@ -8,6 +8,10 @@ import { useScanner } from '../components/ScanContext';
 
 const UNITS = ['each', 'set', 'pair', 'g', 'ml', 'cm', 'in', 'sheet', 'yard', 'pack'];
 
+/** Countable things read better bare: 299, not 299 each. */
+const unitSuffix = (unit) => (!unit || unit === 'each' ? '' : ` ${unit}`);
+const pricedPer = (unit) => (!unit || unit === 'each' ? 'each' : `per ${unit}`);
+
 const BLANK = {
   name: '', category: '', unit: 'each', pack_cost: '', pack_size: 1, cost_per_unit: '',
   qty_on_hand: 0, qty_on_order: 0, reorder_point: 0,
@@ -149,15 +153,17 @@ export default function Materials() {
                     {m.short_by > 0 && <Pill tone="amber">Short {m.short_by}</Pill>}
                   </div>
                   <p className="text-xs text-gray-500">
-                    {money(m.unit_cost)} per {m.unit}
+                    {money(m.unit_cost)} {pricedPer(m.unit)}
                     {m.pack_cost != null && ` · ${money(m.pack_cost)} / ${m.pack_size} pack`}
                     {' · '}<span className="font-mono">{m.sku}</span>
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-primary leading-tight">{m.qty_on_hand} {m.unit}</p>
+                  <p className="text-lg font-bold text-primary leading-tight">
+                    {m.qty_on_hand}{unitSuffix(m.unit)}
+                  </p>
                   <p className="text-[11px] text-gray-500">
-                    {m.qty_committed > 0 ? `${m.qty_projected} after queue` : 'nothing committed'}
+                    on hand{m.qty_committed > 0 ? ` · ${m.qty_projected} after queue` : ''}
                   </p>
                 </div>
               </div>
@@ -184,7 +190,7 @@ export default function Materials() {
                   <button className="btn-ghost !py-1 !px-2" onClick={() => { setAdjust(m); setAdjustForm({ mode: 'receive', quantity: 1 }); }}>Adjust</button>
                   <button
                     className="btn-ghost !py-1 !px-2"
-                    onClick={() => setLabel({ title: m.name, subtitle: m.category || 'Material', code: m.barcode || m.sku, meta: `${money(m.unit_cost)} per ${m.unit}` })}
+                    onClick={() => setLabel({ title: m.name, subtitle: m.category || 'Material', code: m.barcode || m.sku, meta: `${money(m.unit_cost)} ${pricedPer(m.unit)}` })}
                   >
                     Label
                   </button>

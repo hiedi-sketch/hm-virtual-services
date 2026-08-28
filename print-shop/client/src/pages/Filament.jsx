@@ -6,6 +6,7 @@ import printApi, { describeError, grams, money, shortDate } from '../api/print';
 import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard, StockBar, StockLegend } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
 import LocationPicker from '../components/LocationPicker';
+import FilamentImport from '../components/FilamentImport';
 
 const MATERIAL_TYPES = ['PLA', 'PLA+', 'Silk PLA', 'PETG', 'ABS', 'ASA', 'TPU', 'Nylon', 'PC', 'Wood Fill', 'Resin'];
 
@@ -50,6 +51,7 @@ export default function Filament() {
   const [spoolForm, setSpoolForm] = useState({ count: 1, status: 'new', expected_at: '', order_reference: '', location: '' });
   const [placing, setPlacing] = useState(null);
   const [showRack, setShowRack] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [slots, setSlots] = useState({ shelf: [], ams: [] });
 
   const load = useCallback(async () => {
@@ -207,6 +209,7 @@ export default function Filament() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button className="btn-secondary" onClick={() => setShowRack(true)}>Where things are</button>
+          <button className="btn-secondary" onClick={() => setImporting(true)}>Import a list</button>
           <button
             className="btn-secondary"
             onClick={() => scan({ title: 'Scan a spool', hint: 'Scan a spool tag to open it, or a shelf label to add stock' })}
@@ -510,6 +513,12 @@ export default function Filament() {
           </div>
         </form>
       </Modal>
+
+      <FilamentImport
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={() => { load(); refresh(); }}
+      />
 
       <LocationPicker
         open={!!placing || showRack}

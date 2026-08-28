@@ -4,6 +4,7 @@ const { nextSku, nextSpoolCode, defaultBarcode } = require('../utils/sku');
 const { filamentSummary } = require('../utils/planning');
 const { locationLists, occupancy, normalise, isKnown, kindOf } = require('../utils/locations');
 const { logStock, logEvent } = require('./helpers');
+const { planImport, applyImport } = require('../services/filament-import');
 
 const router = express.Router();
 
@@ -37,6 +38,30 @@ router.get('/', (req, res) => {
   const list = filamentSummary();
   const filtered = req.query.needs_reorder === '1' ? list.filter((f) => f.needs_reorder) : list;
   res.json({ data: filtered });
+});
+
+/**
+ * Load a filament list from a spreadsheet export. Send apply:false first to
+ * see what it would do — nobody should paste a file into their library blind.
+ */
+router.post('/import', (req, res) => {
+  const csv = req.body.csv;
+  if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'No CSV to read' });
+  if (csv.length > 2_000_000) return res.status(400).json({ error: 'That file is too big to read in one go' });
+
+  try {
+    if (!req.body.apply) return res.json({ data: { preview: true, ...planImport(csv) } });
+
+    const result = applyImport(csv);
+    return res.json({
+      data: { preview: false, ...result },
+      message: `${result.created.length} added, ${result.updated.length} updated`
+        + (result.unchanged ? `, ${result.unchanged} already right` : '')
+        + (result.failed.length ? `, ${result.failed.length} failed` : ''),
+    });
+  } catch (err) {
+    return res.status(400).json({ error: `Could not read that file: ${err.message}` });
+  }
 });
 
 /** The rack: every slot and whatever is sitting in it. */

@@ -45,6 +45,8 @@ export const printApi = {
   consumeFilament: (id, body) => unwrap(api.post(`/filaments/${id}/consume`, body)),
 
   spoolLocations: () => unwrap(api.get('/filaments/locations')),
+  previewFilamentImport: (csv) => unwrap(api.post('/filaments/import', { csv, apply: false })),
+  applyFilamentImport: (csv) => api.post('/filaments/import', { csv, apply: true }).then((r) => r.data),
   moveSpool: (spoolId, location, swap) =>
     api.put(`/filaments/spools/${spoolId}/location`, { location, swap }).then((r) => r.data),
 

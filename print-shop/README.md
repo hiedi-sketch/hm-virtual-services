@@ -210,6 +210,50 @@ Shopify stock levels when a print finishes — is not built. Both are pulls only
 
 ---
 
+## Importing a filament list
+
+**Import a list** on the Filament tab reads a CSV with a row per colour — the shape a
+supplier list or a spreadsheet of your own tends to be in already.
+
+It always previews first: how many will be added, which existing ones will change and
+exactly what changes, and any rows it cannot use and why. Nothing is written until you
+say so.
+
+| Column | Also accepted |
+|--------|---------------|
+| Color Name | Colour Name, Color, Name |
+| Brand | Manufacturer, Maker |
+| Type | Material, Material Type |
+| Swatch | Hex, Hex Code, Color Hex |
+| Spool Size (KG) | Spool Size, Size KG |
+| Current Cost per KG | Cost per KG, Price per KG, Cost, Price |
+| Reorder when below (spools) | Reorder Point, Reorder At |
+| Spools on hand now | Spools on Hand, On Hand, Quantity, Qty |
+| Where they go | Location, Slot, Shelf |
+| Vendor | Vendor Name, Supplier, Seller |
+| Reorder link | Vendor URL, Link, Product Link |
+
+Headers are matched ignoring case, spaces and punctuation, and values are trimmed — a
+brand of `"Sunlu "` matches `Sunlu`. Columns it does not recognise are named in the
+preview and otherwise ignored.
+
+**Matching** is on colour, brand and type together, ignoring case and padding. For a
+colour already in the library:
+
+- **Swatch and cost per kg are brought up to date** — the two that go stale.
+- Blank fields are filled in from the file.
+- **Anything already set is left alone.** If you corrected a vendor by hand, a
+  spreadsheet does not get to undo it.
+
+**Inventory is never invented.** A blank *Spools on hand now* creates no spools, so
+importing a supplier's catalogue does not tell the shop you own all of it. Put a number
+in that column and it creates that many, and *Where they go* puts them straight into a
+slot.
+
+Running the same file twice changes nothing the second time.
+
+---
+
 ## Where spools are
 
 Every physical spool can be given a place: a shelf slot (`A1`–`A6`, `B1`–`B3` out of the
