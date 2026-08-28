@@ -76,15 +76,20 @@
   }
 }
 
-/* Barcode labels print on their own, with nothing else on the page. */
+/* Labels and order tickets print on their own, with nothing else on the page. */
 @media print {
   body { background: #fff; }
   body * { visibility: hidden; }
-  #print-label, #print-label * { visibility: visible; }
-  #print-label {
+  #print-label, #print-label *,
+  #print-area, #print-area * { visibility: visible; }
+  #print-label,
+  #print-area {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
   }
+  /* One ticket per sheet when several are sent to the printer at once. */
+  .print-page { break-after: page; page-break-after: always; }
+  .print-page:last-child { break-after: auto; page-break-after: auto; }
 }

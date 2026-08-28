@@ -1,4 +1,4 @@
-import { createContext, lazy, Suspense, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import printApi, { describeError, grams, money } from '../api/print';
 
@@ -9,6 +9,7 @@ import { Field, Pill } from './ui';
 import UnknownCode from './UnknownCode';
 import LocationPicker from './LocationPicker';
 import ScanFilamentActions from './ScanFilamentActions';
+import ScanOrderActions, { OrderResultCard } from './ScanOrderActions';
 
 const ScanContext = createContext(null);
 
@@ -28,6 +29,8 @@ const ACTIONS = {
 };
 
 function ResultCard({ match }) {
+  if (match.type === 'order') return <OrderResultCard order={match.order} />;
+
   if (match.type === 'filament' || match.type === 'filament_spool') {
     const f = match.filament;
     return (
@@ -100,7 +103,13 @@ export function ScanProvider({ children, onStockChange }) {
   const [placing, setPlacing] = useState(null);
   const [quantity, setQuantity] = useState('1');
   const [busy, setBusy] = useState(false);
+  const [stages, setStages] = useState([]);
   const handlerRef = useRef(null);
+
+  // The stages live on the server so there is one list, not two that drift.
+  useEffect(() => {
+    printApi.orderStages().then((d) => setStages(d.stages)).catch(() => setStages([]));
+  }, []);
 
   const scan = useCallback((options = {}) => {
     handlerRef.current = options.onCode || null;
@@ -157,6 +166,7 @@ export function ScanProvider({ children, onStockChange }) {
   const value = useMemo(() => ({ scan }), [scan]);
   const actions = match ? ACTIONS[match.type] || [] : [];
   const isFilament = match?.type === 'filament' || match?.type === 'filament_spool';
+  const isOrder = match?.type === 'order';
 
   return (
     <ScanContext.Provider value={value}>
@@ -169,7 +179,7 @@ export function ScanProvider({ children, onStockChange }) {
             onClose={() => { handlerRef.current = null; setOpen(false); }}
             onScan={handleCode}
             title={config.title || 'Scan a code'}
-            hint={config.hint || 'Point the camera at a spool, shelf label or product tag'}
+            hint={config.hint || 'Point the camera at an order ticket, spool, shelf label or product tag'}
           />
         </Suspense>
       )}
@@ -228,7 +238,17 @@ export function ScanProvider({ children, onStockChange }) {
               <>
               <ResultCard match={match} />
 
-              {isFilament ? (
+              {isOrder ? (
+                <ScanOrderActions
+                  match={match}
+                  stages={stages}
+                  onChanged={async () => {
+                    onStockChange?.();
+                    try { setMatch(await printApi.scanLookup(match.code)); } catch { /* keep what we have */ }
+                  }}
+                  onDone={() => setMatch(null)}
+                />
+              ) : isFilament ? (
                 <ScanFilamentActions
                   match={match}
                   onChanged={async () => {

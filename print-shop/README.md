@@ -71,7 +71,7 @@ another device on the same Wi-Fi — handy for testing, but see the camera note 
 | Tab | What it does |
 |-----|--------------|
 | **Dashboard** | Open orders, queue load, reorder list, inventory value. Deliberately light — more panels to come. |
-| **Orders** | Customer orders at retail or wholesale prices, promised vs projected ship date, one tap to send to the queue. |
+| **Orders** | Customer orders at retail or wholesale prices, promised vs projected ship date, printable tickets, and a seven-stage pipeline moved along by scanning. |
 | **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. Import a product list from a CSV. |
 | **Filament** | Colour library with per-spool tracking, where each spool is, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
 | **Materials** | The same for magnets, hardware, packaging — anything bought by the pack. |
@@ -153,6 +153,8 @@ actually hit given what is already queued.
   - **Move** — pick which spool (skipped when a spool's own tag was scanned), then pick
     where it is going. This is the `A1` → `AMS2` move you make before every print.
 - Materials and catalog items keep the plain receive / use / count actions.
+- Scanning an **order ticket** moves that order a stage on. See *Order tickets and the
+  seven stages* above.
 - Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
   scanning a box you just opened finds the right record.
 - **Scanning something the shop has never seen** offers to add it there and then — a
@@ -162,6 +164,57 @@ actually hit given what is already queued.
   Without that, scanning a familiar spool would quietly create a duplicate. One code can
   only ever point at one thing.
 - The decoding library is lazy-loaded, so it is only downloaded when a scan starts.
+
+---
+
+## Order tickets and the seven stages
+
+Every order carries a printed ticket, and scanning that ticket is what moves the order
+along. The stages are:
+
+**New → Confirmed → Queued → Production → Finishing → Packing → Shipped**
+
+One scan moves an order to the next one. **Cancelled** and **Completed** sit off the
+chain — they are chosen by hand, never arrived at by scanning.
+
+### Printing a ticket
+
+**Print** on any order card opens its ticket; **Print tickets** at the top prints every
+order currently shown, one to a sheet. A ticket carries the order number, who it is for,
+the promised ship date, every line with quantity and SKU, the total, any note, a row of
+stage boxes ticked off as far as the order has got, and a Code 128 barcode.
+
+The barcode is the order's own code — `ORD-` and its order number, so `#1001` from
+Shopify prints as `ORD-1001`. The prefix means an order code can never be mistaken for a
+product SKU at the scanner. It is generated when the order is created, whether by hand,
+by import or by Shopify, and it never changes.
+
+### Scanning
+
+Scan a ticket from anywhere — the **Scan** button on any tab. The sheet shows the order,
+who it is for, its lines and where it has got to, with the next stage as one large
+button. **Send it somewhere else instead** opens the full list for the times work skips
+a step.
+
+**A ticket read twice within eight seconds counts once.** Holding a sheet under the
+camera would otherwise walk it down the whole chain in a second.
+
+### What each stage does
+
+Reaching **Queued** is what actually puts the work in front of a printer — the same
+thing *Send to queue* does, so the ticket and the app never disagree about it. Reaching
+**Shipped** stamps the shipped date. Everything else just records where the order is.
+
+The shop moves an order along by itself in one place only: when the last print job on an
+order finishes, the order moves to **Finishing**. That only ever moves forward — if you
+have already scanned the order into packing, the queue does not drag it back.
+
+### The record
+
+Every move is logged with what caused it — a scan, a button, the queue, Shopify, or the
+order being created — and shows under **Details** on the order card as *How it got
+here*. The status tells you where an order is; this tells you when each step happened
+and what did it.
 
 ---
 
@@ -184,6 +237,10 @@ credentials in Render.
 
 **Test connection** confirms the token works and names the shop it belongs to.
 
+For live order push (below) the app also needs the `write_webhooks` scope and its **API
+secret key** — the value on the same *API credentials* screen as the access token, not
+the token itself. It is encrypted the same way, and `SHOPIFY_API_SECRET` overrides it.
+
 ### Pulling products
 
 Matched on SKU, and deliberately additive:
@@ -198,9 +255,42 @@ Matched on SKU, and deliberately additive:
 
 Running it twice changes nothing the second time.
 
+### Orders as they come in
+
+**Settings → Shopify → Push new orders here** subscribes Shopify to send every new
+order straight to this shop as it is placed. It appears within seconds, as **New**, with
+a ticket ready to print. Nothing is queued and nothing reaches a printer on its own.
+
+The endpoint that receives them, `/api/shopify/webhook`, is the one part of the shop
+that is not behind a sign-in — Shopify has no account here. What stands in for one is
+the signature Shopify puts on every request, checked against your API secret key with a
+constant-time comparison over the exact bytes received. A request that does not verify,
+or that verifies but names a different shop, is refused and nothing is written. With no
+secret stored, nothing is accepted at all.
+
+Three topics are subscribed: `orders/create`, `orders/updated` and `orders/cancelled`.
+
+- **Create** brings the order in, exactly as a pull would.
+- **Update** only ever touches what Shopify owns — customer, email, note. **It never
+  moves an order back down the pipeline**: an order you have already scanned into
+  packing stays in packing.
+- **Cancel** moves the order to Cancelled, unless it has already shipped.
+
+An order that arrives twice is recognised by its Shopify id and not duplicated.
+
+**A sweep runs behind the push**, every 15 minutes by default, doing a normal pull to
+catch anything a webhook never delivered — a deploy at the wrong moment, a few hours of
+failed retries. It creates nothing that is already here, so a sweep that finds nothing
+does nothing. Set `SHOPIFY_POLL_MINUTES` to change the interval, or to `0` to turn it
+off. **Check for missed orders** runs it on demand.
+
+If Shopify refuses the subscription, the usual cause is a missing `write_webhooks`
+scope: add it to the custom app, reinstall, and paste the new token in.
+
 ### Pulling orders
 
-Orders arrive with status **New**. Nothing is queued automatically — you look at an
+Pulling by hand still works, and is what the sweep uses. Orders arrive with status
+**New**. Nothing is queued automatically — you look at an
 order and press *Send to queue* yourself, so no order reaches a printer unseen.
 
 Line items match to catalog items by Shopify variant, then by SKU. A line that matches
@@ -223,7 +313,8 @@ you can set a newer version in Settings without a code change.
 ### Not done yet
 
 Pushing the other way — creating Shopify products from this catalog, and updating
-Shopify stock levels when a print finishes — is not built. Both are pulls only for now.
+Shopify stock levels when a print finishes — is not built. Products and orders come in;
+nothing goes out.
 
 ---
 
@@ -528,11 +619,17 @@ print-shop/
 │   ├── db/schema.js          Every table, created on start; seeds settings + first account
 │   ├── middleware/auth.js    JWT check
 │   ├── routes/               auth, settings, filaments, materials, catalog, orders,
-│   │                         queue, scan, dashboard, backup, shopify
+│   │                         queue, scan, dashboard, backup, shopify,
+│   │                         shopify-webhook (the one route outside the sign-in)
 │   ├── services/
-│   │   └── shopify-sync.js   Pulling products and orders in from Shopify
+│   │   ├── order-flow.js     Moving an order along, and what each stage does
+│   │   ├── shopify-sync.js   Pulling products and orders in, and taking webhooks
+│   │   ├── shopify-poll.js   The sweep that catches orders a webhook missed
+│   │   ├── catalog-import.js Reading a product list out of a CSV
+│   │   └── filament-import.js
 │   └── utils/
 │       ├── costing.js        Recursive cost roll-up and price suggestions
+│       ├── order-stages.js   The seven stages, in order — the one definition
 │       ├── picklist.js       What to gather for a job, and which spools to pull
 │       ├── planning.js       Queue scheduling, ship-date projection, stock summaries
 │       └── sku.js            SKU, spool tag and order number generation

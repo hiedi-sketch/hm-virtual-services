@@ -146,7 +146,9 @@ function createSchema() {
       customer_email TEXT,
       channel TEXT DEFAULT 'direct',
       order_type TEXT NOT NULL DEFAULT 'retail' CHECK(order_type IN ('retail','wholesale')),
-      status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','in_production','ready','shipped','completed','cancelled')),
+      -- The stages a printed order ticket is scanned through, plus the two
+      -- that are chosen by hand rather than arrived at. See utils/order-stages.
+      status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','confirmed','queued','in_production','finishing','packing','shipped','completed','cancelled')),
       order_date DATE,
       promised_ship_date DATE,
       shipped_date DATE,
@@ -163,6 +165,19 @@ function createSchema() {
       description TEXT,
       quantity REAL NOT NULL DEFAULT 1,
       unit_price REAL NOT NULL DEFAULT 0
+    );
+
+    -- Every stage an order moved through and what moved it: a scan of the
+    -- printed ticket, a queue job finishing, or a hand-picked change. This is
+    -- the record of when work actually happened, which the status alone loses.
+    CREATE TABLE IF NOT EXISTS order_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      from_status TEXT,
+      to_status TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'manual',
+      note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS queue_jobs (
@@ -285,10 +300,15 @@ function createSchema() {
     // Which kind of place that is. An AMS bay takes one spool; a shelf slot
     // takes as many as fit, so the exclusivity rule needs to know which.
     "ALTER TABLE filament_spools ADD COLUMN location_kind TEXT DEFAULT NULL",
+    // The code printed on an order ticket, scanned to move it a stage on.
+    'ALTER TABLE orders ADD COLUMN barcode TEXT',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
   }
+
+  migrateOrderStages();
+  backfillOrderBarcodes();
 
   // Indexes over the columns added above, once they are guaranteed to exist.
   // Spools placed before shelves could hold more than one need a kind.
@@ -324,5 +344,97 @@ function createSchema() {
   }
 }
 
+/**
+ * Orders used to have four working states. They now have the seven stages a
+ * printed ticket is scanned through, so the CHECK constraint has to change —
+ * and SQLite cannot alter one in place. The table is rebuilt from its own
+ * definition, so every column added since (shipping_total, the Shopify links)
+ * is carried across without this function having to know about them.
+ *
+ * Runs once: on a database whose constraint already knows 'confirmed' it
+ * returns immediately.
+ */
+function migrateOrderStages() {
+  const current = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'").get()?.sql;
+  if (!current || current.includes("'confirmed'")) return;
+
+  const STATUSES = "'new','confirmed','queued','in_production','finishing','packing','shipped','completed','cancelled'";
+  const rebuilt = current
+    .replace(/CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?["'`[]?orders["'`\]]?/i, 'CREATE TABLE orders_migrating')
+    .replace(/CHECK\s*\(\s*status\s+IN\s*\([^)]*\)\s*\)/i, `CHECK(status IN (${STATUSES}))`);
+
+  // If either substitution missed, the table is not shaped the way this
+  // migration expects. Leaving it alone beats corrupting it.
+  if (!rebuilt.includes('orders_migrating') || !rebuilt.includes("'confirmed'")) {
+    console.error('Could not migrate the order stages — leaving the orders table as it is.');
+    return;
+  }
+
+  const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+  const target = columns.map((c) => `"${c}"`).join(', ');
+  // 'ready' meant packed and waiting to go, which is what packing now covers.
+  const source = columns
+    .map((c) => (c === 'status' ? "CASE status WHEN 'ready' THEN 'packing' ELSE status END" : `"${c}"`))
+    .join(', ');
+
+  // Child rows point at orders(id); the rebuild would trip those on the way
+  // through. Both pragmas have to be set outside the transaction.
+  const hadForeignKeys = db.pragma('foreign_keys', { simple: true });
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  try {
+    db.transaction(() => {
+      db.exec(rebuilt);
+      db.exec(`INSERT INTO orders_migrating (${target}) SELECT ${source} FROM orders`);
+      db.exec('DROP TABLE orders');
+      db.exec('ALTER TABLE orders_migrating RENAME TO orders');
+    })();
+    console.log('Orders moved onto the seven-stage pipeline.');
+  } finally {
+    db.pragma('legacy_alter_table = OFF');
+    if (hadForeignKeys) db.pragma('foreign_keys = ON');
+  }
+}
+
+/**
+ * Every order needs something to print and scan. The order number itself is
+ * prefixed rather than used raw, so an order code can never be mistaken for a
+ * product SKU at the scanner.
+ */
+function backfillOrderBarcodes() {
+  let pending;
+  try {
+    pending = db.prepare('SELECT id, order_number FROM orders WHERE barcode IS NULL OR barcode = ?').all('');
+  } catch {
+    return; // column not there yet on a database mid-upgrade
+  }
+  if (!pending.length) return;
+
+  const taken = new Set(
+    db.prepare('SELECT barcode FROM orders WHERE barcode IS NOT NULL').all().map((r) => r.barcode)
+  );
+  const update = db.prepare('UPDATE orders SET barcode = ? WHERE id = ?');
+
+  db.transaction(() => {
+    for (const order of pending) {
+      const code = freeOrderBarcode(order.order_number, order.id, taken);
+      taken.add(code);
+      update.run(code, order.id);
+    }
+  })();
+}
+
+/** `#1001` and `PO-00007` both become a clean, unique `ORD-…` payload. */
+function freeOrderBarcode(orderNumber, id, taken) {
+  const stem = String(orderNumber || '').trim().replace(/[^A-Za-z0-9-]/g, '') || `X${id}`;
+  let candidate = `ORD-${stem}`;
+  let suffix = 2;
+  while (taken.has(candidate)) {
+    candidate = `ORD-${stem}-${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
 createSchema();
-module.exports = { createSchema };
+module.exports = { createSchema, freeOrderBarcode };

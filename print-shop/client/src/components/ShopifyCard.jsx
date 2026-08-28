@@ -56,9 +56,10 @@ function Result({ result }) {
 /** Connect a Shopify store and pull products and orders in from it. */
 export default function ShopifyCard() {
   const [config, setConfig] = useState(null);
-  const [form, setForm] = useState({ domain: '', token: '', api_version: '' });
+  const [form, setForm] = useState({ domain: '', token: '', api_version: '', secret: '' });
   const [busy, setBusy] = useState('');
   const [result, setResult] = useState(null);
+  const [push, setPush] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -70,7 +71,14 @@ export default function ShopifyCard() {
     }
   }, []);
 
+  // What Shopify is currently pushing here, if the connection is good enough
+  // to ask. A store that is not connected simply has nothing to report.
+  const loadPush = useCallback(async () => {
+    try { setPush(await printApi.shopifyWebhooks()); } catch { setPush(null); }
+  }, []);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (config?.configured) loadPush(); }, [config?.configured, loadPush]);
 
   async function run(label, fn, onDone) {
     setBusy(label);
@@ -92,7 +100,7 @@ export default function ShopifyCard() {
   async function save(e) {
     e.preventDefault();
     await run('save', () => printApi.saveShopify(form).then(() => ({ message: 'Saved' })));
-    setForm((f) => ({ ...f, token: '' }));
+    setForm((f) => ({ ...f, token: '', secret: '' }));
   }
 
   async function disconnect() {
@@ -141,6 +149,21 @@ export default function ShopifyCard() {
             onChange={(e) => setForm({ ...form, token: e.target.value })}
           />
         </Field>
+        <Field
+          label="API secret key"
+          hint={config.has_secret
+            ? 'Stored. Leave blank to keep it. Only needed for live order push.'
+            : 'From the same app, under API credentials. Needed to prove a pushed order really came from Shopify.'}
+        >
+          <input
+            type="password"
+            className="input font-mono"
+            autoComplete="off"
+            placeholder={config.has_secret ? '••••••••' : 'shpss_…'}
+            value={form.secret}
+            onChange={(e) => setForm({ ...form, secret: e.target.value })}
+          />
+        </Field>
         <Field label="API version" hint={`Default ${config.default_api_version}. Change it if Shopify says the version is unsupported.`}>
           <input
             className="input font-mono"
@@ -164,6 +187,57 @@ export default function ShopifyCard() {
       {config.configured && (
         <div className="border-t border-linen pt-3 space-y-3">
           <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-semibold text-primary text-sm">Orders as they come in</p>
+              {push?.live
+                ? <Pill tone="green">Shopify is pushing orders here</Pill>
+                : <Pill tone="gray">Not pushing yet</Pill>}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              With this on, an order placed in Shopify appears here within seconds instead of waiting
+              for you to press Pull. It arrives as New with a ticket to print — nothing is queued and
+              nothing reaches a printer on its own.
+              {push?.sweep_minutes > 0 && ` A sweep every ${push.sweep_minutes} minutes catches anything a push missed.`}
+            </p>
+            {!config.has_secret && (
+              <p className="text-xs text-amber-700 mt-1">
+                Paste your app&apos;s API secret key above first — without it a pushed order cannot be
+                proved to have come from Shopify, so none are accepted.
+              </p>
+            )}
+            {push?.callback_url && (
+              <p className="text-[11px] text-gray-400 font-mono mt-1 break-all">{push.callback_url}</p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {push?.live ? (
+              <button
+                className="btn-secondary"
+                disabled={!!busy}
+                onClick={() => run('unhook', printApi.disableShopifyWebhooks, loadPush)}
+              >
+                {busy === 'unhook' ? 'Stopping…' : 'Stop the push'}
+              </button>
+            ) : (
+              <button
+                className="btn-primary"
+                disabled={!!busy || !config.has_secret}
+                onClick={() => run('hook', () => printApi.enableShopifyWebhooks(), loadPush)}
+              >
+                {busy === 'hook' ? 'Setting it up…' : 'Push new orders here'}
+              </button>
+            )}
+            <button
+              className="btn-ghost"
+              disabled={!!busy}
+              onClick={() => run('sweep', printApi.sweepShopifyOrders, (r) => setResult(r.data))}
+            >
+              {busy === 'sweep' ? 'Checking…' : 'Check for missed orders'}
+            </button>
+          </div>
+
+          <div className="border-t border-linen pt-3">
             <p className="font-semibold text-primary text-sm">Bring things in</p>
             <p className="text-xs text-gray-500">
               Products match on SKU. Anything already here keeps its name, prices and recipe and just

@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db/database');
 const { getSettings, computeItemCost, round2 } = require('../utils/costing');
 const { scheduleQueue, orderProjections, filamentSummary, materialSummary } = require('../utils/planning');
+const stages = require('../utils/order-stages');
 
 const router = express.Router();
 
@@ -35,7 +36,8 @@ router.get('/', (req, res) => {
       orders: {
         by_status: Object.fromEntries(orderCounts.map((r) => [r.status, r.count])),
         open: orderCounts
-          .filter((r) => ['new', 'in_production', 'ready'].includes(r.status))
+          // Anything short of shipped is still work in hand.
+          .filter((r) => stages.indexOf(r.status) !== -1 && r.status !== 'shipped')
           .reduce((sum, r) => sum + r.count, 0),
         at_risk: projections.filter((p) => p.at_risk),
         next_ships: [...projections].sort((a, b) =>

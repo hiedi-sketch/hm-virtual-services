@@ -30,11 +30,20 @@ if (!IS_PRODUCTION) {
   app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
 }
 
-app.use(express.json({ limit: '1mb' }));
+// The raw body is kept because Shopify signs it: a re-serialised body would
+// not match the signature it sent.
+app.use(express.json({
+  limit: '1mb',
+  verify: (req, res, buf) => { req.rawBody = buf; },
+}));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Render pings this to decide whether a deploy came up healthy.
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+// Shopify has no account here, so this one endpoint sits outside the sign-in
+// and proves itself with the signature on its body instead.
+app.use('/api/shopify/webhook', require('./routes/shopify-webhook'));
 
 app.use('/api', require('./routes'));
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such endpoint' }));
@@ -65,6 +74,8 @@ app.use((err, req, res, next) => {
 
 const server = app.listen(PORT, () => {
   console.log(`Print Shop running on port ${PORT}${IS_PRODUCTION ? '' : ' — API only, run the client separately'}`);
+  // Catches any order whose webhook never arrived.
+  require('./services/shopify-poll').start();
 });
 
 server.on('error', (err) => {

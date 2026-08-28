@@ -4,6 +4,8 @@ const { nextSpoolCode } = require('../utils/sku');
 const { filamentSummary, materialSummary } = require('../utils/planning');
 const { priceItem } = require('../utils/costing');
 const { logStock } = require('./helpers');
+const flow = require('../services/order-flow');
+const stages = require('../utils/order-stages');
 
 const router = express.Router();
 
@@ -14,6 +16,11 @@ const router = express.Router();
 function resolve(rawCode) {
   const code = String(rawCode || '').trim();
   if (!code) return null;
+
+  // Order tickets first: their codes are prefixed so they cannot collide with
+  // a SKU, and matching here keeps an order out of the stock-adjust branches.
+  const order = db.prepare('SELECT * FROM orders WHERE barcode = ? OR order_number = ?').get(code, code);
+  if (order) return { type: 'order', code, order: orderCard(order) };
 
   const spool = db.prepare('SELECT * FROM filament_spools WHERE spool_code = ?').get(code);
   if (spool) {
@@ -43,6 +50,24 @@ function resolve(rawCode) {
   if (item) return { type: 'item', code, item: priceItem(item.id) };
 
   return null;
+}
+
+/** Just enough of an order to show on the scan sheet and act on. */
+function orderCard(order) {
+  const lines = db.prepare(`
+    SELECT oi.quantity, oi.unit_price, IFNULL(i.name, oi.description) AS label, i.sku
+      FROM order_items oi LEFT JOIN items i ON oi.item_id = i.id
+     WHERE oi.order_id = ? ORDER BY oi.id
+  `).all(order.id);
+
+  return {
+    ...order,
+    items: lines,
+    stage: stages.stageInfo(order.status),
+    next_stage: stages.nextStage(order.status),
+    next_stage_info: stages.stageInfo(stages.nextStage(order.status)),
+    revenue: lines.reduce((sum, l) => sum + (l.quantity || 0) * (l.unit_price || 0), 0),
+  };
 }
 
 router.post('/lookup', (req, res) => {
@@ -109,6 +134,10 @@ router.post('/action', (req, res) => {
   const match = resolve(req.body.code);
   if (!match) {
     return res.status(404).json({ error: 'Nothing in the shop matches that code', code: req.body.code });
+  }
+
+  if (match.type === 'order') {
+    return res.status(400).json({ error: 'That is an order ticket — scan it to move it a stage on' });
   }
 
   const qty = Number(quantity);
@@ -218,6 +247,34 @@ router.post('/action', (req, res) => {
     ? { type: 'material', code: match.code, material: materialSummary(row.id)[0] }
     : { type: 'item', code: match.code, item: priceItem(row.id) };
   res.json({ data, message: `${row.name} — ${action} ${Math.abs(change)}` });
+});
+
+/**
+ * Scan an order ticket to move it a stage on: new to confirmed, confirmed to
+ * queued, and so on to shipped. `to` overrides the next stage when she picks
+ * one on the sheet instead.
+ */
+router.post('/advance', (req, res) => {
+  const match = resolve(req.body.code);
+  if (!match) {
+    return res.status(404).json({ error: 'Nothing in the shop matches that code', code: req.body.code });
+  }
+  if (match.type !== 'order') {
+    return res.status(400).json({ error: 'That code is not an order ticket' });
+  }
+
+  try {
+    const result = req.body.to
+      ? flow.setStatus(match.order.id, req.body.to, { source: 'scan' })
+      : flow.advance(match.order.id, { source: 'scan', guardDoubleScan: true });
+
+    return res.json({
+      data: resolve(match.code),
+      message: `${result.order.order_number} — ${result.message.toLowerCase()}`,
+    });
+  } catch (err) {
+    return res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 module.exports = router;

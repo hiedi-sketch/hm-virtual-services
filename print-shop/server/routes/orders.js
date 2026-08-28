@@ -2,7 +2,10 @@ const express = require('express');
 const db = require('../db/database');
 const { nextOrderNumber } = require('../utils/sku');
 const { getSettings, priceItem, computeItemCost, round2 } = require('../utils/costing');
-const { suggestShipDate, orderProjections, estimatedMinutes } = require('../utils/planning');
+const { suggestShipDate, orderProjections } = require('../utils/planning');
+const { freeOrderBarcode } = require('../db/schema');
+const stages = require('../utils/order-stages');
+const flow = require('../services/order-flow');
 
 const router = express.Router();
 
@@ -40,6 +43,8 @@ function hydrate(order, projectionsById) {
     ...order,
     ...totals,
     queue_entries: queue,
+    next_stage: stages.nextStage(order.status),
+    history: flow.events(order.id, 12),
     projection: projectionsById?.get(order.id) || null,
     needs_queueing: totals.items.some(
       (line) => line.item_id && line.item_type !== 'tool' &&
@@ -57,11 +62,18 @@ router.get('/', (req, res) => {
     sql += ' AND (order_number LIKE ? OR customer_name LIKE ? OR customer_email LIKE ?)';
     params.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
-  sql += " ORDER BY CASE status WHEN 'new' THEN 0 WHEN 'in_production' THEN 1 WHEN 'ready' THEN 2 ELSE 3 END, order_date DESC, id DESC";
+  // Work in progress first, in pipeline order; shipped and cancelled sink.
+  const rank = stages.CHAIN.map((key, i) => `WHEN '${key}' THEN ${i}`).join(' ');
+  sql += ` ORDER BY CASE status ${rank} ELSE 99 END, order_date DESC, id DESC`;
 
   const { projections } = orderProjections();
   const byId = new Map(projections.map((p) => [p.order_id, p]));
   res.json({ data: db.prepare(sql).all(...params).map((o) => hydrate(o, byId)) });
+});
+
+/** The stages themselves, so the app never hard-codes its own copy. */
+router.get('/stages', (req, res) => {
+  res.json({ data: { stages: stages.STAGES, off_chain: stages.OFF_CHAIN } });
 });
 
 router.get('/suggest-ship-date', (req, res) => {
@@ -99,6 +111,14 @@ router.post('/', (req, res) => {
       `INSERT INTO orders (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`
     ).run(...keys.map((k) => body[k])).lastInsertRowid;
 
+    // Every order gets something printable and scannable from the start.
+    const taken = new Set(
+      db.prepare('SELECT barcode FROM orders WHERE barcode IS NOT NULL').all().map((r) => r.barcode)
+    );
+    db.prepare('UPDATE orders SET barcode = ? WHERE id = ?')
+      .run(freeOrderBarcode(body.order_number, id, taken), id);
+    flow.logEvent(id, null, body.status || 'new', 'created');
+
     const insertLine = db.prepare(`
       INSERT INTO order_items (order_id, item_id, description, quantity, unit_price)
       VALUES (?, ?, ?, ?, ?)
@@ -131,8 +151,18 @@ router.put('/:id', (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
+  // A status set by hand goes through the same path as a scan, so choosing
+  // "Queued" from the dropdown queues the work exactly as scanning would.
+  if (req.body.status !== undefined && req.body.status !== order.status) {
+    try {
+      flow.setStatus(order.id, req.body.status, { source: 'manual' });
+    } catch (err) {
+      return res.status(err.status || 400).json({ error: err.message });
+    }
+  }
+
   const update = db.transaction(() => {
-    const keys = EDITABLE.filter((k) => req.body[k] !== undefined);
+    const keys = EDITABLE.filter((k) => k !== 'status' && req.body[k] !== undefined);
     if (keys.length) {
       db.prepare(
         `UPDATE orders SET ${keys.map((k) => `${k}=?`).join(', ')}, updated_at=CURRENT_TIMESTAMP WHERE id=?`
@@ -172,44 +202,43 @@ router.post('/:id/queue', (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
-  const lines = db.prepare(`
-    SELECT oi.*, i.item_type FROM order_items oi
-      JOIN items i ON oi.item_id = i.id
-     WHERE oi.order_id = ? AND i.item_type <> 'tool'
-  `).all(order.id);
-
-  const maxPosition = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM queue_jobs').get().max;
-  let position = maxPosition;
-  let added = 0;
-
-  const enqueue = db.transaction(() => {
-    for (const line of lines) {
-      const already = db.prepare(`
-        SELECT COUNT(*) AS count FROM queue_jobs WHERE order_item_id = ? AND status <> 'cancelled'
-      `).get(line.id).count;
-      if (already > 0) continue;
-
-      position += 1;
-      const minutes = estimatedMinutes({ item_id: line.item_id, quantity: line.quantity, estimated_minutes: null });
-      db.prepare(`
-        INSERT INTO queue_jobs (order_id, order_item_id, item_id, quantity, priority, position, estimated_minutes)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(order.id, line.id, line.item_id, line.quantity, req.body.priority || 'normal', position, minutes);
-      added += 1;
-    }
-    if (added > 0 && order.status === 'new') {
-      db.prepare("UPDATE orders SET status = 'in_production', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-        .run(order.id);
-    }
-  });
-  enqueue();
+  // Queueing is the "queued" stage, so it goes through the pipeline rather
+  // than round the side of it. An order already past queued just gets the work
+  // added without being dragged backwards.
+  let added;
+  let message;
+  if (stages.indexOf(order.status) < stages.indexOf('queued')) {
+    const result = flow.setStatus(order.id, 'queued', { source: 'app', priority: req.body.priority || 'normal' });
+    added = result.queued;
+    message = added ? `${added} item(s) queued` : 'Nothing on this order needs printing';
+  } else {
+    added = flow.enqueueOrder(order.id, req.body.priority || 'normal');
+    message = added ? `${added} item(s) queued` : 'Everything on this order is already queued';
+  }
 
   const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
   const { projections } = orderProjections();
-  res.json({
-    data: hydrate(updated, new Map(projections.map((p) => [p.order_id, p]))),
-    message: added ? `${added} item(s) queued` : 'Everything on this order is already queued',
-  });
+  res.json({ data: hydrate(updated, new Map(projections.map((p) => [p.order_id, p]))), message });
+});
+
+/**
+ * One stage along — what scanning the printed ticket does. Pass `to` to jump
+ * to a particular stage instead; without it the order simply moves on.
+ */
+router.post('/:id/advance', (req, res) => {
+  try {
+    const result = req.body.to
+      ? flow.setStatus(Number(req.params.id), req.body.to, { source: req.body.source || 'app', note: req.body.note })
+      : flow.advance(Number(req.params.id), { source: req.body.source || 'app', note: req.body.note });
+
+    const { projections } = orderProjections();
+    res.json({
+      data: hydrate(result.order, new Map(projections.map((p) => [p.order_id, p]))),
+      message: `${result.order.order_number} — ${result.message.toLowerCase()}`,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 module.exports = router;

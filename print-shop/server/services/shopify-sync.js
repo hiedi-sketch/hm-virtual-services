@@ -2,6 +2,8 @@ const db = require('../db/database');
 const { graphql, paginate } = require('../utils/shopify');
 const { suggestShipDate } = require('../utils/planning');
 const { computeItemCost } = require('../utils/costing');
+const { freeOrderBarcode } = require('../db/schema');
+const flow = require('./order-flow');
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -196,6 +198,95 @@ function summarise(result) {
 // ── Orders ───────────────────────────────────────────────────────────────────
 
 /**
+ * Turn a Shopify order into the shape this shop stores, matching each line to
+ * a catalog item by variant id first and SKU second. Reads nothing but the
+ * catalog, so a pull and a webhook get identical results.
+ */
+function prepareOrder(order) {
+  const byVariant = db.prepare('SELECT * FROM items WHERE shopify_variant_id = ?');
+  const bySku = db.prepare('SELECT * FROM items WHERE sku = ?');
+  const unmatched = [];
+
+  const customer = order.customer
+    ? [order.customer.firstName, order.customer.lastName].filter(Boolean).join(' ')
+    : order.shippingAddress?.name;
+
+  const lines = (order.lineItems?.nodes || []).map((line) => {
+    const match = (line.variant?.id && byVariant.get(line.variant.id))
+      || (line.sku && bySku.get(line.sku.trim()));
+    if (!match) unmatched.push({ order: order.name, line: line.title, sku: line.sku || null });
+    return {
+      item_id: match?.id || null,
+      description: match ? null : line.title,
+      quantity: Number(line.quantity) || 1,
+      unit_price: Number(line.originalUnitPriceSet?.shopMoney?.amount) || 0,
+      shopify_line_item_id: line.id,
+    };
+  });
+
+  return {
+    shopify_order_id: order.id,
+    name: order.name,
+    order_date: String(order.createdAt || new Date().toISOString()).slice(0, 10),
+    cancelled: !!order.cancelledAt,
+    customer: customer || null,
+    email: order.customer?.email || order.email || null,
+    note: order.note || null,
+    lines,
+    unmatched,
+  };
+}
+
+/**
+ * Write a prepared order in. Lands in New with a ticket code and nothing
+ * queued — an order waits to be looked at before anything reaches a printer.
+ */
+function saveOrder(prepared) {
+  const printMinutes = prepared.lines.reduce((sum, l) => (
+    l.item_id ? sum + (computeItemCost(l.item_id)?.print_minutes_per_unit || 0) * l.quantity : sum
+  ), 0);
+  const suggestion = suggestShipDate(prepared.order_date, printMinutes);
+
+  const create = db.transaction(() => {
+    const orderNumber = freeOrderNumber(prepared.name);
+    const orderId = db.prepare(`
+      INSERT INTO orders
+        (order_number, customer_name, customer_email, channel, order_type, status,
+         order_date, promised_ship_date, notes, shopify_order_id)
+      VALUES (?, ?, ?, 'shopify', 'retail', ?, ?, ?, ?, ?)
+    `).run(
+      orderNumber,
+      prepared.customer,
+      prepared.email,
+      prepared.cancelled ? 'cancelled' : 'new',
+      prepared.order_date,
+      suggestion.suggested_ship_date,
+      prepared.note,
+      prepared.shopify_order_id
+    ).lastInsertRowid;
+
+    const taken = new Set(
+      db.prepare('SELECT barcode FROM orders WHERE barcode IS NOT NULL').all().map((r) => r.barcode)
+    );
+    db.prepare('UPDATE orders SET barcode = ? WHERE id = ?')
+      .run(freeOrderBarcode(orderNumber, orderId, taken), orderId);
+
+    const insertLine = db.prepare(`
+      INSERT INTO order_items (order_id, item_id, description, quantity, unit_price, shopify_line_item_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    for (const line of prepared.lines) {
+      insertLine.run(orderId, line.item_id, line.description, line.quantity, line.unit_price, line.shopify_line_item_id);
+    }
+    flow.logEvent(orderId, null, prepared.cancelled ? 'cancelled' : 'new', 'shopify');
+    return orderId;
+  });
+
+  return create();
+}
+
+
+/**
  * Bring Shopify orders in as orders here. Nothing is queued — an order lands
  * in New and waits to be looked at before anything reaches a printer.
  */
@@ -224,65 +315,17 @@ async function pullOrders({ sinceDays = null, dryRun = false } = {}) {
         continue;
       }
 
-      const orderDate = String(order.createdAt).slice(0, 10);
-      const customer = order.customer
-        ? [order.customer.firstName, order.customer.lastName].filter(Boolean).join(' ')
-        : order.shippingAddress?.name;
-
-      const lines = (order.lineItems?.nodes || []).map((line) => {
-        const match = (line.variant?.id && byVariant.get(line.variant.id))
-          || (line.sku && bySku.get(line.sku.trim()));
-        if (!match) {
-          result.unmatched_lines.push({ order: order.name, line: line.title, sku: line.sku || null });
-        }
-        return {
-          item_id: match?.id || null,
-          description: match ? null : line.title,
-          quantity: Number(line.quantity) || 1,
-          unit_price: Number(line.originalUnitPriceSet?.shopMoney?.amount) || 0,
-          shopify_line_item_id: line.id,
-        };
-      });
+      const prepared = prepareOrder(order);
+      result.unmatched_lines.push(...prepared.unmatched);
 
       if (dryRun) {
-        result.created.push({ order_number: order.name, customer, lines: lines.length });
+        result.created.push({ order_number: order.name, customer: prepared.customer, lines: prepared.lines.length });
         continue;
       }
 
-      const printMinutes = lines.reduce((sum, l) => (
-        l.item_id ? sum + (computeItemCost(l.item_id)?.print_minutes_per_unit || 0) * l.quantity : sum
-      ), 0);
-      const suggestion = suggestShipDate(orderDate, printMinutes);
+      saveOrder(prepared);
+      result.created.push({ order_number: order.name, customer: prepared.customer, lines: prepared.lines.length });
 
-      const create = db.transaction(() => {
-        const orderId = db.prepare(`
-          INSERT INTO orders
-            (order_number, customer_name, customer_email, channel, order_type, status,
-             order_date, promised_ship_date, notes, shopify_order_id)
-          VALUES (?, ?, ?, 'shopify', 'retail', ?, ?, ?, ?, ?)
-        `).run(
-          freeOrderNumber(order.name),
-          customer || null,
-          order.customer?.email || order.email || null,
-          order.cancelledAt ? 'cancelled' : 'new',
-          orderDate,
-          suggestion.suggested_ship_date,
-          order.note || null,
-          order.id
-        ).lastInsertRowid;
-
-        const insertLine = db.prepare(`
-          INSERT INTO order_items (order_id, item_id, description, quantity, unit_price, shopify_line_item_id)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `);
-        for (const line of lines) {
-          insertLine.run(orderId, line.item_id, line.description, line.quantity, line.unit_price, line.shopify_line_item_id);
-        }
-        return orderId;
-      });
-
-      create();
-      result.created.push({ order_number: order.name, customer, lines: lines.length });
     }
 
     if (!dryRun) {
@@ -300,9 +343,87 @@ async function pullOrders({ sinceDays = null, dryRun = false } = {}) {
   }
 }
 
+// ── Webhooks ─────────────────────────────────────────────────────────────────
+
+/**
+ * A webhook body is the REST shape — snake_case, numeric ids — while a pull
+ * gives GraphQL nodes. Converting one into the other means orders arriving by
+ * push and by pull go down exactly the same road.
+ */
+function fromWebhook(payload) {
+  const gid = (kind, id) => (id == null ? null : `gid://shopify/${kind}/${id}`);
+  return {
+    id: gid('Order', payload.id),
+    name: payload.name || payload.order_number || `#${payload.id}`,
+    createdAt: payload.created_at || new Date().toISOString(),
+    cancelledAt: payload.cancelled_at || null,
+    note: payload.note || null,
+    email: payload.email || payload.contact_email || null,
+    customer: payload.customer
+      ? {
+        firstName: payload.customer.first_name || null,
+        lastName: payload.customer.last_name || null,
+        email: payload.customer.email || null,
+      }
+      : null,
+    shippingAddress: payload.shipping_address ? { name: payload.shipping_address.name } : null,
+    lineItems: {
+      nodes: (payload.line_items || []).map((line) => ({
+        id: gid('LineItem', line.id),
+        title: line.title || line.name,
+        sku: line.sku || null,
+        quantity: line.quantity,
+        variant: line.variant_id ? { id: gid('ProductVariant', line.variant_id) } : null,
+        originalUnitPriceSet: { shopMoney: { amount: line.price } },
+      })),
+    },
+  };
+}
+
+/**
+ * Act on one verified webhook. Creating is the interesting case; an update to
+ * an order already here only ever touches what Shopify owns — who bought it
+ * and whether it is cancelled — never the stage she has scanned it to.
+ */
+function applyWebhook(topic, payload) {
+  const startedAt = new Date().toISOString();
+  const order = fromWebhook(payload);
+  const existing = db.prepare('SELECT * FROM orders WHERE shopify_order_id = ?').get(order.id);
+
+  let outcome;
+  if (!existing) {
+    const prepared = prepareOrder(order);
+    const id = saveOrder(prepared);
+    outcome = {
+      action: 'created',
+      order_number: db.prepare('SELECT order_number FROM orders WHERE id = ?').get(id).order_number,
+      unmatched_lines: prepared.unmatched.length,
+    };
+  } else if (order.cancelledAt && existing.status !== 'cancelled' && existing.status !== 'shipped') {
+    // A cancellation is worth knowing about even mid-print; a shipped order is
+    // past caring.
+    flow.setStatus(existing.id, 'cancelled', { source: 'shopify', note: 'cancelled in Shopify' });
+    outcome = { action: 'cancelled', order_number: existing.order_number };
+  } else {
+    const prepared = prepareOrder(order);
+    db.prepare(`
+      UPDATE orders SET customer_name = IFNULL(?, customer_name), customer_email = IFNULL(?, customer_email),
+                        notes = IFNULL(?, notes), updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?
+    `).run(prepared.customer, prepared.email, prepared.note, existing.id);
+    outcome = { action: 'updated', order_number: existing.order_number };
+  }
+
+  recordSync('shopify', `webhook ${topic}`, true, outcome, null, startedAt);
+  return outcome;
+}
+
 function history(limit = 10) {
   return db.prepare('SELECT * FROM sync_log ORDER BY id DESC LIMIT ?').all(limit)
     .map((row) => ({ ...row, summary: row.summary ? JSON.parse(row.summary) : null }));
 }
 
-module.exports = { pullProducts, pullOrders, history, PRODUCTS_QUERY, ORDERS_QUERY };
+module.exports = {
+  pullProducts, pullOrders, history, applyWebhook, fromWebhook, prepareOrder, saveOrder,
+  PRODUCTS_QUERY, ORDERS_QUERY,
+};

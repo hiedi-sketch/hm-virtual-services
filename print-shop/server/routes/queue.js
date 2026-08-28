@@ -6,6 +6,7 @@ const {
 } = require('../utils/planning');
 const { logStock } = require('./helpers');
 const { ensurePicks, readPicks } = require('../utils/picklist');
+const flow = require('../services/order-flow');
 
 const router = express.Router();
 
@@ -230,15 +231,15 @@ router.put('/:id', (req, res) => {
       else completeEntry(merged);
     }
 
-    // When the last job on an order lands, the order is ready to pack.
+    // When the last job on an order lands, printing is done and the order is
+    // waiting on finishing. Forward only: if she has already scanned it past
+    // here, the queue does not drag it back.
     if (entry.order_id) {
       const outstanding = db.prepare(
         "SELECT COUNT(*) AS count FROM queue_jobs WHERE order_id = ? AND status IN ('queued','printing','post_processing')"
       ).get(entry.order_id).count;
       if (outstanding === 0) {
-        db.prepare(
-          "UPDATE orders SET status = 'ready', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND status = 'in_production'"
-        ).run(entry.order_id);
+        flow.advanceTo(entry.order_id, 'finishing', { source: 'queue', note: 'all print jobs done' });
       }
     }
   });

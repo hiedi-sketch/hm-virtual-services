@@ -32,6 +32,10 @@ export const printApi = {
   testShopify: () => api.post('/shopify/test').then((r) => r.data),
   pullShopifyProducts: (body) => api.post('/shopify/pull/products', body || {}).then((r) => r.data),
   pullShopifyOrders: (body) => api.post('/shopify/pull/orders', body || {}).then((r) => r.data),
+  shopifyWebhooks: () => unwrap(api.get('/shopify/webhooks')),
+  enableShopifyWebhooks: (body) => api.post('/shopify/webhooks', body || {}).then((r) => r.data),
+  disableShopifyWebhooks: () => api.delete('/shopify/webhooks').then((r) => r.data),
+  sweepShopifyOrders: () => api.post('/shopify/sweep').then((r) => r.data),
   saveSettings: (body) => unwrap(api.put('/settings', body)),
 
   filaments: (params) => unwrap(api.get('/filaments', { params })),
@@ -73,6 +77,8 @@ export const printApi = {
   updateOrder: (id, body) => unwrap(api.put(`/orders/${id}`, body)),
   deleteOrder: (id) => api.delete(`/orders/${id}`),
   queueOrder: (id, body) => api.post(`/orders/${id}/queue`, body).then((r) => r.data),
+  orderStages: () => unwrap(api.get('/orders/stages')),
+  advanceOrder: (id, body) => api.post(`/orders/${id}/advance`, body || {}).then((r) => r.data),
   suggestShipDate: (params) => unwrap(api.get('/orders/suggest-ship-date', { params })),
 
   queue: () => unwrap(api.get('/queue')),
@@ -89,6 +95,7 @@ export const printApi = {
 
   scanLookup: (code) => unwrap(api.post('/scan/lookup', { code })),
   scanAction: (body) => api.post('/scan/action', body).then((r) => r.data),
+  scanAdvance: (body) => api.post('/scan/advance', body).then((r) => r.data),
   scanTargets: () => unwrap(api.get('/scan/targets')),
   scanLink: (body) => api.post('/scan/link', body).then((r) => r.data),
 };

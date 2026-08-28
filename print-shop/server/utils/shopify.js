@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const db = require('../db/database');
 const { encrypt, decrypt, maskToken } = require('./secrets');
 
@@ -34,16 +35,20 @@ function getConfig() {
   const domain = normaliseDomain(process.env.SHOPIFY_STORE_DOMAIN || readSetting('shopify_domain'));
   const token = process.env.SHOPIFY_ACCESS_TOKEN || decrypt(readSetting('shopify_token'));
   const apiVersion = process.env.SHOPIFY_API_VERSION || readSetting('shopify_api_version') || DEFAULT_API_VERSION;
+  // Signs the webhooks Shopify pushes at us. Shopify calls it the API secret
+  // key; it is not the access token and cannot be derived from it.
+  const secret = process.env.SHOPIFY_API_SECRET || decrypt(readSetting('shopify_api_secret'));
   return {
     domain,
     token,
     apiVersion,
+    secret,
     configured: !!(domain && token),
     fromEnvironment: !!(process.env.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_ACCESS_TOKEN),
   };
 }
 
-function saveConfig({ domain, token, apiVersion }) {
+function saveConfig({ domain, token, apiVersion, secret }) {
   if (domain !== undefined) {
     const clean = normaliseDomain(domain);
     if (domain && !clean) {
@@ -60,6 +65,9 @@ function saveConfig({ domain, token, apiVersion }) {
   if (apiVersion !== undefined) {
     writeSetting('shopify_api_version', String(apiVersion || DEFAULT_API_VERSION).trim());
   }
+  if (secret !== undefined && secret !== '') {
+    writeSetting('shopify_api_secret', secret === null ? null : encrypt(String(secret).trim()));
+  }
   return getConfig();
 }
 
@@ -73,6 +81,7 @@ function publicConfig() {
     token_hint: maskToken(config.token),
     from_environment: config.fromEnvironment,
     default_api_version: DEFAULT_API_VERSION,
+    has_secret: !!config.secret,
   };
 }
 
@@ -204,8 +213,115 @@ async function testConnection() {
   return data.shop;
 }
 
+// ── Webhooks ─────────────────────────────────────────────────────────────────
+
+/** The topics that keep orders here in step with orders there. */
+const ORDER_TOPICS = ['ORDERS_CREATE', 'ORDERS_UPDATED', 'ORDERS_CANCELLED'];
+
+/**
+ * Is this really from Shopify? The body is signed with the app's API secret,
+ * so anything that does not match the signature is thrown away unread.
+ *
+ * Compared with `timingSafeEqual`, and only after a length check, since that
+ * function throws on a length mismatch rather than returning false.
+ */
+function verifyWebhook(rawBody, signature) {
+  const { secret } = getConfig();
+  if (!secret || !signature || !rawBody) return false;
+
+  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
+  const a = Buffer.from(expected, 'utf8');
+  const b = Buffer.from(String(signature), 'utf8');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+const WEBHOOK_LIST = `
+  query webhooks($cursor: String) {
+    webhookSubscriptions(first: 50, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes { id topic endpoint { __typename ... on WebhookHttpEndpoint { callbackUrl } } }
+    }
+  }
+`;
+
+const WEBHOOK_CREATE = `
+  mutation create($topic: WebhookSubscriptionTopic!, $url: URL!) {
+    webhookSubscriptionCreate(topic: $topic, webhookSubscription: { callbackUrl: $url, format: JSON }) {
+      webhookSubscription { id topic }
+      userErrors { field message }
+    }
+  }
+`;
+
+const WEBHOOK_DELETE = `
+  mutation destroy($id: ID!) {
+    webhookSubscriptionDelete(id: $id) { deletedWebhookSubscriptionId userErrors { field message } }
+  }
+`;
+
+async function listWebhooks() {
+  const { nodes } = await paginate(WEBHOOK_LIST, {}, (d) => d.webhookSubscriptions);
+  return nodes.map((n) => ({ id: n.id, topic: n.topic, url: n.endpoint?.callbackUrl || null }));
+}
+
+/**
+ * Point Shopify's order topics at this shop. Idempotent: a topic already
+ * pointing at the same URL is left alone, and one pointing somewhere stale is
+ * replaced rather than duplicated.
+ */
+async function registerOrderWebhooks(callbackUrl) {
+  if (!/^https:\/\//i.test(callbackUrl)) {
+    throw new ShopifyError('Shopify only sends webhooks to an https address', { status: 400 });
+  }
+
+  const existing = await listWebhooks();
+  const result = { created: [], kept: [], replaced: [] };
+
+  for (const topic of ORDER_TOPICS) {
+    const mine = existing.filter((w) => w.topic === topic);
+    if (mine.some((w) => w.url === callbackUrl)) {
+      result.kept.push(topic);
+      continue;
+    }
+    // A stale address for the same topic would keep firing into nowhere.
+    for (const stale of mine) {
+      await graphql(WEBHOOK_DELETE, { id: stale.id });
+      result.replaced.push({ topic, was: stale.url });
+    }
+
+    const data = await graphql(WEBHOOK_CREATE, { topic, url: callbackUrl });
+    const errors = data?.webhookSubscriptionCreate?.userErrors || [];
+    if (errors.length) {
+      const message = errors.map((e) => e.message).join('; ');
+      throw new ShopifyError(
+        /access|scope|permission/i.test(message)
+          ? 'Shopify would not let the app subscribe. Add the write_webhooks scope to your custom app, reinstall it, and paste the new token in.'
+          : `Shopify refused the ${topic} subscription: ${message}`,
+        { status: 400 }
+      );
+    }
+    result.created.push(topic);
+  }
+  return result;
+}
+
+async function removeOrderWebhooks() {
+  const existing = await listWebhooks();
+  const removed = [];
+  for (const hook of existing.filter((w) => ORDER_TOPICS.includes(w.topic))) {
+    await graphql(WEBHOOK_DELETE, { id: hook.id });
+    removed.push(hook.topic);
+  }
+  return removed;
+}
+
 module.exports = {
   DEFAULT_API_VERSION,
+  ORDER_TOPICS,
+  verifyWebhook,
+  listWebhooks,
+  registerOrderWebhooks,
+  removeOrderWebhooks,
   normaliseDomain,
   getConfig,
   saveConfig,

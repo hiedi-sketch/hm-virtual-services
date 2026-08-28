@@ -4,19 +4,18 @@ import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
 import printApi, { describeError, money, shortDate } from '../api/print';
 import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
+import OrderTicket from '../components/OrderTicket';
+import { useScanner } from '../components/ScanContext';
 
-const STATUS_TONE = {
-  new: 'blue', in_production: 'amber', ready: 'violet', shipped: 'green', completed: 'green', cancelled: 'gray',
-};
-const STATUS_LABEL = {
-  new: 'New', in_production: 'In production', ready: 'Ready to ship', shipped: 'Shipped', completed: 'Completed', cancelled: 'Cancelled',
-};
-const FILTERS = [
-  { key: '', label: 'All' },
-  { key: 'new', label: 'New' },
-  { key: 'in_production', label: 'In production' },
-  { key: 'ready', label: 'Ready' },
-  { key: 'shipped', label: 'Shipped' },
+// Only used until the real list arrives from the server, which owns it.
+const FALLBACK_STAGES = [
+  { key: 'new', label: 'New', tone: 'blue' },
+  { key: 'confirmed', label: 'Confirmed', tone: 'violet' },
+  { key: 'queued', label: 'Queued', tone: 'teal' },
+  { key: 'in_production', label: 'Production', tone: 'amber' },
+  { key: 'finishing', label: 'Finishing', tone: 'amber' },
+  { key: 'packing', label: 'Packing', tone: 'violet' },
+  { key: 'shipped', label: 'Shipped', tone: 'green' },
 ];
 
 const BLANK = {
@@ -38,6 +37,19 @@ export default function Orders() {
   const [form, setForm] = useState(BLANK);
   const [suggestion, setSuggestion] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [stages, setStages] = useState(FALLBACK_STAGES);
+  const [offChain, setOffChain] = useState([]);
+  const [ticket, setTicket] = useState(null);
+  const [shopName, setShopName] = useState('Print Shop');
+  const { scan } = useScanner();
+
+  // The pipeline is defined once, on the server.
+  useEffect(() => {
+    printApi.orderStages()
+      .then((d) => { setStages(d.stages); setOffChain(d.off_chain); })
+      .catch(() => { /* the fallback list still renders */ });
+    printApi.getSettings().then((s) => setShopName(s.shop_name || 'Print Shop')).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -172,6 +184,17 @@ export default function Orders() {
     }
   }
 
+  async function advance(order) {
+    try {
+      const { message } = await printApi.advanceOrder(order.id, {});
+      toast.success(message);
+      load();
+      refresh();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not move that order on'));
+    }
+  }
+
   async function remove(order) {
     if (!window.confirm(`Delete ${order.order_number}?`)) return;
     await printApi.deleteOrder(order.id);
@@ -179,7 +202,10 @@ export default function Orders() {
     load();
   }
 
-  const open = orders.filter((o) => ['new', 'in_production', 'ready'].includes(o.status));
+  const chain = stages.map((s) => s.key);
+  const open = orders.filter((o) => chain.includes(o.status) && o.status !== 'shipped');
+  const stageOf = (key) => [...stages, ...offChain].find((s) => s.key === key);
+  const labelOf = (key) => stageOf(key)?.label || key;
   const atRisk = orders.filter((o) => o.projection?.at_risk);
   const openValue = open.reduce((sum, o) => sum + o.revenue, 0);
   const formTotal = form.items.reduce((sum, l) => sum + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0), 0);
@@ -191,18 +217,24 @@ export default function Orders() {
           <h1 className="text-2xl font-bold text-primary">Orders</h1>
           <p className="text-sm text-gray-500">What is sold, what is promised, and what still has to be printed.</p>
         </div>
-        <button className="btn-primary" onClick={openNew}>New order</button>
+        <div className="flex gap-2">
+          {orders.length > 0 && (
+            <button className="btn-secondary" onClick={() => setTicket(orders)}>Print tickets</button>
+          )}
+          <button className="btn-secondary" onClick={() => scan({ title: 'Scan an order ticket' })}>Scan</button>
+          <button className="btn-primary" onClick={openNew}>New order</button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Open orders" value={open.length} />
         <StatCard label="Open value" value={money(openValue)} />
-        <StatCard label="Ready to ship" value={orders.filter((o) => o.status === 'ready').length} tone="good" />
+        <StatCard label="Ready to ship" value={orders.filter((o) => o.status === 'packing').length} tone="good" />
         <StatCard label="Past turnaround" value={atRisk.length} tone={atRisk.length ? 'danger' : 'good'} />
       </div>
 
       <div className="card !p-3 flex flex-wrap gap-1">
-        {FILTERS.map((f) => (
+        {[{ key: '', label: 'All' }, ...stages].map((f) => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
@@ -211,6 +243,9 @@ export default function Orders() {
             }`}
           >
             {f.label}
+            {f.key && orders.length > 0 && filter === '' && (
+              <span className="ml-1.5 text-xs opacity-60">{orders.filter((o) => o.status === f.key).length}</span>
+            )}
           </button>
         ))}
       </div>
@@ -231,7 +266,7 @@ export default function Orders() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-bold text-primary leading-tight">{o.order_number}</p>
-                    <Pill tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Pill>
+                    <Pill tone={stageOf(o.status)?.tone || 'gray'}>{labelOf(o.status)}</Pill>
                     {o.order_type === 'wholesale' && <Pill tone="teal">Wholesale</Pill>}
                     {o.needs_queueing && <Pill tone="amber">Not queued</Pill>}
                   </div>
@@ -257,19 +292,47 @@ export default function Orders() {
                 </div>
               </div>
 
+              {/* Where this one has got to, and how far is left. */}
+              {chain.includes(o.status) && (
+                <div className="mt-2.5 flex flex-wrap gap-1">
+                  {stages.map((stage, i) => {
+                    const at = chain.indexOf(o.status);
+                    return (
+                      <span
+                        key={stage.key}
+                        className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          i < at ? 'bg-primary/10 text-primary'
+                            : i === at ? 'bg-primary text-white font-bold'
+                            : 'bg-linen text-gray-400'
+                        }`}
+                      >
+                        {stage.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+                {o.next_stage && (
+                  <button className="btn-primary !py-1 !px-3" onClick={() => advance(o)}>
+                    Move to {labelOf(o.next_stage).toLowerCase()}
+                  </button>
+                )}
+                {/* Still offered on a new order: it is the one-press way to get
+                    work started, and it takes the order to Queued with it. */}
                 {o.needs_queueing && (
-                  <button className="btn-primary !py-1 !px-3" onClick={() => sendToQueue(o)}>Send to queue</button>
+                  <button className="btn-secondary !py-1 !px-3" onClick={() => sendToQueue(o)}>Send to queue</button>
                 )}
-                {o.status === 'ready' && (
-                  <button className="btn-primary !py-1 !px-3" onClick={() => setStatus(o, 'shipped')}>Mark shipped</button>
-                )}
+                <button className="btn-ghost !py-1 !px-2" onClick={() => setTicket([o])}>Print</button>
                 <select
                   className="input !w-auto !py-1 !px-2 text-xs"
                   value={o.status}
                   onChange={(e) => setStatus(o, e.target.value)}
                 >
-                  {Object.entries(STATUS_LABEL).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                  {[...stages, ...offChain].map((stage) => (
+                    <option key={stage.key} value={stage.key}>{stage.label}</option>
+                  ))}
                 </select>
                 <button className="btn-ghost !py-1 !px-2" onClick={() => setExpanded(expanded === o.id ? null : o.id)}>
                   {expanded === o.id ? 'Hide' : 'Details'}
@@ -300,12 +363,32 @@ export default function Orders() {
                     </p>
                   )}
                   {o.notes && <p className="text-gray-500 pt-1">{o.notes}</p>}
+                  {o.history?.length > 0 && (
+                    <div className="pt-2 border-t border-linen">
+                      <p className="text-[11px] uppercase tracking-wide text-gray-400 mb-1">How it got here</p>
+                      {o.history.map((e) => (
+                        <p key={e.id} className="text-gray-500">
+                          {labelOf(e.to_status)}
+                          <span className="text-gray-400"> · {e.source} · {shortDate(e.created_at)}</span>
+                          {e.note && <span className="text-gray-400"> · {e.note}</span>}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           ))}
         </div>
       )}
+
+      <OrderTicket
+        open={!!ticket}
+        orders={ticket || []}
+        shopName={shopName}
+        stages={stages}
+        onClose={() => setTicket(null)}
+      />
 
       <Modal open={!!editing} onClose={() => setEditing(null)} title={editing === 'new' ? 'New order' : 'Edit order'} size="xl">
         <form onSubmit={save} className="space-y-4">
