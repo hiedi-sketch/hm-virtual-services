@@ -18,8 +18,18 @@ const router = express.Router();
  * Nothing is stored until all three pass.
  */
 
-/** Send her back to the settings page with the outcome in the address bar. */
+/**
+ * Send her back to the settings page with the outcome in the address bar, and
+ * put the same line in the server log. The page tidies the URL as soon as it
+ * has read it, so the log is the only copy that survives — and it is the copy
+ * available when the screen says something unhelpful.
+ */
 function finish(res, params) {
+  if (params.shopify !== 'connected') {
+    console.error(`Shopify connect ${params.shopify}: ${params.reason || '(no reason given)'}`);
+  } else {
+    console.log('Shopify connect: connected');
+  }
   const query = new URLSearchParams(params).toString();
   return res.redirect(`/settings?${query}`);
 }
@@ -47,7 +57,6 @@ router.get('/callback', async (req, res) => {
   // Naming both is the difference between a dead end and an obvious fix — the
   // usual cause is being signed into a different store than the one typed in.
   if (domain !== issued.shop) {
-    console.error(`Shopify OAuth: asked to connect ${issued.shop}, came back for ${domain}`);
     return finish(res, {
       shopify: 'error',
       reason: `You asked to connect ${issued.shop}, but Shopify sent you back from ${domain}. `
