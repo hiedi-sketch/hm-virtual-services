@@ -161,9 +161,10 @@ export default function Materials() {
                 <div className="text-right">
                   <p className="text-lg font-bold text-primary leading-tight">
                     {m.qty_on_hand}{unitSuffix(m.unit)}
+                    <span className="text-xs font-semibold text-gray-500 ml-1">on hand</span>
                   </p>
                   <p className="text-[11px] text-gray-500">
-                    on hand{m.qty_committed > 0 ? ` · ${m.qty_projected} after queue` : ''}
+                    {m.qty_committed > 0 ? `${m.qty_projected} after queue` : 'nothing committed'}
                   </p>
                 </div>
               </div>
