@@ -61,6 +61,7 @@ export default function ShopifyCard() {
   const [result, setResult] = useState(null);
   const [push, setPush] = useState(null);
   const [redirectUri, setRedirectUri] = useState('');
+  const [outcome, setOutcome] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -96,9 +97,15 @@ export default function ShopifyCard() {
     const outcome = params.get('shopify');
     if (!outcome) return;
 
-    if (outcome === 'connected') toast.success('Connected to Shopify');
-    else if (outcome === 'partial') toast(params.get('reason') || 'Connected, but not with everything asked for', { icon: '⚠️' });
-    else toast.error(params.get('reason') || 'Shopify did not finish connecting');
+    const reason = params.get('reason');
+    if (outcome === 'connected') {
+      toast.success('Connected to Shopify');
+    } else {
+      // Something to act on. A toast would be gone before it was read.
+      setOutcome({ kind: outcome, reason });
+      if (outcome === 'partial') toast('Connected, but not with everything asked for', { icon: '⚠️' });
+      else toast.error('Shopify did not finish connecting');
+    }
 
     window.history.replaceState({}, '', window.location.pathname);
     load();
@@ -155,6 +162,27 @@ export default function ShopifyCard() {
           : <Pill tone="gray">Not connected</Pill>}
         {config.from_environment && <Pill tone="blue">Set by environment variables</Pill>}
       </div>
+
+      {outcome && (
+        <div
+          className={`rounded-lg p-3 text-sm border ${
+            outcome.kind === 'partial'
+              ? 'bg-amber-50 border-amber-200 text-amber-900'
+              : 'bg-red-50 border-red-200 text-red-900'
+          }`}
+        >
+          <div className="flex items-start gap-2">
+            <p className="flex-1">{outcome.reason || 'Shopify did not finish connecting.'}</p>
+            <button
+              onClick={() => setOutcome(null)}
+              className="text-lg leading-none opacity-60 hover:opacity-100"
+              aria-label="Dismiss"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+      )}
 
       <p className="text-xs text-gray-500">
         In Shopify, open the <span className="font-mono">Dev Dashboard</span> and create an app.

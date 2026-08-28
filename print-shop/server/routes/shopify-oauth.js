@@ -35,10 +35,24 @@ router.get('/callback', async (req, res) => {
     });
   }
 
-  // A signed callback for a different store than the one she asked to connect.
   const domain = shopify.normaliseDomain(shop);
-  if (!domain || domain !== issued.shop) {
-    return finish(res, { shopify: 'error', reason: 'That came back for a different store.' });
+  if (!domain) {
+    return finish(res, {
+      shopify: 'error',
+      reason: `Shopify came back naming a store this shop cannot read: "${String(shop || '').slice(0, 60)}".`,
+    });
+  }
+
+  // A signed callback for a different store than the one she asked to connect.
+  // Naming both is the difference between a dead end and an obvious fix — the
+  // usual cause is being signed into a different store than the one typed in.
+  if (domain !== issued.shop) {
+    console.error(`Shopify OAuth: asked to connect ${issued.shop}, came back for ${domain}`);
+    return finish(res, {
+      shopify: 'error',
+      reason: `You asked to connect ${issued.shop}, but Shopify sent you back from ${domain}. `
+        + `Put ${domain} in the store address if that is the shop you want, then connect again.`,
+    });
   }
 
   if (!shopify.verifyOAuthCallback(req.query)) {
