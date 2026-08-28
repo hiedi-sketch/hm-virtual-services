@@ -269,6 +269,17 @@ export default function Catalog() {
           {visible.map((i) => (
             <div key={i.id} className="card !p-4">
               <div className="flex items-start gap-3">
+                {/* The shop photo, where there is one. Sits beside the name so
+                    everything already on the card keeps its place. */}
+                {i.image_url && (
+                  <img
+                    src={i.image_url}
+                    alt=""
+                    loading="lazy"
+                    className="w-14 h-14 rounded-lg object-cover border border-linen shrink-0 bg-linen"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-bold text-primary leading-tight">{i.name}</p>

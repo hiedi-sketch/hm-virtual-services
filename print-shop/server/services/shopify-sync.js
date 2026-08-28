@@ -15,8 +15,9 @@ const PRODUCTS_QUERY = `
         id
         title
         status
+        featuredImage { url }
         variants(first: 100) {
-          nodes { id sku title price barcode inventoryItem { id } }
+          nodes { id sku title price barcode image { url } inventoryItem { id } }
         }
       }
     }
@@ -117,6 +118,10 @@ async function pullProducts({ dryRun = false } = {}) {
           continue;
         }
 
+        // The variant's own photo where it has one, the product's otherwise —
+        // which is what a shopper sees on the listing.
+        const photo = variant.image?.url || product.featuredImage?.url || null;
+
         const linkFields = {
           shopify_product_id: product.id,
           shopify_variant_id: variant.id,
@@ -136,6 +141,11 @@ async function pullProducts({ dryRun = false } = {}) {
                WHERE id = ?
             `).run(linkFields.shopify_product_id, linkFields.shopify_variant_id,
                    linkFields.shopify_inventory_item_id, existing.id);
+            // A photo it does not have yet is worth taking; one it already has
+            // was put there on purpose.
+            if (photo && !existing.image_url) {
+              db.prepare('UPDATE items SET image_url = ? WHERE id = ?').run(photo, existing.id);
+            }
           }
           result.linked.push({ name: existing.name, sku });
           continue;
@@ -150,11 +160,12 @@ async function pullProducts({ dryRun = false } = {}) {
             const newId = db.prepare(`
               INSERT INTO items
                 (name, item_type, sku, barcode, retail_override, qty_on_hand, is_active,
-                 shopify_product_id, shopify_variant_id, shopify_inventory_item_id, notes)
-              VALUES (?, 'product', ?, ?, ?, 0, ?, ?, ?, ?, ?)
+                 image_url, shopify_product_id, shopify_variant_id, shopify_inventory_item_id, notes)
+              VALUES (?, 'product', ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
             `).run(
               label, sku, barcode, price || null,
               product.status === 'ACTIVE' ? 1 : 0,
+              photo,
               linkFields.shopify_product_id, linkFields.shopify_variant_id,
               linkFields.shopify_inventory_item_id,
               'Pulled from Shopify. Add its filament, materials and print time to get costing.'
