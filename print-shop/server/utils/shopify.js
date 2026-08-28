@@ -295,7 +295,9 @@ async function registerOrderWebhooks(callbackUrl) {
       const message = errors.map((e) => e.message).join('; ');
       throw new ShopifyError(
         /access|scope|permission/i.test(message)
-          ? 'Shopify would not let the app subscribe. Add the write_webhooks scope to your custom app, reinstall it, and paste the new token in.'
+          // A webhook topic is governed by the scope of the thing it is about:
+          // orders/* need read_orders. There is no separate webhook scope.
+          ? 'Shopify would not let the app subscribe. Give your custom app the read_orders scope, save it, then reinstall it and paste the new access token in — a token issued before a scope was added does not gain it.'
           : `Shopify refused the ${topic} subscription: ${message}`,
         { status: 400 }
       );

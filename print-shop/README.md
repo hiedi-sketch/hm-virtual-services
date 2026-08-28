@@ -237,9 +237,12 @@ credentials in Render.
 
 **Test connection** confirms the token works and names the shop it belongs to.
 
-For live order push (below) the app also needs the `write_webhooks` scope and its **API
-secret key** — the value on the same *API credentials* screen as the access token, not
-the token itself. It is encrypted the same way, and `SHOPIFY_API_SECRET` overrides it.
+For live order push (below) the app also needs its **API secret key** — the value on the
+same *API credentials* screen as the access token, not the token itself. It is encrypted
+the same way, and `SHOPIFY_API_SECRET` overrides it.
+
+No extra scope is needed to subscribe: a webhook topic is governed by the scope of the
+thing it is about, so `read_orders` covers the `orders/*` topics.
 
 ### Pulling products
 
@@ -284,8 +287,16 @@ failed retries. It creates nothing that is already here, so a sweep that finds n
 does nothing. Set `SHOPIFY_POLL_MINUTES` to change the interval, or to `0` to turn it
 off. **Check for missed orders** runs it on demand.
 
-If Shopify refuses the subscription, the usual cause is a missing `write_webhooks`
-scope: add it to the custom app, reinstall, and paste the new token in.
+If Shopify refuses the subscription, the usual cause is `read_orders` missing from the
+app, or an access token issued before that scope was added — a token does not gain
+scopes granted after it was created. Add the scope, save, reinstall the app, and paste
+the new token in.
+
+**If you would rather not let the app subscribe at all**, create the webhook by hand in
+**Settings → Notifications → Webhooks** in your Shopify admin, pointing at the same
+`/api/shopify/webhook` address. Webhooks made there are signed with the signing secret
+shown on that page rather than the app's API secret — paste *that* value into the API
+secret key field instead, and everything else works the same.
 
 ### Pulling orders
 
