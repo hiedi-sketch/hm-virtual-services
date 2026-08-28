@@ -5,6 +5,7 @@ import Modal from '../components/Modal';
 import printApi, { describeError, hoursMinutes, money } from '../api/print';
 import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
+import CatalogImport from '../components/CatalogImport';
 
 const TYPES = [
   { key: '', label: 'Everything' },
@@ -45,6 +46,7 @@ export default function Catalog() {
   const [label, setLabel] = useState(null);
   const [adjust, setAdjust] = useState(null);
   const [adjustForm, setAdjustForm] = useState({ mode: 'receive', quantity: 1 });
+  const [importing, setImporting] = useState(false);
   const previewTimer = useRef(null);
 
   const load = useCallback(async () => {
@@ -211,6 +213,7 @@ export default function Catalog() {
           <p className="text-sm text-gray-500">Products, the parts that go into them, and the tools you use to make them.</p>
         </div>
         <div className="flex gap-2">
+          <button className="btn-secondary" onClick={() => setImporting(true)}>Import products</button>
           <button className="btn-secondary" onClick={() => scan({ title: 'Scan a product' })}>Scan</button>
           <button className="btn-primary" onClick={openNew}>Add item</button>
         </div>
@@ -338,6 +341,12 @@ export default function Catalog() {
           ))}
         </div>
       )}
+
+      <CatalogImport
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={() => { load(); refresh(); }}
+      />
 
       {/* Item editor */}
       <Modal open={!!editing} onClose={() => setEditing(null)} title={editing === 'new' ? 'Add item' : 'Edit item'} size="xl">

@@ -72,7 +72,7 @@ another device on the same Wi-Fi — handy for testing, but see the camera note 
 |-----|--------------|
 | **Dashboard** | Open orders, queue load, reorder list, inventory value. Deliberately light — more panels to come. |
 | **Orders** | Customer orders at retail or wholesale prices, promised vs projected ship date, one tap to send to the queue. |
-| **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. |
+| **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. Import a product list from a CSV. |
 | **Filament** | Colour library with per-spool tracking, where each spool is, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
 | **Materials** | The same for magnets, hardware, packaging — anything bought by the pack. |
 | **Queue** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
@@ -224,6 +224,66 @@ you can set a newer version in Settings without a code change.
 
 Pushing the other way — creating Shopify products from this catalog, and updating
 Shopify stock levels when a print finishes — is not built. Both are pulls only for now.
+
+---
+
+## Importing a product list
+
+**Import products** on the Catalog tab reads a CSV with a row per product. A Shopify
+products export works as it comes out of Shopify; a list of your own works too.
+
+Two choices sit above the preview:
+
+- **Bring them in as** — item for sale, a part used in other items, or a tool. A file is
+  usually all one kind, so it is said once here rather than per row.
+- **Category** — leave it blank to use whatever the file calls each row, or type one to
+  put the whole file under it.
+
+It previews first: how many will be added, how many already exist, which fields would be
+filled in on those, and any rows it cannot use. Nothing is written until you say so.
+
+| Column | Also accepted |
+|--------|---------------|
+| Title | Name, Product Name, Product |
+| Type | Product Type, Category |
+| Variant SKU | SKU |
+| Variant Barcode | Barcode, UPC, EAN |
+| Variant Price | Price, Retail Price |
+| Cost per item | Cost, Unit Cost |
+| Body HTML | Description, Body |
+| Vendor | Brand, Supplier |
+| Variant Inventory Qty | Quantity, On Hand, Qty |
+| Image Src | Image, Image URL |
+| Print time minutes | Print Time |
+| Finishing minutes | Labor Minutes |
+| Status | Published |
+
+**SKUs are the shop's own.** Every product gets the next `PS-PRD-####` (or `PS-CMP-` /
+`PS-TL-`) regardless of what the file called it, so one scheme runs through the catalog,
+the labels and the scanner.
+
+**Barcodes come from the file where there is one** — the *Variant Barcode* column, or the
+file's SKU if that column is empty — and one is generated from the new SKU otherwise. A
+spreadsheet's leading apostrophe (`'0123456`) is stripped, since it belongs to the
+spreadsheet rather than the barcode, and a code already used by another item is not
+reused.
+
+**What it does not fill in.** Print time, finishing minutes and inventory are left at zero
+unless the file carries them: those are yours to enter, and a guess would quietly feed the
+costing. Until a product has its filament, materials and print time, its suggested prices
+read zero — the imported ones are listed with a note saying so.
+
+Descriptions are converted from HTML to plain text and trimmed to 600 characters. A price
+in the file is stored as the **Shopify** price under *What it sells for*, not as a cost.
+A row marked `draft` comes in inactive.
+
+**Matching** is on SKU first, then on name ignoring case and padding. An existing product
+only has its **blanks filled in** — category, description, vendor, image, barcode. Nothing
+already set is overwritten. Rows a products export repeats for extra images (no title, just
+a handle and an image) are skipped without comment; a row that genuinely duplicates another
+in the same file is listed as skipped.
+
+Running the same file twice changes nothing the second time.
 
 ---
 

@@ -58,6 +58,8 @@ export const printApi = {
 
   catalog: (params) => unwrap(api.get('/catalog', { params })),
   catalogOptions: () => unwrap(api.get('/catalog/options')),
+  previewCatalogImport: (csv, options) => unwrap(api.post('/catalog/import', { csv, apply: false, ...options })),
+  applyCatalogImport: (csv, options) => api.post('/catalog/import', { csv, apply: true, ...options }).then((r) => r.data),
   item: (id) => unwrap(api.get(`/catalog/${id}`)),
   previewItem: (body) => unwrap(api.post('/catalog/preview', body)),
   createItem: (body) => unwrap(api.post('/catalog', body)),

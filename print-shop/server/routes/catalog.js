@@ -4,6 +4,7 @@ const { nextSku, defaultBarcode } = require('../utils/sku');
 const { getSettings, priceItem, computeItemCost, previewItemCost, salesChannels } = require('../utils/costing');
 const { materialSummary, filamentSummary } = require('../utils/planning');
 const { logStock, applyUpdate } = require('./helpers');
+const { planImport, applyImport } = require('../services/catalog-import');
 
 const router = express.Router();
 
@@ -105,6 +106,36 @@ router.get('/', (req, res) => {
   if (needs_reorder === '1') items = items.filter((i) => i.qty_on_hand <= i.reorder_point);
 
   res.json({ data: items });
+});
+
+/**
+ * Load products from a spreadsheet. Send apply:false first to see what it
+ * would do; a whole file is usually one kind of thing, so the item type and
+ * category are set once here rather than per row.
+ */
+router.post('/import', (req, res) => {
+  const csv = req.body.csv;
+  if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'No CSV to read' });
+  if (csv.length > 5_000_000) return res.status(400).json({ error: 'That file is too big to read in one go' });
+
+  const options = {
+    itemType: ['product', 'component', 'tool'].includes(req.body.item_type) ? req.body.item_type : 'product',
+    category: typeof req.body.category === 'string' ? req.body.category.trim() : '',
+  };
+
+  try {
+    if (!req.body.apply) return res.json({ data: { preview: true, ...planImport(csv, options) } });
+
+    const result = applyImport(csv, options);
+    return res.json({
+      data: { preview: false, ...result },
+      message: `${result.created.length} added, ${result.updated.length} updated`
+        + (result.unchanged ? `, ${result.unchanged} already there` : '')
+        + (result.failed.length ? `, ${result.failed.length} failed` : ''),
+    });
+  } catch (err) {
+    return res.status(400).json({ error: `Could not read that file: ${err.message}` });
+  }
 });
 
 router.get('/options', (req, res) => {
