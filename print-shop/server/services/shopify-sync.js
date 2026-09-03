@@ -4,6 +4,7 @@ const { suggestShipDate } = require('../utils/planning');
 const { computeItemCost } = require('../utils/costing');
 const { freeOrderBarcode } = require('../db/schema');
 const flow = require('./order-flow');
+const { findItem } = require('./catalog-match');
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -128,7 +129,9 @@ async function pullProducts({ dryRun = false } = {}) {
           shopify_inventory_item_id: variant.inventoryItem?.id || null,
         };
 
-        const existing = findByVariant.get(variant.id) || findBySku.get(sku);
+        const existing = findItem({
+          variantId: variant.id, sku, barcode: variant.barcode, title: label,
+        })?.item;
         if (existing) {
           if (existing.shopify_variant_id === variant.id) {
             result.already_linked += 1;
@@ -214,8 +217,6 @@ function summarise(result) {
  * catalog, so a pull and a webhook get identical results.
  */
 function prepareOrder(order) {
-  const byVariant = db.prepare('SELECT * FROM items WHERE shopify_variant_id = ?');
-  const bySku = db.prepare('SELECT * FROM items WHERE sku = ?');
   const unmatched = [];
 
   const customer = order.customer
@@ -223,15 +224,17 @@ function prepareOrder(order) {
     : order.shippingAddress?.name;
 
   const lines = (order.lineItems?.nodes || []).map((line) => {
-    const match = (line.variant?.id && byVariant.get(line.variant.id))
-      || (line.sku && bySku.get(line.sku.trim()));
-    if (!match) unmatched.push({ order: order.name, line: line.title, sku: line.sku || null });
+    const found = findItem({ variantId: line.variant?.id, sku: line.sku, title: line.title });
+    if (!found) unmatched.push({ order: order.name, line: line.title, sku: line.sku || null });
     return {
-      item_id: match?.id || null,
-      description: match ? null : line.title,
+      item_id: found?.item.id || null,
+      // Keep the title either way: it is what names an unmatched line, and what
+      // a later repair pass has to work from.
+      description: line.title,
       quantity: Number(line.quantity) || 1,
       unit_price: Number(line.originalUnitPriceSet?.shopMoney?.amount) || 0,
       shopify_line_item_id: line.id,
+      shopify_sku: line.sku || null,
     };
   });
 
@@ -283,11 +286,12 @@ function saveOrder(prepared) {
       .run(freeOrderBarcode(orderNumber, orderId, taken), orderId);
 
     const insertLine = db.prepare(`
-      INSERT INTO order_items (order_id, item_id, description, quantity, unit_price, shopify_line_item_id)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO order_items (order_id, item_id, description, quantity, unit_price, shopify_line_item_id, shopify_sku)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
     for (const line of prepared.lines) {
-      insertLine.run(orderId, line.item_id, line.description, line.quantity, line.unit_price, line.shopify_line_item_id);
+      insertLine.run(orderId, line.item_id, line.description, line.quantity, line.unit_price,
+                     line.shopify_line_item_id, line.shopify_sku);
     }
     flow.logEvent(orderId, null, prepared.cancelled ? 'cancelled' : 'new', 'shopify');
     return orderId;
@@ -432,6 +436,52 @@ function applyWebhook(topic, payload) {
   return outcome;
 }
 
+/**
+ * Match up order lines that came in before their product existed here, or
+ * before the matcher looked in the right place.
+ *
+ * A line that failed to match kept its title and, from now on, Shopify's SKU —
+ * enough to try again without going back to Shopify. Nothing is guessed at: a
+ * line only links when the matcher is as sure as it would have been at the
+ * time, and lines that still find nothing are reported rather than left silent.
+ */
+function relinkOrderLines({ dryRun = false } = {}) {
+  const lines = db.prepare(`
+    SELECT oi.id, oi.order_id, oi.description, oi.shopify_sku, o.order_number
+      FROM order_items oi JOIN orders o ON oi.order_id = o.id
+     WHERE oi.item_id IS NULL
+     ORDER BY o.id, oi.id
+  `).all();
+
+  const result = { linked: [], still_unmatched: [], orders_touched: [] };
+  const link = db.prepare('UPDATE order_items SET item_id = ? WHERE id = ?');
+  const touched = new Set();
+
+  for (const line of lines) {
+    const found = findItem({ sku: line.shopify_sku, title: line.description });
+    if (!found) {
+      result.still_unmatched.push({
+        order: line.order_number,
+        line: line.description,
+        sku: line.shopify_sku || null,
+      });
+      continue;
+    }
+    if (!dryRun) link.run(found.item.id, line.id);
+    touched.add(line.order_id);
+    result.linked.push({
+      order: line.order_number,
+      line: line.description,
+      item: found.item.name,
+      sku: found.item.sku,
+      matched_on: found.matched_on,
+    });
+  }
+
+  result.orders_touched = [...touched];
+  return result;
+}
+
 function history(limit = 10) {
   return db.prepare('SELECT * FROM sync_log ORDER BY id DESC LIMIT ?').all(limit)
     .map((row) => ({ ...row, summary: row.summary ? JSON.parse(row.summary) : null }));
@@ -439,5 +489,6 @@ function history(limit = 10) {
 
 module.exports = {
   pullProducts, pullOrders, history, applyWebhook, fromWebhook, prepareOrder, saveOrder,
+  relinkOrderLines,
   PRODUCTS_QUERY, ORDERS_QUERY,
 };

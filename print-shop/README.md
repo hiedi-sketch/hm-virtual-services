@@ -356,10 +356,17 @@ Pulling by hand still works, and is what the sweep uses. Orders arrive with stat
 **New**. Nothing is queued automatically — you look at an
 order and press *Send to queue* yourself, so no order reaches a printer unseen.
 
-Line items match to catalog items by Shopify variant, then by SKU. A line that matches
-nothing is still recorded on the order as text, so the order total is right, but it
-cannot be queued until some catalog item carries that SKU. Those lines are listed after
-every sync.
+Line items match to a catalog item in four passes, in order of certainty: the Shopify
+variant id, this shop's own SKU, the **barcode or vendor barcode**, and finally an exact
+name. The barcode pass matters because a catalog imported from a spreadsheet keeps this
+shop's numbering and parks the file's code — for a Shopify export, Shopify's own SKU —
+in the barcode field; matching on our SKU alone would never find it.
+
+A line that matches nothing is still recorded on the order with its title and Shopify's
+SKU, so the order total is right and the line can be matched later. Those lines are listed
+after every sync, and **Match them to the catalog** on the order card runs the four passes
+again over every unmatched line in the shop — for orders that arrived before their product
+existed here, or before the matcher looked in the right place.
 
 The first pull takes the last 30 days; after that each run picks up from the end of the
 last successful one. Orders already brought in are skipped rather than duplicated.

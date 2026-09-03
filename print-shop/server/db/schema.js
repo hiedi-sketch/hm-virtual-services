@@ -326,6 +326,9 @@ function createSchema() {
     // The code printed on an order ticket, scanned to move it a stage on.
     'ALTER TABLE orders ADD COLUMN barcode TEXT',
     // The last figure Shopify was told, so a push that changes nothing is skipped.
+    // The SKU Shopify used on the line, kept so an unmatched line can be
+    // matched again later without going back to Shopify for it.
+    'ALTER TABLE order_items ADD COLUMN shopify_sku TEXT',
     'ALTER TABLE items ADD COLUMN shopify_pushed_quantity INTEGER',
     'ALTER TABLE items ADD COLUMN shopify_pushed_at DATETIME',
   ];

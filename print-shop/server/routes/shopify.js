@@ -182,6 +182,23 @@ router.post('/sweep', async (req, res) => {
   });
 });
 
+/**
+ * Try again on order lines that never matched a catalog product. Send
+ * dry_run to see what it would link before anything changes.
+ */
+router.post('/relink', (req, res) => {
+  const result = sync.relinkOrderLines({ dryRun: !!req.body.dry_run });
+  res.json({
+    data: result,
+    message: result.linked.length
+      ? `${result.linked.length} line(s) matched up across ${result.orders_touched.length} order(s)`
+        + (result.still_unmatched.length ? `, ${result.still_unmatched.length} still with no match` : '')
+      : result.still_unmatched.length
+        ? `Nothing matched — ${result.still_unmatched.length} line(s) have no product in the catalog`
+        : 'Every order line is already matched',
+  });
+});
+
 // ── Stock going back the other way ──────────────────────────────────────────
 
 function saveSetting(key, value) {

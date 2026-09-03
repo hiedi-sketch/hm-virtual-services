@@ -192,6 +192,17 @@ export default function Orders() {
     }
   }
 
+  async function relink() {
+    try {
+      const { message } = await printApi.relinkOrderLines();
+      toast.success(message);
+      load();
+      refresh();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not match those lines up'));
+    }
+  }
+
   async function startProduction(order, orderItemId) {
     try {
       const { message } = await printApi.startProduction(order.id, orderItemId ? { order_item_id: orderItemId } : {});
@@ -377,11 +388,32 @@ export default function Orders() {
                       })}
                     </div>
                   ) : (
-                    <p className="text-xs text-amber-800">
-                      {o.items.length
-                        ? 'None of these lines are linked to a product in your catalog, so there is nothing to print. Give the catalog item the same SKU Shopify uses, pull products again, and they will link up.'
-                        : 'This order has no lines on it yet.'}
-                    </p>
+                    <div className="text-xs text-amber-800 space-y-2">
+                      {o.items.length ? (
+                        <>
+                          <p>
+                            None of these lines are linked to a product in your catalog, so there is
+                            nothing to print yet.
+                          </p>
+                          <ul className="space-y-0.5 text-gray-600">
+                            {o.items.slice(0, 6).map((line) => (
+                              <li key={line.id} className="flex gap-2">
+                                <span className="font-semibold w-8 shrink-0">{line.quantity} ×</span>
+                                <span className="min-w-0 flex-1 truncate">{line.description || 'Unnamed line'}</span>
+                              </li>
+                            ))}
+                            {o.items.length > 6 && (
+                              <li className="text-gray-400">…and {o.items.length - 6} more</li>
+                            )}
+                          </ul>
+                          <button className="btn-secondary !py-1 !px-3 text-xs" onClick={relink}>
+                            Match them to the catalog
+                          </button>
+                        </>
+                      ) : (
+                        <p>This order has no lines on it yet.</p>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
