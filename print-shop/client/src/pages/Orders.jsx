@@ -333,12 +333,15 @@ export default function Orders() {
               )}
 
               {/* An order moves in one piece, but production does not: start one
-                  product or the lot, and the order follows on the first. */}
-              {['queued', 'in_production'].includes(o.status) && o.items.some((l) => l.job_status) && (
+                  product or the lot, and the order follows on the first. Shown
+                  from Confirmed, because starting a line queues it on the way.
+                  When there is nothing to start, this says why rather than
+                  vanishing and leaving the order looking broken. */}
+              {['confirmed', 'queued', 'in_production'].includes(o.status) && (
                 <div className="mt-3 border border-linen rounded-lg p-2.5">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">Products on this order</p>
-                    {o.items.some((l) => l.can_start) && (
+                    {o.items.some((l) => l.can_start || (l.item_id && !l.job_status)) && (
                       <button
                         className="btn-primary !py-1 !px-2.5 text-xs"
                         onClick={() => startProduction(o)}
@@ -347,25 +350,39 @@ export default function Orders() {
                       </button>
                     )}
                   </div>
-                  <div className="space-y-1">
-                    {o.items.filter((l) => l.job_status).map((line) => (
-                      <div key={line.id} className="flex items-center gap-2 text-xs">
-                        <span className="font-semibold w-8 shrink-0">{line.quantity} ×</span>
-                        <span className="min-w-0 flex-1 truncate">{line.item_name || line.description}</span>
-                        <Pill tone={JOB_TONE[line.job_status] || 'gray'}>{JOB_LABEL[line.job_status] || line.job_status}</Pill>
-                        {line.can_start ? (
-                          <button
-                            className="btn-secondary !py-0.5 !px-2 text-xs shrink-0"
-                            onClick={() => startProduction(o, line.id)}
-                          >
-                            Start
-                          </button>
-                        ) : (
-                          <span className="w-[3.1rem] shrink-0" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
+
+                  {o.items.some((l) => l.item_id) ? (
+                    <div className="space-y-1">
+                      {o.items.filter((l) => l.item_id).map((line) => {
+                        const startable = line.can_start || !line.job_status;
+                        return (
+                          <div key={line.id} className="flex items-center gap-2 text-xs">
+                            <span className="font-semibold w-8 shrink-0">{line.quantity} ×</span>
+                            <span className="min-w-0 flex-1 truncate">{line.item_name || line.description}</span>
+                            <Pill tone={JOB_TONE[line.job_status] || 'gray'}>
+                              {JOB_LABEL[line.job_status] || 'Not queued'}
+                            </Pill>
+                            {startable ? (
+                              <button
+                                className="btn-secondary !py-0.5 !px-2 text-xs shrink-0"
+                                onClick={() => startProduction(o, line.id)}
+                              >
+                                Start
+                              </button>
+                            ) : (
+                              <span className="w-[3.1rem] shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-800">
+                      {o.items.length
+                        ? 'None of these lines are linked to a product in your catalog, so there is nothing to print. Give the catalog item the same SKU Shopify uses, pull products again, and they will link up.'
+                        : 'This order has no lines on it yet.'}
+                    </p>
+                  )}
                 </div>
               )}
 

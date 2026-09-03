@@ -201,9 +201,15 @@ camera would otherwise walk it down the whole chain in a second.
 
 ### Starting one product, or all of them
 
-An order moves through its stages as a whole, but production does not. Once an order is
-**Queued**, its card lists every product on it with the state of that product's print job,
-a **Start** beside each one still waiting, and **Start all** above them.
+An order moves through its stages as a whole, but production does not. From **Confirmed**
+onwards, its card lists every product on it with the state of that product's print job, a
+**Start** beside each one still waiting, and **Start all** above them. Starting from
+Confirmed queues the line on the way, so the Queued step is never in the way of getting
+work moving.
+
+When there is nothing to start, the panel says why instead of disappearing — an order
+whose lines match no catalog product cannot be printed, and that is worth reading rather
+than guessing at.
 
 Starting one product puts that job on a printer and leaves the rest queued. The order
 itself moves to **Production** the moment any part of it starts — so a three-product order
