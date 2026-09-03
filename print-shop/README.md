@@ -199,6 +199,20 @@ a step.
 **A ticket read twice within eight seconds counts once.** Holding a sheet under the
 camera would otherwise walk it down the whole chain in a second.
 
+### Starting one product, or all of them
+
+An order moves through its stages as a whole, but production does not. Once an order is
+**Queued**, its card lists every product on it with the state of that product's print job,
+a **Start** beside each one still waiting, and **Start all** above them.
+
+Starting one product puts that job on a printer and leaves the rest queued. The order
+itself moves to **Production** the moment any part of it starts — so a three-product order
+with one on the plate reads as in production, which is what it is.
+
+Starting a job from the Queue tab does the same thing, so the two tabs never disagree.
+Starting a line on an order that was never explicitly queued queues it on the way. A line
+started late never drags an order backwards: one already scanned to packing stays there.
+
 ### What each stage does
 
 Reaching **Queued** is what actually puts the work in front of a printer — the same

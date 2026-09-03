@@ -116,6 +116,60 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
 }
 
 /**
+ * Put an order's work in front of a printer — one line, or all of them.
+ *
+ * An order moves through its stages as a whole, but production does not: one
+ * product can be on the plate while the rest of the order waits. So this moves
+ * the individual jobs, and the order follows to Production as soon as any one
+ * of them starts.
+ *
+ * `orderItemId` picks a single line; without it every line that is still
+ * waiting starts. Lines that have not reached the queue yet are put there
+ * first, so this works even if the order was never explicitly queued.
+ */
+function startProduction(orderId, { orderItemId = null, source = 'app' } = {}) {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+  if (!order) {
+    const err = new Error('Order not found');
+    err.status = 404;
+    throw err;
+  }
+
+  // Nothing can be printed that was never queued.
+  enqueueOrder(order.id);
+
+  const jobs = db.prepare(`
+    SELECT q.*, i.name AS item_name FROM queue_jobs q
+      JOIN items i ON q.item_id = i.id
+     WHERE q.order_id = ? AND q.status = 'queued'
+       ${orderItemId ? 'AND q.order_item_id = ?' : ''}
+     ORDER BY q.position, q.id
+  `).all(...(orderItemId ? [order.id, orderItemId] : [order.id]));
+
+  if (!jobs.length) {
+    const err = new Error(
+      orderItemId
+        ? 'That product is already in production, or finished'
+        : 'Every product on this order is already in production, or finished'
+    );
+    err.status = 400;
+    throw err;
+  }
+
+  const start = db.prepare(
+    "UPDATE queue_jobs SET status = 'printing', started_at = IFNULL(started_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+  );
+  db.transaction(() => { for (const job of jobs) start.run(job.id); })();
+
+  // The order is in production the moment any part of it is. Forward only, so
+  // an order already at finishing is not dragged back by a late-started line.
+  const note = jobs.length === 1 ? `${jobs[0].item_name} started` : `${jobs.length} products started`;
+  advanceTo(order.id, 'in_production', { source, note });
+
+  return { started: jobs.map((j) => ({ id: j.id, item_name: j.item_name, quantity: j.quantity })) };
+}
+
+/**
  * Take an order's goods out of stock, once. The event log is the record of
  * whether it has already happened, so an order shipped, put back and shipped
  * again does not draw the stock down twice.
@@ -231,5 +285,5 @@ function advanceTo(orderId, to, { source = 'app', note = null } = {}) {
 
 module.exports = {
   logEvent, events, enqueueOrder, setStatus, advance, advanceTo,
-  shipStock, sellableQuantity, DOUBLE_SCAN_SECONDS,
+  shipStock, sellableQuantity, startProduction, DOUBLE_SCAN_SECONDS,
 };

@@ -227,6 +227,11 @@ router.put('/:id', (req, res) => {
     if (nextStatus === 'printing' && !entry.started_at) {
       db.prepare('UPDATE queue_jobs SET started_at = CURRENT_TIMESTAMP WHERE id = ?').run(entry.id);
     }
+    // Starting a job here means the same thing as starting it from the order:
+    // that order is in production now. Forward only.
+    if (nextStatus === 'printing' && entry.order_id) {
+      flow.advanceTo(entry.order_id, 'in_production', { source: 'queue', note: 'a print started' });
+    }
     if (justCompleted) {
       db.prepare('UPDATE queue_jobs SET completed_at = CURRENT_TIMESTAMP WHERE id = ?').run(entry.id);
       const picks = db.prepare('SELECT * FROM queue_picks WHERE queue_id = ?').all(entry.id);

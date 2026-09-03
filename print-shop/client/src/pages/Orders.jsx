@@ -7,6 +7,14 @@ import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
 import OrderTicket from '../components/OrderTicket';
 import { useScanner } from '../components/ScanContext';
 
+// How a single product's print job reads on the order card.
+const JOB_LABEL = {
+  queued: 'Waiting', printing: 'Printing', post_processing: 'Finishing', done: 'Printed', cancelled: 'Cancelled',
+};
+const JOB_TONE = {
+  queued: 'gray', printing: 'amber', post_processing: 'violet', done: 'green', cancelled: 'gray',
+};
+
 // Only used until the real list arrives from the server, which owns it.
 const FALLBACK_STAGES = [
   { key: 'new', label: 'New', tone: 'blue' },
@@ -184,6 +192,17 @@ export default function Orders() {
     }
   }
 
+  async function startProduction(order, orderItemId) {
+    try {
+      const { message } = await printApi.startProduction(order.id, orderItemId ? { order_item_id: orderItemId } : {});
+      toast.success(message);
+      load();
+      refresh();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not start that print'));
+    }
+  }
+
   async function advance(order) {
     try {
       const { message } = await printApi.advanceOrder(order.id, {});
@@ -310,6 +329,43 @@ export default function Orders() {
                       </span>
                     );
                   })}
+                </div>
+              )}
+
+              {/* An order moves in one piece, but production does not: start one
+                  product or the lot, and the order follows on the first. */}
+              {['queued', 'in_production'].includes(o.status) && o.items.some((l) => l.job_status) && (
+                <div className="mt-3 border border-linen rounded-lg p-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    <p className="text-[11px] uppercase tracking-wide text-gray-500">Products on this order</p>
+                    {o.items.some((l) => l.can_start) && (
+                      <button
+                        className="btn-primary !py-1 !px-2.5 text-xs"
+                        onClick={() => startProduction(o)}
+                      >
+                        Start all
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {o.items.filter((l) => l.job_status).map((line) => (
+                      <div key={line.id} className="flex items-center gap-2 text-xs">
+                        <span className="font-semibold w-8 shrink-0">{line.quantity} ×</span>
+                        <span className="min-w-0 flex-1 truncate">{line.item_name || line.description}</span>
+                        <Pill tone={JOB_TONE[line.job_status] || 'gray'}>{JOB_LABEL[line.job_status] || line.job_status}</Pill>
+                        {line.can_start ? (
+                          <button
+                            className="btn-secondary !py-0.5 !px-2 text-xs shrink-0"
+                            onClick={() => startProduction(o, line.id)}
+                          >
+                            Start
+                          </button>
+                        ) : (
+                          <span className="w-[3.1rem] shrink-0" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

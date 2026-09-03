@@ -39,9 +39,23 @@ function hydrate(order, projectionsById) {
      WHERE q.order_id = ? ORDER BY q.position, q.id
   `).all(order.id);
 
+  // Pair each line with its print job, so a card can show where that one
+  // product has got to rather than only where the order has.
+  const byLine = new Map(queue.filter((q) => q.order_item_id).map((q) => [q.order_item_id, q]));
+  const items = totals.items.map((line) => {
+    const job = byLine.get(line.id);
+    return {
+      ...line,
+      job_status: job?.status || null,
+      job_id: job?.id || null,
+      can_start: !!job && job.status === 'queued',
+    };
+  });
+
   return {
     ...order,
     ...totals,
+    items,
     queue_entries: queue,
     next_stage: stages.nextStage(order.status),
     history: flow.events(order.id, 12),
@@ -219,6 +233,30 @@ router.post('/:id/queue', (req, res) => {
   const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
   const { projections } = orderProjections();
   res.json({ data: hydrate(updated, new Map(projections.map((p) => [p.order_id, p]))), message });
+});
+
+/**
+ * Start printing — one product off this order, or all of them. The order
+ * itself follows to Production as soon as anything on it starts.
+ */
+router.post('/:id/production', (req, res) => {
+  try {
+    const result = flow.startProduction(Number(req.params.id), {
+      orderItemId: req.body.order_item_id ? Number(req.body.order_item_id) : null,
+    });
+
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    const { projections } = orderProjections();
+    const names = result.started.map((s) => s.item_name);
+    res.json({
+      data: hydrate(order, new Map(projections.map((p) => [p.order_id, p]))),
+      message: names.length === 1
+        ? `${names[0]} is in production`
+        : `${names.length} products are in production`,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 /**
