@@ -245,9 +245,11 @@ does the whole handshake itself; no token is ever typed in or shown.
 In Shopify's Dev Dashboard, create an app, then release a version whose configuration
 carries:
 
-- the access scopes `read_products`, `read_orders` and `write_inventory` (add
-  `read_all_orders` for orders older than 60 days). The write scope does one job: putting
-  this shop's stock figure back on the store;
+- the access scopes `read_products`, `read_orders`, `write_inventory` and `read_locations`
+  (add `read_all_orders` for orders older than 60 days). The write scope does one job:
+  putting this shop's stock figure back on the store. `read_locations` only names the
+  places stock sits — without it Shopify returns a location's id and refuses its name, and
+  the location picker falls back to listing ids;
 - an **allowed redirection URL** of `https://your-shop-address/api/shopify/oauth/callback`.
   Settings shows the exact address to copy; Shopify refuses the connect unless it matches
   character for character.

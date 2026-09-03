@@ -64,6 +64,7 @@ export default function ShopifyCard() {
   const [outcome, setOutcome] = useState(null);
   const [stock, setStock] = useState(null);
   const [locations, setLocations] = useState([]);
+  const [locationError, setLocationError] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -91,7 +92,14 @@ export default function ShopifyCard() {
 
   const loadStock = useCallback(async () => {
     try { setStock(await printApi.shopifyInventory()); } catch { setStock(null); }
-    try { setLocations(await printApi.shopifyLocations()); } catch { setLocations([]); }
+    try {
+      setLocations(await printApi.shopifyLocations());
+      setLocationError('');
+    } catch (err) {
+      // An empty dropdown with no reason is the worst of both. Say why.
+      setLocations([]);
+      setLocationError(describeError(err, 'Could not read your Shopify locations'));
+    }
   }, []);
   useEffect(() => { if (config?.configured) loadStock(); }, [config?.configured, loadStock]);
   useEffect(() => {
@@ -373,10 +381,12 @@ export default function ShopifyCard() {
                   value={stock?.location_id || ''}
                   onChange={(e) => run('loc', () => printApi.saveShopifyInventory({ location_id: e.target.value }), loadStock)}
                 >
-                  <option value="">Choose a location…</option>
+                  <option value="">
+                    {locations.length ? 'Choose a location…' : 'No locations to choose from'}
+                  </option>
                   {locations.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {l.name}{l.fulfils_online ? '' : ' (not online orders)'}
+                      {l.name}{l.fulfils_online === false ? ' (not online orders)' : ''}
                     </option>
                   ))}
                 </select>
@@ -392,6 +402,19 @@ export default function ShopifyCard() {
                 </select>
               </Field>
             </div>
+
+            {locationError && (
+              <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-2.5">
+                {locationError}
+              </p>
+            )}
+            {locations.some((l) => l.unnamed) && (
+              <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                Shopify would not give the names of your locations, only their ids — that needs the{' '}
+                <span className="font-mono">read_locations</span> scope. Stock still writes correctly to
+                whichever you pick. Add the scope in a new app version and reconnect to see them named.
+              </p>
+            )}
 
             <div className="flex flex-wrap gap-2">
               {stock?.push_on ? (

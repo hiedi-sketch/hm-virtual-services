@@ -7,7 +7,10 @@ const DEFAULT_API_VERSION = '2026-01';
 // What the shop asks Shopify for. The write scope is there for one job only:
 // putting this shop's stock figure back on the store. Shopify grants the
 // matching read with every write scope.
-const OAUTH_SCOPES = ['read_products', 'read_orders', 'write_inventory'];
+// read_locations is only for naming the places stock sits: without it Shopify
+// hands back a location's id and refuses its name, which makes for a dropdown
+// nobody can choose from.
+const OAUTH_SCOPES = ['read_products', 'read_orders', 'write_inventory', 'read_locations'];
 
 // ── Stored configuration ─────────────────────────────────────────────────────
 
@@ -334,6 +337,17 @@ const LOCATIONS_QUERY = `
   }
 `;
 
+// The same question asked with less curiosity. An app holding write_inventory
+// but not read_locations may read a location's id and nothing else, so this is
+// what remains answerable — enough to write stock to the right place.
+const LOCATION_IDS_QUERY = `
+  query locationIds {
+    locations(first: 20, includeInactive: false) {
+      nodes { id }
+    }
+  }
+`;
+
 const SET_QUANTITIES = `
   mutation setQuantities($input: InventorySetQuantitiesInput!) {
     inventorySetQuantities(input: $input) {
@@ -344,13 +358,28 @@ const SET_QUANTITIES = `
 `;
 
 async function fetchLocations() {
-  const data = await graphql(LOCATIONS_QUERY);
-  return (data?.locations?.nodes || []).map((l) => ({
-    id: l.id,
-    name: l.name,
-    active: l.isActive,
-    fulfils_online: l.fulfillsOnlineOrders,
-  }));
+  try {
+    const data = await graphql(LOCATIONS_QUERY);
+    return (data?.locations?.nodes || []).map((l) => ({
+      id: l.id,
+      name: l.name,
+      active: l.isActive,
+      fulfils_online: l.fulfillsOnlineOrders,
+    }));
+  } catch (err) {
+    // Not allowed to read the names. Ask for the ids alone rather than showing
+    // an empty list, so stock can still be pointed at the right place.
+    if (!/access denied|read_locations/i.test(String(err.message) + String(err.detail || ''))) throw err;
+
+    const data = await graphql(LOCATION_IDS_QUERY);
+    return (data?.locations?.nodes || []).map((l, i) => ({
+      id: l.id,
+      name: `Location ${i + 1} (${String(l.id).split('/').pop()})`,
+      active: true,
+      fulfils_online: null,
+      unnamed: true,
+    }));
+  }
 }
 
 /**
