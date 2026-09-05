@@ -1,5 +1,7 @@
 const db = require('../db/database');
-const { estimatedMinutes } = require('../utils/planning');
+const { estimatedMinutes, filamentSummary } = require('../utils/planning');
+const { filamentDemandForItem } = require('../utils/costing');
+const { suggestSpools } = require('../utils/picklist');
 const flow = require('./order-flow');
 
 /**
@@ -82,12 +84,62 @@ function demandFor(itemId) {
     // What is left to print once the shelf and the plates are counted. Never
     // less than one: she is standing at a printer about to print something.
     suggested: Math.max(1, shortfall - printing),
+    filaments: filamentsFor(itemId),
     order_count: new Set(lines.map((l) => l.order_id)).size,
     orders: lines.map((line) => ({
       ...line,
       started: !notStarted(line),
     })),
   };
+}
+
+/**
+ * The filament a product is made of — colour by colour, with the spool to load.
+ *
+ * Read at the printer, before anything is sliced: what to put in the machine,
+ * how much of it a run of this size will eat, and whether the shelf can cover
+ * it. Grams are per unit; the run's own total is worked out against whatever
+ * quantity she settles on.
+ */
+function filamentsFor(itemId) {
+  const perUnit = filamentDemandForItem(itemId);
+
+  return Object.entries(perUnit)
+    .map(([id, gramsPerUnit]) => {
+      const [f] = filamentSummary(Number(id));
+      if (!f) return null;
+
+      // Asking for a single gram names the spool that would be reached for
+      // first — the oldest open one, or a sealed one that has to be opened.
+      const [next] = suggestSpools(f.id, 1);
+      const spool = next
+        ? db.prepare('SELECT location FROM filament_spools WHERE id = ?').get(next.spool_id)
+        : null;
+
+      return {
+        id: f.id,
+        brand: f.brand,
+        material_type: f.material_type,
+        color_name: f.color_name,
+        color_hex: f.color_hex,
+        grams_per_unit: gramsPerUnit,
+        grams_on_hand: f.grams_on_hand,
+        spools_opened: f.spools_opened,
+        spools_new: f.spools_new,
+        // How many units the shelf could cover on this colour alone.
+        units_from_stock: gramsPerUnit > 0 ? Math.floor(f.grams_on_hand / gramsPerUnit) : null,
+        next_spool: next && {
+          spool_code: next.spool_code,
+          status: next.status,
+          needs_opening: next.needs_opening,
+          grams_available: next.grams_available,
+          location: spool?.location || null,
+        },
+      };
+    })
+    .filter(Boolean)
+    // Most-used colour first: that is the one being loaded.
+    .sort((a, b) => b.grams_per_unit - a.grams_per_unit);
 }
 
 function requireItem(itemId) {
@@ -200,4 +252,4 @@ function queueDemand(itemId, { source = 'scan' } = {}) {
   return { item: { id: item.id, name: item.name }, queued, demand: demandFor(item.id) };
 }
 
-module.exports = { demandFor, startRun, queueDemand, openLines };
+module.exports = { demandFor, startRun, queueDemand, openLines, filamentsFor };

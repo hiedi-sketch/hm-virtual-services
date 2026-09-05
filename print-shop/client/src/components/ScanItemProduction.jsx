@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import printApi, { describeError, shortDate } from '../api/print';
+import printApi, { describeError, grams, shortDate } from '../api/print';
 import { Pill } from './ui';
 
 /**
@@ -108,6 +108,62 @@ export default function ScanItemProduction({ match, onChanged, onDone, onStock, 
             : <Pill tone="green">Enough on the shelf</Pill>}
         </div>
         </div>
+      </div>
+
+      {/* What to load before anything is sliced. */}
+      <div className="space-y-1">
+        <p className="label !mb-1">Filament</p>
+        {demand.filaments.length === 0 ? (
+          <p className="text-xs text-gray-500">
+            Nothing on this product's <span className="font-semibold">Made from</span> list yet — add its
+            filament in the Catalog and the colours will show up here.
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {demand.filaments.map((f) => {
+              const needs = f.grams_per_unit * (Number(quantity) || 0);
+              const short = needs > f.grams_on_hand;
+              return (
+                <li key={f.id} className="flex items-start gap-2.5">
+                  <span
+                    className="w-7 h-7 rounded-full border border-greige shrink-0 mt-0.5"
+                    style={{ background: f.color_hex || '#B0B5BC' }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-primary leading-tight">
+                      {f.color_name}
+                      <span className="font-normal text-gray-500 text-xs ml-1.5">
+                        {f.brand} {f.material_type}
+                      </span>
+                    </p>
+                    <p className="text-xs text-gray-600">
+                      {grams(f.grams_per_unit)} each · <span className={short ? 'text-red-600 font-semibold' : ''}>
+                        {grams(needs)} for this run
+                      </span>
+                      <span className="text-gray-400"> · {grams(f.grams_on_hand)} on hand</span>
+                    </p>
+                    {f.next_spool ? (
+                      // Which spool to reach for, so the colour on screen and the
+                      // one in the machine are the same spool.
+                      <p className="text-[11px] text-gray-500">
+                        Load <span className="font-mono">{f.next_spool.spool_code}</span>
+                        {f.next_spool.location ? ` from ${f.next_spool.location}` : ' — no place recorded'}
+                        {f.next_spool.needs_opening && ' · sealed, needs opening'}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-red-600">No spool of this colour on the shelf</p>
+                    )}
+                    {short && (
+                      <p className="text-[11px] text-red-600">
+                        {grams(needs - f.grams_on_hand)} short — enough for {f.units_from_stock} at this rate
+                      </p>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
 
       {waitingOrders.length > 0 && (

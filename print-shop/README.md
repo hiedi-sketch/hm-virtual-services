@@ -237,6 +237,13 @@ is already on a plate, and how short that leaves you. Under it are the orders wa
 that product, soonest promise first. It fills in a suggested quantity — the shortfall,
 less anything already printing — and asks how many you are putting on this job.
 
+**The filament comes with it.** Every colour on the product's *Made from* list is shown
+with its swatch: grams per unit, grams for the run you have typed in (it re-reckons as you
+change the number), what is on the shelf, and which spool to load — the oldest open one,
+or a sealed one flagged as needing opening, with where it lives if the spool has a place.
+A colour the shelf cannot cover says how short it is and how many units it *would* cover.
+A product with nothing on its *Made from* list says so rather than guessing.
+
 **Print N and move to production** starts the run. The units are handed to the waiting
 orders soonest promise first, and each order that gets its units moves to **Production**.
 An order line is only taken when the run covers all of it: half a line printed is not a
