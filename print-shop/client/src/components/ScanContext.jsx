@@ -10,6 +10,7 @@ import UnknownCode from './UnknownCode';
 import LocationPicker from './LocationPicker';
 import ScanFilamentActions from './ScanFilamentActions';
 import ScanOrderActions, { OrderResultCard } from './ScanOrderActions';
+import ScanItemProduction from './ScanItemProduction';
 
 const ScanContext = createContext(null);
 
@@ -104,6 +105,9 @@ export function ScanProvider({ children, onStockChange }) {
   const [quantity, setQuantity] = useState('1');
   const [busy, setBusy] = useState(false);
   const [stages, setStages] = useState([]);
+  // A scanned product leads with its print run; the stock verbs are a tap
+  // away for the times she is counting a shelf rather than printing.
+  const [stockMode, setStockMode] = useState(false);
   const handlerRef = useRef(null);
 
   // The stages live on the server so there is one list, not two that drift.
@@ -116,6 +120,7 @@ export function ScanProvider({ children, onStockChange }) {
     setConfig(options);
     setMatch(null);
     setUnknown(null);
+    setStockMode(false);
     setOpen(true);
   }, []);
 
@@ -131,6 +136,7 @@ export function ScanProvider({ children, onStockChange }) {
       const found = await printApi.scanLookup(code);
       setMatch(found);
       setUnknown(null);
+      setStockMode(false);
       setQuantity('1');
       setOpen(false);
     } catch (err) {
@@ -167,6 +173,8 @@ export function ScanProvider({ children, onStockChange }) {
   const actions = match ? ACTIONS[match.type] || [] : [];
   const isFilament = match?.type === 'filament' || match?.type === 'filament_spool';
   const isOrder = match?.type === 'order';
+  // Tools are bought, not printed, so they have no run to start.
+  const isProduct = match?.type === 'item' && match.item?.item_type !== 'tool';
 
   return (
     <ScanContext.Provider value={value}>
@@ -257,6 +265,17 @@ export function ScanProvider({ children, onStockChange }) {
                   }}
                   onDone={() => setMatch(null)}
                 />
+              ) : isProduct && !stockMode ? (
+                <ScanItemProduction
+                  match={match}
+                  onChanged={async () => {
+                    onStockChange?.();
+                    try { setMatch(await printApi.scanLookup(match.code)); } catch { /* keep what we have */ }
+                  }}
+                  onStock={() => setStockMode(true)}
+                  onScanAnother={() => { setMatch(null); scan(config); }}
+                  onDone={() => setMatch(null)}
+                />
               ) : (
               <>
 
@@ -286,6 +305,11 @@ export function ScanProvider({ children, onStockChange }) {
               </div>
 
               <div className="flex gap-2">
+                {isProduct && (
+                  <button onClick={() => setStockMode(false)} className="btn-secondary">
+                    Printing
+                  </button>
+                )}
                 <button
                   onClick={() => { setMatch(null); scan(config); }}
                   className="btn-primary flex-1 !py-3"

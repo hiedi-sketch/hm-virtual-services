@@ -77,6 +77,9 @@ export const printApi = {
   updateItem: (id, body) => unwrap(api.put(`/catalog/${id}`, body)),
   deleteItem: (id) => api.delete(`/catalog/${id}`),
   adjustItem: (id, body) => unwrap(api.post(`/catalog/${id}/adjust`, body)),
+  itemDemand: (id) => unwrap(api.get(`/catalog/${id}/demand`)),
+  startPrintRun: (id, body) => api.post(`/catalog/${id}/print-run`, body).then((r) => r.data),
+  queueItemDemand: (id, body) => api.post(`/catalog/${id}/queue`, body || {}).then((r) => r.data),
 
   orders: (params) => unwrap(api.get('/orders', { params })),
   order: (id) => unwrap(api.get(`/orders/${id}`)),

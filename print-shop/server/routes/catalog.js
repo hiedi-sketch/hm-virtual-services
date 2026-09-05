@@ -6,6 +6,7 @@ const { materialSummary, filamentSummary } = require('../utils/planning');
 const { logStock, applyUpdate } = require('./helpers');
 const { planImport, applyImport } = require('../services/catalog-import');
 const inventory = require('../services/inventory-sync');
+const printRun = require('../services/print-run');
 
 const router = express.Router();
 
@@ -269,6 +270,50 @@ router.post('/:id/adjust', (req, res) => {
   inventory.changed(item.id);
 
   res.json({ data: priceItem(item.id) });
+});
+
+/**
+ * How many of this product the whole shop owes, and which orders are waiting.
+ * This is what the popup shows when a product barcode is scanned at the
+ * printer, so she decides the plate against every order, not just one ticket.
+ */
+router.get('/:id/demand', (req, res) => {
+  const demand = printRun.demandFor(req.params.id);
+  if (!demand) return res.status(404).json({ error: 'Item not found' });
+  res.json({ data: demand });
+});
+
+/** Start printing a given number, filling the waiting orders oldest first. */
+router.post('/:id/print-run', (req, res) => {
+  try {
+    const result = printRun.startRun(req.params.id, req.body.quantity, {
+      source: req.body.source || 'scan',
+      printer: req.body.printer ?? null,
+      filamentId: req.body.filament_id ?? null,
+    });
+    const orders = result.orders.length;
+    const parts = [];
+    if (orders) parts.push(`${orders} order${orders === 1 ? '' : 's'} in production`);
+    if (result.stock_quantity > 0) parts.push(`${result.stock_quantity} for stock`);
+    res.json({ data: result, message: `Printing ${result.printing} — ${parts.join(', ')}` });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/** Line the waiting orders up without starting a print. */
+router.post('/:id/queue', (req, res) => {
+  try {
+    const result = printRun.queueDemand(req.params.id, { source: req.body.source || 'scan' });
+    res.json({
+      data: result,
+      message: result.queued.length
+        ? `${result.queued.length} order(s) queued`
+        : 'Every order for this product is already queued',
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
 });
 
 module.exports = { router, decorateComponents };

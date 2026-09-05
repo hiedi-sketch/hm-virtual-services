@@ -153,6 +153,8 @@ actually hit given what is already queued.
   - **Move** — pick which spool (skipped when a spool's own tag was scanned), then pick
     where it is going. This is the `A1` → `AMS2` move you make before every print.
 - Materials and catalog items keep the plain receive / use / count actions.
+- Scanning a **product** opens its print run: how many the shop owes across every open
+  order, and how many you are printing now. See *Scanning a product: the print run*.
 - Scanning an **order ticket** moves that order a stage on. See *Order tickets and the
   seven stages* above.
 - Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
@@ -184,10 +186,16 @@ order currently shown, one to a sheet. A ticket carries the order number, who it
 the promised ship date, every line with quantity and SKU, the total, any note, a row of
 stage boxes ticked off as far as the order has got, and a Code 128 barcode.
 
-The barcode is the order's own code — `ORD-` and its order number, so `#1001` from
-Shopify prints as `ORD-1001`. The prefix means an order code can never be mistaken for a
-product SKU at the scanner. It is generated when the order is created, whether by hand,
-by import or by Shopify, and it never changes.
+The barcode at the foot is the order's own code — `ORD-` and its order number, so `#1001`
+from Shopify prints as `ORD-1001`. The prefix means an order code can never be mistaken
+for a product SKU at the scanner. It is generated when the order is created, whether by
+hand, by import or by Shopify, and it never changes.
+
+Each product line also carries its own small barcode: that product's barcode, or its SKU
+if it has no barcode. It is the same code as the shelf label, so one scan means one
+product wherever it is read — off the ticket, off a bin, off a tag. Scanning it opens the
+print run described below. A line matching no catalog product prints no code, because
+there is no product to print.
 
 ### Scanning
 
@@ -218,6 +226,30 @@ with one on the plate reads as in production, which is what it is.
 Starting a job from the Queue tab does the same thing, so the two tabs never disagree.
 Starting a line on an order that was never explicitly queued queues it on the way. A line
 started late never drags an order backwards: one already scanned to packing stays there.
+
+### Scanning a product: the print run
+
+Scanning a product's barcode — from an order ticket, a shelf, or a bin — asks the
+question that actually matters at the printer: **how many of these does the shop owe?**
+
+The sheet leads with the total needed across every open order, what is on the shelf, what
+is already on a plate, and how short that leaves you. Under it are the orders waiting on
+that product, soonest promise first. It fills in a suggested quantity — the shortfall,
+less anything already printing — and asks how many you are putting on this job.
+
+**Print N and move to production** starts the run. The units are handed to the waiting
+orders soonest promise first, and each order that gets its units moves to **Production**.
+An order line is only taken when the run covers all of it: half a line printed is not a
+line that can ship, so a run of three against lines of one, two and four fills the first
+two and leaves the four waiting. Whatever the orders do not take becomes a **stock job**
+on the queue, marked *For stock* — printed against nobody's order, landing on the shelf
+when it finishes.
+
+**Queue the orders** lines the waiting orders up without starting anything, walking each
+one up to Queued. **Adjust stock** switches to the old receive / remove / count buttons
+for the times you are counting a shelf rather than printing.
+
+Tools have no print run; scanning one goes straight to the stock buttons.
 
 ### What each stage does
 

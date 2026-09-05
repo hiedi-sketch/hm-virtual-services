@@ -4,8 +4,10 @@ import { money, shortDate } from '../api/print';
 
 /**
  * The paper that travels with the job. Everything needed to work the order is
- * on it, and the barcode at the bottom is what moves it a stage on when it is
- * scanned — so the sheet on the bench and the shop's own record stay the same
+ * on it. The barcode at the bottom moves the whole order a stage on when it is
+ * scanned; the small one beside each product opens that product's print run —
+ * how many the shop owes across every order, and how many she is putting on
+ * the plate. So the sheet on the bench and the shop's own record stay the same
  * thing.
  */
 
@@ -48,15 +50,29 @@ function Ticket({ order, shopName, stages }) {
           </tr>
         </thead>
         <tbody>
-          {(order.items || []).map((line, i) => (
+          {(order.items || []).map((line, i) => {
+            // The product's own code, so the label on the ticket is the same
+            // one on the shelf and one scan means one product wherever it is
+            // read. A line with nothing in the catalog behind it has no code
+            // to print, and prints none.
+            const code = line.item_id ? (line.item_barcode || line.item_sku) : null;
+            return (
             <tr key={i} className="border-b border-gray-200 align-top">
               <td className="py-1.5 font-bold">{line.quantity}</td>
-              <td className="py-1.5">{line.item_name || line.description || 'Item'}</td>
+              <td className="py-1.5">
+                <span>{line.item_name || line.description || 'Item'}</span>
+                {code && (
+                  <span className="block mt-1">
+                    <Barcode value={code} height={30} moduleWidth={1.4} showText={false} />
+                  </span>
+                )}
+              </td>
               <td className="py-1.5 font-mono text-xs">{line.item_sku || '—'}</td>
               <td className="py-1.5 text-right">{money(line.unit_price)}</td>
               <td className="py-1.5 text-right">{money((line.quantity || 0) * (line.unit_price || 0))}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
         <tfoot>
           <tr className="font-bold">
@@ -90,7 +106,9 @@ function Ticket({ order, shopName, stages }) {
 
       <div className="text-center border-t-2 border-gray-800 pt-3">
         <Barcode value={order.barcode || order.order_number} height={70} moduleWidth={2} />
-        <p className="text-[11px] text-gray-500 mt-1">Scan to move this order on a stage</p>
+        <p className="text-[11px] text-gray-500 mt-1">
+          Scan this to move the order on a stage · scan a product above to print a batch of it
+        </p>
       </div>
     </div>
   );

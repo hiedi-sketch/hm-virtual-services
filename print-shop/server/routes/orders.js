@@ -16,7 +16,8 @@ const EDITABLE = [
 
 function orderTotals(orderId) {
   const items = db.prepare(`
-    SELECT oi.*, i.name AS item_name, i.sku AS item_sku, i.item_type, i.print_time_minutes
+    SELECT oi.*, i.name AS item_name, i.sku AS item_sku, i.item_type, i.print_time_minutes,
+           i.barcode AS item_barcode
       FROM order_items oi LEFT JOIN items i ON oi.item_id = i.id
      WHERE oi.order_id = ? ORDER BY oi.id
   `).all(orderId);
