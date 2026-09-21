@@ -214,6 +214,19 @@ export default function Orders() {
     }
   }
 
+  // One product's own progress: off the printer into finishing, then printed.
+  // The order follows by itself once nothing of its is on a printer.
+  async function advanceJob(order, line, to) {
+    try {
+      const { message } = await printApi.advanceJob(order.id, line.job_id, to ? { to } : {});
+      toast.success(message);
+      load();
+      refresh();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not move that product on'));
+    }
+  }
+
   async function advance(order) {
     try {
       const { message } = await printApi.advanceOrder(order.id, {});
@@ -344,11 +357,13 @@ export default function Orders() {
               )}
 
               {/* An order moves in one piece, but production does not: start one
-                  product or the lot, and the order follows on the first. Shown
-                  from Confirmed, because starting a line queues it on the way.
-                  When there is nothing to start, this says why rather than
-                  vanishing and leaving the order looking broken. */}
-              {['confirmed', 'queued', 'in_production'].includes(o.status) && (
+                  product or the lot, take one off the printer so the next can
+                  go on, and the order follows. Shown from Confirmed, because
+                  starting a line queues it on the way, and still at Finishing,
+                  because work on the bench is not finished work. When there is
+                  nothing to do, this says why rather than vanishing and leaving
+                  the order looking broken. */}
+              {['confirmed', 'queued', 'in_production', 'finishing'].includes(o.status) && (
                 <div className="mt-3 border border-linen rounded-lg p-2.5">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">Products on this order</p>
@@ -379,6 +394,21 @@ export default function Orders() {
                                 onClick={() => startProduction(o, line.id)}
                               >
                                 Start
+                              </button>
+                            ) : line.job_status === 'printing' ? (
+                              // Off the printer, so the next plate can go on.
+                              <button
+                                className="btn-secondary !py-0.5 !px-2 text-xs shrink-0"
+                                onClick={() => advanceJob(o, line, 'post_processing')}
+                              >
+                                Off printer
+                              </button>
+                            ) : line.job_status === 'post_processing' ? (
+                              <button
+                                className="btn-secondary !py-0.5 !px-2 text-xs shrink-0"
+                                onClick={() => advanceJob(o, line, 'done')}
+                              >
+                                Finished
                               </button>
                             ) : (
                               <span className="w-[3.1rem] shrink-0" />

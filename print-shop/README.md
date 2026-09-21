@@ -207,25 +207,33 @@ a step.
 **A ticket read twice within eight seconds counts once.** Holding a sheet under the
 camera would otherwise walk it down the whole chain in a second.
 
-### Starting one product, or all of them
+### One product at a time
 
-An order moves through its stages as a whole, but production does not. From **Confirmed**
-onwards, its card lists every product on it with the state of that product's print job, a
-**Start** beside each one still waiting, and **Start all** above them. Starting from
-Confirmed queues the line on the way, so the Queued step is never in the way of getting
-work moving.
+An order moves through its stages as a whole, but production does not — one plate comes
+off to let the next one go on. So from **Confirmed** through **Finishing**, an order's card
+lists every product on it with where that one product has got to, and a button that moves
+it one step:
 
-When there is nothing to start, the panel says why instead of disappearing — an order
-whose lines match no catalog product cannot be printed, and that is worth reading rather
-than guessing at.
+| The product reads | The button says | What it does |
+| --- | --- | --- |
+| Not queued / Waiting | **Start** | Puts it on a printer. Queues it first if it was never queued. |
+| Printing | **Off printer** | Takes it off into finishing, freeing the printer for the next one. Nothing moves in stock yet. |
+| Finishing | **Finished** | Printed: its units go on the shelf, its filament comes off the spools. |
+| Printed | — | Done. |
 
-Starting one product puts that job on a printer and leaves the rest queued. The order
-itself moves to **Production** the moment any part of it starts — so a three-product order
-with one on the plate reads as in production, which is what it is.
+**Start all** above the list starts everything still waiting.
 
-Starting a job from the Queue tab does the same thing, so the two tabs never disagree.
-Starting a line on an order that was never explicitly queued queues it on the way. A line
-started late never drags an order backwards: one already scanned to packing stays there.
+The order follows its products rather than leading them. It moves to **Production** the
+moment any one of them starts, and to **Finishing** as soon as none of them is left on a
+printer — whether they came off into finishing or straight to printed. Only ever forward:
+an order already scanned to packing is never dragged back.
+
+When there is nothing to do, the panel says why instead of disappearing — an order whose
+lines match no catalog product cannot be printed, and that is worth reading rather than
+guessing at.
+
+Finishing a job from the Queue tab does exactly the same thing, by the same code, so the
+two tabs can never disagree about stock.
 
 ### Scanning a product: the print run
 
@@ -264,8 +272,8 @@ Reaching **Queued** is what actually puts the work in front of a printer — the
 thing *Send to queue* does, so the ticket and the app never disagree about it. Reaching
 **Shipped** stamps the shipped date. Everything else just records where the order is.
 
-The shop moves an order along by itself in one place only: when the last print job on an
-order finishes, the order moves to **Finishing**. That only ever moves forward — if you
+The shop moves an order along by itself in one place only: when nothing of the order is
+left on a printer, it moves to **Finishing**. That only ever moves forward — if you
 have already scanned the order into packing, the queue does not drag it back.
 
 ### The record
@@ -636,7 +644,8 @@ those lines, so the pick list and the stock movement can never disagree.
 
 ## Stock movement
 
-Marking a queue job **done** is what moves stock: filament grams come off the open
+Marking a job **done** — *Finished* on an order card, or **done** on the Queue tab, which
+are the same thing — is what moves stock: filament grams come off the open
 spools (opening a fresh one automatically when needed), materials come off the shelf,
 components pulled from stock are deducted, and finished units are added to the item's
 inventory. Every movement is appended to `stock_log`.
@@ -771,6 +780,9 @@ print-shop/
 │   │                         outside the sign-in, each proving itself instead)
 │   ├── services/
 │   │   ├── order-flow.js     Moving an order along, and what each stage does
+│   │   ├── job-complete.js   One product's own progress, and the stock it moves
+│   │   ├── print-run.js      What the shop owes of a product, and printing it
+│   │   ├── catalog-match.js  Finding the catalog item a Shopify line means
 │   │   ├── oauth-state.js    One-time nonces tying a Shopify connect to its start
 │   │   ├── inventory-sync.js Stock back to Shopify: sellable figure, outbox, retries
 │   │   ├── shopify-sync.js   Pulling products and orders in, and taking webhooks

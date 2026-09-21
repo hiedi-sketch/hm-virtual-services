@@ -1,13 +1,12 @@
 const express = require('express');
 const db = require('../db/database');
-const { getSettings, filamentDemandForItem, materialDemandForItem } = require('../utils/costing');
+const { getSettings } = require('../utils/costing');
 const {
   scheduleQueue, orderProjections, estimatedMinutes, filamentSummary, materialSummary,
 } = require('../utils/planning');
-const { logStock } = require('./helpers');
 const { ensurePicks, readPicks } = require('../utils/picklist');
 const flow = require('../services/order-flow');
-const inventory = require('../services/inventory-sync');
+const jobs = require('../services/job-complete');
 
 const router = express.Router();
 
@@ -64,152 +63,6 @@ router.post('/', (req, res) => {
   res.status(201).json({ data: queuePayload() });
 });
 
-/** Take grams off the open spools, opening a sealed one when needed. */
-function drawFilament(filamentId, grams, reference) {
-  const f = db.prepare('SELECT * FROM filaments WHERE id = ?').get(filamentId);
-  if (!f || !grams) return;
-  const fullGrams = (f.spool_size_kg || 1) * 1000;
-  const todayStr = new Date().toISOString().slice(0, 10);
-  let remaining = grams;
-
-  while (remaining > 0) {
-    let spool = db.prepare(`
-      SELECT * FROM filament_spools
-       WHERE filament_id = ? AND status = 'opened' AND IFNULL(grams_remaining, 0) > 0
-       ORDER BY opened_at, id LIMIT 1
-    `).get(f.id);
-
-    if (!spool) {
-      const fresh = db.prepare(
-        "SELECT * FROM filament_spools WHERE filament_id = ? AND status = 'new' ORDER BY id LIMIT 1"
-      ).get(f.id);
-      if (!fresh) break;
-      db.prepare(
-        "UPDATE filament_spools SET status='opened', grams_remaining=?, opened_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?"
-      ).run(fullGrams, todayStr, fresh.id);
-      spool = { ...fresh, grams_remaining: fullGrams };
-    }
-
-    const take = Math.min(remaining, spool.grams_remaining);
-    const left = spool.grams_remaining - take;
-    db.prepare(`
-      UPDATE filament_spools
-         SET grams_remaining=?, status = CASE WHEN ? <= 0 THEN 'empty' ELSE 'opened' END,
-             emptied_at = CASE WHEN ? <= 0 THEN ? ELSE emptied_at END, updated_at = CURRENT_TIMESTAMP
-       WHERE id=?
-    `).run(left, left, left, todayStr, spool.id);
-    remaining -= take;
-  }
-  logStock('filament', f.id, -(grams - Math.max(0, remaining)), 'g', 'print completed', reference);
-}
-
-/**
- * Complete a job against its pick list. Because the list already decided which
- * components come off the shelf instead of being printed, its filament and
- * material figures are what the machine actually used — so the deduction
- * matches what was gathered.
- */
-function completeFromPicks(entry, picks) {
-  const reference = `Queue #${entry.id}`;
-
-  for (const line of picks) {
-    if (line.line_type === 'filament') {
-      drawFilament(line.ref_id, line.quantity, reference);
-    } else if (line.line_type === 'material') {
-      const m = db.prepare('SELECT * FROM materials WHERE id = ?').get(line.ref_id);
-      if (!m) continue;
-      db.prepare('UPDATE materials SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .run((m.qty_on_hand || 0) - line.quantity, m.id);
-      logStock('material', m.id, -line.quantity, m.unit, 'print completed', reference);
-    } else {
-      // A part pulled from the shelf rather than printed.
-      const sub = db.prepare('SELECT * FROM items WHERE id = ?').get(line.ref_id);
-      if (!sub) continue;
-      db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .run((sub.qty_on_hand || 0) - line.quantity, sub.id);
-      logStock('item', sub.id, -line.quantity, 'each', 'used in print', reference);
-      inventory.markChanged(sub.id);
-    }
-  }
-
-  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(entry.item_id);
-  db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-    .run((item.qty_on_hand || 0) + (entry.quantity || 0), item.id);
-  logStock('item', item.id, entry.quantity || 0, 'each', 'print completed', reference);
-  inventory.changed(item.id);
-}
-
-/**
- * Finishing a print is what actually draws stock down: filament off the open
- * spools, consumable materials off the shelf, finished units onto it.
- */
-function completeEntry(entry) {
-  const filament = filamentDemandForItem(entry.item_id);
-  const materials = materialDemandForItem(entry.item_id);
-  const qty = entry.quantity || 0;
-  const reference = `Queue #${entry.id}`;
-
-  // A queue entry can pin one colour for the whole job.
-  const filamentTotals = entry.filament_id
-    ? { [entry.filament_id]: Object.values(filament).reduce((a, b) => a + b, 0) * qty }
-    : Object.fromEntries(Object.entries(filament).map(([id, g]) => [id, g * qty]));
-
-  for (const [filamentId, grams] of Object.entries(filamentTotals)) {
-    if (!grams) continue;
-    const f = db.prepare('SELECT * FROM filaments WHERE id = ?').get(filamentId);
-    if (!f) continue;
-    const fullGrams = (f.spool_size_kg || 1) * 1000;
-    let remaining = grams;
-    const todayStr = new Date().toISOString().slice(0, 10);
-
-    while (remaining > 0) {
-      let spool = db.prepare(`
-        SELECT * FROM filament_spools
-         WHERE filament_id = ? AND status = 'opened' AND IFNULL(grams_remaining, 0) > 0
-         ORDER BY opened_at, id LIMIT 1
-      `).get(f.id);
-
-      if (!spool) {
-        const fresh = db.prepare(
-          "SELECT * FROM filament_spools WHERE filament_id = ? AND status = 'new' ORDER BY id LIMIT 1"
-        ).get(f.id);
-        if (!fresh) break;
-        db.prepare(
-          "UPDATE filament_spools SET status='opened', grams_remaining=?, opened_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?"
-        ).run(fullGrams, todayStr, fresh.id);
-        spool = { ...fresh, grams_remaining: fullGrams };
-      }
-
-      const take = Math.min(remaining, spool.grams_remaining);
-      const left = spool.grams_remaining - take;
-      db.prepare(`
-        UPDATE filament_spools
-           SET grams_remaining=?, status = CASE WHEN ? <= 0 THEN 'empty' ELSE 'opened' END,
-               emptied_at = CASE WHEN ? <= 0 THEN ? ELSE emptied_at END, updated_at = CURRENT_TIMESTAMP
-         WHERE id=?
-      `).run(left, left, left, todayStr, spool.id);
-      remaining -= take;
-    }
-    logStock('filament', f.id, -(grams - Math.max(0, remaining)), 'g', 'print completed', reference);
-  }
-
-  for (const [materialId, amount] of Object.entries(materials)) {
-    const used = amount * qty;
-    if (!used) continue;
-    const m = db.prepare('SELECT * FROM materials WHERE id = ?').get(materialId);
-    if (!m) continue;
-    db.prepare('UPDATE materials SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run((m.qty_on_hand || 0) - used, m.id);
-    logStock('material', m.id, -used, m.unit, 'print completed', reference);
-  }
-
-  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(entry.item_id);
-  db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-    .run((item.qty_on_hand || 0) + qty, item.id);
-  logStock('item', item.id, qty, 'each', 'print completed', reference);
-  inventory.changed(item.id);
-}
-
 router.put('/:id', (req, res) => {
   const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Queue entry not found' });
@@ -234,23 +87,10 @@ router.put('/:id', (req, res) => {
     }
     if (justCompleted) {
       db.prepare('UPDATE queue_jobs SET completed_at = CURRENT_TIMESTAMP WHERE id = ?').run(entry.id);
-      const picks = db.prepare('SELECT * FROM queue_picks WHERE queue_id = ?').all(entry.id);
-      const merged = { ...entry, ...req.body, id: entry.id };
-      if (picks.length) completeFromPicks(merged, picks);
-      else completeEntry(merged);
+      jobs.completeJob({ ...entry, ...req.body, id: entry.id });
     }
 
-    // When the last job on an order lands, printing is done and the order is
-    // waiting on finishing. Forward only: if she has already scanned it past
-    // here, the queue does not drag it back.
-    if (entry.order_id) {
-      const outstanding = db.prepare(
-        "SELECT COUNT(*) AS count FROM queue_jobs WHERE order_id = ? AND status IN ('queued','printing','post_processing')"
-      ).get(entry.order_id).count;
-      if (outstanding === 0) {
-        flow.advanceTo(entry.order_id, 'finishing', { source: 'queue', note: 'all print jobs done' });
-      }
-    }
+    jobs.settleOrder(entry.order_id);
   });
   update();
 

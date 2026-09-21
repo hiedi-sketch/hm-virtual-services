@@ -90,6 +90,8 @@ export const printApi = {
   orderStages: () => unwrap(api.get('/orders/stages')),
   advanceOrder: (id, body) => api.post(`/orders/${id}/advance`, body || {}).then((r) => r.data),
   startProduction: (id, body) => api.post(`/orders/${id}/production`, body || {}).then((r) => r.data),
+  advanceJob: (orderId, jobId, body) =>
+    api.post(`/orders/${orderId}/jobs/${jobId}/advance`, body || {}).then((r) => r.data),
   suggestShipDate: (params) => unwrap(api.get('/orders/suggest-ship-date', { params })),
 
   queue: () => unwrap(api.get('/queue')),

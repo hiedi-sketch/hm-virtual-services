@@ -6,6 +6,7 @@ const { suggestShipDate, orderProjections } = require('../utils/planning');
 const { freeOrderBarcode } = require('../db/schema');
 const stages = require('../utils/order-stages');
 const flow = require('../services/order-flow');
+const jobs = require('../services/job-complete');
 
 const router = express.Router();
 
@@ -210,6 +211,31 @@ router.delete('/:id', (req, res) => {
   if (!order) return res.status(404).json({ error: 'Order not found' });
   db.prepare('DELETE FROM orders WHERE id = ?').run(req.params.id);
   res.json({ message: 'Deleted' });
+});
+
+/**
+ * Move one product on this order along its own chain: printing, off the
+ * printer into finishing, then printed. A one-printer shop takes one plate off
+ * to put the next one on, and the order card is where that is seen.
+ */
+router.post('/:id/jobs/:jobId/advance', (req, res) => {
+  const job = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: 'That print job is not here any more' });
+  if (String(job.order_id) !== String(req.params.id)) {
+    return res.status(400).json({ error: 'That print job belongs to another order' });
+  }
+
+  try {
+    const result = jobs.advanceJob(job.id, { to: req.body.to || null, source: 'app' });
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    const { projections } = orderProjections();
+    res.json({
+      data: hydrate(order, new Map(projections.map((p) => [p.order_id, p]))),
+      message: result.message,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
 });
 
 /** Push every printable line on this order into the production queue. */
