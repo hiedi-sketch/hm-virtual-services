@@ -124,18 +124,28 @@ function inQueue() {
   };
 }
 
-/** Both figures, for the buttons that sit at the top of every page. */
+/** A short list of what is there, for a button's hover text. */
+const naming = (jobs) => jobs.slice(0, 3).map((j) => ({ item_name: j.item_name, quantity: j.quantity }));
+
+/** The three figures for the buttons that sit at the top of every page. */
 function board() {
-  const printing = printingNow();
+  const work = printingNow();
   const queue = inQueue();
   return {
     printing: {
-      units: printing.units_printing,
-      finishing: printing.units_finishing,
-      job_count: printing.job_count,
-      idle: printing.idle,
-      // Enough to name what is on the printer without a second request.
-      now: printing.printing.slice(0, 3).map((j) => ({ item_name: j.item_name, quantity: j.quantity })),
+      units: work.units_printing,
+      job_count: work.printing.length,
+      idle: work.printing.length === 0,
+      // Enough to name what is there without a second request.
+      now: naming(work.printing),
+    },
+    // Off the plate and being finished by hand — its own step, and its own
+    // button, because it is a different job in a different place.
+    bench: {
+      units: work.units_finishing,
+      job_count: work.finishing.length,
+      idle: work.finishing.length === 0,
+      now: naming(work.finishing),
     },
     queue: {
       products: queue.product_count,

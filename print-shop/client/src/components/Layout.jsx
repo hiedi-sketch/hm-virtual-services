@@ -26,14 +26,15 @@ function ScanButton({ className = '' }) {
 }
 
 /**
- * The two questions a print shop asks all day, in the chrome of every page:
- * what is on the printer, and what is waiting to go on it. Both carry their
- * own number, so the answer is there without opening anything.
+ * The three questions a print shop asks all day, in the chrome of every page:
+ * what is on the printer, what is on the bench waiting to be finished, and
+ * what is still to be printed. Each carries its own number, so the answer is
+ * there without opening anything.
  */
 function ProductionButtons({ refreshKey, onChanged, dark = false }) {
   const navigate = useNavigate();
   const [board, setBoard] = useState(null);
-  const [panel, setPanel] = useState(false);
+  const [panel, setPanel] = useState(null);
 
   const load = useCallback(() => {
     printApi.productionBoard().then(setBoard).catch(() => setBoard(null));
@@ -44,24 +45,42 @@ function ProductionButtons({ refreshKey, onChanged, dark = false }) {
     ? 'bg-white/10 text-white hover:bg-white/20'
     : 'bg-white text-primary border border-greige hover:bg-linen';
   const chip = (tone) => `ml-1.5 px-1.5 py-0.5 rounded text-[11px] font-bold ${tone}`;
+  const names = (part, fallback) => (part?.now?.length
+    ? part.now.map((j) => `${j.quantity}× ${j.item_name}`).join(', ')
+    : fallback);
 
   const printing = board?.printing;
+  const bench = board?.bench;
   const queue = board?.queue;
 
   return (
     <>
       <button
-        onClick={() => setPanel(true)}
+        onClick={() => setPanel('printing')}
         className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${base}`}
-        title={printing?.now?.length
-          ? printing.now.map((j) => `${j.quantity}× ${j.item_name}`).join(', ')
-          : 'Nothing is printing'}
+        title={names(printing, 'Nothing is printing')}
       >
         <span aria-hidden>🖨</span>
         <span>Printing</span>
         {printing && !printing.idle && (
           <span className={chip(dark ? 'bg-amber-300 text-amber-900' : 'bg-amber-100 text-amber-800')}>
             {printing.units}
+          </span>
+        )}
+      </button>
+
+      {/* Off the plate, being finished by hand. A different job in a different
+          place, so it gets its own button rather than sharing the printer's. */}
+      <button
+        onClick={() => setPanel('bench')}
+        className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${base}`}
+        title={names(bench, 'Nothing is waiting to be finished')}
+      >
+        <span aria-hidden>🛠</span>
+        <span>On the Bench</span>
+        {bench && !bench.idle && (
+          <span className={chip(dark ? 'bg-violet-300 text-violet-900' : 'bg-violet-100 text-violet-800')}>
+            {bench.units}
           </span>
         )}
       </button>
@@ -79,8 +98,9 @@ function ProductionButtons({ refreshKey, onChanged, dark = false }) {
       </button>
 
       <PrintingPanel
-        open={panel}
-        onClose={() => setPanel(false)}
+        open={!!panel}
+        mode={panel || 'printing'}
+        onClose={() => setPanel(null)}
         onChanged={() => { load(); onChanged?.(); }}
       />
     </>
@@ -141,7 +161,7 @@ function Shell({ refreshKey, refresh }) {
           </div>
           <ScanButton className="!bg-white !text-primary !py-2" />
         </div>
-        <div className="flex gap-2 px-4 pb-2">
+        <div className="flex flex-wrap gap-2 px-4 pb-2">
           <ProductionButtons refreshKey={refreshKey} onChanged={refresh} dark />
         </div>
         <nav className="flex gap-1 px-2 pb-2 overflow-x-auto">

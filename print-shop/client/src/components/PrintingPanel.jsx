@@ -5,17 +5,31 @@ import printApi, { describeError, hoursMinutes, shortDate } from '../api/print';
 import { Pill } from './ui';
 
 /**
- * What is on the printer, from wherever she happens to be standing.
+ * What is on the printer, and what is on the bench — from wherever she happens
+ * to be standing.
  *
- * A shop with one printer has one question all day — is it running, and on
- * what — so the answer is a button in the chrome rather than a page to go to.
- * The same sheet moves a job on, because the moment she looks is the moment
- * the print has finished.
+ * They are two different jobs in two different places: one is a machine
+ * running, the other is her hands. So each has its own button and its own
+ * sheet, and each sheet moves its work on, because the moment she looks is the
+ * moment the print has finished.
  */
 
-const STATUS_LABEL = { printing: 'On the printer', post_processing: 'On the bench' };
+const MODES = {
+  printing: {
+    title: 'On the printer',
+    status: 'printing',
+    empty: 'Nothing is printing. Scan a product\'s barcode to start a run, or start one from an order.',
+    count: (d) => `${d.units_printing} on the printer`,
+  },
+  bench: {
+    title: 'On the bench',
+    status: 'post_processing',
+    empty: 'Nothing is waiting to be finished. Products land here when they come off the printer.',
+    count: (d) => `${d.units_finishing} on the bench`,
+  },
+};
 
-export default function PrintingPanel({ open, onClose, onChanged }) {
+export default function PrintingPanel({ open, mode = 'printing', onClose, onChanged }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -29,14 +43,17 @@ export default function PrintingPanel({ open, onClose, onChanged }) {
     }
   }
 
-  useEffect(() => { if (open) load(); }, [open]);
+  useEffect(() => { if (open) load(); }, [open, mode]);
+
+  const view = MODES[mode] || MODES.printing;
+  const jobs = data ? data.jobs.filter((j) => j.status === view.status) : [];
 
   async function move(job, status) {
     setBusy(true);
     try {
       await printApi.updateQueue(job.id, { status });
       toast.success(status === 'done'
-        ? `${job.item_name} is printed and on the shelf`
+        ? `${job.item_name} is finished and on the shelf`
         : `${job.item_name} is off the printer`);
       await load();
       onChanged?.();
@@ -48,7 +65,7 @@ export default function PrintingPanel({ open, onClose, onChanged }) {
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="On the printer" size="md">
+    <Modal open={open} onClose={onClose} title={view.title} size="md">
       {error ? (
         <div className="space-y-3">
           <p className="text-sm text-red-600">{error}</p>
@@ -56,13 +73,11 @@ export default function PrintingPanel({ open, onClose, onChanged }) {
         </div>
       ) : !data ? (
         <p className="text-sm text-gray-500">Looking…</p>
-      ) : !data.jobs.length ? (
-        <p className="text-sm text-gray-500">
-          Nothing is printing. Scan a product's barcode to start a run, or start one from an order.
-        </p>
+      ) : !jobs.length ? (
+        <p className="text-sm text-gray-500">{view.empty}</p>
       ) : (
         <div className="space-y-2">
-          {data.jobs.map((job) => (
+          {jobs.map((job) => (
             <div key={job.id} className="rounded-xl border border-linen p-3">
               <div className="flex items-start gap-3">
                 {job.image_url && (
@@ -80,9 +95,6 @@ export default function PrintingPanel({ open, onClose, onChanged }) {
                     {job.promised_ship_date && ` · due ${shortDate(job.promised_ship_date)}`}
                   </p>
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    <Pill tone={job.status === 'printing' ? 'amber' : 'violet'}>
-                      {STATUS_LABEL[job.status] || job.status}
-                    </Pill>
                     {job.estimated_minutes > 0 && <Pill tone="gray">{hoursMinutes(job.estimated_minutes)}</Pill>}
                     {job.printer && <Pill tone="blue">{job.printer}</Pill>}
                   </div>
@@ -102,10 +114,7 @@ export default function PrintingPanel({ open, onClose, onChanged }) {
             </div>
           ))}
 
-          <p className="text-xs text-gray-500 pt-1">
-            {data.units_printing} on the printer
-            {data.units_finishing > 0 && ` · ${data.units_finishing} on the bench`}
-          </p>
+          <p className="text-xs text-gray-500 pt-1">{view.count(data)}</p>
         </div>
       )}
     </Modal>

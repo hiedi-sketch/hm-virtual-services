@@ -170,16 +170,22 @@ actually hit given what is already queued.
 
 ---
 
-## Printing, and what is in the queue
+## Printing, the bench, and what is in the queue
 
-Two buttons sit in the chrome of every page, because a print shop asks the same two
-questions all day.
+Three buttons sit in the chrome of every page, because a print shop asks the same three
+questions all day — and they are three different places, not one list.
 
 **Printing** carries the number of units on a plate right now, and opens the list of what
-is on the printer — what it is, how many, which order it is for, and how long the job was
-estimated at. **Off printer** and **Finished** are on each one, since the moment you look
-is usually the moment a print has finished. It reads *Printing* with no number when the
-machine is idle.
+is on the printer: what it is, how many, which order it is for, and how long the job was
+estimated at. **Off printer** moves one to the bench and **Finished** takes it straight to
+the shelf, since the moment you look is usually the moment a print has finished. It reads
+*Printing* with no number when the machine is idle.
+
+**On the Bench** is the finishing step: what has come off the printer and is waiting on
+your hands rather than the machine's. Its sheet lists the same detail with a single
+**Finished** on each, which is what puts the units on the shelf and takes the filament off
+the spools. Both buttons carry their own count, so a printer running while three things
+wait to be sanded reads as two numbers rather than one pile.
 
 **In Queue** carries the number of units still to print and opens the list of them.
 
