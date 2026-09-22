@@ -234,7 +234,7 @@ function computeItemPricing(item, cost, settings = getSettings()) {
 /** The places this shop sells, in the order they should be shown. */
 function salesChannels() {
   const raw = db.prepare("SELECT value FROM settings WHERE key = 'sales_channels'").get()?.value;
-  return String(raw ?? 'Shopify,Faire,Etsy,Amazon')
+  return String(raw ?? 'Shopify,Faire,Etsy,Amazon,TikTok')
     .split(',')
     .map((c) => c.trim())
     .filter(Boolean);

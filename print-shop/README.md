@@ -108,9 +108,13 @@ recalculates the moment a rate changes in Settings.
 ### What it actually sells for
 
 Those three figures are what an item *should* fetch. Underneath them, each product also
-carries the price you really charge on each place you sell — Shopify, Faire, Etsy and
-Amazon out of the box, editable in **Settings → sales channels**, so a new marketplace
+carries the price you really charge on each place you sell — Shopify, Faire, Etsy, Amazon
+and TikTok out of the box, editable in **Settings → sales channels**, so a new marketplace
 is a settings change rather than a migration.
+
+A channel added to that default reaches a shop that is already running too: it is appended
+to the list once, on the next start, and marked as done — so a channel taken off on purpose
+stays off rather than coming back every restart. Whatever order the list is in is kept.
 
 Each one shows the profit and margin it leaves against the unit cost, and a price below
 what the item costs to make is called out in red on the form and on the catalog card. A

@@ -296,7 +296,7 @@ function createSchema() {
     ['finishing_days', '1'],
     ['printer_count', '1'],
     // Where spools live. Editable, because shelves grow.
-    ['sales_channels', 'Shopify,Faire,Etsy,Amazon'],
+    ['sales_channels', 'Shopify,Faire,Etsy,Amazon,TikTok'],
     ['shelf_locations', 'A1,A2,A3,A4,A5,A6,B1,B2,B3'],
     ['ams_slots', 'AMS1,AMS2,AMS3,AMS4'],
     // Which Shopify figure the push sets, and whether it pushes at all.
@@ -342,6 +342,7 @@ function createSchema() {
 
   migrateOrderStages();
   dropQueuedStage();
+  addSalesChannel('TikTok', 'channels_tiktok_added');
   backfillOrderBarcodes();
 
   // Indexes over the columns added above, once they are guaranteed to exist.
@@ -487,6 +488,36 @@ function dropQueuedStage() {
     db.pragma('legacy_alter_table = OFF');
     if (hadForeignKeys) db.pragma('foreign_keys = ON');
   }
+}
+
+/**
+ * Add a place this shop sells to a database that already has the list.
+ *
+ * The default only reaches a database being created; one already running keeps
+ * whatever is in its settings. So a new channel is appended once — and once
+ * only, marked by its own setting, because a channel removed on purpose should
+ * stay removed rather than coming back on every restart.
+ */
+function addSalesChannel(channel, marker) {
+  const done = db.prepare('SELECT value FROM settings WHERE key = ?').get(marker)?.value;
+  if (done === '1') return;
+
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'sales_channels'").get();
+  const current = String(row?.value ?? '').split(',').map((c) => c.trim()).filter(Boolean);
+
+  if (!current.some((c) => c.toLowerCase() === channel.toLowerCase())) {
+    current.push(channel);
+    db.prepare(`
+      INSERT INTO settings (key, value) VALUES ('sales_channels', ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run(current.join(','));
+    console.log(`${channel} added to the sales channels.`);
+  }
+
+  db.prepare(`
+    INSERT INTO settings (key, value) VALUES (?, '1')
+    ON CONFLICT(key) DO UPDATE SET value = '1'
+  `).run(marker);
 }
 
 function backfillOrderBarcodes() {
