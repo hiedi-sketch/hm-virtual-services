@@ -155,8 +155,8 @@ actually hit given what is already queued.
 - Materials and catalog items keep the plain receive / use / count actions.
 - Scanning a **product** opens its print run: how many the shop owes across every open
   order, and how many you are printing now. See *Scanning a product: the print run*.
-- Scanning an **order ticket** moves that order a stage on. See *Order tickets and the
-  seven stages* above.
+- Scanning an **order ticket** moves that order a stage on, and one at Packing brings up
+  the box to check off first. See *Order tickets and the seven stages* above.
 - Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
   scanning a box you just opened finds the right record.
 - **Scanning something the shop has never seen** offers to add it there and then — a
@@ -280,6 +280,25 @@ tracking label is asked for. Everything else just records where the order is.
 The shop moves an order along by itself in one place only: when nothing of the order is
 left on a printer, it moves to **Finishing**. That only ever moves forward — if you
 have already scanned the order into packing, the queue does not drag it back.
+
+### Packing a box
+
+Scan the ticket of an order at **Packing** and the sheet leads with what should be in the
+box. **Scan items to be shipped** opens the scanner and keeps it open while anything is
+still outstanding, so a six-item box is one pass rather than six trips through a menu.
+Each product's own barcode ticks its line off — the same code as on the shelf and on the
+order ticket, so whichever one is nearest works.
+
+Lines count units, not rows: two of a thing means two scans, and the line reads `1/2`
+until both are in. A line that matches no catalog product has no code to scan, which the
+sheet says plainly; tap it to tick it off, as with a gift note or a hand-written line.
+
+**Every scan is saved as it happens.** A box gets packed in interruptions, so closing the
+sheet with **Done** leaves it exactly where you left it, and scanning the ticket again
+picks the box up mid-pack. The order card carries the same count while it is at Packing.
+
+Under the box comes the postage label, and under that the button that sends it — so the
+sheet reads in the order the work happens: check the box, scan the label, ship it.
 
 ### Shipping, and the tracking label
 
@@ -811,6 +830,7 @@ print-shop/
 │   ├── services/
 │   │   ├── order-flow.js     Moving an order along, and what each stage does
 │   │   ├── job-complete.js   One product's own progress, and the stock it moves
+│   │   ├── packing.js        What should be in the box, and what is in it
 │   │   ├── print-run.js      What the shop owes of a product, and printing it
 │   │   ├── catalog-match.js  Finding the catalog item a Shopify line means
 │   │   ├── oauth-state.js    One-time nonces tying a Shopify connect to its start

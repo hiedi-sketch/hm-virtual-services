@@ -367,6 +367,14 @@ export default function Orders() {
                     <Pill tone={stageOf(o.status)?.tone || 'gray'}>{labelOf(o.status)}</Pill>
                     {o.order_type === 'wholesale' && <Pill tone="teal">Wholesale</Pill>}
                     {o.needs_queueing && <Pill tone="amber">Not queued</Pill>}
+                    {/* How far the box has got, for the one being packed. */}
+                    {o.status === 'packing' && o.packing?.total > 0 && (
+                      <Pill tone={o.packing.complete ? 'green' : 'gray'}>
+                        {o.packing.complete
+                          ? 'Box packed'
+                          : `${o.packing.packed} of ${o.packing.total} packed`}
+                      </Pill>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500">
                     {o.customer_name || 'No customer name'}

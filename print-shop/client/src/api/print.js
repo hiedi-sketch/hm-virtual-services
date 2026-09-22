@@ -90,6 +90,9 @@ export const printApi = {
   orderStages: () => unwrap(api.get('/orders/stages')),
   advanceOrder: (id, body) => api.post(`/orders/${id}/advance`, body || {}).then((r) => r.data),
   setTracking: (id, code) => api.post(`/orders/${id}/tracking`, { code }).then((r) => r.data),
+  packing: (id) => unwrap(api.get(`/orders/${id}/packing`)),
+  packScan: (id, code) => api.post(`/orders/${id}/packing/scan`, { code }).then((r) => r.data),
+  setPacked: (id, body) => unwrap(api.put(`/orders/${id}/packing`, body)),
   startProduction: (id, body) => api.post(`/orders/${id}/production`, body || {}).then((r) => r.data),
   advanceJob: (orderId, jobId, body) =>
     api.post(`/orders/${orderId}/jobs/${jobId}/advance`, body || {}).then((r) => r.data),

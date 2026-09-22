@@ -8,6 +8,7 @@ const flow = require('../services/order-flow');
 const stages = require('../utils/order-stages');
 const inventory = require('../services/inventory-sync');
 const { trackingLink } = require('../utils/tracking');
+const packing = require('../services/packing');
 
 const router = express.Router();
 
@@ -68,6 +69,7 @@ function orderCard(order) {
     tracking: order.tracking_number
       ? { number: order.tracking_number, ...trackingLink(order.tracking_number) }
       : null,
+    packing: packing.packList(order.id),
     stage: stages.stageInfo(order.status),
     next_stage: stages.nextStage(order.status),
     next_stage_info: stages.stageInfo(stages.nextStage(order.status)),

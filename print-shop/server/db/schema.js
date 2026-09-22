@@ -331,6 +331,10 @@ function createSchema() {
     'ALTER TABLE order_items ADD COLUMN shopify_sku TEXT',
     'ALTER TABLE items ADD COLUMN shopify_pushed_quantity INTEGER',
     'ALTER TABLE items ADD COLUMN shopify_pushed_at DATETIME',
+    // How many of this line are in the box, ticked off by scanning as it is
+    // packed. Kept on the line so a half-packed order survives the screen
+    // going to sleep, the same way a pick list does.
+    'ALTER TABLE order_items ADD COLUMN packed_quantity REAL NOT NULL DEFAULT 0',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import printApi, { describeError } from '../api/print';
 import { Pill } from './ui';
 import { useScanner } from './ScanContext';
+import ScanPackList from './ScanPackList';
 
 /**
  * What a scanned order ticket offers: the next stage as one big button, since
@@ -81,6 +82,12 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
             </span>
           ))}
         </div>
+      )}
+
+      {/* Packing is the one stage with work of its own on this sheet: check the
+          box, then the label, then send it. */}
+      {order.status === 'packing' && (
+        <ScanPackList order={order} packing={order.packing} />
       )}
 
       {shippingNext && (
@@ -169,8 +176,17 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
         </button>
       )}
 
-      <div className="flex gap-2">
-        <button onClick={onDone} className="btn-secondary flex-1 !py-3">Done</button>
+      <div className="space-y-1.5">
+        <div className="flex gap-2">
+          <button onClick={onDone} className="btn-secondary flex-1 !py-3">Done</button>
+        </div>
+        {order.status === 'packing' && (
+          // Boxes get packed in interruptions. Saying this out loud is the
+          // difference between closing the sheet and starting the box again.
+          <p className="text-[11px] text-gray-500 text-center">
+            Done closes this and keeps what you have scanned into the box.
+          </p>
+        )}
       </div>
     </div>
   );

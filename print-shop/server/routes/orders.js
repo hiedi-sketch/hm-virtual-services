@@ -8,6 +8,7 @@ const stages = require('../utils/order-stages');
 const flow = require('../services/order-flow');
 const jobs = require('../services/job-complete');
 const { parseTracking, trackingLink } = require('../utils/tracking');
+const packing = require('../services/packing');
 
 const router = express.Router();
 
@@ -63,6 +64,7 @@ function hydrate(order, projectionsById) {
     tracking: order.tracking_number
       ? { number: order.tracking_number, ...trackingLink(order.tracking_number) }
       : null,
+    packing: packing.packList(order.id),
     items,
     queue_entries: queue,
     next_stage: stages.nextStage(order.status),
@@ -246,6 +248,40 @@ router.post('/:id/jobs/:jobId/advance', (req, res) => {
       data: hydrate(order, new Map(projections.map((p) => [p.order_id, p]))),
       message: result.message,
     });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+/** What should be in the box, and what is in it so far. */
+router.get('/:id/packing', (req, res) => {
+  const order = db.prepare('SELECT id FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+  res.json({ data: packing.packList(order.id) });
+});
+
+/** One thing going into the box. */
+router.post('/:id/packing/scan', (req, res) => {
+  try {
+    const result = packing.packScan(Number(req.params.id), req.body.code);
+    res.json({ data: result.packing, matched: result.matched, message: result.message });
+  } catch (err) {
+    // The list goes back even on a miss, so the sheet stays truthful about
+    // what is in the box while she works out what she just scanned.
+    const data = err.status === 404 && !db.prepare('SELECT id FROM orders WHERE id = ?').get(req.params.id)
+      ? null
+      : packing.packList(Number(req.params.id));
+    res.status(err.status || 400).json({ error: err.message, data });
+  }
+});
+
+/** Tick a line off by hand — for what has no barcode, or a miscount. */
+router.put('/:id/packing', (req, res) => {
+  try {
+    const data = req.body.reset
+      ? packing.resetPacking(Number(req.params.id))
+      : packing.setPacked(Number(req.params.id), Number(req.body.order_item_id), req.body.packed_quantity);
+    res.json({ data });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
