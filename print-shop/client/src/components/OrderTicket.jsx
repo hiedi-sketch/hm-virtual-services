@@ -118,9 +118,9 @@ export default function OrderTicket({ open, orders, shopName = 'Print Shop', sta
   if (!open || !orders?.length) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto print:p-0 print:static print:overflow-visible">
+    <div className="print-portal fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto print:p-0 print:static print:overflow-visible">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm print:hidden" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl my-4 print:my-0 print:max-w-none print:shadow-none print:rounded-none">
+      <div className="print-sheet relative bg-white rounded-2xl shadow-xl w-full max-w-2xl my-4 print:my-0 print:max-w-none print:shadow-none print:rounded-none">
         <div
           className="flex items-center justify-between px-5 py-4 border-b border-linen print:hidden"
           style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}

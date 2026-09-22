@@ -94,6 +94,8 @@ function inQueue() {
     covered: item.needs_printing === 0,
     order_count: item.order_ids.size,
     earliest_due: item.earliest_due,
+    // Every date this product is wanted on, with how many for each.
+    due: item.due,
   }));
 
   // Soonest promise first; within a day, the biggest run first, because that

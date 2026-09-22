@@ -14,6 +14,37 @@ import { useScanner } from '../components/ScanContext';
  * everybody, and what goes on the next plate". One row per product, however
  * many orders asked for it.
  */
+/**
+ * Every date this product is wanted on, and how many for each.
+ *
+ * One product ordered by four customers for four different days is four days
+ * of work, not one — so a single "due" date hides the shape of the week. A
+ * date the shelf already covers is shown greyed rather than dropped, because
+ * "all the dates" means all of them.
+ */
+function DueDates({ due }) {
+  if (!due?.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-2">
+      <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">Due</span>
+      {due.map((day) => (
+        <span
+          key={day.date || 'none'}
+          className={`text-xs ${day.to_print > 0 ? 'text-primary' : 'text-gray-400'}`}
+          title={day.to_print < day.ordered
+            ? `${day.ordered} ordered, ${day.ordered - day.to_print} coming off the shelf`
+            : `${day.ordered} ordered across ${day.order_count} order(s)`}
+        >
+          {day.date ? shortDate(day.date) : 'No date'}
+          <span className="font-bold ml-1">({day.to_print > 0 ? day.to_print : day.ordered})</span>
+          {day.to_print === 0 && <span className="text-[10px] ml-0.5">stock</span>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function InQueue() {
   const { refreshKey, refresh } = useOutletContext();
   const { scan } = useScanner();
@@ -141,6 +172,8 @@ export default function InQueue() {
                     {row.printing > 0 && <Pill tone="amber">{row.printing} printing</Pill>}
                     <Pill tone="blue">{row.order_count} order{row.order_count === 1 ? '' : 's'}</Pill>
                   </div>
+
+                  <DueDates due={row.due} />
                 </div>
 
                 <div className="text-right shrink-0">
@@ -148,9 +181,6 @@ export default function InQueue() {
                     {row.to_print}
                   </p>
                   <p className="text-[11px] text-gray-500">to print</p>
-                  {row.earliest_due && (
-                    <p className="text-[11px] text-gray-500 mt-1">due {shortDate(row.earliest_due)}</p>
-                  )}
                 </div>
 
                 {/* The same code as on the printed list and the shelf label, so
@@ -169,6 +199,7 @@ export default function InQueue() {
       <QueueSheet
         open={sheet}
         rows={data?.needing || []}
+        summary={data}
         shopName={shopName}
         onClose={() => { setSheet(false); refresh(); }}
       />

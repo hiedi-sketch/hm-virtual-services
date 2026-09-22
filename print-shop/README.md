@@ -149,6 +149,11 @@ actually hit given what is already queued.
   its **Code 128** barcode. Individual spools get their own tags (`SPL-000001`).
 - **Label** on any row opens a printable label; the barcode is rendered as inline SVG,
   so it prints crisply at any size with no image assets.
+- Anything printable — a label, an order ticket, the In Queue list — hides the rest of the
+  app outright rather than merely making it invisible, and prints in normal flow rather
+  than positioned. An invisible element still takes up its space and still makes pages, so
+  the first way round that gave a sheet starting half way down the paper followed by blank
+  pages of hidden app.
 - **Scan** is on every tab. It opens the camera, and the same dialog keeps a focused
   text box so a USB or Bluetooth wedge scanner — or typing — works identically.
 - Scanning a filament — its shelf label, its vendor barcode, or one spool's own tag —
@@ -232,11 +237,23 @@ list, including products the shelf already covers. Lines on an order that match 
 product cannot be printed or counted, so the page says how many there are rather than
 quietly leaving them out.
 
-**Print list** gives you the sheet to take to the printer: how many of each to print, the
-product's own barcode, what is ordered, what is on hand, and when it is due. Scanning a
-barcode off that sheet opens that product's print run — how many are needed, which
-filament to load, and how many you are putting on the plate — so the paper and the app are
-the same list.
+**Due** lists every date the product is wanted on, with how many for each:
+
+```
+DUE   Sep 19 (4)   Sep 22 (3)   Sep 26 (5)
+```
+
+One product ordered by four customers for four different days is four days of work, and a
+single "due" date hides the shape of the week. Orders sharing a date are added together,
+the count is what still has to be printed, and a date the shelf already covers is greyed
+rather than dropped. Anything never promised a date sits at the end under *No date*, where
+it cannot be mistaken for today.
+
+**Print list** gives you the sheet to take to the printer: the same four figures the page
+carries at its top, then how many of each to print, the product's own barcode, what is
+ordered, what is on hand, and every date it is due. Scanning a barcode off that sheet opens
+that product's print run — how many are needed, which filament to load, and how many you
+are putting on the plate — so the paper and the app are the same list.
 
 The **Print jobs** tab is the other half of this: individual jobs in print order, with
 pick lists, priorities and projected ship dates. In Queue answers *what needs printing*;

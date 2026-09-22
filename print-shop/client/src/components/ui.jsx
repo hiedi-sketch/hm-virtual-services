@@ -128,9 +128,9 @@ export function StockLegend() {
 export function LabelModal({ open, onClose, title, subtitle, code, meta }) {
   if (!open) return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 print:p-0 print:static">
+    <div className="print-portal fixed inset-0 z-50 flex items-center justify-center p-4 print:p-0 print:static">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm print:hidden" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md print:max-w-none print:shadow-none print:rounded-none">
+      <div className="print-sheet relative bg-white rounded-2xl shadow-xl w-full max-w-md print:max-w-none print:shadow-none print:rounded-none">
         <div className="flex items-center justify-between px-5 py-4 border-b border-linen print:hidden">
           <h2 className="text-lg font-bold text-primary">Label</h2>
           <button onClick={onClose} className="text-silver hover:text-gray-600 text-2xl leading-none">×</button>

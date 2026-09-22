@@ -76,20 +76,61 @@
   }
 }
 
-/* Labels and order tickets print on their own, with nothing else on the page. */
+/*
+ * Labels, tickets and lists print on their own, with nothing else on the page.
+ *
+ * Two things this has to get right, both of which it once got wrong.
+ *
+ * The app is *hidden*, not merely made invisible: `visibility: hidden` leaves
+ * an element's box in the layout, so a screen full of orders still generated
+ * its own page boxes and the printer spat out blank sheets after the real one.
+ *
+ * And the sheet is left in normal flow rather than absolutely positioned. A
+ * printable sheet lives inside a centred modal, so `position: absolute; top: 0`
+ * meant the top of *the modal*, wherever that had been scrolled to — which is
+ * how a list came out starting half way down the page.
+ */
 @media print {
-  body { background: #fff; }
-  body * { visibility: hidden; }
-  #print-label, #print-label *,
-  #print-area, #print-area * { visibility: visible; }
+  @page { margin: 12mm; }
+
+  html, body {
+    background: #fff;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  /* Only the portal holding the sheet survives; the app shell goes entirely. */
+  body > *:not(.print-portal) { display: none !important; }
+
+  .print-portal {
+    position: static !important;
+    inset: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .print-sheet {
+    position: static !important;
+    max-width: none !important;
+    width: auto !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+
   #print-label,
   #print-area {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
+    position: static !important;
+    max-height: none !important;
+    overflow: visible !important;
+    width: auto !important;
   }
-  /* One ticket per sheet when several are sent to the printer at once. */
+
+  /* One ticket per sheet when several are sent to the printer at once. The
+     last one must not force a page, or every print ends on a blank sheet. */
   .print-page { break-after: page; page-break-after: always; }
   .print-page:last-child { break-after: auto; page-break-after: auto; }
 }

@@ -10,16 +10,25 @@ import { shortDate } from '../api/print';
  * the plate. Scanning a line off this sheet opens that product's print run, so
  * the paper and the app are the same list.
  */
-export default function QueueSheet({ open, rows, shopName = 'Print Shop', onClose }) {
+export default function QueueSheet({ open, rows, summary, shopName = 'Print Shop', onClose }) {
   if (!open || !rows?.length) return null;
 
   const units = rows.reduce((total, r) => total + r.to_print, 0);
   const today = new Date().toISOString().slice(0, 10);
 
+  // The same four figures the page carries at its top, so the sheet by the
+  // printer answers the same questions without going back to the screen.
+  const cards = [
+    { label: 'To print', value: units, sub: `${rows.length} product${rows.length === 1 ? '' : 's'}` },
+    { label: 'Pull from stock', value: summary?.units_from_stock ?? 0, sub: 'already made' },
+    { label: 'Ordered', value: summary?.units_ordered ?? rows.reduce((t, r) => t + r.ordered, 0), sub: 'across open orders' },
+    { label: 'No product', value: summary?.unmatched_lines ?? 0, sub: 'lines unmatched' },
+  ];
+
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto print:p-0 print:static print:overflow-visible">
+    <div className="print-portal fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto print:p-0 print:static print:overflow-visible">
       <div className="absolute inset-0 bg-black/30 backdrop-blur-sm print:hidden" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl my-4 print:my-0 print:max-w-none print:shadow-none print:rounded-none">
+      <div className="print-sheet relative bg-white rounded-2xl shadow-xl w-full max-w-2xl my-4 print:my-0 print:max-w-none print:shadow-none print:rounded-none">
         <div
           className="flex items-center justify-between px-5 py-4 border-b border-linen print:hidden"
           style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
@@ -41,6 +50,16 @@ export default function QueueSheet({ open, rows, shopName = 'Print Shop', onClos
               </div>
             </div>
 
+            <div className="grid grid-cols-4 gap-2 mt-3">
+              {cards.map((card) => (
+                <div key={card.label} className="border border-gray-300 rounded p-2">
+                  <p className="text-[9px] uppercase tracking-wide text-gray-500 leading-tight">{card.label}</p>
+                  <p className="text-xl font-bold leading-tight">{card.value}</p>
+                  <p className="text-[9px] text-gray-500 leading-tight">{card.sub}</p>
+                </div>
+              ))}
+            </div>
+
             <table className="w-full text-sm mt-3">
               <thead>
                 <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-300">
@@ -48,7 +67,7 @@ export default function QueueSheet({ open, rows, shopName = 'Print Shop', onClos
                   <th className="py-1">Product</th>
                   <th className="py-1 w-20 text-right">Ordered</th>
                   <th className="py-1 w-20 text-right">On hand</th>
-                  <th className="py-1 w-20 text-right">Due</th>
+                  <th className="py-1 w-28 text-right">Due</th>
                 </tr>
               </thead>
               <tbody>
@@ -78,7 +97,17 @@ export default function QueueSheet({ open, rows, shopName = 'Print Shop', onClos
                         <span className="block text-[10px] text-gray-500">{row.printing} printing</span>
                       )}
                     </td>
-                    <td className="py-2 text-right">{row.earliest_due ? shortDate(row.earliest_due) : '—'}</td>
+                    <td className="py-2 text-right">
+                      {/* Every date it is wanted on, so the sheet by the
+                          printer shows the shape of the week rather than just
+                          the next deadline. */}
+                      {row.due?.length ? row.due.map((day) => (
+                        <span key={day.date || 'none'} className="block whitespace-nowrap">
+                          {day.date ? shortDate(day.date) : 'No date'}
+                          <span className="font-bold ml-1">({day.to_print > 0 ? day.to_print : day.ordered})</span>
+                        </span>
+                      )) : '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

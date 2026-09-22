@@ -119,6 +119,9 @@ function plan() {
       needs_printing: 0,
       order_ids: new Set(),
       earliest_due: null,
+      // What is wanted on each promised date. A product ordered by four
+      // customers for four different days is four days of work, not one.
+      due: new Map(),
       lines: [],
     };
     item.ordered += quantity;
@@ -132,8 +135,28 @@ function plan() {
     if (line.promised_ship_date && (!item.earliest_due || line.promised_ship_date < item.earliest_due)) {
       item.earliest_due = line.promised_ship_date;
     }
+
+    const day = line.promised_ship_date || null;
+    const tally = item.due.get(day) || { date: day, ordered: 0, to_print: 0, from_stock: 0, orders: new Set() };
+    tally.ordered += quantity;
+    tally.to_print += queued + outstanding;
+    tally.from_stock += fromShelf;
+    tally.orders.add(line.order_id);
+    item.due.set(day, tally);
     item.lines.push(entry);
     byItem.set(line.item_id, item);
+  }
+
+  // Turn the per-day tallies into a list, soonest first, with anything that
+  // was never promised a date at the end where it cannot be mistaken for today.
+  for (const item of byItem.values()) {
+    item.due = [...item.due.values()]
+      .map((d) => ({ ...d, order_count: d.orders.size, orders: undefined }))
+      .sort((a, b) => {
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+      });
   }
 
   return { byLine, byItem };
