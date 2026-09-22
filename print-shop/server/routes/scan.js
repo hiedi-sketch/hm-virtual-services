@@ -7,6 +7,7 @@ const { logStock } = require('./helpers');
 const flow = require('../services/order-flow');
 const stages = require('../utils/order-stages');
 const inventory = require('../services/inventory-sync');
+const { trackingLink } = require('../utils/tracking');
 
 const router = express.Router();
 
@@ -64,6 +65,9 @@ function orderCard(order) {
   return {
     ...order,
     items: lines,
+    tracking: order.tracking_number
+      ? { number: order.tracking_number, ...trackingLink(order.tracking_number) }
+      : null,
     stage: stages.stageInfo(order.status),
     next_stage: stages.nextStage(order.status),
     next_stage_info: stages.stageInfo(stages.nextStage(order.status)),
@@ -266,9 +270,10 @@ router.post('/advance', (req, res) => {
   }
 
   try {
+    const tracking = req.body.tracking || null;
     const result = req.body.to
-      ? flow.setStatus(match.order.id, req.body.to, { source: 'scan' })
-      : flow.advance(match.order.id, { source: 'scan', guardDoubleScan: true });
+      ? flow.setStatus(match.order.id, req.body.to, { source: 'scan', tracking })
+      : flow.advance(match.order.id, { source: 'scan', guardDoubleScan: true, tracking });
 
     return res.json({
       data: resolve(match.code),

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import printApi, { describeError } from '../api/print';
 import { Pill } from './ui';
+import { useScanner } from './ScanContext';
 
 /**
  * What a scanned order ticket offers: the next stage as one big button, since
@@ -9,17 +10,28 @@ import { Pill } from './ui';
  * second tap for the times work skips ahead.
  */
 export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
+  const { scan } = useScanner();
   const [busy, setBusy] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [tracking, setTracking] = useState('');
   const order = match.order;
   const next = order.next_stage_info;
+
+  // The label is in her hand as the parcel is sealed, so shipping by scanning
+  // the ticket asks for it in the same breath the app does.
+  const shippingNext = order.next_stage === 'shipped';
 
   async function move(to) {
     setBusy(true);
     try {
-      const { message } = await printApi.scanAdvance({ code: match.code, ...(to ? { to } : {}) });
+      const { message } = await printApi.scanAdvance({
+        code: match.code,
+        ...(to ? { to } : {}),
+        ...(tracking ? { tracking } : {}),
+      });
       toast.success(message || 'Moved on');
       setPicking(false);
+      setTracking('');
       await onChanged?.();
     } catch (err) {
       toast.error(describeError(err, 'Could not move that order on'));
@@ -27,6 +39,27 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
       setBusy(false);
     }
   }
+
+  async function saveTracking(code) {
+    setBusy(true);
+    try {
+      const { message } = await printApi.setTracking(order.id, code);
+      toast.success(message);
+      await onChanged?.();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not save that tracking number'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // `keepMatch` brings her back to this sheet with the order still on it.
+  const scanLabel = (onDone_) => scan({
+    title: 'Scan the tracking label',
+    hint: 'Point the camera at the barcode on the postage label',
+    keepMatch: true,
+    onCode: onDone_,
+  });
 
   const chain = stages.length ? stages : [];
   const at = chain.findIndex((s) => s.key === order.status);
@@ -47,6 +80,57 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
               {stage.label}
             </span>
           ))}
+        </div>
+      )}
+
+      {shippingNext && (
+        <div className="rounded-xl border border-linen p-3 space-y-2">
+          <p className="label !mb-0">Tracking label</p>
+          {tracking ? (
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm text-primary min-w-0 flex-1 truncate">{tracking}</span>
+              <button onClick={() => setTracking('')} className="btn-ghost !py-1 !px-2 text-xs">Clear</button>
+            </div>
+          ) : (
+            <button
+              disabled={busy}
+              onClick={() => scanLabel(setTracking)}
+              className="btn-secondary w-full !py-2.5 text-sm"
+            >
+              Scan the postage label
+            </button>
+          )}
+          <p className="text-[11px] text-gray-500">
+            {tracking
+              ? 'It goes on the order when you ship it — the routing digits at the front come off.'
+              : 'Optional — shipping without one still works.'}
+          </p>
+        </div>
+      )}
+
+      {order.status === 'shipped' && (
+        <div className="rounded-xl border border-linen p-3 space-y-2">
+          <p className="label !mb-0">Tracking</p>
+          {order.tracking ? (
+            <p className="text-sm">
+              {order.tracking.url ? (
+                <a href={order.tracking.url} target="_blank" rel="noreferrer" className="text-primary font-semibold hover:underline">
+                  {order.tracking.carrier_label || 'Track'} {order.tracking.number} ↗
+                </a>
+              ) : (
+                <span className="font-mono text-gray-600">{order.tracking.number}</span>
+              )}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500">None on this one yet.</p>
+          )}
+          <button
+            disabled={busy}
+            onClick={() => scanLabel(saveTracking)}
+            className="btn-secondary w-full !py-2.5 text-sm"
+          >
+            {order.tracking ? 'Scan a different label' : 'Scan the postage label'}
+          </button>
         </div>
       )}
 

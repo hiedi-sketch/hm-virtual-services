@@ -7,6 +7,7 @@ const { freeOrderBarcode } = require('../db/schema');
 const stages = require('../utils/order-stages');
 const flow = require('../services/order-flow');
 const jobs = require('../services/job-complete');
+const { parseTracking, trackingLink } = require('../utils/tracking');
 
 const router = express.Router();
 
@@ -57,6 +58,11 @@ function hydrate(order, projectionsById) {
   return {
     ...order,
     ...totals,
+    // The number is what is stored; where to follow it is worked out on the
+    // way out, so a link never goes stale in the database.
+    tracking: order.tracking_number
+      ? { number: order.tracking_number, ...trackingLink(order.tracking_number) }
+      : null,
     items,
     queue_entries: queue,
     next_stage: stages.nextStage(order.status),
@@ -177,12 +183,19 @@ router.put('/:id', (req, res) => {
     }
   }
 
+  // A number typed or pasted into the form is read the same way a scan is, so
+  // a whole barcode dropped in the box still ends up as a number that tracks.
+  const body = { ...req.body };
+  if (body.tracking_number !== undefined) {
+    body.tracking_number = parseTracking(body.tracking_number)?.number || null;
+  }
+
   const update = db.transaction(() => {
-    const keys = EDITABLE.filter((k) => k !== 'status' && req.body[k] !== undefined);
+    const keys = EDITABLE.filter((k) => k !== 'status' && body[k] !== undefined);
     if (keys.length) {
       db.prepare(
         `UPDATE orders SET ${keys.map((k) => `${k}=?`).join(', ')}, updated_at=CURRENT_TIMESTAMP WHERE id=?`
-      ).run(...keys.map((k) => req.body[k]), req.params.id);
+      ).run(...keys.map((k) => body[k]), req.params.id);
     }
 
     if (Array.isArray(req.body.items)) {
@@ -236,6 +249,28 @@ router.post('/:id/jobs/:jobId/advance', (req, res) => {
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }
+});
+
+/**
+ * The tracking label, on its own — for the order that shipped before the label
+ * was printed, or the one scanned wrong the first time. An empty code clears it.
+ */
+router.post('/:id/tracking', (req, res) => {
+  const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+  if (!order) return res.status(404).json({ error: 'Order not found' });
+
+  const parsed = req.body.code ? parseTracking(req.body.code) : null;
+  db.prepare('UPDATE orders SET tracking_number = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+    .run(parsed ? parsed.number : null, order.id);
+
+  const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+  const { projections } = orderProjections();
+  res.json({
+    data: hydrate(updated, new Map(projections.map((p) => [p.order_id, p]))),
+    message: parsed
+      ? `${parsed.carrier_label || 'Tracking'} ${parsed.number}`
+      : 'Tracking cleared',
+  });
 });
 
 /** Push every printable line on this order into the production queue. */
@@ -292,9 +327,14 @@ router.post('/:id/production', (req, res) => {
  */
 router.post('/:id/advance', (req, res) => {
   try {
+    const options = {
+      source: req.body.source || 'app',
+      note: req.body.note,
+      tracking: req.body.tracking || null,
+    };
     const result = req.body.to
-      ? flow.setStatus(Number(req.params.id), req.body.to, { source: req.body.source || 'app', note: req.body.note })
-      : flow.advance(Number(req.params.id), { source: req.body.source || 'app', note: req.body.note });
+      ? flow.setStatus(Number(req.params.id), req.body.to, options)
+      : flow.advance(Number(req.params.id), options);
 
     const { projections } = orderProjections();
     res.json({

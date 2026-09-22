@@ -2,6 +2,7 @@ const db = require('../db/database');
 const { estimatedMinutes } = require('../utils/planning');
 const { indexOf, nextStage, stageInfo, isValid, CHAIN } = require('../utils/order-stages');
 const { logStock } = require('../routes/helpers');
+const { parseTracking } = require('../utils/tracking');
 
 /**
  * Moving an order along happens from three places — a scan of the printed
@@ -61,7 +62,7 @@ function enqueueOrder(orderId, priority = 'normal') {
  * `queued` is what actually queues the work, and reaching `shipped` is what
  * dates it — so the ticket and the shop never disagree about what happened.
  */
-function setStatus(orderId, to, { source = 'manual', note = null, priority = 'normal' } = {}) {
+function setStatus(orderId, to, { source = 'manual', note = null, priority = 'normal', tracking = null } = {}) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order) {
     const err = new Error('Order not found');
@@ -92,9 +93,15 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
       ? (order.shipped_date || new Date().toISOString().slice(0, 10))
       : order.shipped_date;
 
+    // The label is scanned in the same breath as the order is marked shipped,
+    // so it is saved in the same move rather than in a second one that could
+    // fail on its own.
+    const parsed = tracking ? parseTracking(tracking) : null;
+    const trackingNumber = parsed ? parsed.number : order.tracking_number;
+
     db.prepare(
-      'UPDATE orders SET status = ?, shipped_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-    ).run(to, shippedDate, order.id);
+      'UPDATE orders SET status = ?, shipped_date = ?, tracking_number = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+    ).run(to, shippedDate, trackingNumber, order.id);
 
     logEvent(order.id, order.status, to, source, note);
   });
@@ -231,7 +238,7 @@ function sellableQuantity(itemId) {
  * One stage along the chain. Used by the scanner, where the whole point is
  * that she does not have to say where it is going.
  */
-function advance(orderId, { source = 'scan', note = null, guardDoubleScan = false } = {}) {
+function advance(orderId, { source = 'scan', note = null, guardDoubleScan = false, tracking = null } = {}) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order) {
     const err = new Error('Order not found');
@@ -268,7 +275,7 @@ function advance(orderId, { source = 'scan', note = null, guardDoubleScan = fals
     throw err;
   }
 
-  return setStatus(order.id, to, { source, note });
+  return setStatus(order.id, to, { source, note, tracking });
 }
 
 /**

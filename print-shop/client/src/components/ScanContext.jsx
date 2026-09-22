@@ -118,9 +118,14 @@ export function ScanProvider({ children, onStockChange }) {
   const scan = useCallback((options = {}) => {
     handlerRef.current = options.onCode || null;
     setConfig(options);
-    setMatch(null);
-    setUnknown(null);
-    setStockMode(false);
+    // A scan launched from inside an open sheet — the tracking label on an
+    // order about to ship — comes back to that sheet, so what she was looking
+    // at is still there afterwards.
+    if (!options.keepMatch) {
+      setMatch(null);
+      setUnknown(null);
+      setStockMode(false);
+    }
     setOpen(true);
   }, []);
 

@@ -274,11 +274,37 @@ Tools have no print run; scanning one goes straight to the stock buttons.
 
 Reaching **Queued** is what actually puts the work in front of a printer — the same
 thing *Send to queue* does, so the ticket and the app never disagree about it. Reaching
-**Shipped** stamps the shipped date. Everything else just records where the order is.
+**Shipped** stamps the shipped date, takes the goods out of stock, and is where the
+tracking label is asked for. Everything else just records where the order is.
 
 The shop moves an order along by itself in one place only: when nothing of the order is
 left on a printer, it moves to **Finishing**. That only ever moves forward — if you
 have already scanned the order into packing, the queue does not drag it back.
+
+### Shipping, and the tracking label
+
+Marking an order **Shipped** — the button, the dropdown, or a scan of its ticket — asks
+for the postage label first. Scan the barcode on it and the order carries a tracking link
+from then on; the customer's "where is it?" is answered from the order itself rather than
+from a search of the postage account. **Ship without tracking** is one tap, for the shop
+that posts before it prints labels.
+
+**What a scanner reads off a USPS label is not the tracking number.** The barcode is an
+Intelligent Mail package barcode: the routing code `420` and the destination ZIP come
+first, and the tracking number is the tail. Those digits are trimmed off before the number
+is stored, so what goes on the order is what usps.com will look up. The ZIP is five or
+nine digits depending on the label, and both are tried — the one that leaves a real USPS
+number wins, and a barcode that leaves neither is kept whole rather than guessed at.
+
+Numbers are recognised by shape, so a label from another carrier still gets the right
+link: the 22-digit USPS barcode and its older 20-digit form, the international `EA…US`
+format, UPS `1Z…`, and FedEx's 12 and 15 digit numbers. A run of digits that matches none
+of them exactly is taken as USPS, because that is what this shop posts with — and the
+number is always shown, so a wrong guess is visible rather than silent.
+
+The number can be typed instead of scanned, and a whole barcode pasted into the box is
+read the same way. **Add tracking** on a shipped order fills in one that shipped before
+its label was printed; **Change tracking** replaces one scanned wrong.
 
 ### The record
 
@@ -798,6 +824,7 @@ print-shop/
 │       ├── order-stages.js   The seven stages, in order — the one definition
 │       ├── picklist.js       What to gather for a job, and which spools to pull
 │       ├── planning.js       Queue scheduling, ship-date projection, stock summaries
+│       ├── tracking.js       Reading a postage label, and where to follow it
 │       └── sku.js            SKU, spool tag and order number generation
 └── client/
     ├── public/               Icons, web manifest, cache-free service worker

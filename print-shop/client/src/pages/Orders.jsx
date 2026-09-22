@@ -5,6 +5,7 @@ import Modal from '../components/Modal';
 import printApi, { describeError, money, shortDate } from '../api/print';
 import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
 import OrderTicket from '../components/OrderTicket';
+import ShipDialog from '../components/ShipDialog';
 import { useScanner } from '../components/ScanContext';
 
 // How a single product's print job reads on the order card.
@@ -41,6 +42,8 @@ export default function Orders() {
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState(null);
+  const [shipping, setShipping] = useState(null);
+  const [shipBusy, setShipBusy] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(BLANK);
   const [suggestion, setSuggestion] = useState(null);
@@ -180,6 +183,12 @@ export default function Orders() {
   }
 
   async function setStatus(order, status) {
+    // Picking Shipped from the dropdown means the same thing as pressing the
+    // button, so it asks for the label too rather than quietly skipping it.
+    if (status === 'shipped' && order.status !== 'shipped') {
+      setShipping(order);
+      return;
+    }
     try {
       await printApi.updateOrder(order.id, {
         status,
@@ -227,15 +236,55 @@ export default function Orders() {
     }
   }
 
-  async function advance(order) {
+  async function advance(order, body = {}) {
+    // Shipping is the one move that wants something from her first — the label
+    // in her hand. Every other stage just happens.
+    if (order.next_stage === 'shipped' && !body.tracking && !body.skipTracking) {
+      setShipping(order);
+      return;
+    }
     try {
-      const { message } = await printApi.advanceOrder(order.id, {});
+      const { message } = await printApi.advanceOrder(order.id, { tracking: body.tracking || null });
       toast.success(message);
       load();
       refresh();
     } catch (err) {
       toast.error(describeError(err, 'Could not move that order on'));
     }
+  }
+
+  async function ship(code) {
+    const order = shipping;
+    setShipBusy(true);
+    try {
+      const { message } = await printApi.advanceOrder(order.id, { to: 'shipped', tracking: code || null });
+      toast.success(message);
+      setShipping(null);
+      load();
+      refresh();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not ship that order'));
+    } finally {
+      setShipBusy(false);
+    }
+  }
+
+  // For the order already gone before the label was printed, and the one
+  // scanned wrong the first time.
+  async function addTracking(order) {
+    scan({
+      title: 'Scan the tracking label',
+      hint: 'Point the camera at the barcode on the postage label',
+      onCode: async (code) => {
+        try {
+          const { message } = await printApi.setTracking(order.id, code);
+          toast.success(message);
+          load();
+        } catch (err) {
+          toast.error(describeError(err, 'Could not save that tracking number'));
+        }
+      },
+    });
   }
 
   async function remove(order) {
@@ -325,6 +374,23 @@ export default function Orders() {
                     {' · ordered '}{shortDate(o.order_date)}
                     {o.items.length ? ` · ${o.items.length} line${o.items.length === 1 ? '' : 's'}` : ''}
                   </p>
+                  {o.tracking && (
+                    // Where the parcel is, one tap from the order it belongs to.
+                    <p className="text-xs mt-0.5">
+                      {o.tracking.url ? (
+                        <a
+                          href={o.tracking.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary font-semibold hover:underline"
+                        >
+                          {o.tracking.carrier_label || 'Track'} {o.tracking.number} ↗
+                        </a>
+                      ) : (
+                        <span className="text-gray-500 font-mono">{o.tracking.number}</span>
+                      )}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right shrink-0">
                   <p className="font-bold text-primary leading-tight">{money(o.revenue)}</p>
@@ -465,6 +531,11 @@ export default function Orders() {
                 {o.needs_queueing && (
                   <button className="btn-secondary !py-1 !px-3" onClick={() => sendToQueue(o)}>Send to queue</button>
                 )}
+                {o.status === 'shipped' && (
+                  <button className="btn-secondary !py-1 !px-3" onClick={() => addTracking(o)}>
+                    {o.tracking ? 'Change tracking' : 'Add tracking'}
+                  </button>
+                )}
                 <button className="btn-ghost !py-1 !px-2" onClick={() => setTicket([o])}>Print</button>
                 <select
                   className="input !w-auto !py-1 !px-2 text-xs"
@@ -522,6 +593,14 @@ export default function Orders() {
           ))}
         </div>
       )}
+
+      <ShipDialog
+        open={!!shipping}
+        order={shipping}
+        busy={shipBusy}
+        onClose={() => setShipping(null)}
+        onShip={ship}
+      />
 
       <OrderTicket
         open={!!ticket}
