@@ -10,6 +10,7 @@ import Catalog from './pages/Catalog';
 import Filament from './pages/Filament';
 import Materials from './pages/Materials';
 import Queue from './pages/Queue';
+import InQueue from './pages/InQueue';
 import Settings from './pages/Settings';
 
 export default function App() {
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="filament" element={<Filament />} />
             <Route path="materials" element={<Materials />} />
             <Route path="queue" element={<Queue />} />
+            <Route path="in-queue" element={<InQueue />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -20,7 +20,6 @@ const JOB_TONE = {
 const FALLBACK_STAGES = [
   { key: 'new', label: 'New', tone: 'blue' },
   { key: 'confirmed', label: 'Confirmed', tone: 'violet' },
-  { key: 'queued', label: 'Queued', tone: 'teal' },
   { key: 'in_production', label: 'Production', tone: 'amber' },
   { key: 'finishing', label: 'Finishing', tone: 'amber' },
   { key: 'packing', label: 'Packing', tone: 'violet' },
@@ -369,7 +368,7 @@ export default function Orders() {
                     <p className="font-bold text-primary leading-tight">{o.order_number}</p>
                     <Pill tone={stageOf(o.status)?.tone || 'gray'}>{labelOf(o.status)}</Pill>
                     {o.order_type === 'wholesale' && <Pill tone="teal">Wholesale</Pill>}
-                    {o.needs_queueing && <Pill tone="amber">Not queued</Pill>}
+                    {o.needs_queueing && <Pill tone="amber">Not in the queue</Pill>}
                     {/* How far the box has got, for the one being packed. */}
                     {o.status === 'packing' && o.packing?.total > 0 && (
                       <Pill tone={o.packing.complete ? 'green' : 'gray'}>
@@ -437,7 +436,7 @@ export default function Orders() {
                   because work on the bench is not finished work. When there is
                   nothing to do, this says why rather than vanishing and leaving
                   the order looking broken. */}
-              {['confirmed', 'queued', 'in_production', 'finishing'].includes(o.status) && (
+              {['confirmed', 'in_production', 'finishing'].includes(o.status) && (
                 <div className="mt-3 border border-linen rounded-lg p-2.5">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">Products on this order</p>
@@ -460,7 +459,7 @@ export default function Orders() {
                             <span className="font-semibold w-8 shrink-0">{line.quantity} ×</span>
                             <span className="min-w-0 flex-1 truncate">{line.item_name || line.description}</span>
                             <Pill tone={JOB_TONE[line.job_status] || 'gray'}>
-                              {JOB_LABEL[line.job_status] || 'Not queued'}
+                              {JOB_LABEL[line.job_status] || 'No job yet'}
                             </Pill>
                             {startable ? (
                               <button
@@ -529,7 +528,8 @@ export default function Orders() {
                   </button>
                 )}
                 {/* Still offered on a new order: it is the one-press way to get
-                    work started, and it takes the order to Queued with it. */}
+                    work moving, and it confirms the order on the way, which is
+                    what puts its products on the In Queue list. */}
                 {o.needs_queueing && (
                   <button className="btn-secondary !py-1 !px-3" onClick={() => sendToQueue(o)}>Send to queue</button>
                 )}

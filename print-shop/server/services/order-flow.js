@@ -59,7 +59,7 @@ function enqueueOrder(orderId, priority = 'normal') {
 
 /**
  * Put an order at a given stage and do whatever that stage implies. Reaching
- * `queued` is what actually queues the work, and reaching `shipped` is what
+ * `confirmed` is what actually queues the work, and reaching `shipped` is what
  * dates it — so the ticket and the shop never disagree about what happened.
  */
 function setStatus(orderId, to, { source = 'manual', note = null, priority = 'normal', tracking = null } = {}) {
@@ -81,9 +81,9 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
 
   let queued = 0;
   const apply = db.transaction(() => {
-    // Entering the queue stage from anywhere is what puts the work in front of
-    // a printer. Doing it here means the ticket scan and the button agree.
-    if (to === 'queued') queued = enqueueOrder(order.id, priority);
+    // Confirming an order is what puts its work in front of a printer: agreed
+    // to means it has to be made, and from here it is on the In Queue list.
+    if (to === 'confirmed') queued = enqueueOrder(order.id, priority);
 
     // Shipping is what takes the goods out of the building. Printing puts them
     // on the shelf; without this the on-hand figure only ever climbs.
@@ -131,8 +131,8 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
  * of them starts.
  *
  * `orderItemId` picks a single line; without it every line that is still
- * waiting starts. Lines that have not reached the queue yet are put there
- * first, so this works even if the order was never explicitly queued.
+ * waiting starts. Lines that have no job yet are given one first, so this works
+ * on an order that went straight from new to a printer.
  */
 function startProduction(orderId, { orderItemId = null, source = 'app' } = {}) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
@@ -142,7 +142,7 @@ function startProduction(orderId, { orderItemId = null, source = 'app' } = {}) {
     throw err;
   }
 
-  // Nothing can be printed that was never queued.
+  // Nothing can be printed that has no job behind it.
   enqueueOrder(order.id);
 
   const jobs = db.prepare(`

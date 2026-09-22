@@ -1,7 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ScanProvider, useScanner } from './ScanContext';
+import PrintingPanel from './PrintingPanel';
+import printApi from '../api/print';
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: '▦', end: true },
@@ -9,7 +11,8 @@ const NAV = [
   { to: '/catalog', label: 'Catalog', icon: '📦' },
   { to: '/filament', label: 'Filament', icon: '🧵' },
   { to: '/materials', label: 'Materials', icon: '🔩' },
-  { to: '/queue', label: 'Queue', icon: '🖨' },
+  { to: '/in-queue', label: 'In Queue', icon: '☰' },
+  { to: '/queue', label: 'Print jobs', icon: '🖨' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
@@ -19,6 +22,68 @@ function ScanButton({ className = '' }) {
     <button onClick={() => scan()} className={`btn-primary flex items-center gap-2 ${className}`}>
       <span aria-hidden>⌗</span> Scan
     </button>
+  );
+}
+
+/**
+ * The two questions a print shop asks all day, in the chrome of every page:
+ * what is on the printer, and what is waiting to go on it. Both carry their
+ * own number, so the answer is there without opening anything.
+ */
+function ProductionButtons({ refreshKey, onChanged, dark = false }) {
+  const navigate = useNavigate();
+  const [board, setBoard] = useState(null);
+  const [panel, setPanel] = useState(false);
+
+  const load = useCallback(() => {
+    printApi.productionBoard().then(setBoard).catch(() => setBoard(null));
+  }, []);
+  useEffect(() => { load(); }, [load, refreshKey]);
+
+  const base = dark
+    ? 'bg-white/10 text-white hover:bg-white/20'
+    : 'bg-white text-primary border border-greige hover:bg-linen';
+  const chip = (tone) => `ml-1.5 px-1.5 py-0.5 rounded text-[11px] font-bold ${tone}`;
+
+  const printing = board?.printing;
+  const queue = board?.queue;
+
+  return (
+    <>
+      <button
+        onClick={() => setPanel(true)}
+        className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${base}`}
+        title={printing?.now?.length
+          ? printing.now.map((j) => `${j.quantity}× ${j.item_name}`).join(', ')
+          : 'Nothing is printing'}
+      >
+        <span aria-hidden>🖨</span>
+        <span>Printing</span>
+        {printing && !printing.idle && (
+          <span className={chip(dark ? 'bg-amber-300 text-amber-900' : 'bg-amber-100 text-amber-800')}>
+            {printing.units}
+          </span>
+        )}
+      </button>
+
+      <button
+        onClick={() => navigate('/in-queue')}
+        className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${base}`}
+        title={queue ? `${queue.products} product(s) still to print` : 'What still has to be printed'}
+      >
+        <span aria-hidden>☰</span>
+        <span>In Queue</span>
+        {queue?.units > 0 && (
+          <span className={chip(dark ? 'bg-white text-primary' : 'bg-primary text-white')}>{queue.units}</span>
+        )}
+      </button>
+
+      <PrintingPanel
+        open={panel}
+        onClose={() => setPanel(false)}
+        onChanged={() => { load(); onChanged?.(); }}
+      />
+    </>
   );
 }
 
@@ -76,6 +141,9 @@ function Shell({ refreshKey, refresh }) {
           </div>
           <ScanButton className="!bg-white !text-primary !py-2" />
         </div>
+        <div className="flex gap-2 px-4 pb-2">
+          <ProductionButtons refreshKey={refreshKey} onChanged={refresh} dark />
+        </div>
         <nav className="flex gap-1 px-2 pb-2 overflow-x-auto">
           {NAV.map(({ to, label, end }) => (
             <NavLink
@@ -95,8 +163,9 @@ function Shell({ refreshKey, refresh }) {
       </div>
 
       <main className="flex-1 min-w-0 lg-pad-safe-top pad-safe-bottom">
-        {/* Desktop scan bar */}
-        <div className="hidden lg:flex justify-end px-6 pt-6">
+        {/* Desktop production bar */}
+        <div className="hidden lg:flex justify-end items-center gap-2 px-6 pt-6">
+          <ProductionButtons refreshKey={refreshKey} onChanged={refresh} />
           <ScanButton />
         </div>
         <div className="p-4 lg:px-6 lg:pt-4 lg:pb-10">

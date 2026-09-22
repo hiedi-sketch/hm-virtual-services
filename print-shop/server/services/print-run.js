@@ -229,8 +229,9 @@ function startRun(itemId, quantity, { source = 'scan', printer = null, filamentI
 }
 
 /**
- * Put every open order for a product into the queue without starting anything
- * — for the scan that says "I know these are coming, line them up".
+ * Confirm every open order for a product without starting anything — for the
+ * scan that says "I know these are coming, line them up". Confirming is what
+ * puts the work on the In Queue list.
  */
 function queueDemand(itemId, { source = 'scan' } = {}) {
   const item = requireItem(itemId);
@@ -238,10 +239,8 @@ function queueDemand(itemId, { source = 'scan' } = {}) {
   const queued = [];
   for (const line of openLines(itemId).filter((l) => !l.job_status)) {
     if (queued.some((q) => q.order_id === line.order_id)) continue;
-    // An order sitting at New has not been confirmed yet; queueing it walks it
-    // through confirmed on the way, which is what the stage chain is for.
-    const moved = flow.advanceTo(line.order_id, 'queued', { source, note: `${item.name} queued from a scan` });
-    if (!moved) flow.enqueueOrder(line.order_id);  // already past queued: just make the job
+    const moved = flow.advanceTo(line.order_id, 'confirmed', { source, note: `${item.name} queued from a scan` });
+    if (!moved) flow.enqueueOrder(line.order_id);  // already past confirmed: just make the job
     queued.push({
       order_id: line.order_id,
       order_number: line.order_number,

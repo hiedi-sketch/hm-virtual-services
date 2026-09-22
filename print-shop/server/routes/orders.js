@@ -318,13 +318,13 @@ router.post('/:id/queue', (req, res) => {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
   if (!order) return res.status(404).json({ error: 'Order not found' });
 
-  // Queueing is the "queued" stage, so it goes through the pipeline rather
-  // than round the side of it. An order already past queued just gets the work
-  // added without being dragged backwards.
+  // Confirming is what queues the work, so an unconfirmed order goes through
+  // the pipeline rather than round the side of it. One already confirmed just
+  // gets the work added without being dragged backwards.
   let added;
   let message;
-  if (stages.indexOf(order.status) < stages.indexOf('queued')) {
-    const result = flow.setStatus(order.id, 'queued', { source: 'app', priority: req.body.priority || 'normal' });
+  if (stages.indexOf(order.status) < stages.indexOf('confirmed')) {
+    const result = flow.setStatus(order.id, 'confirmed', { source: 'app', priority: req.body.priority || 'normal' });
     added = result.queued;
     message = added ? `${added} item(s) queued` : 'Nothing on this order needs printing';
   } else {

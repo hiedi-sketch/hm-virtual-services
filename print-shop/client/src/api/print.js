@@ -104,6 +104,9 @@ export const printApi = {
   removeFromQueue: (id) => unwrap(api.delete(`/queue/${id}`)),
   reorderQueue: (ids) => unwrap(api.put('/queue/reorder/positions', { ids })),
   shortages: () => unwrap(api.get('/queue/shortages')),
+  productionBoard: () => unwrap(api.get('/queue/board')),
+  printingNow: () => unwrap(api.get('/queue/printing')),
+  inQueue: () => unwrap(api.get('/queue/in-queue')),
 
   pickList: (id) => unwrap(api.get(`/queue/${id}/picklist`)),
   rebuildPickList: (id) => unwrap(api.delete(`/queue/${id}/picklist`)),

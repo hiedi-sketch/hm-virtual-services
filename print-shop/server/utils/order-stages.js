@@ -1,7 +1,11 @@
 /**
  * The stages an order walks through, in order. Each one is a scan on the
- * printed ticket: scan a new order and it is confirmed, scan it again when it
- * goes into the queue, and so on down to shipped.
+ * printed ticket: scan a new order and it is confirmed, scan it again when the
+ * first thing on it goes on a printer, and so on down to shipped.
+ *
+ * There is no queued stage. Being ordered is being in the queue — a confirmed
+ * order's work is on the In Queue list from that moment, and a separate stage
+ * saying so was a step that only ever moved paper.
  *
  * `cancelled` and `completed` sit off the chain — they are chosen by hand, not
  * arrived at by scanning.
@@ -9,7 +13,6 @@
 const STAGES = [
   { key: 'new', label: 'New', scan_label: 'New order', tone: 'blue' },
   { key: 'confirmed', label: 'Confirmed', scan_label: 'Confirm it', tone: 'violet' },
-  { key: 'queued', label: 'Queued', scan_label: 'Send to the queue', tone: 'teal' },
   { key: 'in_production', label: 'Production', scan_label: 'Start production', tone: 'amber' },
   { key: 'finishing', label: 'Finishing', scan_label: 'Move to finishing', tone: 'amber' },
   { key: 'packing', label: 'Packing', scan_label: 'Move to packing', tone: 'violet' },

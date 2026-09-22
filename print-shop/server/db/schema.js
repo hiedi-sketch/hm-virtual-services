@@ -148,7 +148,7 @@ function createSchema() {
       order_type TEXT NOT NULL DEFAULT 'retail' CHECK(order_type IN ('retail','wholesale')),
       -- The stages a printed order ticket is scanned through, plus the two
       -- that are chosen by hand rather than arrived at. See utils/order-stages.
-      status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','confirmed','queued','in_production','finishing','packing','shipped','completed','cancelled')),
+      status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','confirmed','in_production','finishing','packing','shipped','completed','cancelled')),
       order_date DATE,
       promised_ship_date DATE,
       shipped_date DATE,
@@ -341,6 +341,7 @@ function createSchema() {
   }
 
   migrateOrderStages();
+  dropQueuedStage();
   backfillOrderBarcodes();
 
   // Indexes over the columns added above, once they are guaranteed to exist.
@@ -434,6 +435,60 @@ function migrateOrderStages() {
  * prefixed rather than used raw, so an order code can never be mistaken for a
  * product SKU at the scanner.
  */
+/**
+ * Take the queued stage out of the chain.
+ *
+ * It was a step that only ever moved paper: an order is in the queue because it
+ * has been ordered, not because someone pressed a button saying so. Orders
+ * sitting at queued go back to confirmed, which is what they are — agreed to,
+ * with their work waiting on a printer.
+ *
+ * SQLite cannot drop a value from a CHECK constraint in place, so the table is
+ * rebuilt from its own definition. Runs once: a constraint that no longer
+ * mentions queued returns immediately.
+ */
+function dropQueuedStage() {
+  const current = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'").get()?.sql;
+  if (!current || !current.includes("'queued'")) return;
+
+  const STATUSES = "'new','confirmed','in_production','finishing','packing','shipped','completed','cancelled'";
+  const rebuilt = current
+    .replace(/CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?["'`[]?orders["'`\]]?/i, 'CREATE TABLE orders_migrating')
+    .replace(/CHECK\s*\(\s*status\s+IN\s*\([^)]*\)\s*\)/i, `CHECK(status IN (${STATUSES}))`);
+
+  if (!rebuilt.includes('orders_migrating') || rebuilt.includes("'queued'")) {
+    console.error('Could not drop the queued stage — leaving the orders table as it is.');
+    return;
+  }
+
+  const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+  const target = columns.map((c) => `"${c}"`).join(', ');
+  const source = columns
+    .map((c) => (c === 'status' ? "CASE status WHEN 'queued' THEN 'confirmed' ELSE status END" : `"${c}"`))
+    .join(', ');
+
+  const hadForeignKeys = db.pragma('foreign_keys', { simple: true });
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  try {
+    const waiting = db.prepare("SELECT COUNT(*) AS count FROM orders WHERE status = 'queued'").get().count;
+    db.transaction(() => {
+      db.exec(rebuilt);
+      db.exec(`INSERT INTO orders_migrating (${target}) SELECT ${source} FROM orders`);
+      db.exec('DROP TABLE orders');
+      db.exec('ALTER TABLE orders_migrating RENAME TO orders');
+    })();
+    console.log(
+      waiting
+        ? `Queued stage removed; ${waiting} order(s) moved back to confirmed.`
+        : 'Queued stage removed.'
+    );
+  } finally {
+    db.pragma('legacy_alter_table = OFF');
+    if (hadForeignKeys) db.pragma('foreign_keys = ON');
+  }
+}
+
 function backfillOrderBarcodes() {
   let pending;
   try {

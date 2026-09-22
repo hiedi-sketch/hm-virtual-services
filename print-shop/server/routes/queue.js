@@ -7,6 +7,7 @@ const {
 const { ensurePicks, readPicks } = require('../utils/picklist');
 const flow = require('../services/order-flow');
 const jobs = require('../services/job-complete');
+const board = require('../services/production-board');
 
 const router = express.Router();
 
@@ -39,6 +40,15 @@ function queuePayload() {
 }
 
 router.get('/', (req, res) => res.json({ data: queuePayload() }));
+
+/** The two numbers the buttons at the top of every page carry. */
+router.get('/board', (req, res) => res.json({ data: board.board() }));
+
+/** What is on a printer now, and what has come off onto the bench. */
+router.get('/printing', (req, res) => res.json({ data: board.printingNow() }));
+
+/** Everything ordered that still has to be printed, gathered by product. */
+router.get('/in-queue', (req, res) => res.json({ data: board.inQueue() }));
 
 router.post('/', (req, res) => {
   const { item_id, quantity = 1 } = req.body;

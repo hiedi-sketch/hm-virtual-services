@@ -71,11 +71,12 @@ another device on the same Wi-Fi — handy for testing, but see the camera note 
 | Tab | What it does |
 |-----|--------------|
 | **Dashboard** | Open orders, queue load, reorder list, inventory value. Deliberately light — more panels to come. |
-| **Orders** | Customer orders at retail or wholesale prices, promised vs projected ship date, printable tickets, and a seven-stage pipeline moved along by scanning. |
+| **Orders** | Customer orders at retail or wholesale prices, promised vs projected ship date, printable tickets, and a six-stage pipeline moved along by scanning. |
 | **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. Shop photos on the cards, and import a product list from a CSV. |
 | **Filament** | Colour library with per-spool tracking, where each spool is, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
 | **Materials** | The same for magnets, hardware, packaging — anything bought by the pack. |
-| **Queue** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
+| **In Queue** | Everything ordered that still has to be printed, gathered by product, with a printable list you can scan from. |
+| **Print jobs** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
 | **Settings** | Every rate, markup and turnaround figure the app calculates from, plus the Shopify connection, your password and backups. |
 
 ---
@@ -156,7 +157,7 @@ actually hit given what is already queued.
 - Scanning a **product** opens its print run: how many the shop owes across every open
   order, and how many you are printing now. See *Scanning a product: the print run*.
 - Scanning an **order ticket** moves that order a stage on, and one at Packing brings up
-  the box to check off first. See *Order tickets and the seven stages* above.
+  the box to check off first. See *Order tickets and the six stages* above.
 - Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
   scanning a box you just opened finds the right record.
 - **Scanning something the shop has never seen** offers to add it there and then — a
@@ -169,12 +170,54 @@ actually hit given what is already queued.
 
 ---
 
-## Order tickets and the seven stages
+## Printing, and what is in the queue
+
+Two buttons sit in the chrome of every page, because a print shop asks the same two
+questions all day.
+
+**Printing** carries the number of units on a plate right now, and opens the list of what
+is on the printer — what it is, how many, which order it is for, and how long the job was
+estimated at. **Off printer** and **Finished** are on each one, since the moment you look
+is usually the moment a print has finished. It reads *Printing* with no number when the
+machine is idle.
+
+**In Queue** carries the number of units still to print and opens the list of them.
+
+### The In Queue list
+
+One row per product, however many orders asked for it, because that is how a plate gets
+loaded. Each row shows what is ordered across every open order, what is on the shelf,
+what is already on a printer, and — the number that decides anything — how many are still
+**to print**:
+
+```
+to print = ordered − on hand − already printing
+```
+
+Soonest promise first, and within a day the biggest run first, because that is the plate
+worth setting up. **Everything ordered** switches from what needs printing to the full
+list, including products the shelf already covers. Lines on an order that match no catalog
+product cannot be printed or counted, so the page says how many there are rather than
+quietly leaving them out.
+
+**Print list** gives you the sheet to take to the printer: how many of each to print, the
+product's own barcode, what is ordered, what is on hand, and when it is due. Scanning a
+barcode off that sheet opens that product's print run — how many are needed, which
+filament to load, and how many you are putting on the plate — so the paper and the app are
+the same list.
+
+The **Print jobs** tab is the other half of this: individual jobs in print order, with
+pick lists, priorities and projected ship dates. In Queue answers *what needs printing*;
+Print jobs answers *what is scheduled, in what order*.
+
+---
+
+## Order tickets and the six stages
 
 Every order carries a printed ticket, and scanning that ticket is what moves the order
 along. The stages are:
 
-**New → Confirmed → Queued → Production → Finishing → Packing → Shipped**
+**New → Confirmed → Production → Finishing → Packing → Shipped**
 
 One scan moves an order to the next one. **Cancelled** and **Completed** sit off the
 chain — they are chosen by hand, never arrived at by scanning. Scanning a shipped order
@@ -238,7 +281,7 @@ it one step:
 
 | The product reads | The button says | What it does |
 | --- | --- | --- |
-| Not queued / Waiting | **Start** | Puts it on a printer. Queues it first if it was never queued. |
+| No job yet / Waiting | **Start** | Puts it on a printer, giving it a job first if it never had one. |
 | Printing | **Off printer** | Takes it off into finishing, freeing the printer for the next one. Nothing moves in stock yet. |
 | Finishing | **Finished** | Printed: its units go on the shelf, its filament comes off the spools. |
 | Printed | — | Done. |
@@ -283,15 +326,17 @@ on the queue, marked *For stock* — printed against nobody's order, landing on 
 when it finishes.
 
 **Queue the orders** lines the waiting orders up without starting anything, walking each
-one up to Queued. **Adjust stock** switches to the old receive / remove / count buttons
+one up to Confirmed. **Adjust stock** switches to the old receive / remove / count buttons
 for the times you are counting a shelf rather than printing.
 
 Tools have no print run; scanning one goes straight to the stock buttons.
 
 ### What each stage does
 
-Reaching **Queued** is what actually puts the work in front of a printer — the same
-thing *Send to queue* does, so the ticket and the app never disagree about it. Reaching
+Reaching **Confirmed** is what actually puts the work in front of a printer — agreeing
+to an order is what says it has to be made, and from that moment its products are on the
+**In Queue** list. *Send to queue* does the same thing, so the ticket and the app never
+disagree about it. Reaching
 **Shipped** stamps the shipped date, takes the goods out of stock, and is where the
 tracking label is asked for. Everything else just records where the order is.
 
@@ -849,6 +894,7 @@ print-shop/
 │   │   ├── order-flow.js     Moving an order along, and what each stage does
 │   │   ├── job-complete.js   One product's own progress, and the stock it moves
 │   │   ├── packing.js        What should be in the box, and what is in it
+│   │   ├── production-board.js  What is on the printer, and what is waiting
 │   │   ├── print-run.js      What the shop owes of a product, and printing it
 │   │   ├── catalog-match.js  Finding the catalog item a Shopify line means
 │   │   ├── oauth-state.js    One-time nonces tying a Shopify connect to its start
@@ -859,7 +905,7 @@ print-shop/
 │   │   └── filament-import.js
 │   └── utils/
 │       ├── costing.js        Recursive cost roll-up and price suggestions
-│       ├── order-stages.js   The seven stages, in order — the one definition
+│       ├── order-stages.js   The six stages, in order — the one definition
 │       ├── picklist.js       What to gather for a job, and which spools to pull
 │       ├── planning.js       Queue scheduling, ship-date projection, stock summaries
 │       ├── tracking.js       Reading a postage label, and where to follow it
@@ -869,7 +915,7 @@ print-shop/
     └── src/
         ├── api/print.js      Typed-ish wrapper over the API + formatting helpers
         ├── components/       Layout, scan station, barcode renderer, shared UI
-        └── pages/            One per tab
+        └── pages/            One per tab, plus In Queue
 ```
 
 Tech: React 18 · Vite · Tailwind · React Router · Express · better-sqlite3 · ZXing.
