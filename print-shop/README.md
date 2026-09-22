@@ -181,8 +181,12 @@ chain — they are chosen by hand, never arrived at by scanning.
 
 ### Printing a ticket
 
-**Print** on any order card opens its ticket; **Print tickets** at the top prints every
-order currently shown, one to a sheet. A ticket carries the order number, who it is for,
+**Print** on any order card opens its ticket; **Print tickets** at the top prints the
+unshipped orders currently shown, one to a sheet, with the count on the button so you know
+what is about to come out of the printer. Shipped, completed and cancelled orders are left
+out — a ticket travels with the job, and those have no job left. Reprinting one of those is
+still a tap on its own card's **Print**, and on a view with nothing unshipped in it the
+batch button steps aside rather than printing an empty stack. A ticket carries the order number, who it is for,
 the promised ship date, every line with quantity and SKU, the total, any note, a row of
 stage boxes ticked off as far as the order has got, and a Code 128 barcode.
 

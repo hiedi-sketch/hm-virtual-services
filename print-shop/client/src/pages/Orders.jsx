@@ -261,8 +261,14 @@ export default function Orders() {
           <p className="text-sm text-gray-500">What is sold, what is promised, and what still has to be printed.</p>
         </div>
         <div className="flex gap-2">
-          {orders.length > 0 && (
-            <button className="btn-secondary" onClick={() => setTicket(orders)}>Print tickets</button>
+          {/* A ticket is a working document: it travels with the job. An order
+              already out of the door has no job left, so a batch print skips
+              it — and skips the cancelled and completed too. One that does need
+              reprinting still has Print on its own card. */}
+          {open.length > 0 && (
+            <button className="btn-secondary" onClick={() => setTicket(open)}>
+              Print tickets ({open.length})
+            </button>
           )}
           <button className="btn-secondary" onClick={() => scan({ title: 'Scan an order ticket' })}>Scan</button>
           <button className="btn-primary" onClick={openNew}>New order</button>
