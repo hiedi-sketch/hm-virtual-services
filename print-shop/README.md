@@ -183,16 +183,38 @@ machine is idle.
 
 **In Queue** carries the number of units still to print and opens the list of them.
 
+### The shelf comes first
+
+An order agreed to does not automatically mean a print. Confirming one hands out what is
+already on the shelf before anything is queued: soonest promise first, because that is the
+order they have to go out in. A line the stock can fill reads **Pull stock** on the order
+card and never reaches the queue; a line it can half fill queues only the half that is
+missing.
+
+Two orders for the same product and one of them on the shelf means the sooner one is
+picked and the later one printed. Nothing is moved by this — the units come off at
+shipping as they always have — so it is a decision about which lines are *picked* and
+which are *made*, worked out fresh every time it is asked for rather than stored and left
+to drift. Ship an order and the stock it was holding goes with it, and whoever was next in
+line is printed instead.
+
+**Start** beside a covered line still prints it, because asking for it by name is a
+deliberate thing to do.
+
 ### The In Queue list
 
 One row per product, however many orders asked for it, because that is how a plate gets
-loaded. Each row shows what is ordered across every open order, what is on the shelf,
-what is already on a printer, and — the number that decides anything — how many are still
-**to print**:
+loaded. Each row shows what is ordered across every open order, how much of that the shelf
+is covering, what is already on a printer, and — the number that decides anything — how
+many are still **to print**:
 
 ```
-to print = ordered − on hand − already printing
+to print = ordered − what the shelf covers − what is already on a plate
 ```
+
+A product the shelf covers outright is not on the list at all, which is the point: the list
+is what has to be made, not what has been sold. A job waiting its turn still counts as work
+to print; only a job actually on a plate counts as progress.
 
 Soonest promise first, and within a day the biggest run first, because that is the plate
 worth setting up. **Everything ordered** switches from what needs printing to the full
@@ -334,8 +356,8 @@ Tools have no print run; scanning one goes straight to the stock buttons.
 ### What each stage does
 
 Reaching **Confirmed** is what actually puts the work in front of a printer — agreeing
-to an order is what says it has to be made, and from that moment its products are on the
-**In Queue** list. *Send to queue* does the same thing, so the ticket and the app never
+to an order is what says it has to be made, less whatever the shelf can already fill, and
+from that moment the rest is on the **In Queue** list. *Send to queue* does the same thing, so the ticket and the app never
 disagree about it. Reaching
 **Shipped** stamps the shipped date, takes the goods out of stock, and is where the
 tracking label is asked for. Everything else just records where the order is.
@@ -894,6 +916,7 @@ print-shop/
 │   │   ├── order-flow.js     Moving an order along, and what each stage does
 │   │   ├── job-complete.js   One product's own progress, and the stock it moves
 │   │   ├── packing.js        What should be in the box, and what is in it
+│   │   ├── allocation.js     Who gets the stock, and what is left to print
 │   │   ├── production-board.js  What is on the printer, and what is waiting
 │   │   ├── print-run.js      What the shop owes of a product, and printing it
 │   │   ├── catalog-match.js  Finding the catalog item a Shopify line means

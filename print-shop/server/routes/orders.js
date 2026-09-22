@@ -9,6 +9,7 @@ const flow = require('../services/order-flow');
 const jobs = require('../services/job-complete');
 const { parseTracking, trackingLink } = require('../utils/tracking');
 const packing = require('../services/packing');
+const allocation = require('../services/allocation');
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ function orderTotals(orderId) {
   return { items, revenue: round2(revenue), cost: round2(cost), profit: round2(revenue - cost) };
 }
 
-function hydrate(order, projectionsById) {
+function hydrate(order, projectionsById, plan = null) {
   const totals = orderTotals(order.id);
   const queue = db.prepare(`
     SELECT q.*, i.name AS item_name FROM queue_jobs q
@@ -43,16 +44,25 @@ function hydrate(order, projectionsById) {
      WHERE q.order_id = ? ORDER BY q.position, q.id
   `).all(order.id);
 
-  // Pair each line with its print job, so a card can show where that one
-  // product has got to rather than only where the order has.
+  // Pair each line with its print job and with where its units are coming
+  // from, so a card can show what to do with that one product rather than
+  // only where the order has got to.
   const byLine = new Map(queue.filter((q) => q.order_item_id).map((q) => [q.order_item_id, q]));
+  const allocated = allocation.forOrder(order.id, plan);
   const items = totals.items.map((line) => {
     const job = byLine.get(line.id);
+    const where = allocated.get(line.id) || null;
     return {
       ...line,
       job_status: job?.status || null,
       job_id: job?.id || null,
       can_start: !!job && job.status === 'queued',
+      // Where this line's units come from: the shelf, a run already going, or
+      // a print that still has to happen.
+      source: where?.source || null,
+      from_stock: where?.from_stock || 0,
+      from_incoming: where?.from_incoming || 0,
+      to_print: where?.to_print || 0,
     };
   });
 
@@ -70,14 +80,16 @@ function hydrate(order, projectionsById) {
     next_stage: stages.nextStage(order.status),
     history: flow.events(order.id, 12),
     projection: projectionsById?.get(order.id) || null,
-    // Work that still has to be printed. An order that has gone out, or been
-    // called finished or cancelled, is not waiting on a printer whatever its
-    // lines say — offering to queue one is offering to print it twice.
+    // Work that still has to be printed and has no job behind it. A line the
+    // shelf covers is not waiting on a printer, and nor is an order that has
+    // gone out — offering to queue either is offering to print it twice.
     needs_queueing: !['shipped', 'completed', 'cancelled'].includes(order.status)
-      && totals.items.some(
-        (line) => line.item_id && line.item_type !== 'tool' &&
+      && items.some(
+        (line) => line.item_id && line.item_type !== 'tool' && line.to_print > 0 &&
           !queue.some((q) => q.order_item_id === line.id && q.status !== 'cancelled')
       ),
+    // What the shelf can fill, for the picking note on the card.
+    pull_from_stock: items.filter((line) => line.source === 'stock').length,
   };
 }
 
@@ -96,7 +108,10 @@ router.get('/', (req, res) => {
 
   const { projections } = orderProjections();
   const byId = new Map(projections.map((p) => [p.order_id, p]));
-  res.json({ data: db.prepare(sql).all(...params).map((o) => hydrate(o, byId)) });
+  // One allocation for the whole list: who gets the stock is a question about
+  // every open order at once, not about each one on its own.
+  const plan = allocation.plan();
+  res.json({ data: db.prepare(sql).all(...params).map((o) => hydrate(o, byId, plan)) });
 });
 
 /** The stages themselves, so the app never hard-codes its own copy. */
@@ -165,6 +180,9 @@ router.post('/', (req, res) => {
 
   try {
     const id = create();
+    // An order written straight in as confirmed queues its work the same way
+    // one confirmed later does — the shelf first, and a job for the rest.
+    if (body.status === 'confirmed') flow.enqueueOrder(id, 'normal', { skipCovered: true });
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(id);
     res.status(201).json({ data: hydrate(order), suggestion: suggested });
   } catch (err) {

@@ -74,7 +74,12 @@ export default function InQueue() {
           value={data?.units_to_print ?? '—'}
           sub={`${data?.product_count ?? 0} product${data?.product_count === 1 ? '' : 's'}`}
         />
-        <StatCard label="Ordered" value={data?.units_ordered ?? '—'} sub="across every open order" />
+        <StatCard
+          label="Pull from stock"
+          value={data?.units_from_stock ?? '—'}
+          tone="good"
+          sub="already made, no printing needed"
+        />
         <StatCard
           label="Due soonest"
           value={rows[0]?.earliest_due ? shortDate(rows[0].earliest_due) : '—'}
@@ -115,7 +120,7 @@ export default function InQueue() {
         <EmptyState title={showAll ? 'Nothing is on order' : 'Nothing needs printing'}>
           {showAll
             ? 'Every order has shipped or been finished off. The queue fills up as orders come in.'
-            : 'Everything on order is covered by what is on the shelf or already on a printer.'}
+            : 'Everything on order is covered by what is on the shelf or already on a printer — those lines are picked, not printed.'}
         </EmptyState>
       ) : (
         <div className="space-y-2">
@@ -131,6 +136,7 @@ export default function InQueue() {
                   <p className="text-xs text-gray-500 font-mono">{row.sku}</p>
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
                     <Pill tone="gray">{row.ordered} ordered</Pill>
+                    {row.from_stock > 0 && <Pill tone="teal">{row.from_stock} from stock</Pill>}
                     <Pill tone={row.on_hand > 0 ? 'green' : 'gray'}>{row.on_hand} on hand</Pill>
                     {row.printing > 0 && <Pill tone="amber">{row.printing} printing</Pill>}
                     <Pill tone="blue">{row.order_count} order{row.order_count === 1 ? '' : 's'}</Pill>

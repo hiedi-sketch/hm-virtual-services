@@ -3,6 +3,7 @@ const { estimatedMinutes } = require('../utils/planning');
 const { indexOf, nextStage, stageInfo, isValid, CHAIN } = require('../utils/order-stages');
 const { logStock } = require('../routes/helpers');
 const { parseTracking } = require('../utils/tracking');
+const allocation = require('./allocation');
 
 /**
  * Moving an order along happens from three places — a scan of the printed
@@ -26,15 +27,23 @@ function events(orderId, limit = 20) {
 }
 
 /**
- * Push every printable line of an order into the production queue, skipping
- * anything already there. Tools are not printed, so they never queue.
+ * Push an order's printable lines into the production queue, skipping anything
+ * already there. Tools are not printed, so they never queue.
+ *
+ * With `skipCovered` — which is how confirming an order queues — the shelf is
+ * consulted first: a line the stock can already fill is left alone to be picked
+ * rather than printed, and a line the stock can only half fill queues the half
+ * that is missing. `forceLineId` overrides that for one line, because starting
+ * a line by hand means printing it whatever the shelf says.
  */
-function enqueueOrder(orderId, priority = 'normal') {
+function enqueueOrder(orderId, priority = 'normal', { skipCovered = false, forceLineId = null } = {}) {
   const lines = db.prepare(`
     SELECT oi.*, i.item_type FROM order_items oi
       JOIN items i ON oi.item_id = i.id
      WHERE oi.order_id = ? AND i.item_type <> 'tool'
   `).all(orderId);
+
+  const shortfall = skipCovered ? allocation.shortfallFor(orderId) : null;
 
   const already = db.prepare(
     "SELECT COUNT(*) AS count FROM queue_jobs WHERE order_item_id = ? AND status <> 'cancelled'"
@@ -49,9 +58,16 @@ function enqueueOrder(orderId, priority = 'normal') {
 
   for (const line of lines) {
     if (already.get(line.id).count > 0) continue;
+
+    let quantity = line.quantity;
+    if (shortfall && line.id !== forceLineId) {
+      quantity = shortfall.get(line.id) || 0;
+      if (quantity <= 0) continue;  // the shelf has this one covered
+    }
+
     position += 1;
-    const minutes = estimatedMinutes({ item_id: line.item_id, quantity: line.quantity, estimated_minutes: null });
-    insert.run(orderId, line.id, line.item_id, line.quantity, priority, position, minutes);
+    const minutes = estimatedMinutes({ item_id: line.item_id, quantity, estimated_minutes: null });
+    insert.run(orderId, line.id, line.item_id, quantity, priority, position, minutes);
     added += 1;
   }
   return added;
@@ -82,8 +98,9 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
   let queued = 0;
   const apply = db.transaction(() => {
     // Confirming an order is what puts its work in front of a printer: agreed
-    // to means it has to be made, and from here it is on the In Queue list.
-    if (to === 'confirmed') queued = enqueueOrder(order.id, priority);
+    // to means it has to be made — except for what is already made, which is
+    // picked off the shelf instead of printed again.
+    if (to === 'confirmed') queued = enqueueOrder(order.id, priority, { skipCovered: true });
 
     // Shipping is what takes the goods out of the building. Printing puts them
     // on the shelf; without this the on-hand figure only ever climbs.
@@ -142,8 +159,10 @@ function startProduction(orderId, { orderItemId = null, source = 'app' } = {}) {
     throw err;
   }
 
-  // Nothing can be printed that has no job behind it.
-  enqueueOrder(order.id);
+  // Nothing can be printed that has no job behind it. Starting the whole order
+  // queues only what the shelf cannot cover; starting one line queues that line
+  // whatever the shelf says, because she asked for it by name.
+  enqueueOrder(order.id, 'normal', { skipCovered: true, forceLineId: orderItemId });
 
   const jobs = db.prepare(`
     SELECT q.*, i.name AS item_name FROM queue_jobs q

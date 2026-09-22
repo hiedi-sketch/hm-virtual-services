@@ -16,6 +16,17 @@ const JOB_TONE = {
   queued: 'gray', printing: 'amber', post_processing: 'violet', done: 'green', cancelled: 'gray',
 };
 
+// Where a line's units are coming from, when there is no job to speak for it.
+const SOURCE_LABEL = { stock: 'Pull stock', incoming: 'Printing for stock', print: 'To print' };
+const SOURCE_TONE = { stock: 'teal', incoming: 'amber', print: 'gray' };
+
+/** What a line reads as: its job if it has one, else where its units come from. */
+function lineState(line) {
+  if (line.job_status) return { label: JOB_LABEL[line.job_status], tone: JOB_TONE[line.job_status] };
+  if (line.source) return { label: SOURCE_LABEL[line.source], tone: SOURCE_TONE[line.source] };
+  return { label: 'No job yet', tone: 'gray' };
+}
+
 // Only used until the real list arrives from the server, which owns it.
 const FALLBACK_STAGES = [
   { key: 'new', label: 'New', tone: 'blue' },
@@ -370,6 +381,11 @@ export default function Orders() {
                     {o.order_type === 'wholesale' && <Pill tone="teal">Wholesale</Pill>}
                     {o.needs_queueing && <Pill tone="amber">Not in the queue</Pill>}
                     {/* How far the box has got, for the one being packed. */}
+                    {o.pull_from_stock > 0 && !['shipped', 'completed', 'cancelled'].includes(o.status) && (
+                      <Pill tone="teal">
+                        {o.pull_from_stock} to pull from stock
+                      </Pill>
+                    )}
                     {o.status === 'packing' && o.packing?.total > 0 && (
                       <Pill tone={o.packing.complete ? 'green' : 'gray'}>
                         {o.packing.complete
@@ -454,13 +470,21 @@ export default function Orders() {
                     <div className="space-y-1">
                       {o.items.filter((l) => l.item_id).map((line) => {
                         const startable = line.can_start || !line.job_status;
+                        const state = lineState(line);
                         return (
                           <div key={line.id} className="flex items-center gap-2 text-xs">
                             <span className="font-semibold w-8 shrink-0">{line.quantity} ×</span>
-                            <span className="min-w-0 flex-1 truncate">{line.item_name || line.description}</span>
-                            <Pill tone={JOB_TONE[line.job_status] || 'gray'}>
-                              {JOB_LABEL[line.job_status] || 'No job yet'}
-                            </Pill>
+                            <span className="min-w-0 flex-1 truncate">
+                              {line.item_name || line.description}
+                              {/* A line the shelf only half covers is worth
+                                  spelling out, or the pill is a half-truth. */}
+                              {line.from_stock > 0 && line.from_stock < line.quantity && (
+                                <span className="text-gray-400 ml-1.5">
+                                  {line.from_stock} from stock, {line.quantity - line.from_stock} to print
+                                </span>
+                              )}
+                            </span>
+                            <Pill tone={state.tone}>{state.label}</Pill>
                             {startable ? (
                               <button
                                 className="btn-secondary !py-0.5 !px-2 text-xs shrink-0"
