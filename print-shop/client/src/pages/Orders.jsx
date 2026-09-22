@@ -332,7 +332,10 @@ export default function Orders() {
       </div>
 
       <div className="card !p-3 flex flex-wrap gap-1">
-        {[{ key: '', label: 'All' }, ...stages].map((f) => (
+        {/* The pipeline, then the orders that are finished with. Cancelled ones
+            stay off the bar and are found under All — they are not a place
+            work sits, they are work that stopped. */}
+        {[{ key: '', label: 'All' }, ...stages, ...offChain.filter((s) => s.key === 'completed')].map((f) => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
@@ -383,20 +386,11 @@ export default function Orders() {
                     {o.items.length ? ` · ${o.items.length} line${o.items.length === 1 ? '' : 's'}` : ''}
                   </p>
                   {o.tracking && (
-                    // Where the parcel is, one tap from the order it belongs to.
-                    <p className="text-xs mt-0.5">
-                      {o.tracking.url ? (
-                        <a
-                          href={o.tracking.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary font-semibold hover:underline"
-                        >
-                          {o.tracking.carrier_label || 'Track'} {o.tracking.number} ↗
-                        </a>
-                      ) : (
-                        <span className="text-gray-500 font-mono">{o.tracking.number}</span>
-                      )}
+                    // The number to read or read out. Following it is the
+                    // Check tracking button's job, below.
+                    <p className="text-xs text-gray-500 mt-0.5 font-mono break-all">
+                      {o.tracking.carrier_label ? `${o.tracking.carrier_label} · ` : ''}
+                      {o.tracking.number}
                     </p>
                   )}
                 </div>
@@ -538,6 +532,21 @@ export default function Orders() {
                     work started, and it takes the order to Queued with it. */}
                 {o.needs_queueing && (
                   <button className="btn-secondary !py-1 !px-3" onClick={() => sendToQueue(o)}>Send to queue</button>
+                )}
+                {o.status === 'shipped' && (
+                  <button className="btn-primary !py-1 !px-3" onClick={() => setStatus(o, 'completed')}>
+                    Mark completed
+                  </button>
+                )}
+                {['shipped', 'completed'].includes(o.status) && o.tracking?.url && (
+                  <a
+                    href={o.tracking.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-secondary !py-1 !px-3"
+                  >
+                    Check tracking ↗
+                  </a>
                 )}
                 {o.status === 'shipped' && (
                   <button className="btn-secondary !py-1 !px-3" onClick={() => addTracking(o)}>

@@ -177,7 +177,9 @@ along. The stages are:
 **New → Confirmed → Queued → Production → Finishing → Packing → Shipped**
 
 One scan moves an order to the next one. **Cancelled** and **Completed** sit off the
-chain — they are chosen by hand, never arrived at by scanning.
+chain — they are chosen by hand, never arrived at by scanning. Scanning a shipped order
+offers **Mark as completed**, which is the one deliberate step at the end: shipped means
+it left, completed means it arrived and nobody wrote in about it.
 
 ### Printing a ticket
 
@@ -210,6 +212,22 @@ a step.
 
 **A ticket read twice within eight seconds counts once.** Holding a sheet under the
 camera would otherwise walk it down the whole chain in a second.
+
+**A shipped order still answers questions.** Scanning one brings up its tracking number
+with **Check tracking**, which opens the carrier's page for that parcel, and **Mark as
+completed** to finish it off. Completed orders keep the tracking button, since "where did
+that one go?" outlives the order being done with.
+
+### Finished orders
+
+The filter bar carries a **Completed** tab beside the pipeline stages, holding everything
+marked completed, newest first. **Mark completed** is on any shipped order's card as well
+as on its scan sheet.
+
+Cancelled orders stay off the bar and are found under **All** — a cancellation is not a
+place work sits, it is work that stopped. Neither a shipped, completed nor cancelled order
+offers to queue its lines any more: that offer meant printing something that had already
+gone out.
 
 ### One product at a time
 

@@ -70,10 +70,14 @@ function hydrate(order, projectionsById) {
     next_stage: stages.nextStage(order.status),
     history: flow.events(order.id, 12),
     projection: projectionsById?.get(order.id) || null,
-    needs_queueing: totals.items.some(
-      (line) => line.item_id && line.item_type !== 'tool' &&
-        !queue.some((q) => q.order_item_id === line.id && q.status !== 'cancelled')
-    ),
+    // Work that still has to be printed. An order that has gone out, or been
+    // called finished or cancelled, is not waiting on a printer whatever its
+    // lines say — offering to queue one is offering to print it twice.
+    needs_queueing: !['shipped', 'completed', 'cancelled'].includes(order.status)
+      && totals.items.some(
+        (line) => line.item_id && line.item_type !== 'tool' &&
+          !queue.some((q) => q.order_item_id === line.id && q.status !== 'cancelled')
+      ),
   };
 }
 

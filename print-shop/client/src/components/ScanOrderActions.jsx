@@ -115,26 +115,35 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
         </div>
       )}
 
-      {order.status === 'shipped' && (
+      {/* A parcel that has gone still gets asked about, so the sheet keeps the
+          tracking on it after it ships and after it is completed. */}
+      {['shipped', 'completed'].includes(order.status) && (
         <div className="rounded-xl border border-linen p-3 space-y-2">
           <p className="label !mb-0">Tracking</p>
           {order.tracking ? (
-            <p className="text-sm">
-              {order.tracking.url ? (
-                <a href={order.tracking.url} target="_blank" rel="noreferrer" className="text-primary font-semibold hover:underline">
-                  {order.tracking.carrier_label || 'Track'} {order.tracking.number} ↗
+            <>
+              <p className="font-mono text-xs text-gray-600 break-all">
+                {order.tracking.carrier_label ? `${order.tracking.carrier_label} · ` : ''}
+                {order.tracking.number}
+              </p>
+              {order.tracking.url && (
+                <a
+                  href={order.tracking.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-secondary w-full !py-2.5 text-sm block text-center"
+                >
+                  Check tracking ↗
                 </a>
-              ) : (
-                <span className="font-mono text-gray-600">{order.tracking.number}</span>
               )}
-            </p>
+            </>
           ) : (
             <p className="text-xs text-gray-500">None on this one yet.</p>
           )}
           <button
             disabled={busy}
             onClick={() => scanLabel(saveTracking)}
-            className="btn-secondary w-full !py-2.5 text-sm"
+            className="btn-ghost w-full !py-2 text-xs"
           >
             {order.tracking ? 'Scan a different label' : 'Scan the postage label'}
           </button>
@@ -149,10 +158,20 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
         >
           {busy ? 'Moving…' : next.scan_label}
         </button>
+      ) : order.status === 'shipped' ? (
+        // Shipped is the end of the chain, not the end of the order: it is done
+        // when it has arrived and nobody has written in about it.
+        <button
+          disabled={busy}
+          onClick={() => move('completed')}
+          className="btn-primary w-full !py-4 text-base"
+        >
+          {busy ? 'Marking…' : 'Mark as completed'}
+        </button>
       ) : (
         <p className="text-sm text-gray-500 text-center py-2">
-          {order.status === 'shipped'
-            ? 'This one is shipped — nothing further to scan.'
+          {order.status === 'completed'
+            ? 'This one is finished with.'
             : `A ${order.stage?.label.toLowerCase() || order.status} order does not move on by scanning.`}
         </p>
       )}
