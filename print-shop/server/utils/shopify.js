@@ -324,9 +324,19 @@ async function exchangeCode({ shop, code }) {
 }
 
 /** Which of the scopes we asked for the token actually carries. */
+/**
+ * Which of the scopes this shop needs were not granted.
+ *
+ * Shopify folds a read scope into its write: an app allowed `write_products`
+ * is never also handed `read_products`, because it can already read. So the
+ * token comes back naming the write scope alone, and checking for the read one
+ * by name reports an app that has *more* access than asked for as having less.
+ */
 function missingScopes(granted) {
   const have = new Set(String(granted || '').split(',').map((s) => s.trim()).filter(Boolean));
-  return OAUTH_SCOPES.filter((s) => !have.has(s));
+  const holds = (scope) => have.has(scope)
+    || (scope.startsWith('read_') && have.has(`write_${scope.slice('read_'.length)}`));
+  return OAUTH_SCOPES.filter((scope) => !holds(scope));
 }
 
 // ── Inventory ────────────────────────────────────────────────────────────────

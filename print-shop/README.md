@@ -447,7 +447,12 @@ carries:
   does one job: `write_inventory` puts this shop's stock figure back on the store, and
   `write_products` sends SKUs and barcodes up. `read_locations` only names the places stock
   sits — without it Shopify returns a location's id and refuses its name, and the location
-  picker falls back to listing ids;
+  picker falls back to listing ids.
+
+  Shopify folds a read scope into its write, so a connected app is told it has
+  `write_products` and *not* `read_products`, even when both were asked for. The scope check
+  after connecting knows that: a write covers its own read, and only a scope genuinely
+  absent is reported;
 - an **allowed redirection URL** of `https://your-shop-address/api/shopify/oauth/callback`.
   Settings shows the exact address to copy; Shopify refuses the connect unless it matches
   character for character.
