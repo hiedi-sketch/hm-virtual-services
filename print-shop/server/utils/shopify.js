@@ -10,7 +10,9 @@ const DEFAULT_API_VERSION = '2026-01';
 // read_locations is only for naming the places stock sits: without it Shopify
 // hands back a location's id and refuses its name, which makes for a dropdown
 // nobody can choose from.
-const OAUTH_SCOPES = ['read_products', 'read_orders', 'write_inventory', 'read_locations'];
+const OAUTH_SCOPES = [
+  'read_products', 'write_products', 'read_orders', 'write_inventory', 'read_locations',
+];
 
 // ── Stored configuration ─────────────────────────────────────────────────────
 
@@ -357,6 +359,87 @@ const SET_QUANTITIES = `
   }
 `;
 
+const VARIANT_CODES_QUERY = `
+  query variantCodes($ids: [ID!]!) {
+    nodes(ids: $ids) {
+      ... on ProductVariant {
+        id
+        title
+        sku
+        barcode
+        product { id title }
+      }
+    }
+  }
+`;
+
+// Since 2024-04 a variant's SKU lives on its inventory item; the barcode is
+// still the variant's own. Both are set in the one call.
+const SET_VARIANT_CODES = `
+  mutation setVariantCodes($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+    productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+      productVariants { id sku barcode }
+      userErrors { field message }
+    }
+  }
+`;
+
+/** What Shopify currently has on a batch of variants. */
+async function readVariantCodes(variantIds) {
+  const out = [];
+  // `nodes` takes 250 at a time, and the cost of a bigger page is a throttle.
+  for (let i = 0; i < variantIds.length; i += 100) {
+    const data = await graphql(VARIANT_CODES_QUERY, { ids: variantIds.slice(i, i + 100) });
+    for (const node of data?.nodes || []) {
+      if (!node?.id) continue;
+      out.push({
+        variant_id: node.id,
+        product_id: node.product?.id || null,
+        product_title: node.product?.title || null,
+        variant_title: node.title || null,
+        sku: node.sku || null,
+        barcode: node.barcode || null,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Write SKUs and barcodes onto a product's variants.
+ *
+ * `variants` are { variantId, sku, barcode } — a field left undefined is left
+ * alone on Shopify, which is how a push of barcodes only does not wipe SKUs.
+ */
+async function setVariantCodes(productId, variants) {
+  if (!variants.length) return { updated: 0 };
+
+  const data = await graphql(SET_VARIANT_CODES, {
+    productId,
+    variants: variants.map((v) => {
+      const input = { id: v.variantId };
+      if (v.barcode !== undefined) input.barcode = v.barcode;
+      if (v.sku !== undefined) input.inventoryItem = { sku: v.sku };
+      return input;
+    }),
+  });
+
+  const errors = data?.productVariantsBulkUpdate?.userErrors || [];
+  if (errors.length) {
+    const message = errors.map((e) => e.message).join('; ');
+    throw new ShopifyError(
+      /scope|access|permission/i.test(message)
+        ? 'Shopify would not let the app change products. Release a new app version with the write_products scope, then press Connect to Shopify again.'
+        : `Shopify refused the update: ${message}`,
+      { status: 400 }
+    );
+  }
+  return {
+    updated: (data?.productVariantsBulkUpdate?.productVariants || []).length,
+    variants: data?.productVariantsBulkUpdate?.productVariants || [],
+  };
+}
+
 async function fetchLocations() {
   try {
     const data = await graphql(LOCATIONS_QUERY);
@@ -532,6 +615,8 @@ module.exports = {
   OAUTH_SCOPES,
   fetchLocations,
   setInventory,
+  readVariantCodes,
+  setVariantCodes,
   authorizeUrl,
   verifyOAuthCallback,
   exchangeCode,

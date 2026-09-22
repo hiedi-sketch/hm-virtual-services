@@ -39,6 +39,7 @@ export const printApi = {
   disableShopifyWebhooks: () => api.delete('/shopify/webhooks').then((r) => r.data),
   sweepShopifyOrders: () => api.post('/shopify/sweep').then((r) => r.data),
   relinkOrderLines: (body) => api.post('/shopify/relink', body || {}).then((r) => r.data),
+  pushShopifyCodes: (body) => api.post('/shopify/push/codes', body || {}).then((r) => r.data),
   shopifyLocations: () => unwrap(api.get('/shopify/locations')),
   shopifyInventory: () => unwrap(api.get('/shopify/inventory')),
   saveShopifyInventory: (body) => api.put('/shopify/inventory', body).then((r) => r.data),

@@ -54,6 +54,105 @@ function Result({ result }) {
 }
 
 /** Connect a Shopify store and pull products and orders in from it. */
+/**
+ * Sending this shop's own codes up to Shopify.
+ *
+ * Nothing is written until she has read what would change. This shop's SKUs are
+ * generated — `PS-PRD-0001` and so on — and a catalog imported from a
+ * spreadsheet keeps the file's code as its *barcode*, so writing our SKU over
+ * one Shopify already has is exactly the mistake worth making hard.
+ */
+function CodePush({ busy, setBusy, onDone }) {
+  const [plan, setPlan] = useState(null);
+  const [fields, setFields] = useState({ sku: true, barcode: true });
+  const [fill, setFill] = useState(true);
+  const [error, setError] = useState('');
+
+  const chosen = Object.entries(fields).filter(([, on]) => on).map(([f]) => f);
+
+  async function call(apply) {
+    if (!chosen.length) return;
+    setBusy(apply ? 'push-codes' : 'plan-codes');
+    setError('');
+    try {
+      const { data } = await printApi.pushShopifyCodes({ apply, fields: chosen, fill });
+      setPlan(data);
+      if (apply) { toast.success(data.message); onDone?.(); }
+    } catch (err) {
+      setError(describeError(err, 'Could not reach Shopify'));
+    } finally {
+      setBusy('');
+    }
+  }
+
+  return (
+    <div className="border-t border-linen pt-3 space-y-2">
+      <p className="font-semibold text-primary text-sm">Send codes up to Shopify</p>
+      <p className="text-xs text-gray-500">
+        Writes this shop's SKUs and barcodes onto the Shopify variants they are linked to. It never
+        clears a code Shopify already has, and it always shows you the changes before writing any.
+        Needs the <span className="font-mono">write_products</span> scope on the app.
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        {[['sku', 'SKUs'], ['barcode', 'Barcodes']].map(([field, label]) => (
+          <label key={field} className="flex items-center gap-1.5">
+            <input
+              type="checkbox"
+              checked={fields[field]}
+              onChange={(e) => { setFields((f) => ({ ...f, [field]: e.target.checked })); setPlan(null); }}
+            />
+            <span className="font-semibold text-primary">{label}</span>
+          </label>
+        ))}
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={fill} onChange={(e) => { setFill(e.target.checked); setPlan(null); }} />
+          <span>Only fill blanks on Shopify</span>
+        </label>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <button className="btn-secondary" disabled={!!busy || !chosen.length} onClick={() => call(false)}>
+          {busy === 'plan-codes' ? 'Checking…' : 'See what would change'}
+        </button>
+        {plan?.planned?.length > 0 && (
+          <button className="btn-primary" disabled={!!busy} onClick={() => call(true)}>
+            {busy === 'push-codes' ? 'Sending…' : `Send ${plan.planned.length} to Shopify`}
+          </button>
+        )}
+      </div>
+
+      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      {plan && (
+        <div className="text-xs space-y-1">
+          <p className={plan.applied ? 'text-emerald-700 font-semibold' : 'text-gray-600'}>{plan.message}</p>
+          {plan.planned.length > 0 && !plan.applied && (
+            <ul className="space-y-0.5 max-h-48 overflow-y-auto border border-linen rounded-lg p-2">
+              {plan.planned.map((row) => (
+                <li key={row.variant_id} className="flex flex-wrap gap-x-2">
+                  <span className="font-semibold text-primary">{row.name}</span>
+                  {Object.entries(row.changes).map(([field, change]) => (
+                    <span key={field} className="text-gray-600">
+                      {field}: <span className="font-mono text-gray-400">{change.from || 'empty'}</span>
+                      {' → '}<span className="font-mono text-primary">{change.to}</span>
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-gray-500">
+            {plan.unchanged} already match
+            {plan.unlinked > 0 && ` · ${plan.unlinked} catalog item(s) are not linked to Shopify yet`}
+            {plan.missing > 0 && ` · ${plan.missing} link(s) point at a variant Shopify no longer has`}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ShopifyCard() {
   const [config, setConfig] = useState(null);
   const [form, setForm] = useState({ domain: '', token: '', api_version: '', secret: '', api_key: '' });
@@ -508,6 +607,8 @@ export default function ShopifyCard() {
               Disconnect
             </button>
           </div>
+
+          <CodePush busy={busy} setBusy={setBusy} onDone={load} />
 
           <Result result={result} />
 

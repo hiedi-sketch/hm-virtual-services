@@ -438,11 +438,12 @@ does the whole handshake itself; no token is ever typed in or shown.
 In Shopify's Dev Dashboard, create an app, then release a version whose configuration
 carries:
 
-- the access scopes `read_products`, `read_orders`, `write_inventory` and `read_locations`
-  (add `read_all_orders` for orders older than 60 days). The write scope does one job:
-  putting this shop's stock figure back on the store. `read_locations` only names the
-  places stock sits — without it Shopify returns a location's id and refuses its name, and
-  the location picker falls back to listing ids;
+- the access scopes `read_products`, `write_products`, `read_orders`, `write_inventory` and
+  `read_locations` (add `read_all_orders` for orders older than 60 days). Each write scope
+  does one job: `write_inventory` puts this shop's stock figure back on the store, and
+  `write_products` sends SKUs and barcodes up. `read_locations` only names the places stock
+  sits — without it Shopify returns a location's id and refuses its name, and the location
+  picker falls back to listing ids;
 - an **allowed redirection URL** of `https://your-shop-address/api/shopify/oauth/callback`.
   Settings shows the exact address to copy; Shopify refuses the connect unless it matches
   character for character.
@@ -605,6 +606,32 @@ whole catalog, which is also what happens the moment you turn it on.
 If Shopify refuses the write, the app is missing `write_inventory`: release a new version
 carrying it and press **Connect to Shopify** again. Which figure gets set — *available* or
 *on hand* — is a dropdown, because a store not tracking them separately needs the other.
+
+### Sending codes the other way
+
+**Settings → Shopify → Send codes up to Shopify** writes this shop's SKUs and barcodes onto
+the Shopify variants they are linked to.
+
+It never writes without showing you first. **See what would change** lists every variant it
+would touch, field by field, old value to new — because this shop's SKUs are *generated*
+(`PS-PRD-0001`), and a catalog imported from a spreadsheet keeps the file's code as its
+**barcode**, not its SKU. Sending SKUs with the blanks-only box unticked would therefore
+replace real Shopify SKUs with generated ones. The preview says so in as many words:
+
+```
+Leopard Heart Pop Tab    sku: LEO-HEART → PS-PRD-0001    barcode: empty → HM-LEO-001
+```
+
+**Only fill blanks on Shopify** is on by default and is the safe way round: it writes only
+where Shopify's box is empty. Untick it to overwrite, and tick the fields separately if you
+want barcodes but not SKUs. An empty code here never clears one there.
+
+Only items already linked to a Shopify variant can be written to — the rest are counted and
+named, because a product Shopify has never heard of would have to be created there first,
+which this does not do.
+
+This needs the **`write_products`** scope. Without it Shopify refuses and the app says so,
+naming the scope and the fix.
 
 ### Not done yet
 

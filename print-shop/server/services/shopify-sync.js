@@ -1,5 +1,5 @@
 const db = require('../db/database');
-const { graphql, paginate } = require('../utils/shopify');
+const { graphql, paginate, readVariantCodes, setVariantCodes } = require('../utils/shopify');
 const { suggestShipDate } = require('../utils/planning');
 const { computeItemCost } = require('../utils/costing');
 const { freeOrderBarcode } = require('../db/schema');
@@ -482,6 +482,121 @@ function relinkOrderLines({ dryRun = false } = {}) {
   return result;
 }
 
+/**
+ * Send this shop's SKUs and barcodes up to Shopify.
+ *
+ * Only items already linked to a Shopify variant can be written to — an item
+ * Shopify has never heard of would have to be created there first, which is a
+ * different job. Unlinked items are counted and named rather than skipped in
+ * silence.
+ *
+ * Nothing is written without being looked at first: a plan compares what
+ * Shopify holds against what this shop holds, field by field, and says exactly
+ * what would change. `fill` only writes where Shopify's box is empty, which is
+ * the safe way round when this shop's codes were generated rather than typed.
+ */
+async function pushCodes({ apply = false, fields = ['sku', 'barcode'], fill = false } = {}) {
+  const wanted = new Set(fields);
+  const startedAt = new Date().toISOString();
+
+  const linked = db.prepare(`
+    SELECT id, name, sku, barcode, shopify_variant_id, shopify_product_id
+      FROM items
+     WHERE shopify_variant_id IS NOT NULL AND item_type <> 'tool'
+     ORDER BY name
+  `).all();
+
+  const unlinked = db.prepare(`
+    SELECT COUNT(*) AS count FROM items
+     WHERE shopify_variant_id IS NULL AND item_type <> 'tool' AND is_active = 1
+  `).get().count;
+
+  if (!linked.length) {
+    return {
+      planned: [], unchanged: 0, unlinked, applied: false,
+      message: 'No catalog item is linked to a Shopify product yet — pull products first.',
+    };
+  }
+
+  const live = new Map(
+    (await readVariantCodes(linked.map((i) => i.shopify_variant_id))).map((v) => [v.variant_id, v])
+  );
+
+  const planned = [];
+  let unchanged = 0;
+  let missing = 0;
+
+  for (const item of linked) {
+    const current = live.get(item.shopify_variant_id);
+    if (!current) { missing += 1; continue; }
+
+    const changes = {};
+    for (const field of ['sku', 'barcode']) {
+      if (!wanted.has(field)) continue;
+      const mine = (item[field] || '').trim();
+      const theirs = (current[field] || '').trim();
+      if (!mine) continue;                       // never clear what Shopify has
+      if (mine === theirs) continue;             // already agrees
+      if (fill && theirs) continue;              // filling blanks only
+      changes[field] = { from: theirs || null, to: mine };
+    }
+
+    if (!Object.keys(changes).length) { unchanged += 1; continue; }
+    planned.push({
+      item_id: item.id,
+      name: item.name,
+      variant_id: item.shopify_variant_id,
+      product_id: current.product_id || item.shopify_product_id,
+      shopify_name: [current.product_title, current.variant_title].filter(Boolean).join(' — '),
+      changes,
+    });
+  }
+
+  const result = { planned, unchanged, unlinked, missing, applied: false };
+
+  if (!apply || !planned.length) {
+    result.message = planned.length
+      ? `${planned.length} variant(s) would change`
+      : 'Everything linked already matches Shopify';
+    return result;
+  }
+
+  // One call per product: the mutation takes a product and its variants.
+  const byProduct = new Map();
+  for (const row of planned) {
+    if (!row.product_id) continue;
+    if (!byProduct.has(row.product_id)) byProduct.set(row.product_id, []);
+    byProduct.get(row.product_id).push({
+      variantId: row.variant_id,
+      ...(row.changes.sku ? { sku: row.changes.sku.to } : {}),
+      ...(row.changes.barcode ? { barcode: row.changes.barcode.to } : {}),
+    });
+  }
+
+  let updated = 0;
+  try {
+    for (const [productId, variants] of byProduct) {
+      const done = await setVariantCodes(productId, variants);
+      updated += done.updated;
+    }
+  } catch (err) {
+    recordSync('shopify', 'push_codes', false, { updated, planned: planned.length }, err.message, startedAt);
+    throw err;
+  }
+
+  result.applied = true;
+  result.updated = updated;
+  result.message = `${updated} variant(s) updated on Shopify`;
+  recordSync('shopify', 'push_codes', true, {
+    updated,
+    unchanged,
+    unlinked,
+    fields: [...wanted],
+    fill,
+  }, null, startedAt);
+  return result;
+}
+
 function history(limit = 10) {
   return db.prepare('SELECT * FROM sync_log ORDER BY id DESC LIMIT ?').all(limit)
     .map((row) => ({ ...row, summary: row.summary ? JSON.parse(row.summary) : null }));
@@ -489,6 +604,6 @@ function history(limit = 10) {
 
 module.exports = {
   pullProducts, pullOrders, history, applyWebhook, fromWebhook, prepareOrder, saveOrder,
-  relinkOrderLines,
+  relinkOrderLines, pushCodes,
   PRODUCTS_QUERY, ORDERS_QUERY,
 };

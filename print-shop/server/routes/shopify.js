@@ -199,6 +199,28 @@ router.post('/relink', (req, res) => {
   });
 });
 
+/**
+ * Send this shop's SKUs and barcodes up to Shopify. Without `apply` it only
+ * says what would change, which is the way to use it first: this shop's SKUs
+ * are generated, and writing one over a SKU Shopify already has is not a thing
+ * to do by accident.
+ */
+router.post('/push/codes', async (req, res, next) => {
+  try {
+    const fields = Array.isArray(req.body.fields) && req.body.fields.length
+      ? req.body.fields.filter((f) => ['sku', 'barcode'].includes(f))
+      : ['sku', 'barcode'];
+    const result = await sync.pushCodes({
+      apply: !!req.body.apply,
+      fields,
+      fill: !!req.body.fill,
+    });
+    res.json({ data: result, message: result.message });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // ── Stock going back the other way ──────────────────────────────────────────
 
 function saveSetting(key, value) {
