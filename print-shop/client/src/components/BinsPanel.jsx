@@ -18,7 +18,6 @@ export default function BinsPanel({ open, onClose, onChanged }) {
   const [bins, setBins] = useState(null);
   const [error, setError] = useState(null);
   const [labels, setLabels] = useState(false);
-  const [shopName, setShopName] = useState('Print Shop');
 
   const load = useCallback(async () => {
     setError(null);
@@ -30,9 +29,6 @@ export default function BinsPanel({ open, onClose, onChanged }) {
   }, []);
 
   useEffect(() => { if (open) load(); }, [open, load]);
-  useEffect(() => {
-    if (open) printApi.getSettings().then((s) => setShopName(s.shop_name || 'Print Shop')).catch(() => {});
-  }, [open]);
 
   return (
     <>
@@ -87,7 +83,6 @@ export default function BinsPanel({ open, onClose, onChanged }) {
       <BinLabels
         open={labels}
         bins={bins || []}
-        shopName={shopName}
         onClose={() => { setLabels(false); onChanged?.(); }}
       />
     </>

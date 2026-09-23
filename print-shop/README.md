@@ -401,9 +401,18 @@ An order is rarely made in one go. A print today, another tomorrow, something of
 shelf on Friday — and all of it has to sit somewhere findable in the meantime. So the
 shop has six baskets, each with its code on the front, and an order goes in one.
 
-**Print labels** on the Bins panel prints all six, two to a row, with the bin's name big
-enough to read across the room and the barcode big enough to scan from there. Cut them
-out and tape one to each basket; that is the whole setup.
+**Print labels** on the Bins panel prints twelve labels on **2″ × 1″ label stock** — two
+for each bin. The first is the bin's name filling the label, to read from across the room;
+the second is the barcode filling the label, with the short name (`B1`) tucked in small so
+a label face down in a drawer can still be told apart. They come out in pairs, so each
+bin's two are together on the roll: stick the big one on the front of the basket and the
+barcode where the scanner will meet it. That is the whole setup.
+
+Each label is its own page at exactly the label's size, so the printer feeds one label per
+label — set the printer to the 2″ × 1″ stock and leave scaling at 100%. The barcode is
+sized around its quiet zone rather than the other way round: 0.2″ of clear paper either
+side of a 1.6″ symbol, which is an 18 mil module, more than twice what a handheld scanner
+asks for.
 
 From then on:
 
