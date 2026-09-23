@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ScanProvider, useScanner } from './ScanContext';
 import PrintingPanel from './PrintingPanel';
+import BinsPanel from './BinsPanel';
 import printApi from '../api/print';
 
 const NAV = [
@@ -35,6 +36,7 @@ function ProductionButtons({ refreshKey, onChanged, dark = false }) {
   const navigate = useNavigate();
   const [board, setBoard] = useState(null);
   const [panel, setPanel] = useState(null);
+  const [binsOpen, setBinsOpen] = useState(false);
 
   const load = useCallback(() => {
     printApi.productionBoard().then(setBoard).catch(() => setBoard(null));
@@ -52,6 +54,7 @@ function ProductionButtons({ refreshKey, onChanged, dark = false }) {
   const printing = board?.printing;
   const bench = board?.bench;
   const queue = board?.queue;
+  const binsInUse = board?.bins;
 
   return (
     <>
@@ -96,6 +99,27 @@ function ProductionButtons({ refreshKey, onChanged, dark = false }) {
           <span className={chip(dark ? 'bg-white text-primary' : 'bg-primary text-white')}>{queue.units}</span>
         )}
       </button>
+
+      {/* Where the orders themselves are sitting while they are being made. */}
+      <button
+        onClick={() => setBinsOpen(true)}
+        className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${base}`}
+        title={binsInUse ? `${binsInUse.used} of ${binsInUse.total} bins in use` : 'Which order is in which basket'}
+      >
+        <span aria-hidden>🧺</span>
+        <span>Bins</span>
+        {binsInUse?.used > 0 && (
+          <span className={chip(dark ? 'bg-teal-300 text-teal-900' : 'bg-teal-100 text-teal-800')}>
+            {binsInUse.used}/{binsInUse.total}
+          </span>
+        )}
+      </button>
+
+      <BinsPanel
+        open={binsOpen}
+        onClose={() => setBinsOpen(false)}
+        onChanged={() => { load(); onChanged?.(); }}
+      />
 
       <PrintingPanel
         open={!!panel}

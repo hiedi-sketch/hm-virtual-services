@@ -10,6 +10,7 @@ const jobs = require('../services/job-complete');
 const { parseTracking, trackingLink } = require('../utils/tracking');
 const packing = require('../services/packing');
 const allocation = require('../services/allocation');
+const bins = require('../services/bins');
 
 const router = express.Router();
 
@@ -75,6 +76,7 @@ function hydrate(order, projectionsById, plan = null) {
       ? { number: order.tracking_number, ...trackingLink(order.tracking_number) }
       : null,
     packing: packing.packList(order.id),
+    bin: bins.forOrder(order.id),
     items,
     queue_entries: queue,
     next_stage: stages.nextStage(order.status),
@@ -270,6 +272,47 @@ router.post('/:id/jobs/:jobId/advance', (req, res) => {
       data: hydrate(order, new Map(projections.map((p) => [p.order_id, p]))),
       message: result.message,
     });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+/** Put this order in a bin, by the code scanned off the front of it. */
+router.post('/:id/bin', (req, res) => {
+  try {
+    if (req.body.clear) {
+      const gone = bins.release(Number(req.params.id));
+      const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+      const { projections } = orderProjections();
+      return res.json({
+        data: hydrate(order, new Map(projections.map((p) => [p.order_id, p]))),
+        message: gone ? `Taken out of ${gone.label}` : 'That order was not in a bin',
+      });
+    }
+
+    const result = bins.assign(Number(req.params.id), req.body.code);
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    const { projections } = orderProjections();
+    res.json({
+      data: hydrate(order, new Map(projections.map((p) => [p.order_id, p]))),
+      bin: result.bin,
+      message: result.message,
+    });
+  } catch (err) {
+    res.status(err.status || 400).json({ error: err.message });
+  }
+});
+
+/** Put finished units into this order's bin. */
+router.post('/:id/bin/put', (req, res) => {
+  try {
+    const result = bins.putIn(Number(req.params.id), {
+      itemId: req.body.item_id ? Number(req.body.item_id) : null,
+      orderItemId: req.body.order_item_id ? Number(req.body.order_item_id) : null,
+      quantity: req.body.quantity,
+      code: req.body.code || null,
+    });
+    res.json({ data: result, message: result.message });
   } catch (err) {
     res.status(err.status || 400).json({ error: err.message });
   }

@@ -9,6 +9,7 @@ const stages = require('../utils/order-stages');
 const inventory = require('../services/inventory-sync');
 const { trackingLink } = require('../utils/tracking');
 const packing = require('../services/packing');
+const bins = require('../services/bins');
 
 const router = express.Router();
 
@@ -24,6 +25,11 @@ function resolve(rawCode) {
   // a SKU, and matching here keeps an order out of the stock-adjust branches.
   const order = db.prepare('SELECT * FROM orders WHERE barcode = ? OR order_number = ?').get(code, code);
   if (order) return { type: 'order', code, order: orderCard(order) };
+
+  // Bins next: their codes are prefixed like an order's, and a bin scanned on
+  // its own is a question about what is in it.
+  const bin = bins.byCode(code);
+  if (bin) return { type: 'bin', code, bin };
 
   const spool = db.prepare('SELECT * FROM filament_spools WHERE spool_code = ?').get(code);
   if (spool) {
@@ -69,6 +75,7 @@ function orderCard(order) {
     tracking: order.tracking_number
       ? { number: order.tracking_number, ...trackingLink(order.tracking_number) }
       : null,
+    bin: bins.forOrder(order.id),
     packing: packing.packList(order.id),
     stage: stages.stageInfo(order.status),
     next_stage: stages.nextStage(order.status),
@@ -287,3 +294,6 @@ router.post('/advance', (req, res) => {
 });
 
 module.exports = router;
+// The code-to-thing lookup is the whole of what a scan means, so it is worth
+// being able to ask it a question without going through HTTP.
+module.exports.resolve = resolve;

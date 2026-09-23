@@ -13,6 +13,7 @@ router.use('/materials', require('./materials'));
 router.use('/catalog', require('./catalog').router);
 router.use('/orders', require('./orders'));
 router.use('/queue', require('./queue'));
+router.use('/bins', require('./bins'));
 router.use('/scan', require('./scan'));
 router.use('/dashboard', require('./dashboard'));
 router.use('/backup', require('./backup'));

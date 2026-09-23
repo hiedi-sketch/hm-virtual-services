@@ -4,6 +4,7 @@ import printApi, { describeError } from '../api/print';
 import { Pill } from './ui';
 import { useScanner } from './ScanContext';
 import ScanPackList from './ScanPackList';
+import ScanOrderBin from './ScanOrderBin';
 
 /**
  * What a scanned order ticket offers: the next stage as one big button, since
@@ -82,6 +83,12 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
             </span>
           ))}
         </div>
+      )}
+
+      {/* Where this order lives while it is being made. Asked for as soon as it
+          is agreed to, because everything printed after that goes in it. */}
+      {!['shipped', 'completed', 'cancelled'].includes(order.status) && (
+        <ScanOrderBin order={order} bin={order.bin} onChanged={onChanged} />
       )}
 
       {/* Packing is the one stage with work of its own on this sheet: check the

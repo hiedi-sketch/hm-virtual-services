@@ -11,6 +11,7 @@ import LocationPicker from './LocationPicker';
 import ScanFilamentActions from './ScanFilamentActions';
 import ScanOrderActions, { OrderResultCard } from './ScanOrderActions';
 import ScanItemProduction from './ScanItemProduction';
+import ScanBinCard from './ScanBinCard';
 
 const ScanContext = createContext(null);
 
@@ -31,6 +32,7 @@ const ACTIONS = {
 
 function ResultCard({ match }) {
   if (match.type === 'order') return <OrderResultCard order={match.order} />;
+  if (match.type === 'bin') return <ScanBinCard bin={match.bin} />;
 
   if (match.type === 'filament' || match.type === 'filament_spool') {
     const f = match.filament;
@@ -178,6 +180,7 @@ export function ScanProvider({ children, onStockChange }) {
   const actions = match ? ACTIONS[match.type] || [] : [];
   const isFilament = match?.type === 'filament' || match?.type === 'filament_spool';
   const isOrder = match?.type === 'order';
+  const isBin = match?.type === 'bin';
   // Tools are bought, not printed, so they have no run to start.
   const isProduct = match?.type === 'item' && match.item?.item_type !== 'tool';
 
@@ -261,6 +264,16 @@ export function ScanProvider({ children, onStockChange }) {
                   }}
                   onDone={() => setMatch(null)}
                 />
+              ) : isBin ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setMatch(null); scan(config); }}
+                    className="btn-primary flex-1 !py-3"
+                  >
+                    Scan another
+                  </button>
+                  <button onClick={() => setMatch(null)} className="btn-ghost">Done</button>
+                </div>
               ) : isFilament ? (
                 <ScanFilamentActions
                   match={match}

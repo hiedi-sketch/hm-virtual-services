@@ -22,14 +22,21 @@ const sum = (rows, key = 'quantity') => rows.reduce((total, row) => total + (Num
 function printingNow() {
   const jobs = db.prepare(`
     SELECT q.id, q.quantity, q.status, q.started_at, q.printer, q.estimated_minutes,
+           q.order_item_id,
            i.id AS item_id, i.name AS item_name, i.sku AS item_sku, i.image_url,
-           o.id AS order_id, o.order_number, o.promised_ship_date, o.customer_name
+           o.id AS order_id, o.order_number, o.promised_ship_date, o.customer_name,
+           b.id AS bin_id, b.code AS bin_code, b.label AS bin_label
       FROM queue_jobs q
       JOIN items i ON q.item_id = i.id
       LEFT JOIN orders o ON q.order_id = o.id
+      LEFT JOIN bins b ON o.bin_id = b.id
      WHERE q.status IN ('printing', 'post_processing')
      ORDER BY CASE q.status WHEN 'printing' THEN 0 ELSE 1 END, q.started_at, q.id
-  `).all();
+  `).all().map((job) => ({
+    ...job,
+    // Where these units go when they come off: the bin the order lives in.
+    bin: job.bin_id ? { id: job.bin_id, code: job.bin_code, label: job.bin_label } : null,
+  }));
 
   const printing = jobs.filter((j) => j.status === 'printing');
   const finishing = jobs.filter((j) => j.status === 'post_processing');
@@ -153,7 +160,21 @@ function board() {
       products: queue.product_count,
       units: queue.units_to_print,
     },
+    // How much of the shelf is spoken for, so "have I got a free basket" is
+    // answered before she goes and looks.
+    bins: binSummary(),
   };
+}
+
+/** Bins in use, out of the bins there are. */
+function binSummary() {
+  const total = db.prepare('SELECT COUNT(*) AS n FROM bins WHERE is_active = 1').get().n;
+  const used = db.prepare(`
+    SELECT COUNT(DISTINCT b.id) AS n FROM bins b
+      JOIN orders o ON o.bin_id = b.id
+     WHERE b.is_active = 1 AND o.status NOT IN ('shipped', 'completed', 'cancelled')
+  `).get().n;
+  return { total, used, free: Math.max(0, total - used) };
 }
 
 module.exports = { printingNow, inQueue, board };

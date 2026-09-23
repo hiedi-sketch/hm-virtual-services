@@ -104,7 +104,11 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
 
     // Shipping is what takes the goods out of the building. Printing puts them
     // on the shelf; without this the on-hand figure only ever climbs.
-    if (to === 'shipped') shipStock(order.id);
+    if (to === 'shipped') {
+      shipStock(order.id);
+      // The basket is free the moment the parcel leaves it.
+      require('./bins').release(order.id);
+    }
 
     const shippedDate = to === 'shipped'
       ? (order.shipped_date || new Date().toISOString().slice(0, 10))

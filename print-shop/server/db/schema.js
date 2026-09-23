@@ -219,6 +219,20 @@ function createSchema() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- The bins an order lives in between being confirmed and going out. A
+    -- fixed, small set of physical baskets on a shelf, each with a barcode on
+    -- the front, so "where is order 11011" is answered by looking rather than
+    -- remembering.
+    CREATE TABLE IF NOT EXISTS bins (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      label TEXT NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     -- What a print job needs gathered, and what has been gathered so far.
     -- Written once when the pick list is first built, so the tick marks
     -- survive the screen going to sleep mid-collection.
@@ -335,6 +349,8 @@ function createSchema() {
     // packed. Kept on the line so a half-packed order survives the screen
     // going to sleep, the same way a pick list does.
     'ALTER TABLE order_items ADD COLUMN packed_quantity REAL NOT NULL DEFAULT 0',
+    // Which bin this order is sitting in until it ships.
+    'ALTER TABLE orders ADD COLUMN bin_id INTEGER REFERENCES bins(id)',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
@@ -343,6 +359,7 @@ function createSchema() {
   migrateOrderStages();
   dropQueuedStage();
   addSalesChannel('TikTok', 'channels_tiktok_added');
+  seedBins(6);
   backfillOrderBarcodes();
 
   // Indexes over the columns added above, once they are guaranteed to exist.
@@ -518,6 +535,24 @@ function addSalesChannel(channel, marker) {
     INSERT INTO settings (key, value) VALUES (?, '1')
     ON CONFLICT(key) DO UPDATE SET value = '1'
   `).run(marker);
+}
+
+/**
+ * Put the shop's bins in the database the first time, and never again.
+ *
+ * Six baskets on a shelf, numbered, each with its code printed on the front.
+ * Seeded once: a shop that renames them, or takes one out of service, should
+ * not find them back the next morning.
+ */
+function seedBins(count) {
+  const existing = db.prepare('SELECT COUNT(*) AS count FROM bins').get().count;
+  if (existing > 0) return;
+
+  const insert = db.prepare('INSERT INTO bins (code, label, position) VALUES (?, ?, ?)');
+  db.transaction(() => {
+    for (let n = 1; n <= count; n += 1) insert.run(`BIN-${n}`, `Bin ${n}`, n);
+  })();
+  console.log(`${count} bins created.`);
 }
 
 function backfillOrderBarcodes() {

@@ -167,6 +167,8 @@ actually hit given what is already queued.
   order, and how many you are printing now. See *Scanning a product: the print run*.
 - Scanning an **order ticket** moves that order a stage on, and one at Packing brings up
   the box to check off first. See *Order tickets and the six stages* above.
+- Scanning a **bin** (`BIN-1`…`BIN-6`) says which order is in that basket and how much of
+  it has been made. See *Bins: where an order lives* below.
 - Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
   scanning a box you just opened finds the right record.
 - **Scanning something the shop has never seen** offers to add it there and then — a
@@ -392,6 +394,37 @@ tracking label is asked for. Everything else just records where the order is.
 The shop moves an order along by itself in one place only: when nothing of the order is
 left on a printer, it moves to **Finishing**. That only ever moves forward — if you
 have already scanned the order into packing, the queue does not drag it back.
+
+### Bins: where an order lives
+
+An order is rarely made in one go. A print today, another tomorrow, something off the
+shelf on Friday — and all of it has to sit somewhere findable in the meantime. So the
+shop has six baskets, each with its code on the front, and an order goes in one.
+
+**Print labels** on the Bins panel prints all six, two to a row, with the bin's name big
+enough to read across the room and the barcode big enough to scan from there. Cut them
+out and tape one to each basket; that is the whole setup.
+
+From then on:
+
+- Scan the order ticket, then **Scan a bin** — the order is in that basket until it ships.
+  The bin shows on the order card, so *where is 11011* is answered from the list.
+- Finish a print and the panel asks straight away, while the parts are still in your hand:
+  it names the bin the order lives in, and **Scan the bin** puts that run's units in it.
+  Scanning the wrong basket records nothing and says which one it should be.
+- Scan a bin on its own to see whose it is and what is still missing from it.
+- Shipping empties the basket. It is free for the next order the moment the parcel leaves.
+
+A bin holds one order at a time — that is the point of a bin — so putting a second order
+in an occupied one says whose it already is rather than quietly taking it over. Moving an
+order to another bin moves it; it is one physical pile and it can only be in one place.
+
+**What goes in the bin is what gets packed.** The count kept per line is the same count
+the packing check reads, so a thing in the basket is already ticked off in the box. Two
+separate tallies would be two chances to disagree, and the one that disagreed would be
+the one you found out about at the post office.
+
+The **Bins** button at the top of every page says how many of the six are in use.
 
 ### Packing a box
 

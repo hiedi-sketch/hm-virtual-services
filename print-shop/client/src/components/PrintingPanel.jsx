@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import Modal from './Modal';
 import printApi, { describeError, hoursMinutes, shortDate } from '../api/print';
 import { Pill } from './ui';
+import { useScanner } from './ScanContext';
 
 /**
  * What is on the printer, and what is on the bench — from wherever she happens
@@ -30,9 +31,13 @@ const MODES = {
 };
 
 export default function PrintingPanel({ open, mode = 'printing', onClose, onChanged }) {
+  const { scan } = useScanner();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  // A finished print is a handful of things with nowhere to be yet. This is
+  // the job waiting to be put in its order's bin.
+  const [toPutAway, setToPutAway] = useState(null);
 
   async function load() {
     setError(null);
@@ -55,6 +60,9 @@ export default function PrintingPanel({ open, mode = 'printing', onClose, onChan
       toast.success(status === 'done'
         ? `${job.item_name} is finished and on the shelf`
         : `${job.item_name} is off the printer`);
+      // Finished units for an order have somewhere to go. Ask while they are
+      // still in her hand rather than hoping she remembers at packing time.
+      if (status === 'done' && job.order_id) setToPutAway(job);
       await load();
       onChanged?.();
     } catch (err) {
@@ -62,6 +70,32 @@ export default function PrintingPanel({ open, mode = 'printing', onClose, onChan
     } finally {
       setBusy(false);
     }
+  }
+
+  function putAway(job) {
+    scan({
+      title: `Scan the bin for ${job.order_number}`,
+      hint: job.bin ? `It lives in ${job.bin.label}` : 'The barcode on the front of the basket',
+      keepMatch: true,
+      onCode: async (code) => {
+        setBusy(true);
+        try {
+          const { message } = await printApi.putInBin(job.order_id, {
+            code,
+            order_item_id: job.order_item_id,
+            item_id: job.item_id,
+            quantity: job.quantity,
+          });
+          toast.success(message);
+          setToPutAway(null);
+          onChanged?.();
+        } catch (err) {
+          toast.error(describeError(err, 'Could not put those in the bin'));
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
   }
 
   return (
@@ -73,6 +107,28 @@ export default function PrintingPanel({ open, mode = 'printing', onClose, onChan
         </div>
       ) : !data ? (
         <p className="text-sm text-gray-500">Looking…</p>
+      ) : toPutAway ? (
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">
+            <span className="font-bold text-primary">{toPutAway.quantity}× {toPutAway.item_name}</span>
+            {' '}finished for <span className="font-semibold">{toPutAway.order_number}</span>.
+          </p>
+          {toPutAway.bin ? (
+            <p className="text-sm">
+              That order lives in <span className="text-2xl font-bold text-primary align-middle">{toPutAway.bin.label}</span>
+            </p>
+          ) : (
+            <p className="text-xs text-amber-700">
+              That order has no bin yet — scan the one you are putting these in and it will be given that bin.
+            </p>
+          )}
+          <button disabled={busy} onClick={() => putAway(toPutAway)} className="btn-primary w-full !py-4 text-base">
+            Scan the bin
+          </button>
+          <button onClick={() => setToPutAway(null)} className="btn-ghost w-full !py-2 text-sm">
+            Not now
+          </button>
+        </div>
       ) : !jobs.length ? (
         <p className="text-sm text-gray-500">{view.empty}</p>
       ) : (

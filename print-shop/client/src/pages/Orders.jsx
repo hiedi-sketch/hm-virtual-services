@@ -380,6 +380,9 @@ export default function Orders() {
                     <Pill tone={stageOf(o.status)?.tone || 'gray'}>{labelOf(o.status)}</Pill>
                     {o.order_type === 'wholesale' && <Pill tone="teal">Wholesale</Pill>}
                     {o.needs_queueing && <Pill tone="amber">Not in the queue</Pill>}
+                    {/* Which basket it is sitting in — the one thing you need
+                        to know to go and put your hands on it. */}
+                    {o.bin && <Pill tone="blue">{o.bin.label}</Pill>}
                     {/* How far the box has got, for the one being packed. */}
                     {o.pull_from_stock > 0 && !['shipped', 'completed', 'cancelled'].includes(o.status) && (
                       <Pill tone="teal">
