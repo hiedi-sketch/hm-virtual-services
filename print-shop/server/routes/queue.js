@@ -13,7 +13,7 @@ const router = express.Router();
 
 const EDITABLE = [
   'order_id', 'order_item_id', 'item_id', 'quantity', 'status', 'priority',
-  'position', 'printer', 'filament_id', 'estimated_minutes', 'notes',
+  'position', 'printer', 'filament_id', 'estimated_minutes', 'notes', 'started_at',
 ];
 
 function queuePayload() {
@@ -61,6 +61,9 @@ router.post('/', (req, res) => {
     ...req.body,
     quantity: Number(quantity) || 1,
     position: req.body.position ?? maxPosition + 1,
+    // A job created already on a plate has been running since now, not since
+    // never — the panel counts elapsed time from this.
+    started_at: req.body.status === 'printing' ? new Date().toISOString() : req.body.started_at,
     estimated_minutes: req.body.estimated_minutes ??
       estimatedMinutes({ item_id, quantity: Number(quantity) || 1, estimated_minutes: null }),
   };

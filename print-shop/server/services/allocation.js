@@ -63,6 +63,15 @@ function plan() {
     target.set(job.order_item_id, (target.get(job.order_item_id) || 0) + quantity);
   }
 
+  // A plate can hold more than the order asked for — she starts a run of four
+  // and fills the bed to nine. The extra is not that order's, but it is real
+  // and it is coming, so it counts as stock on its way to the shelf rather
+  // than disappearing from every number in the shop.
+  for (const line of lines) {
+    const surplus = (onPlate.get(line.id) || 0) - (Number(line.quantity) || 0);
+    if (surplus > 0) incomingStock.set(line.item_id, (incomingStock.get(line.item_id) || 0) + surplus);
+  }
+
   const shelf = new Map();
   const incoming = new Map();
   const byLine = new Map();

@@ -494,6 +494,29 @@ The six numbered bins still hold one order each, and say whose it is if you try 
 second in. The Mail Bin is the only exception, and it is the only bin where "empty it"
 means something.
 
+### How many are actually on the plate
+
+*Start* on a line puts the order's quantity on the printer, because that is what the
+order asked for. A bed rarely fills that neatly: four are wanted, nine fit, and the rest
+are the shop's.
+
+So **the count on the Printing panel is editable** — tap it and type what is really on
+the plate. A job carrying more than its order needs says how it splits:
+
+```
+9× Leopard Heart Pop Tab Opener
+for 11070 · Jane Doe · due Sep 28
+4 for 11070, 5 for the shelf
+```
+
+The order still counts its four; the extra five are stock on their way to the shelf, so
+they cover the next order that wants one and come off the **In Queue** list straight away.
+When the plate is finished, all nine land on the shelf and the order draws its four from
+there — the same path as any other print.
+
+**Something else on the plate, for stock** adds a run that belongs to no order at all, for
+the times the bed is shared between a product and a few spares of something else.
+
 ### What a line still needs
 
 Six ordered is not six to print. Five may already be on the shelf and one on a plate, and
