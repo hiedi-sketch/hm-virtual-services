@@ -3,7 +3,7 @@ import Barcode from './Barcode';
 import { shortDate } from '../api/print';
 
 /**
- * The In Queue list, on paper.
+ * The To Print list, on paper.
  *
  * It goes next to the printer, so it carries the two things needed there: how
  * many of each product the shop owes, and the barcode to scan when one goes on
@@ -33,7 +33,7 @@ export default function QueueSheet({ open, rows, summary, shopName = 'Print Shop
           className="flex items-center justify-between px-5 py-4 border-b border-linen print:hidden"
           style={{ paddingTop: 'calc(1rem + var(--safe-top))' }}
         >
-          <h2 className="text-lg font-bold text-primary">In Queue list</h2>
+          <h2 className="text-lg font-bold text-primary">To Print list</h2>
           <button onClick={onClose} className="text-silver hover:text-gray-600 text-2xl leading-none">×</button>
         </div>
 
@@ -42,7 +42,7 @@ export default function QueueSheet({ open, rows, summary, shopName = 'Print Shop
             <div className="flex items-end justify-between border-b-2 border-gray-800 pb-2">
               <div>
                 <p className="text-[11px] uppercase tracking-widest text-gray-500">{shopName}</p>
-                <p className="text-2xl font-bold leading-tight">In Queue</p>
+                <p className="text-2xl font-bold leading-tight">To Print</p>
               </div>
               <div className="text-right text-xs leading-snug">
                 <p>{shortDate(today)}</p>

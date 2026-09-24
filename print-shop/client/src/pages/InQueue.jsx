@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { useOutletContext } from 'react-router-dom';
 import printApi, { describeError, shortDate } from '../api/print';
 import { EmptyState, LoadError, Pill, StatCard } from '../components/ui';
@@ -12,7 +13,12 @@ import { useScanner } from '../components/ScanContext';
  * The orders page answers "what do I owe this customer". This answers the
  * other question, the one asked standing at the printer: "what do I owe
  * everybody, and what goes on the next plate". One row per product, however
- * many orders asked for it.
+ * many orders asked for it, less whatever is on the shelf or already sitting
+ * in an order's bin.
+ *
+ * It is not the Print Queue. That is the jobs themselves, in the order they go
+ * on. This is the demand behind them, which is why work can be sent from here
+ * to there but never the other way.
  */
 /**
  * Every date this product is wanted on, and how many for each.
@@ -54,6 +60,8 @@ export default function InQueue() {
   const [loading, setLoading] = useState(true);
   const [showAll, setShowAll] = useState(false);
   const [sheet, setSheet] = useState(false);
+  // Which row is being sent to the Print Queue, or 'all'.
+  const [busy, setBusy] = useState(null);
   const [shopName, setShopName] = useState('Print Shop');
 
   const load = useCallback(async () => {
@@ -74,17 +82,62 @@ export default function InQueue() {
   }, []);
 
   const rows = data ? (showAll ? data.items : data.needing) : [];
+  // Units that still have no job behind them at all.
+  const unqueued = (data?.needing || []).reduce((sum, r) => sum + (r.unqueued || 0), 0);
+
+  /** Make print jobs for what this product still owes, across every order. */
+  async function queue(row) {
+    setBusy(row.id);
+    try {
+      const { data } = await printApi.queueItemDemand(row.id);
+      const queued = data?.queued || [];
+      toast.success(queued.length
+        ? `${row.name} sent to the Print Queue for ${queued.map((o) => o.order_number).join(', ')}`
+        : `${row.name} is already covered — nothing to send`);
+    } catch (err) {
+      toast.error(describeError(err, 'Could not send that to the Print Queue'));
+    } finally {
+      // Whatever happened, the list on screen is now a guess. Go and look.
+      setBusy(null);
+      await load();
+      refresh();
+    }
+  }
+
+  async function queueAll() {
+    setBusy('all');
+    try {
+      let sent = 0;
+      for (const row of (data?.needing || []).filter((r) => r.unqueued > 0)) {
+        const { data: result } = await printApi.queueItemDemand(row.id);
+        sent += (result?.queued || []).length;
+      }
+      toast.success(sent ? `${sent} order line(s) sent to the Print Queue` : 'Nothing left to send');
+    } catch (err) {
+      toast.error(describeError(err, 'Stopped part way — what went, went'));
+    } finally {
+      setBusy(null);
+      await load();
+      refresh();
+    }
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-primary">In Queue</h1>
+          <h1 className="text-2xl font-bold text-primary">To Print</h1>
           <p className="text-sm text-gray-500">
-            Everything ordered that still has to be printed, gathered by product.
+            Everything ordered that still has to be printed, gathered by product — less what is
+            on the shelf and what is already in a bin.
           </p>
         </div>
         <div className="flex gap-2">
+          {unqueued > 0 && (
+            <button className="btn-secondary" disabled={busy} onClick={queueAll}>
+              {busy === 'all' ? 'Sending…' : `Send ${unqueued} to the Print Queue`}
+            </button>
+          )}
           {data?.needing.length > 0 && (
             <button className="btn-secondary" onClick={() => setSheet(true)}>
               Print list ({data.needing.length})
@@ -92,7 +145,7 @@ export default function InQueue() {
           )}
           <button
             className="btn-primary"
-            onClick={() => scan({ title: 'Scan a product to print', hint: 'Its barcode on the In Queue list, the shelf, or an order ticket' })}
+            onClick={() => scan({ title: 'Scan a product to print', hint: 'Its barcode on the To Print list, the shelf, or an order ticket' })}
           >
             Scan a product
           </button>
@@ -168,7 +221,13 @@ export default function InQueue() {
                   <div className="flex flex-wrap gap-1.5 mt-1.5">
                     <Pill tone="gray">{row.ordered} ordered</Pill>
                     {row.from_stock > 0 && <Pill tone="teal">{row.from_stock} from stock</Pill>}
-                    <Pill tone={row.on_hand > 0 ? 'green' : 'gray'}>{row.on_hand} on hand</Pill>
+                    {row.in_bins > 0 && <Pill tone="blue">{row.in_bins} in bins</Pill>}
+                    {/* A shelf can read below nothing when more has been set
+                        aside than was ever counted in. That is worth saying
+                        plainly rather than as a minus sign. */}
+                    {row.on_hand < 0
+                      ? <Pill tone="amber">{Math.abs(row.on_hand)} short on the shelf</Pill>
+                      : <Pill tone={row.on_hand > 0 ? 'green' : 'gray'}>{row.on_hand} on hand</Pill>}
                     {row.printing > 0 && <Pill tone="amber">{row.printing} printing</Pill>}
                     <Pill tone="blue">{row.order_count} order{row.order_count === 1 ? '' : 's'}</Pill>
                   </div>
@@ -181,6 +240,20 @@ export default function InQueue() {
                     {row.to_print}
                   </p>
                   <p className="text-[11px] text-gray-500">to print</p>
+                  {/* Straight from the demand to a job on the Print Queue,
+                      for what has none behind it yet. */}
+                  {row.unqueued > 0 && (
+                    <button
+                      disabled={!!busy}
+                      onClick={() => queue(row)}
+                      className="btn-secondary !py-1 !px-2 text-xs mt-1.5"
+                    >
+                      {busy === row.id ? 'Sending…' : `Queue ${row.unqueued}`}
+                    </button>
+                  )}
+                  {row.unqueued === 0 && row.to_print > 0 && (
+                    <p className="text-[10px] text-gray-400 mt-1.5">on the Print Queue</p>
+                  )}
                 </div>
 
                 {/* The same code as on the printed list and the shelf label, so

@@ -111,7 +111,7 @@ export default function LineCoverage({ open, order, line, onClose, onChanged }) 
 
         <p className="text-[11px] text-gray-500 leading-snug">
           On hand moves the shelf — it holds {line.shelf_total ?? '—'} of these at the moment.
-          Printing puts the units on a plate, or takes them off it. Needed is what the In Queue
+          Printing puts the units on a plate, or takes them off it. Needed is what the To Print
           list counts, so it follows both.
         </p>
 

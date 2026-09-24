@@ -92,11 +92,16 @@ function plan() {
 
     // The shelf first, then a run already going for stock. Both mean "do not
     // print this"; only one of them means "go and pick it up".
-    const fromShelf = Math.min(shelf.get(line.item_id), outstanding);
+    //
+    // Never below nothing. A shelf can read negative — units set aside that
+    // were never counted in, a stocktake that disagrees — and a negative draw
+    // would come back round as extra demand, asking her to print things she
+    // has already put in a basket.
+    const fromShelf = Math.max(0, Math.min(shelf.get(line.item_id), outstanding));
     shelf.set(line.item_id, shelf.get(line.item_id) - fromShelf);
     outstanding -= fromShelf;
 
-    const fromIncoming = Math.min(incoming.get(line.item_id), outstanding);
+    const fromIncoming = Math.max(0, Math.min(incoming.get(line.item_id), outstanding));
     incoming.set(line.item_id, incoming.get(line.item_id) - fromIncoming);
     outstanding -= fromIncoming;
 
@@ -126,6 +131,7 @@ function plan() {
       sku: line.item_sku,
       on_hand: Number(line.qty_on_hand) || 0,
       ordered: 0,
+      packed: 0,
       printing: 0,
       queued: 0,
       from_stock: 0,
@@ -140,6 +146,7 @@ function plan() {
       lines: [],
     };
     item.ordered += quantity;
+    item.packed += packed;
     item.printing += plated;
     item.queued += queued;
     item.from_stock += fromShelf;

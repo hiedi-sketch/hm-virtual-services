@@ -95,6 +95,8 @@ function inQueue() {
     printing: plated.get(item.item_id) || 0,
     // What the shelf is covering, which is picked rather than printed.
     from_stock: item.from_stock,
+    // Already made and sitting in an order's bin, waiting to be packed.
+    in_bins: item.packed,
     // Everything still to go on a plate: jobs waiting their turn, plus what
     // has no job at all yet.
     to_print: item.needs_printing,

@@ -12,8 +12,8 @@ const NAV = [
   { to: '/catalog', label: 'Catalog', icon: '📦' },
   { to: '/filament', label: 'Filament', icon: '🧵' },
   { to: '/materials', label: 'Materials', icon: '🔩' },
-  { to: '/in-queue', label: 'In Queue', icon: '☰' },
-  { to: '/queue', label: 'Print jobs', icon: '🖨' },
+  { to: '/in-queue', label: 'To Print', icon: '☰' },
+  { to: '/queue', label: 'Print Queue', icon: '🖨' },
   { to: '/settings', label: 'Settings', icon: '⚙' },
 ];
 
@@ -94,7 +94,7 @@ function ProductionButtons({ refreshKey, onChanged, dark = false }) {
         title={queue ? `${queue.products} product(s) still to print` : 'What still has to be printed'}
       >
         <span aria-hidden>☰</span>
-        <span>In Queue</span>
+        <span>To Print</span>
         {queue?.units > 0 && (
           <span className={chip(dark ? 'bg-white text-primary' : 'bg-primary text-white')}>{queue.units}</span>
         )}

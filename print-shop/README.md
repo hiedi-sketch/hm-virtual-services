@@ -75,8 +75,8 @@ another device on the same Wi-Fi — handy for testing, but see the camera note 
 | **Catalog** | Items for sale, components used inside other items, and tools. Pick what each is made of; cost and prices fall out. Shop photos on the cards, and import a product list from a CSV. |
 | **Filament** | Colour library with per-spool tracking, where each spool is, grams on hand, what the queue will consume, reorder flags, vendor reorder links. |
 | **Materials** | The same for magnets, hardware, packaging — anything bought by the pack. |
-| **In Queue** | Everything ordered that still has to be printed, gathered by product, with a printable list you can scan from. |
-| **Print jobs** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
+| **To Print** | Everything ordered that still has to be printed, gathered by product, with a printable list you can scan from. |
+| **Print Queue** | Jobs in print order with projected ship dates, priorities, a pick list per job, and the stock the queue will run short of. |
 | **Settings** | Every rate, markup and turnaround figure the app calculates from, plus the Shopify connection, your password and backups. |
 
 ---
@@ -149,7 +149,7 @@ actually hit given what is already queued.
   its **Code 128** barcode. Individual spools get their own tags (`SPL-000001`).
 - **Label** on any row opens a printable label; the barcode is rendered as inline SVG,
   so it prints crisply at any size with no image assets.
-- Anything printable — a label, an order ticket, the In Queue list — hides the rest of the
+- Anything printable — a label, an order ticket, the To Print list — hides the rest of the
   app outright rather than merely making it invisible, and prints in normal flow rather
   than positioned. An invisible element still takes up its space and still makes pages, so
   the first way round that gave a sheet starting half way down the paper followed by blank
@@ -182,7 +182,7 @@ actually hit given what is already queued.
 
 ---
 
-## Printing, the bench, and what is in the queue
+## Printing, the bench, and what still has to be made
 
 Three buttons sit in the chrome of every page, because a print shop asks the same three
 questions all day — and they are three different places, not one list.
@@ -199,7 +199,7 @@ your hands rather than the machine's. Its sheet lists the same detail with a sin
 the spools. Both buttons carry their own count, so a printer running while three things
 wait to be sanded reads as two numbers rather than one pile.
 
-**In Queue** carries the number of units still to print and opens the list of them.
+**To Print** carries the number of units still to print and opens the list of them.
 
 ### The shelf comes first
 
@@ -219,7 +219,23 @@ line is printed instead.
 **Start** beside a covered line still prints it, because asking for it by name is a
 deliberate thing to do.
 
-### The In Queue list
+### Sending work to the Print Queue
+
+The two pages are not the same list, which is why they no longer share a name. **To Print**
+is the demand: every product any open order still owes, less what the shelf covers and less
+what is already sitting in a bin. **Print Queue** is the jobs themselves, in the order they
+go on the machine.
+
+Work moves one way, from the first to the second. Each row on To Print carries a **Queue**
+button for the units that have no job behind them yet, and the header carries one for the
+lot. A row whose work is all queued says *on the Print Queue* instead.
+
+Queueing a product queues whatever the orders it belongs to still need — you do not print
+half an order — and never more than that: a line the shelf or the bin already covers is
+left alone. Once queued, the units stay on the To Print list, because a job waiting its
+turn is still work to do; what changes is that they now have a job behind them.
+
+### The To Print list
 
 One row per product, however many orders asked for it, because that is how a plate gets
 loaded. Each row shows what is ordered across every open order, how much of that the shelf
@@ -258,9 +274,9 @@ ordered, what is on hand, and every date it is due. Scanning a barcode off that 
 that product's print run — how many are needed, which filament to load, and how many you
 are putting on the plate — so the paper and the app are the same list.
 
-The **Print jobs** tab is the other half of this: individual jobs in print order, with
-pick lists, priorities and projected ship dates. In Queue answers *what needs printing*;
-Print jobs answers *what is scheduled, in what order*.
+The **Print Queue** tab is the other half of this: individual jobs in print order, with
+pick lists, priorities and projected ship dates. To Print answers *what needs printing*;
+The Print Queue answers *what is scheduled, in what order*.
 
 ---
 
@@ -387,7 +403,7 @@ Tools have no print run; scanning one goes straight to the stock buttons.
 
 Reaching **Confirmed** is what actually puts the work in front of a printer — agreeing
 to an order is what says it has to be made, less whatever the shelf can already fill, and
-from that moment the rest is on the **In Queue** list. *Send to queue* does the same thing, so the ticket and the app never
+from that moment the rest is on the **To Print** list. *Send to queue* does the same thing, so the ticket and the app never
 disagree about it. Reaching
 **Shipped** stamps the shipped date, takes the goods out of stock, and is where the
 tracking label is asked for. Everything else just records where the order is.
@@ -528,7 +544,7 @@ for 11070 · Jane Doe · due Sep 28
 ```
 
 The order still counts its four; the extra five are stock on their way to the shelf, so
-they cover the next order that wants one and come off the **In Queue** list straight away.
+they cover the next order that wants one and come off the **To Print** list straight away.
 When the plate is finished, all nine land on the shelf and the order draws its four from
 there — the same path as any other print.
 
@@ -547,7 +563,7 @@ spells it out behind the product name, small and in parentheses:
 
 - **On hand** is units that exist for this order and will be picked rather than printed —
   what the shelf is holding for it, plus anything already in its bin.
-- **Needed** is what is left to print — the number the **In Queue** list and its button
+- **Needed** is what is left to print — the number the **To Print** list and its button
   are counting.
 - **Printing** is what is on a plate now. A run going for stock counts here too, because
   those units are on a printer whoever ends up with them.
@@ -559,7 +575,7 @@ shop because there is nothing to drift.
 **Tap the note to change them.** On hand and printing are typed; needed follows, because
 it is the remainder and typing it would invite a number the next screen would contradict.
 Saving does the real thing behind each one: on hand moves the shelf and writes to the
-stock history, printing puts units on a plate or takes them off it. The In Queue button
+stock history, printing puts units on a plate or takes them off it. The To Print button
 changes as soon as it is saved.
 
 Two things it refuses, because they cannot be true: more on hand and printing together
@@ -1217,7 +1233,7 @@ print-shop/
     └── src/
         ├── api/print.js      Typed-ish wrapper over the API + formatting helpers
         ├── components/       Layout, scan station, barcode renderer, shared UI
-        └── pages/            One per tab, plus In Queue
+        └── pages/            One per tab, plus To Print
 ```
 
 Tech: React 18 · Vite · Tailwind · React Router · Express · better-sqlite3 · ZXing.

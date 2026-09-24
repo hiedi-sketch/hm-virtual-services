@@ -3,6 +3,7 @@ const { estimatedMinutes, filamentSummary } = require('../utils/planning');
 const { filamentDemandForItem } = require('../utils/costing');
 const { suggestSpools } = require('../utils/picklist');
 const flow = require('./order-flow');
+const allocation = require('./allocation');
 
 /**
  * Printing one product against every order waiting for it.
@@ -236,11 +237,18 @@ function startRun(itemId, quantity, { source = 'scan', printer = null, filamentI
 function queueDemand(itemId, { source = 'scan' } = {}) {
   const item = requireItem(itemId);
 
+  // What each line still actually needs, so a line the shelf or the bin has
+  // already covered is left alone rather than queued for nothing.
+  const shortfall = allocation.plan().byLine;
+
   const queued = [];
   for (const line of openLines(itemId).filter((l) => !l.job_status)) {
     if (queued.some((q) => q.order_id === line.order_id)) continue;
+    if ((shortfall.get(line.order_item_id)?.needs_printing ?? line.quantity) <= 0) continue;
     const moved = flow.advanceTo(line.order_id, 'confirmed', { source, note: `${item.name} queued from a scan` });
-    if (!moved) flow.enqueueOrder(line.order_id);  // already past confirmed: just make the job
+    // Already past confirmed: just make the job — but only for what is not
+    // already covered by the shelf or sitting in the order's bin.
+    if (!moved) flow.enqueueOrder(line.order_id, 'normal', { skipCovered: true });
     queued.push({
       order_id: line.order_id,
       order_number: line.order_number,

@@ -118,11 +118,11 @@ export default function Queue() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-primary">Print jobs</h1>
+          <h1 className="text-2xl font-bold text-primary">Print Queue</h1>
           <p className="text-sm text-gray-500">
             Every job in print order, with its pick list. Ship dates come from a{' '}
             {data.settings.turnaround_min_days}–{data.settings.turnaround_max_days} day turnaround and what is
-            already ahead of it. For what still has to be printed by product, see <b>In Queue</b>.
+            already ahead of it. For what still has to be printed by product, see <b>To Print</b>.
           </p>
         </div>
         <button className="btn-primary" onClick={() => setAdding(true)}>Add to queue</button>
