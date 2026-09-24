@@ -9,6 +9,10 @@ const { findItem } = require('./catalog-match');
  * each one off. Every scan is written down as it happens — the box is packed
  * over minutes, with interruptions, and a count that only survives while the
  * sheet is open is a count that gets lost.
+ *
+ * That count is also where the units physically are. A thing in the box, or in
+ * the order's bin waiting to be boxed, is not on the shelf any more — so every
+ * change to it moves stock, through `setAside` below and nowhere else.
  */
 
 function lineState(line) {
@@ -48,6 +52,48 @@ function packList(orderId) {
   };
 }
 
+/**
+ * Set how many of a line are set aside for its order — in its bin, or in the
+ * box — and move the shelf to match.
+ *
+ * This is the only place that figure is written, because it is two facts at
+ * once: how far the box has got, and where the units are. Four in a bin are
+ * four fewer to sell, and a shelf that says otherwise will happily promise
+ * them to somebody else.
+ *
+ * Symmetric on the way back: taking them out of the box puts them back.
+ */
+function setAside(orderItemId, quantity, { reason = 'set aside for an order', reference = null } = {}) {
+  const line = db.prepare(`
+    SELECT oi.*, o.order_number FROM order_items oi
+      JOIN orders o ON oi.order_id = o.id
+     WHERE oi.id = ?
+  `).get(orderItemId);
+  if (!line) return null;
+
+  const wanted = Number(line.quantity) || 0;
+  const before = Math.max(0, Math.min(wanted, Number(line.packed_quantity) || 0));
+  const after = Math.max(0, Math.min(wanted, Number(quantity) || 0));
+  const moved = after - before;
+
+  db.prepare('UPDATE order_items SET packed_quantity = ? WHERE id = ?').run(after, orderItemId);
+
+  // A line with no catalog product behind it — a gift note, a hand-written
+  // line — has no shelf to come off.
+  if (moved && line.item_id) {
+    db.prepare('UPDATE items SET qty_on_hand = COALESCE(qty_on_hand, 0) - ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(moved, line.item_id);
+    // Required lazily: these reach back into orders, and loading them up top
+    // would be a circle.
+    require('../routes/helpers').logStock(
+      'item', line.item_id, -moved, 'each', reason, reference || line.order_number
+    );
+    require('./inventory-sync').changed(line.item_id);
+  }
+
+  return { before, after, moved };
+}
+
 /** Tick one line off, or back on. */
 function setPacked(orderId, orderItemId, quantity) {
   const line = db.prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?')
@@ -58,15 +104,16 @@ function setPacked(orderId, orderItemId, quantity) {
     throw err;
   }
 
-  const wanted = Number(line.quantity) || 0;
-  const packed = Math.max(0, Math.min(wanted, Number(quantity) || 0));
-  db.prepare('UPDATE order_items SET packed_quantity = ? WHERE id = ?').run(packed, line.id);
+  setAside(line.id, quantity, { reason: 'packed into the box' });
   return packList(orderId);
 }
 
 /** Put everything back to nothing packed — for a box being repacked. */
 function resetPacking(orderId) {
-  db.prepare('UPDATE order_items SET packed_quantity = 0 WHERE order_id = ?').run(orderId);
+  const lines = db.prepare('SELECT id FROM order_items WHERE order_id = ?').all(orderId);
+  db.transaction(() => {
+    for (const line of lines) setAside(line.id, 0, { reason: 'taken back out of the box' });
+  })();
   return packList(orderId);
 }
 
@@ -124,8 +171,7 @@ function packScan(orderId, rawCode) {
     throw err;
   }
 
-  db.prepare('UPDATE order_items SET packed_quantity = ? WHERE id = ?')
-    .run(line.packed_quantity + 1, line.id);
+  setAside(line.id, (Number(line.packed_quantity) || 0) + 1, { reason: 'packed into the box' });
 
   const packing = packList(orderId);
   const after = packing.lines.find((l) => l.id === line.id);
@@ -143,4 +189,4 @@ function packScan(orderId, rawCode) {
   };
 }
 
-module.exports = { packList, packScan, setPacked, resetPacking };
+module.exports = { packList, packScan, setPacked, resetPacking, setAside };

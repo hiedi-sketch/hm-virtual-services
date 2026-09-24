@@ -26,7 +26,7 @@ const OPEN = "o.status NOT IN ('shipped', 'completed', 'cancelled')";
  */
 function plan() {
   const lines = db.prepare(`
-    SELECT oi.id, oi.order_id, oi.item_id, oi.quantity,
+    SELECT oi.id, oi.order_id, oi.item_id, oi.quantity, oi.packed_quantity,
            o.order_number, o.status AS order_status, o.promised_ship_date, o.order_date,
            i.name AS item_name, i.sku AS item_sku, i.qty_on_hand
       FROM order_items oi
@@ -68,7 +68,8 @@ function plan() {
   // and it is coming, so it counts as stock on its way to the shelf rather
   // than disappearing from every number in the shop.
   for (const line of lines) {
-    const surplus = (onPlate.get(line.id) || 0) - (Number(line.quantity) || 0);
+    const room = (Number(line.quantity) || 0) - Math.max(0, Number(line.packed_quantity) || 0);
+    const surplus = (onPlate.get(line.id) || 0) - Math.max(0, room);
     if (surplus > 0) incomingStock.set(line.item_id, (incomingStock.get(line.item_id) || 0) + surplus);
   }
 
@@ -82,9 +83,12 @@ function plan() {
     if (!incoming.has(line.item_id)) incoming.set(line.item_id, incomingStock.get(line.item_id) || 0);
 
     const quantity = Number(line.quantity) || 0;
-    const plated = Math.min(quantity, onPlate.get(line.id) || 0);
-    const queued = Math.min(quantity - plated, queuedUnits.get(line.id) || 0);
-    let outstanding = quantity - plated - queued;
+    // Already made and already in this order's bin or box. They came off the
+    // shelf when they went in, so they cover the line without drawing on it.
+    const packed = Math.max(0, Math.min(quantity, Number(line.packed_quantity) || 0));
+    const plated = Math.min(quantity - packed, onPlate.get(line.id) || 0);
+    const queued = Math.min(quantity - packed - plated, queuedUnits.get(line.id) || 0);
+    let outstanding = quantity - packed - plated - queued;
 
     // The shelf first, then a run already going for stock. Both mean "do not
     // print this"; only one of them means "go and pick it up".
@@ -99,6 +103,7 @@ function plan() {
     const entry = {
       ...line,
       quantity,
+      packed,
       printing: plated,
       queued,
       from_stock: fromShelf,
@@ -110,7 +115,8 @@ function plan() {
       source: outstanding > 0 ? 'print'
         : queued > 0 ? 'queued'
           : plated > 0 ? 'printing'
-            : fromShelf > 0 ? 'stock' : 'incoming',
+            : fromShelf > 0 ? 'stock'
+              : fromIncoming > 0 ? 'incoming' : 'packed',
     };
     byLine.set(line.id, entry);
 

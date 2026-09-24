@@ -68,7 +68,9 @@ function hydrate(order, projectionsById, plan = null) {
       // The three the card spells out behind the product name. They always add
       // up to what was ordered: a run going for stock is on a printer too, so
       // it counts as printing rather than as a fourth number.
-      on_hand: where?.from_stock || 0,
+      // Made and already in this order's bin, plus what the shelf is holding
+      // for it: both mean "these exist, do not print them".
+      on_hand: (where?.packed || 0) + (where?.from_stock || 0),
       needed: where ? where.needs_printing : Number(line.quantity) || 0,
       printing: where ? where.printing + where.from_incoming : 0,
       shelf_total: where ? Number(where.qty_on_hand) || 0 : null,

@@ -267,7 +267,9 @@ function putIn(orderId, { itemId = null, orderItemId = null, quantity = 1, code 
   const adding = Math.max(0, Number(quantity) || 0);
   const now = Math.min(wanted, already + adding);
 
-  db.prepare('UPDATE order_items SET packed_quantity = ? WHERE id = ?').run(now, line.id);
+  // Into the bin is off the shelf: packing owns that figure and the stock move
+  // that goes with it.
+  require('./packing').setAside(line.id, now, { reason: 'into the order bin' });
 
   const bin = forOrder(orderId);
   const name = db.prepare('SELECT name FROM items WHERE id = ?').get(line.item_id)?.name

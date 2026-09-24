@@ -438,6 +438,17 @@ the packing check reads, so a thing in the basket is already ticked off in the b
 separate tallies would be two chances to disagree, and the one that disagreed would be
 the one you found out about at the post office.
 
+**And a thing in a bin is off the shelf.** It has a customer's name on it; the shop cannot
+sell it twice. So putting units in an order's bin takes them out of stock there and then,
+writes it to the stock history, and tells Shopify the new sellable figure. Taking them back
+out puts them back. The line still reads them as *on hand* — they exist for that order —
+but nobody else can be promised them.
+
+Shipping then takes only what never went through a bin or a box. The units that did left
+the shelf when they were set aside, so a packed order ships without the shelf moving at
+all; an order boxed straight from stock still draws on it as it goes out. Either way the
+shelf is charged once.
+
 The **Bins** button at the top of every page says how many of the six are in use, and
 carries a second count — ✉ — for the parcels waiting in the Mail Bin.
 
@@ -527,7 +538,8 @@ spells it out behind the product name, small and in parentheses:
 6 × Leopard Heart Pop Tab Opener  (5 on hand, 1 needed, 0 printing)
 ```
 
-- **On hand** is the shelf: units that exist and will be picked rather than printed.
+- **On hand** is units that exist for this order and will be picked rather than printed —
+  what the shelf is holding for it, plus anything already in its bin.
 - **Needed** is what is left to print — the number the **In Queue** list and its button
   are counting.
 - **Printing** is what is on a plate now. A run going for stock counts here too, because

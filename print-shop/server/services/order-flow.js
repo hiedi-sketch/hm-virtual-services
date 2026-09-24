@@ -217,6 +217,10 @@ function startProduction(orderId, { orderItemId = null, source = 'app' } = {}) {
  * Take an order's goods out of stock, once. The event log is the record of
  * whether it has already happened, so an order shipped, put back and shipped
  * again does not draw the stock down twice.
+ *
+ * Only what has not already left. Units set aside into the order's bin or
+ * packed into its box came off the shelf at that moment — they are in a
+ * basket, not on sale — so shipping takes the remainder and nothing more.
  */
 function shipStock(orderId) {
   const already = db.prepare(`
@@ -226,7 +230,9 @@ function shipStock(orderId) {
   if (already > 0) return 0;
 
   const lines = db.prepare(`
-    SELECT oi.item_id, oi.quantity, i.qty_on_hand
+    SELECT oi.item_id,
+           MAX(0, oi.quantity - MIN(IFNULL(oi.packed_quantity, 0), oi.quantity)) AS quantity,
+           i.qty_on_hand
       FROM order_items oi JOIN items i ON oi.item_id = i.id
      WHERE oi.order_id = ? AND i.item_type <> 'tool'
   `).all(orderId);

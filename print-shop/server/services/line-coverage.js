@@ -52,7 +52,7 @@ function shelfNeededFor(itemId, lineId, wanted, plan = null) {
   for (const [id, line] of byLine) {
     if (id === lineId) break;                       // lines come in shelf order
     if (line.item_id !== itemId) continue;
-    ahead += Math.max(0, line.quantity - line.printing - line.queued);
+    ahead += Math.max(0, line.quantity - line.packed - line.printing - line.queued);
   }
   return ahead + wanted;
 }
@@ -77,11 +77,14 @@ function forLine(orderItemId, plan = null) {
     quantity,
     // A run already going for stock is on a printer too, so it counts as
     // printing rather than as a fourth number nobody asked for.
-    on_hand: where ? where.from_stock : 0,
+    // What is in this order's bin is on hand for it as surely as the shelf is.
+    on_hand: where ? where.packed + where.from_stock : 0,
     needed: where ? where.needs_printing : quantity,
     printing: where ? where.printing + where.from_incoming : 0,
-    // Context for editing: the shelf as a whole, and what is spoken for.
+    // Context for editing: the shelf as a whole, what is already set aside for
+    // this order, and what is spoken for.
     shelf_total: Number(line.qty_on_hand) || 0,
+    packed: where ? where.packed : 0,
     on_bench: onBench(line.id),
   };
 }
@@ -106,6 +109,13 @@ function setCoverage(orderItemId, { onHand = null, printing = null, reason = 'Ad
     err.status = 400;
     throw err;
   }
+  if (wantHand < before.packed) {
+    const err = new Error(
+      `${before.packed} of these are already in the bin, so on hand cannot go below that`
+    );
+    err.status = 400;
+    throw err;
+  }
   if (wantPrinting < before.on_bench) {
     const err = new Error(`${before.on_bench} of these are already on the bench, so printing cannot go below that`);
     err.status = 400;
@@ -115,7 +125,9 @@ function setCoverage(orderItemId, { onHand = null, printing = null, reason = 'Ad
   db.transaction(() => {
     // ── the shelf ──
     if (wantHand !== before.on_hand) {
-      const shelf = shelfNeededFor(before.item_id, orderItemId, wantHand);
+      // The bin's share is already made and already off the shelf, so only the
+      // rest is the shelf's job.
+      const shelf = shelfNeededFor(before.item_id, orderItemId, wantHand - before.packed);
       const change = shelf - before.shelf_total;
       db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
         .run(shelf, before.item_id);
