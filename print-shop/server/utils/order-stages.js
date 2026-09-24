@@ -3,6 +3,10 @@
  * printed ticket: scan a new order and it is confirmed, scan it again when the
  * first thing on it goes on a printer, and so on down to shipped.
  *
+ * Packing is the work, the Mail Bin is the wait, and shipped is the carrier
+ * having taken it. Keeping those apart is what lets the shop say how many
+ * parcels are standing by the door.
+ *
  * There is no queued stage. Being ordered is being in the queue — a confirmed
  * order's work is on the In Queue list from that moment, and a separate stage
  * saying so was a step that only ever moved paper.
@@ -16,7 +20,10 @@ const STAGES = [
   { key: 'in_production', label: 'Production', scan_label: 'Start production', tone: 'amber' },
   { key: 'finishing', label: 'Finishing', scan_label: 'Move to finishing', tone: 'amber' },
   { key: 'packing', label: 'Packing', scan_label: 'Move to packing', tone: 'violet' },
-  { key: 'shipped', label: 'Shipped', scan_label: 'Mark it shipped', tone: 'green' },
+  // Packed, labelled, and standing by the door. Shipped used to mean both this
+  // and gone, which made "shipped" a lie for as long as the parcel sat there.
+  { key: 'mail_bin', label: 'Mail Bin', scan_label: 'Into the Mail Bin', tone: 'teal' },
+  { key: 'shipped', label: 'Shipped', scan_label: 'Picked up by the carrier', tone: 'green' },
 ];
 
 const OFF_CHAIN = [

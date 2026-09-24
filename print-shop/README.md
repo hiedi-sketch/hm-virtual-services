@@ -419,6 +419,10 @@ From then on:
 
 - Scan the order ticket, then **Scan a bin** — the order is in that basket until it ships.
   The bin shows on the order card, so *where is 11011* is answered from the list.
+- Or pick one without the scanner: **Details** on an order card has every bin as a button,
+  with the taken ones greyed and named. Tapping the bin an order is already in takes it
+  out. That is the way to sort out yesterday from the screen, when neither the basket nor
+  the scanner is in your hand.
 - Finish a print and the panel asks straight away, while the parts are still in your hand:
   it names the bin the order lives in, and **Scan the bin** puts that run's units in it.
   Scanning the wrong basket records nothing and says which one it should be.
@@ -439,15 +443,42 @@ carries a second count — ✉ — for the parcels waiting in the Mail Bin.
 
 #### The Mail Bin
 
-The seventh bin is the one by the door. It is a bin like the others — code on the front,
-scanned the same way — with one difference: **it holds as many orders as are going out**,
-because a post office pickup is a pile of parcels rather than a single order.
+The seventh bin is the one by the door, and it is a **stage** as well as a bin:
 
-- A packed order with its postage label on goes in with **Into the Mail Bin**, on the sheet
-  you get from scanning its ticket. The order stays at *Packing* — it has not shipped yet,
-  it is only standing by the door. A tracking label scanned but not yet saved goes on in
-  the same move. *Mark it shipped* is still right there for the days you walk it to the
-  counter yourself.
+| Stage | What it means |
+| --- | --- |
+| **Packing** | the box is being filled |
+| **Mail Bin** | packed and labelled, waiting for the carrier |
+| **Shipped** | the carrier has taken it |
+
+Shipped used to mean both of the last two, which made it a lie for as long as a parcel sat
+by the door. Now the stage says where the parcel actually is, and the Orders page has a
+**Mail Bin** tab for exactly the pile that is waiting.
+
+**The stage and the bin are the same fact**, so neither is set without the other. Moving an
+order on from Packing puts it in the Mail Bin; putting it in the Mail Bin moves it to that
+stage; taking it out, or moving it to a numbered bin, puts it back to Packing. Nothing has
+to be kept in step by hand.
+
+**Stock comes out when the carrier takes it**, not when the box is sealed — but an order
+waiting in the Mail Bin still holds its claim on the shelf, so those units are never handed
+to another order in the meantime.
+
+**A parcel marked shipped that never left** goes back: put it in the Mail Bin and it
+returns to that stage, from the order's details or by scanning. Its stock stays out, since
+it is in a sealed box either way, and shipping it again does not draw the shelf down twice.
+A shipped order is still refused from a numbered bin — that would mean it is being made
+again.
+
+It is a bin like the others — code on the front, scanned the same way — with one
+difference: **it holds as many orders as are going out**, because a post office pickup is a
+pile of parcels rather than a single order.
+
+- A packed order goes in with **Into the Mail Bin** — the order card's own button, or the
+  sheet you get from scanning its ticket. That is where the postage label is asked for now,
+  since the label goes on as the box is sealed; by the time the carrier comes, nothing
+  needs typing. *Taking it to the counter — mark it shipped* is the second tap, for the
+  days you walk it there yourself.
 - Scan the Mail Bin to see the pile: every parcel in it, oldest first, with its tracking
   number, or a plain **No tracking** warning for one that has none.
 - When the post office has been, **Picked up — ship all** empties the bin and marks every

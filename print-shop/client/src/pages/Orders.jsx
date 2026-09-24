@@ -7,6 +7,7 @@ import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
 import OrderTicket from '../components/OrderTicket';
 import ShipDialog from '../components/ShipDialog';
 import LineCoverage, { CoverageNote } from '../components/LineCoverage';
+import BinPicker from '../components/BinPicker';
 import { useScanner } from '../components/ScanContext';
 
 // How a single product's print job reads on the order card.
@@ -35,6 +36,7 @@ const FALLBACK_STAGES = [
   { key: 'in_production', label: 'Production', tone: 'amber' },
   { key: 'finishing', label: 'Finishing', tone: 'amber' },
   { key: 'packing', label: 'Packing', tone: 'violet' },
+  { key: 'mail_bin', label: 'Mail Bin', tone: 'teal' },
   { key: 'shipped', label: 'Shipped', tone: 'green' },
 ];
 
@@ -250,9 +252,12 @@ export default function Orders() {
   }
 
   async function advance(order, body = {}) {
-    // Shipping is the one move that wants something from her first — the label
-    // in her hand. Every other stage just happens.
-    if (order.next_stage === 'shipped' && !body.tracking && !body.skipTracking) {
+    // The label goes on as the box is sealed, which is the move into the Mail
+    // Bin. By the time the carrier takes it the label is already on, so it is
+    // only asked for when there is none.
+    const wantsLabel = order.next_stage === 'mail_bin'
+      || (order.next_stage === 'shipped' && !order.tracking);
+    if (wantsLabel && !body.tracking && !body.skipTracking) {
       setShipping(order);
       return;
     }
@@ -270,7 +275,10 @@ export default function Orders() {
     const order = shipping;
     setShipBusy(true);
     try {
-      const { message } = await printApi.advanceOrder(order.id, { to: 'shipped', tracking: code || null });
+      const { message } = await printApi.advanceOrder(order.id, {
+        to: order.next_stage || 'shipped',
+        tracking: code || null,
+      });
       toast.success(message);
       setShipping(null);
       load();
@@ -551,7 +559,9 @@ export default function Orders() {
               <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
                 {o.next_stage && (
                   <button className="btn-primary !py-1 !px-3" onClick={() => advance(o)}>
-                    Move to {labelOf(o.next_stage).toLowerCase()}
+                    {/* The stage says what the move is for — "Into the Mail
+                        Bin" rather than "Move to mail bin". */}
+                    {stageOf(o.next_stage)?.scan_label || `Move to ${labelOf(o.next_stage).toLowerCase()}`}
                   </button>
                 )}
                 {/* Still offered on a new order: it is the one-press way to get
@@ -599,6 +609,13 @@ export default function Orders() {
 
               {expanded === o.id && (
                 <div className="mt-3 border-t border-linen pt-3 space-y-1 text-xs">
+                  {/* Where the order is sitting. Scanning is faster at the
+                      shelf; this is for sorting things out at the screen. */}
+                  {!['completed', 'cancelled'].includes(o.status) && (
+                    <div className="pb-2 mb-2 border-b border-linen">
+                      <BinPicker order={o} onChanged={() => { load(); refresh(); }} />
+                    </div>
+                  )}
                   {o.items.map((line) => (
                     <div key={line.id} className="flex items-center gap-2">
                       <span className="font-semibold">{line.quantity} ×</span>

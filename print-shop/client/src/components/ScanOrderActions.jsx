@@ -19,9 +19,10 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
   const order = match.order;
   const next = order.next_stage_info;
 
-  // The label is in her hand as the parcel is sealed, so shipping by scanning
-  // the ticket asks for it in the same breath the app does.
-  const shippingNext = order.next_stage === 'shipped';
+  // The label is in her hand as the parcel is sealed, which is the move into
+  // the Mail Bin. By the time the carrier takes it, it is already on.
+  const shippingNext = order.next_stage === 'mail_bin'
+    || (order.next_stage === 'shipped' && !order.tracking);
 
   async function move(to) {
     setBusy(true);
@@ -50,26 +51,6 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
       await onChanged?.();
     } catch (err) {
       toast.error(describeError(err, 'Could not save that tracking number'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  /**
-   * Packed, labelled, and standing by the door: into the Mail Bin it goes,
-   * still at Packing, until the post office actually takes it. A label scanned
-   * on this sheet but not yet saved goes on in the same move.
-   */
-  async function toMailBin() {
-    setBusy(true);
-    try {
-      if (tracking) await printApi.setTracking(order.id, tracking);
-      const { message } = await printApi.toMailBin(order.id);
-      setTracking('');
-      toast.success(message);
-      await onChanged?.();
-    } catch (err) {
-      toast.error(describeError(err, 'Could not put it in the Mail Bin'));
     } finally {
       setBusy(false);
     }
@@ -179,18 +160,9 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
 
       {next ? (
         <>
-          {/* A packed parcel is usually not shipped the moment it is packed —
-              it waits by the door for the post office. Marking it shipped is
-              still there for the days she drops it off herself. */}
-          {order.status === 'packing' && order.bin?.kind !== 'mail' && (
-            <button
-              disabled={busy}
-              onClick={toMailBin}
-              className="btn-secondary w-full !py-3 text-sm"
-            >
-              Into the Mail Bin
-            </button>
-          )}
+          {/* Packing now leads to the Mail Bin, so the one big button already
+              says it. Straight out of the door is the second tap, for the days
+              she walks it to the counter herself. */}
           <button
             disabled={busy}
             onClick={() => move(null)}
@@ -198,6 +170,15 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
           >
             {busy ? 'Moving…' : next.scan_label}
           </button>
+          {order.status === 'packing' && (
+            <button
+              disabled={busy}
+              onClick={() => move('shipped')}
+              className="btn-ghost w-full !py-2 text-sm"
+            >
+              Taking it to the counter — mark it shipped
+            </button>
+          )}
         </>
       ) : order.status === 'shipped' ? (
         // Shipped is the end of the chain, not the end of the order: it is done

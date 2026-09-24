@@ -110,23 +110,32 @@ function forOrder(orderId) {
  * An order already in another bin is moved rather than duplicated, because it
  * is one physical pile of things and it can only be in one place.
  */
-function assign(orderId, code) {
+function assign(orderId, code, { skipStage = false } = {}) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order) {
     const err = new Error('Order not found');
     err.status = 404;
     throw err;
   }
-  if (['shipped', 'completed', 'cancelled'].includes(order.status)) {
-    const err = new Error(`${order.order_number} has already gone — it does not need a bin`);
-    err.status = 400;
-    throw err;
-  }
-
   const bin = db.prepare('SELECT * FROM bins WHERE code = ? AND is_active = 1').get(String(code || '').trim());
   if (!bin) {
     const err = new Error(`${String(code || '').trim() || 'That code'} is not one of the bins`);
     err.status = 404;
+    throw err;
+  }
+
+  if (['completed', 'cancelled'].includes(order.status)) {
+    const err = new Error(`${order.order_number} is ${order.status} — it does not need a bin`);
+    err.status = 400;
+    throw err;
+  }
+  // A shipped order back in the Mail Bin is the correction for a parcel marked
+  // shipped that never actually left, so that one is allowed and moves the
+  // order back. Into a numbered bin it would mean the order is being made
+  // again, which it is not.
+  if (order.status === 'shipped' && bin.kind !== 'mail') {
+    const err = new Error(`${order.order_number} has already gone — it does not need a bin`);
+    err.status = 400;
     throw err;
   }
 
@@ -148,6 +157,29 @@ function assign(orderId, code) {
   const from = order.bin_id ? db.prepare('SELECT label FROM bins WHERE id = ?').get(order.bin_id) : null;
   db.prepare('UPDATE orders SET bin_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(bin.id, order.id);
 
+  // A parcel in the Mail Bin is packed and waiting for the carrier, which is a
+  // stage of its own — so putting it there says so. advanceTo only ever moves
+  // forward, so an order already past this is left alone.
+  if (bin.kind !== 'mail' && !skipStage && order.status === 'mail_bin') {
+    // Out of the Mail Bin and back on the making shelf: it is not waiting for
+    // the carrier any more, whatever the stage said a moment ago.
+    require('./order-flow').setStatus(order.id, 'packing', {
+      source: 'bin',
+      note: `Taken out of the Mail Bin into ${bin.label}`,
+    });
+  }
+
+  if (bin.kind === 'mail' && !skipStage) {
+    const flow = require('./order-flow');
+    if (order.status === 'shipped') {
+      // Said too early. The goods stay out of stock — they are in a sealed box
+      // either way — but the order is honest about where the box is.
+      flow.setStatus(order.id, 'mail_bin', { source: 'bin', note: 'Back in the Mail Bin — it had not left' });
+    } else {
+      flow.advanceTo(order.id, 'mail_bin', { source: 'bin', note: `Into ${bin.label}` });
+    }
+  }
+
   return {
     bin: byId(bin.id),
     moved_from: from?.label || null,
@@ -157,12 +189,28 @@ function assign(orderId, code) {
   };
 }
 
-/** Take an order out of its bin — on shipping, or because she emptied it. */
-function release(orderId) {
+/**
+ * Take an order out of its bin — on shipping, or because she emptied it.
+ *
+ * `keepStage` is for shipping, which calls this on its way to setting the
+ * status: the row still says mail_bin at that moment, and without it the order
+ * would be sent back to packing on its way out of the door.
+ */
+function release(orderId, { keepStage = false } = {}) {
   const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
   if (!order?.bin_id) return null;
-  const bin = db.prepare('SELECT label FROM bins WHERE id = ?').get(order.bin_id);
+  const bin = db.prepare('SELECT * FROM bins WHERE id = ?').get(order.bin_id);
   db.prepare('UPDATE orders SET bin_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(order.id);
+
+  // Emptied out of the Mail Bin by hand: it is packed, but nothing is waiting
+  // for the carrier any more.
+  if (!keepStage && bin?.kind === 'mail' && order.status === 'mail_bin') {
+    require('./order-flow').setStatus(order.id, 'packing', {
+      source: 'bin',
+      note: 'Taken out of the Mail Bin',
+    });
+  }
+
   return { label: bin?.label || null };
 }
 

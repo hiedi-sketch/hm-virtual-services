@@ -3,13 +3,13 @@ import Modal from './Modal';
 import { useScanner } from './ScanContext';
 
 /**
- * The last thing that happens to an order: it goes in the post.
+ * The label going on the box.
  *
- * The label is already printed and in her hand at that moment, so this asks for
- * it rather than making her come back later — one scan, and the order carries a
- * link the customer's question can be answered from. Shipping without one is
- * still a single tap, because a shop that posts before it prints labels should
- * not be held up by a box it cannot fill in.
+ * That happens as the box is sealed, which is the move into the Mail Bin
+ * rather than the move out of the door — so this is asked for there, and the
+ * carrier taking the parcel later needs nothing typed at all. Going on without
+ * a label is still a single tap, because a shop that posts before it prints
+ * labels should not be held up by a box it cannot fill in.
  */
 export default function ShipDialog({ open, order, onClose, onShip, busy }) {
   const { scan } = useScanner();
@@ -19,6 +19,14 @@ export default function ShipDialog({ open, order, onClose, onShip, busy }) {
 
   if (!order) return null;
 
+  // Into the Mail Bin, or straight out of the door: the same scan, different
+  // words, because the button should say what it is about to do.
+  const toBin = order.next_stage === 'mail_bin';
+  const title = toBin ? `Label ${order.order_number}` : `Ship ${order.order_number}`;
+  const go = toBin
+    ? (code.trim() ? 'Into the Mail Bin' : 'Into the Mail Bin without tracking')
+    : (code.trim() ? 'Ship it' : 'Ship without tracking');
+
   const scanLabel = () => scan({
     title: 'Scan the tracking label',
     hint: 'Point the camera at the barcode on the postage label',
@@ -26,10 +34,11 @@ export default function ShipDialog({ open, order, onClose, onShip, busy }) {
   });
 
   return (
-    <Modal open={open} onClose={onClose} title={`Ship ${order.order_number}`} size="sm">
+    <Modal open={open} onClose={onClose} title={title} size="sm">
       <div className="space-y-4">
         <p className="text-sm text-gray-600">
           Scan the barcode on the postage label and this order will carry a tracking link.
+          {toBin && ' It then waits in the Mail Bin until the carrier takes it.'}
         </p>
 
         <button type="button" onClick={scanLabel} className="btn-primary w-full !py-4 text-base">
@@ -59,7 +68,7 @@ export default function ShipDialog({ open, order, onClose, onShip, busy }) {
             onClick={() => onShip(code.trim())}
             className="btn-primary flex-1 !py-3"
           >
-            {busy ? 'Shipping…' : code.trim() ? 'Ship it' : 'Ship without tracking'}
+            {busy ? 'Saving…' : go}
           </button>
           <button type="button" onClick={onClose} className="btn-ghost">Cancel</button>
         </div>

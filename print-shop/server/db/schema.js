@@ -148,7 +148,7 @@ function createSchema() {
       order_type TEXT NOT NULL DEFAULT 'retail' CHECK(order_type IN ('retail','wholesale')),
       -- The stages a printed order ticket is scanned through, plus the two
       -- that are chosen by hand rather than arrived at. See utils/order-stages.
-      status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','confirmed','in_production','finishing','packing','shipped','completed','cancelled')),
+      status TEXT NOT NULL DEFAULT 'new' CHECK(status IN ('new','confirmed','in_production','finishing','packing','mail_bin','shipped','completed','cancelled')),
       order_date DATE,
       promised_ship_date DATE,
       shipped_date DATE,
@@ -364,6 +364,7 @@ function createSchema() {
   migrateOrderStages();
   dropQueuedStage();
   addSalesChannel('TikTok', 'channels_tiktok_added');
+  addMailBinStage();
   seedBins(6);
   seedMailBin();
   backfillOrderBarcodes();
@@ -570,6 +571,48 @@ function seedBins(count) {
  * parcels, not a single order. Added by code rather than by number so it keeps
  * its place if the shop ever has more or fewer of the numbered bins.
  */
+/**
+ * Add the Mail Bin stage between packing and shipped.
+ *
+ * Shipped used to mean two different things — packed and standing by the door,
+ * and actually collected — and an order could sit in the first for a day while
+ * the app said the second. SQLite cannot widen a CHECK, so the table is
+ * rebuilt around it; nothing moves stage, because nothing is known to be
+ * waiting yet.
+ */
+function addMailBinStage() {
+  const current = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='orders'").get()?.sql;
+  if (!current || current.includes("'mail_bin'")) return;
+
+  const STATUSES = "'new','confirmed','in_production','finishing','packing','mail_bin','shipped','completed','cancelled'";
+  const rebuilt = current
+    .replace(/CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?["'`[]?orders["'`\]]?/i, 'CREATE TABLE orders_migrating')
+    .replace(/CHECK\s*\(\s*status\s+IN\s*\([^)]*\)\s*\)/i, `CHECK(status IN (${STATUSES}))`);
+
+  if (!rebuilt.includes('orders_migrating') || !rebuilt.includes("'mail_bin'")) {
+    console.error('Could not add the Mail Bin stage — leaving the orders table as it is.');
+    return;
+  }
+
+  const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => `"${c.name}"`).join(', ');
+
+  const hadForeignKeys = db.pragma('foreign_keys', { simple: true });
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  try {
+    db.transaction(() => {
+      db.exec(rebuilt);
+      db.exec(`INSERT INTO orders_migrating (${columns}) SELECT ${columns} FROM orders`);
+      db.exec('DROP TABLE orders');
+      db.exec('ALTER TABLE orders_migrating RENAME TO orders');
+    })();
+    console.log('Mail Bin stage added between packing and shipped.');
+  } finally {
+    db.pragma('legacy_alter_table = OFF');
+    if (hadForeignKeys) db.pragma('foreign_keys = ON');
+  }
+}
+
 function seedMailBin() {
   const existing = db.prepare("SELECT id, code FROM bins WHERE kind = 'mail' OR code = 'BIN-MAIL'").get();
   if (existing) {

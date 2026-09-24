@@ -106,8 +106,22 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
     // on the shelf; without this the on-hand figure only ever climbs.
     if (to === 'shipped') {
       shipStock(order.id);
-      // The basket is free the moment the parcel leaves it.
-      require('./bins').release(order.id);
+      // The basket is free the moment the parcel leaves it. The stage is about
+      // to become shipped, so this must not send it back to packing on the way.
+      require('./bins').release(order.id, { keepStage: true });
+    }
+
+    // Reaching the Mail Bin stage is the parcel going in the Mail Bin. The
+    // stage and the shelf are the same fact, so one is never set without the
+    // other; skipStage stops it asking to be moved to the stage it is at.
+    if (to === 'mail_bin') {
+      const bins = require('./bins');
+      const box = bins.mailBin();
+      // Out of whatever bin it was being made in, too: the parcel is by the
+      // door now, and assign moves rather than copies.
+      if (box && bins.forOrder(order.id)?.kind !== 'mail') {
+        try { bins.assign(order.id, box.code, { skipStage: true }); } catch { /* it can go in by hand */ }
+      }
     }
 
     const shippedDate = to === 'shipped'
