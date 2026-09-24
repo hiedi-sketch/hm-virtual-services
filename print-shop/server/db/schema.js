@@ -227,6 +227,9 @@ function createSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       code TEXT NOT NULL UNIQUE,
       label TEXT NOT NULL,
+      -- An 'order' bin holds one order while it is being made. The 'mail' bin
+      -- holds every parcel waiting for the post office, so it takes many.
+      kind TEXT NOT NULL DEFAULT 'order' CHECK(kind IN ('order','mail')),
       position INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
@@ -351,6 +354,8 @@ function createSchema() {
     'ALTER TABLE order_items ADD COLUMN packed_quantity REAL NOT NULL DEFAULT 0',
     // Which bin this order is sitting in until it ships.
     'ALTER TABLE orders ADD COLUMN bin_id INTEGER REFERENCES bins(id)',
+    // Whether a bin holds one order or a shelf of outgoing parcels.
+    "ALTER TABLE bins ADD COLUMN kind TEXT NOT NULL DEFAULT 'order'",
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
@@ -360,6 +365,7 @@ function createSchema() {
   dropQueuedStage();
   addSalesChannel('TikTok', 'channels_tiktok_added');
   seedBins(6);
+  seedMailBin();
   backfillOrderBarcodes();
 
   // Indexes over the columns added above, once they are guaranteed to exist.
@@ -553,6 +559,36 @@ function seedBins(count) {
     for (let n = 1; n <= count; n += 1) insert.run(`BIN-${n}`, `Bin ${n}`, n);
   })();
   console.log(`${count} bins created.`);
+}
+
+/**
+ * The bin by the door: where a packed, labelled parcel waits for the post
+ * office run.
+ *
+ * It is a bin like the others — it has a code on the front and it is scanned —
+ * but it holds many orders rather than one, because a pickup is a pile of
+ * parcels, not a single order. Added by code rather than by number so it keeps
+ * its place if the shop ever has more or fewer of the numbered bins.
+ */
+function seedMailBin() {
+  const existing = db.prepare("SELECT id, code FROM bins WHERE kind = 'mail' OR code = 'BIN-MAIL'").get();
+  if (existing) {
+    // An earlier build gave it the code BIN-MAIL. A longer code means a denser
+    // barcode on the same 2" label — 12 mil bars against the numbered bins'
+    // 18 — so it is shortened to match them. The label she reads is unchanged.
+    if (existing.code !== 'BIN-M') {
+      try {
+        db.prepare("UPDATE bins SET code = 'BIN-M', kind = 'mail' WHERE id = ?").run(existing.id);
+        console.log('Mail Bin code shortened to BIN-M — reprint its barcode label.');
+      } catch { /* something already holds that code */ }
+    }
+    return;
+  }
+
+  const after = db.prepare('SELECT MAX(position) AS last FROM bins').get().last || 0;
+  db.prepare("INSERT INTO bins (code, label, kind, position) VALUES ('BIN-M', 'Mail Bin', 'mail', ?)")
+    .run(after + 1);
+  console.log('Mail Bin created.');
 }
 
 function backfillOrderBarcodes() {

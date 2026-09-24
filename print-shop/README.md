@@ -168,7 +168,8 @@ actually hit given what is already queued.
 - Scanning an **order ticket** moves that order a stage on, and one at Packing brings up
   the box to check off first. See *Order tickets and the six stages* above.
 - Scanning a **bin** (`BIN-1`…`BIN-6`) says which order is in that basket and how much of
-  it has been made. See *Bins: where an order lives* below.
+  it has been made; scanning the **Mail Bin** (`BIN-M`) lists the parcels waiting for the
+  post office. See *Bins: where an order lives* below.
 - Vendor barcodes (the UPC on the manufacturer's packaging) can be stored per item, so
   scanning a box you just opened finds the right record.
 - **Scanning something the shop has never seen** offers to add it there and then — a
@@ -401,7 +402,7 @@ An order is rarely made in one go. A print today, another tomorrow, something of
 shelf on Friday — and all of it has to sit somewhere findable in the meantime. So the
 shop has six baskets, each with its code on the front, and an order goes in one.
 
-**Print labels** on the Bins panel prints twelve labels on **2″ × 1″ label stock** — two
+**Print labels** on the Bins panel prints fourteen labels on **2″ × 1″ label stock** — two
 for each bin. The first is the bin's name filling the label, to read from across the room;
 the second is the barcode filling the label, with the short name (`B1`) tucked in small so
 a label face down in a drawer can still be told apart. They come out in pairs, so each
@@ -433,7 +434,34 @@ the packing check reads, so a thing in the basket is already ticked off in the b
 separate tallies would be two chances to disagree, and the one that disagreed would be
 the one you found out about at the post office.
 
-The **Bins** button at the top of every page says how many of the six are in use.
+The **Bins** button at the top of every page says how many of the six are in use, and
+carries a second count — ✉ — for the parcels waiting in the Mail Bin.
+
+#### The Mail Bin
+
+The seventh bin is the one by the door. It is a bin like the others — code on the front,
+scanned the same way — with one difference: **it holds as many orders as are going out**,
+because a post office pickup is a pile of parcels rather than a single order.
+
+- A packed order with its postage label on goes in with **Into the Mail Bin**, on the sheet
+  you get from scanning its ticket. The order stays at *Packing* — it has not shipped yet,
+  it is only standing by the door. A tracking label scanned but not yet saved goes on in
+  the same move. *Mark it shipped* is still right there for the days you walk it to the
+  counter yourself.
+- Scan the Mail Bin to see the pile: every parcel in it, oldest first, with its tracking
+  number, or a plain **No tracking** warning for one that has none.
+- When the post office has been, **Picked up — ship all** empties the bin and marks every
+  one of them shipped in a single move, taking the stock out and stamping the shipped date
+  as any other shipping does. If they only took some, **Only some of them went** ticks off
+  the ones that did.
+
+Emptying the bin and shipping the orders are the same event, which is why they are one
+action. An order that cannot ship — already gone, or cancelled — is left in the bin and
+named, rather than the whole pickup failing because of it.
+
+The six numbered bins still hold one order each, and say whose it is if you try to put a
+second in. The Mail Bin is the only exception, and it is the only bin where "empty it"
+means something.
 
 ### Packing a box
 

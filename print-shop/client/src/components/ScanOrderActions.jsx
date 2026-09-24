@@ -55,6 +55,26 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
     }
   }
 
+  /**
+   * Packed, labelled, and standing by the door: into the Mail Bin it goes,
+   * still at Packing, until the post office actually takes it. A label scanned
+   * on this sheet but not yet saved goes on in the same move.
+   */
+  async function toMailBin() {
+    setBusy(true);
+    try {
+      if (tracking) await printApi.setTracking(order.id, tracking);
+      const { message } = await printApi.toMailBin(order.id);
+      setTracking('');
+      toast.success(message);
+      await onChanged?.();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not put it in the Mail Bin'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // `keepMatch` brings her back to this sheet with the order still on it.
   const scanLabel = (onDone_) => scan({
     title: 'Scan the tracking label',
@@ -158,13 +178,27 @@ export default function ScanOrderActions({ match, stages, onChanged, onDone }) {
       )}
 
       {next ? (
-        <button
-          disabled={busy}
-          onClick={() => move(null)}
-          className="btn-primary w-full !py-4 text-base"
-        >
-          {busy ? 'Moving…' : next.scan_label}
-        </button>
+        <>
+          {/* A packed parcel is usually not shipped the moment it is packed —
+              it waits by the door for the post office. Marking it shipped is
+              still there for the days she drops it off herself. */}
+          {order.status === 'packing' && order.bin?.kind !== 'mail' && (
+            <button
+              disabled={busy}
+              onClick={toMailBin}
+              className="btn-secondary w-full !py-3 text-sm"
+            >
+              Into the Mail Bin
+            </button>
+          )}
+          <button
+            disabled={busy}
+            onClick={() => move(null)}
+            className="btn-primary w-full !py-4 text-base"
+          >
+            {busy ? 'Moving…' : next.scan_label}
+          </button>
+        </>
       ) : order.status === 'shipped' ? (
         // Shipped is the end of the chain, not the end of the order: it is done
         // when it has arrived and nobody has written in about it.

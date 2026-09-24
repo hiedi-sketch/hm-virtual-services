@@ -30,9 +30,9 @@ const ACTIONS = {
   ],
 };
 
-function ResultCard({ match }) {
+function ResultCard({ match, onChanged }) {
   if (match.type === 'order') return <OrderResultCard order={match.order} />;
-  if (match.type === 'bin') return <ScanBinCard bin={match.bin} />;
+  if (match.type === 'bin') return <ScanBinCard bin={match.bin} onChanged={onChanged} />;
 
   if (match.type === 'filament' || match.type === 'filament_spool') {
     const f = match.filament;
@@ -252,7 +252,15 @@ export function ScanProvider({ children, onStockChange }) {
                 />
               ) : (
               <>
-              <ResultCard match={match} />
+              <ResultCard
+                match={match}
+                onChanged={async () => {
+                  onStockChange?.();
+                  // Re-read the same code: a bin emptied by the post office is
+                  // a different bin than the one on screen a moment ago.
+                  try { setMatch(await printApi.scanLookup(match.code)); } catch { /* keep what we have */ }
+                }}
+              />
 
               {isOrder ? (
                 <ScanOrderActions

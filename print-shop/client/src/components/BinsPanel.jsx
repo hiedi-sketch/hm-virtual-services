@@ -47,11 +47,17 @@ export default function BinsPanel({ open, onClose, onChanged }) {
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <p className="font-bold text-primary">{bin.label}</p>
                   <span className="font-mono text-[11px] text-gray-400">{bin.code}</span>
-                  {bin.empty
-                    ? <Pill tone="gray">Empty</Pill>
-                    : <Pill tone={bin.contents?.complete ? 'green' : 'amber'}>
-                        {bin.contents?.complete ? 'All in' : `${bin.contents?.in_bin} of ${bin.contents?.total} in`}
-                      </Pill>}
+                  {bin.kind === 'mail' ? (
+                    <Pill tone={bin.waiting ? 'amber' : 'gray'}>
+                      {bin.waiting ? `${bin.waiting} waiting for the post` : 'Empty'}
+                    </Pill>
+                  ) : bin.empty ? (
+                    <Pill tone="gray">Empty</Pill>
+                  ) : (
+                    <Pill tone={bin.contents?.complete ? 'green' : 'amber'}>
+                      {bin.contents?.complete ? 'All in' : `${bin.contents?.in_bin} of ${bin.contents?.total} in`}
+                    </Pill>
+                  )}
                 </div>
                 {bin.order && (
                   <p className="text-sm mt-0.5">
@@ -60,6 +66,13 @@ export default function BinsPanel({ open, onClose, onChanged }) {
                     {bin.order.promised_ship_date && (
                       <span className="text-gray-500"> · due {shortDate(bin.order.promised_ship_date)}</span>
                     )}
+                  </p>
+                )}
+                {/* The mail bin is a pile going out, so it names the parcels
+                    rather than the one order a numbered bin holds. */}
+                {bin.kind === 'mail' && bin.orders?.length > 0 && (
+                  <p className="text-sm mt-0.5 text-gray-500 truncate">
+                    {bin.orders.map((o) => o.order_number).join(', ')}
                   </p>
                 )}
               </div>

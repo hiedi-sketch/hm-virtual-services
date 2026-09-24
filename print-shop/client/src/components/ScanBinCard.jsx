@@ -1,5 +1,6 @@
 import { Pill } from './ui';
 import { shortDate } from '../api/print';
+import ScanMailBin from './ScanMailBin';
 
 /**
  * A bin scanned on its own: what is in it, and how far along it is.
@@ -7,7 +8,11 @@ import { shortDate } from '../api/print';
  * The question a basket answers when you pick it up is "whose is this, and is
  * it ready to go?" — so that is what the sheet leads with.
  */
-export default function ScanBinCard({ bin }) {
+export default function ScanBinCard({ bin, onChanged }) {
+  // The Mail Bin holds a pile going out rather than one order being made, so
+  // it answers a different question and gets its own card.
+  if (bin.kind === 'mail') return <ScanMailBin bin={bin} onChanged={onChanged} />;
+
   const order = bin.order;
   const contents = bin.contents;
 

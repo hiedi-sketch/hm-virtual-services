@@ -166,15 +166,26 @@ function board() {
   };
 }
 
-/** Bins in use, out of the bins there are. */
+/**
+ * Bins in use, out of the bins there are — counting only the ones that hold a
+ * single order. The Mail Bin is never "full", so it is reported as what it
+ * actually is: how many parcels are waiting for the post office.
+ */
 function binSummary() {
-  const total = db.prepare('SELECT COUNT(*) AS n FROM bins WHERE is_active = 1').get().n;
+  const total = db.prepare("SELECT COUNT(*) AS n FROM bins WHERE is_active = 1 AND kind = 'order'").get().n;
   const used = db.prepare(`
     SELECT COUNT(DISTINCT b.id) AS n FROM bins b
       JOIN orders o ON o.bin_id = b.id
-     WHERE b.is_active = 1 AND o.status NOT IN ('shipped', 'completed', 'cancelled')
+     WHERE b.is_active = 1 AND b.kind = 'order'
+       AND o.status NOT IN ('shipped', 'completed', 'cancelled')
   `).get().n;
-  return { total, used, free: Math.max(0, total - used) };
+  const mail = db.prepare(`
+    SELECT COUNT(*) AS n FROM orders o
+      JOIN bins b ON o.bin_id = b.id
+     WHERE b.is_active = 1 AND b.kind = 'mail'
+       AND o.status NOT IN ('shipped', 'completed', 'cancelled')
+  `).get().n;
+  return { total, used, free: Math.max(0, total - used), mail };
 }
 
 module.exports = { printingNow, inQueue, board };

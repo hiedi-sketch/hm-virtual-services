@@ -104,13 +104,23 @@ function ProductionButtons({ refreshKey, onChanged, dark = false }) {
       <button
         onClick={() => setBinsOpen(true)}
         className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${base}`}
-        title={binsInUse ? `${binsInUse.used} of ${binsInUse.total} bins in use` : 'Which order is in which basket'}
+        title={binsInUse
+          ? `${binsInUse.used} of ${binsInUse.total} bins in use`
+            + (binsInUse.mail ? `, ${binsInUse.mail} waiting for the post` : '')
+          : 'Which order is in which basket'}
       >
         <span aria-hidden>🧺</span>
         <span>Bins</span>
         {binsInUse?.used > 0 && (
           <span className={chip(dark ? 'bg-teal-300 text-teal-900' : 'bg-teal-100 text-teal-800')}>
             {binsInUse.used}/{binsInUse.total}
+          </span>
+        )}
+        {/* Parcels standing by the door are worth their own count: they are
+            done, and only waiting on someone else. */}
+        {binsInUse?.mail > 0 && (
+          <span className={chip(dark ? 'bg-amber-300 text-amber-900' : 'bg-amber-100 text-amber-800')}>
+            ✉ {binsInUse.mail}
           </span>
         )}
       </button>

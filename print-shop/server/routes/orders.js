@@ -290,7 +290,16 @@ router.post('/:id/bin', (req, res) => {
       });
     }
 
-    const result = bins.assign(Number(req.params.id), req.body.code);
+    // The mail bin is asked for by what it is rather than by its code, since
+    // the button that sends a packed order there has no bin list to hand.
+    let code = req.body.code;
+    if (req.body.mail) {
+      const box = bins.mailBin();
+      if (!box) return res.status(404).json({ error: 'There is no Mail Bin' });
+      code = box.code;
+    }
+
+    const result = bins.assign(Number(req.params.id), code);
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     const { projections } = orderProjections();
     res.json({

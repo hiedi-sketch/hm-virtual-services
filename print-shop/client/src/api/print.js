@@ -94,8 +94,12 @@ export const printApi = {
   packing: (id) => unwrap(api.get(`/orders/${id}/packing`)),
   bins: () => unwrap(api.get('/bins')),
   assignBin: (id, code) => api.post(`/orders/${id}/bin`, { code }).then((r) => r.data),
+  toMailBin: (id) => api.post(`/orders/${id}/bin`, { mail: true }).then((r) => r.data),
   clearBin: (id) => api.post(`/orders/${id}/bin`, { clear: true }).then((r) => r.data),
   putInBin: (id, body) => api.post(`/orders/${id}/bin/put`, body).then((r) => r.data),
+  binPickedUp: (code, orderIds = null) =>
+    api.post(`/bins/${encodeURIComponent(code)}/picked-up`, orderIds ? { order_ids: orderIds } : {})
+      .then((r) => r.data),
   packScan: (id, code) => api.post(`/orders/${id}/packing/scan`, { code }).then((r) => r.data),
   setPacked: (id, body) => unwrap(api.put(`/orders/${id}/packing`, body)),
   startProduction: (id, body) => api.post(`/orders/${id}/production`, body || {}).then((r) => r.data),

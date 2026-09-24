@@ -26,10 +26,12 @@ const LABEL_H = 1;
  */
 const QUIET = 0.2;
 
-/** "Bin 1" → "B1": what fits on a barcode label without crowding the bars. */
+/** "Bin 1" → "B1", "Mail Bin" → "MAIL": short enough not to crowd the bars. */
 function shortName(bin) {
-  const digits = String(bin.label || bin.code || '').replace(/\D/g, '');
-  return digits ? `B${digits}` : bin.code;
+  const label = String(bin.label || bin.code || '');
+  const digits = label.replace(/\D/g, '');
+  if (digits) return `B${digits}`;
+  return label.split(/\s+/)[0].toUpperCase().slice(0, 6) || bin.code;
 }
 
 /** Big, but never wider than the label — a renamed bin shrinks to fit. */

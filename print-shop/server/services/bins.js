@@ -12,6 +12,11 @@ const db = require('../db/database');
  * A bin holds one order at a time — that is the whole point of a bin — so
  * putting an order in an occupied one says whose it is rather than quietly
  * taking it over.
+ *
+ * The Mail Bin is the exception, and the only one. It is the bin by the door:
+ * packed and labelled parcels wait in it for the post office run, so it holds
+ * as many orders as are going out. Emptying it is the pickup — everything in
+ * it is on the van, which is the moment those orders are shipped.
  */
 
 /** Orders that are still using their bin. A shipped one has left. */
@@ -19,6 +24,8 @@ const HOLDING = "o.status NOT IN ('shipped', 'completed', 'cancelled')";
 
 function binRow(bin) {
   if (!bin) return null;
+  if (bin.kind === 'mail') return mailBinRow(bin);
+
   const order = db.prepare(`
     SELECT o.id, o.order_number, o.status, o.customer_name, o.promised_ship_date
       FROM orders o WHERE o.bin_id = ? AND ${HOLDING}
@@ -44,6 +51,28 @@ function binRow(bin) {
   return { ...bin, order: order || null, contents, empty: !order };
 }
 
+/**
+ * The Mail Bin: every parcel waiting for the post office, oldest first, since
+ * that is the order they were packed in and the order they should go out in.
+ */
+function mailBinRow(bin) {
+  const orders = db.prepare(`
+    SELECT o.id, o.order_number, o.status, o.customer_name, o.promised_ship_date, o.tracking_number
+      FROM orders o
+     WHERE o.bin_id = ? AND ${HOLDING}
+     ORDER BY o.updated_at, o.id
+  `).all(bin.id);
+
+  return {
+    ...bin,
+    order: null,
+    orders,
+    contents: null,
+    waiting: orders.length,
+    empty: orders.length === 0,
+  };
+}
+
 /** Every bin, in shelf order, with whatever is sitting in it. */
 function list() {
   return db.prepare('SELECT * FROM bins WHERE is_active = 1 ORDER BY position, id').all().map(binRow);
@@ -61,12 +90,18 @@ function byId(id) {
   return bin ? binRow(bin) : null;
 }
 
+/** The bin by the door, whatever it ends up being called. */
+function mailBin() {
+  const bin = db.prepare("SELECT * FROM bins WHERE kind = 'mail' AND is_active = 1 ORDER BY position, id").get();
+  return bin ? binRow(bin) : null;
+}
+
 /** The bin an order is in, if it is in one. */
 function forOrder(orderId) {
   const order = db.prepare('SELECT bin_id FROM orders WHERE id = ?').get(orderId);
   if (!order?.bin_id) return null;
   const bin = db.prepare('SELECT * FROM bins WHERE id = ?').get(order.bin_id);
-  return bin ? { id: bin.id, code: bin.code, label: bin.label } : null;
+  return bin ? { id: bin.id, code: bin.code, label: bin.label, kind: bin.kind } : null;
 }
 
 /**
@@ -95,15 +130,19 @@ function assign(orderId, code) {
     throw err;
   }
 
-  const holder = db.prepare(`
-    SELECT o.id, o.order_number FROM orders o
-     WHERE o.bin_id = ? AND o.id <> ? AND ${HOLDING}
-     LIMIT 1
-  `).get(bin.id, order.id);
-  if (holder) {
-    const err = new Error(`${bin.label} already has ${holder.order_number} in it`);
-    err.status = 400;
-    throw err;
+  // Every bin but the mail one holds a single order: a second order going into
+  // an occupied bin is a mistake worth stopping, not a pile worth making.
+  if (bin.kind !== 'mail') {
+    const holder = db.prepare(`
+      SELECT o.id, o.order_number FROM orders o
+       WHERE o.bin_id = ? AND o.id <> ? AND ${HOLDING}
+       LIMIT 1
+    `).get(bin.id, order.id);
+    if (holder) {
+      const err = new Error(`${bin.label} already has ${holder.order_number} in it`);
+      err.status = 400;
+      throw err;
+    }
   }
 
   const from = order.bin_id ? db.prepare('SELECT label FROM bins WHERE id = ?').get(order.bin_id) : null;
@@ -199,4 +238,64 @@ function putIn(orderId, { itemId = null, orderItemId = null, quantity = 1, code 
   };
 }
 
-module.exports = { list, byCode, byId, forOrder, assign, release, putIn };
+/**
+ * The post office has been: everything in the Mail Bin is on the van.
+ *
+ * Emptying the bin and shipping the orders are the same event, so this is one
+ * action rather than a list to work through one parcel at a time. Shipping an
+ * order already releases its bin, so the bin empties itself as it goes.
+ *
+ * Pass `orderIds` when only some of the pile was collected.
+ */
+function pickedUp(code, { orderIds = null } = {}) {
+  const bin = byCode(code);
+  if (!bin) {
+    const err = new Error(`${String(code || '').trim() || 'That code'} is not one of the bins`);
+    err.status = 404;
+    throw err;
+  }
+  if (bin.kind !== 'mail') {
+    const err = new Error(`${bin.label} is not the Mail Bin — it holds an order being made, not a parcel going out`);
+    err.status = 400;
+    throw err;
+  }
+
+  const wanted = orderIds ? new Set(orderIds.map(Number)) : null;
+  const going = bin.orders.filter((o) => !wanted || wanted.has(o.id));
+  if (!going.length) {
+    const err = new Error('Nothing in the Mail Bin to collect');
+    err.status = 400;
+    throw err;
+  }
+
+  // Lazily required: order-flow releases bins on shipping, so requiring it at
+  // the top would be a circle.
+  const flow = require('./order-flow');
+  const shipped = [];
+  const held = [];
+  for (const order of going) {
+    try {
+      // advanceTo declines rather than throws for an order that cannot move —
+      // one already shipped, or cancelled. Either way it is not on the van.
+      const moved = flow.advanceTo(order.id, 'shipped', {
+        source: 'mail-bin',
+        note: 'Collected from the Mail Bin',
+      });
+      if (moved) shipped.push(order.order_number);
+      else held.push({ order_number: order.order_number, reason: `Cannot ship from ${order.status}` });
+    } catch (err) {
+      held.push({ order_number: order.order_number, reason: err.message });
+    }
+  }
+
+  return {
+    bin: byCode(code),
+    shipped,
+    held,
+    message: held.length
+      ? `${shipped.length} shipped, ${held.length} still in ${bin.label}`
+      : `${shipped.length} parcel${shipped.length === 1 ? '' : 's'} collected and marked shipped`,
+  };
+}
+
+module.exports = { list, byCode, byId, mailBin, forOrder, assign, release, putIn, pickedUp };
