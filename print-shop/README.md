@@ -426,7 +426,14 @@ From then on:
 - Finish a print and the panel asks straight away, while the parts are still in your hand:
   it names the bin the order lives in, and **Scan the bin** puts that run's units in it.
   Scanning the wrong basket records nothing and says which one it should be.
-- Scan a bin on its own to see whose it is and what is still missing from it.
+- **Click a bin** — in the Bins panel, or by scanning it — and its contents open as a list:
+  one row per product, with `12/17` in the middle. Tap that number to type what is in
+  there, use **−** and **+** to nudge it one at a time, or hit **Scan items into the bin**
+  and scan each thing as it goes in. The scanner stays open while anything is outstanding,
+  so a basket of seventeen is one pass rather than seventeen trips through a menu.
+  **Take it all back out** empties it in one go.
+- All three ways write the same figure, which is the same one the packing check reads — and
+  the same one that takes those units off the shelf.
 - Shipping empties the basket. It is free for the next order the moment the parcel leaves.
 
 A bin holds one order at a time — that is the point of a bin — so putting a second order

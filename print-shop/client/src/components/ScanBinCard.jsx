@@ -1,6 +1,7 @@
 import { Pill } from './ui';
 import { shortDate } from '../api/print';
 import ScanMailBin from './ScanMailBin';
+import BinContents from './BinContents';
 
 /**
  * A bin scanned on its own: what is in it, and how far along it is.
@@ -38,17 +39,8 @@ export default function ScanBinCard({ bin, onChanged }) {
             )}
           </p>
 
-          <ul className="text-xs space-y-0.5 border-t border-linen pt-2">
-            {contents.lines.map((l) => (
-              <li key={l.id} className="flex gap-2 items-baseline">
-                <span className={`font-bold w-10 shrink-0 ${l.packed_quantity >= l.quantity ? 'text-emerald-700' : 'text-gray-800'}`}>
-                  {l.packed_quantity}/{l.quantity}
-                </span>
-                <span className="min-w-0 flex-1 truncate">{l.item_name || l.description || 'Item'}</span>
-                {l.item_sku && <span className="font-mono text-gray-400 shrink-0">{l.item_sku}</span>}
-              </li>
-            ))}
-          </ul>
+          {/* The basket in your hand is the moment to say what is in it. */}
+          <BinContents order={order} lines={contents.lines} onChanged={onChanged} />
         </>
       ) : (
         <p className="text-sm text-gray-500">

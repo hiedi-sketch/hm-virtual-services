@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import Modal from './Modal';
 import BinLabels from './BinLabels';
+import BinContents from './BinContents';
+import ScanMailBin from './ScanMailBin';
 import printApi, { describeError, shortDate } from '../api/print';
 import { Pill } from './ui';
 import { useScanner } from './ScanContext';
@@ -18,6 +20,9 @@ export default function BinsPanel({ open, onClose, onChanged }) {
   const [bins, setBins] = useState(null);
   const [error, setError] = useState(null);
   const [labels, setLabels] = useState(false);
+  // The bin being looked into. A bin is a list of things, and the list is the
+  // point — the shelf view is only how you get to it.
+  const [chosen, setChosen] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -29,11 +34,49 @@ export default function BinsPanel({ open, onClose, onChanged }) {
   }, []);
 
   useEffect(() => { if (open) load(); }, [open, load]);
+  useEffect(() => { if (!open) setChosen(null); }, [open]);
+  useEffect(() => {
+    if (chosen && bins) setChosen(bins.find((b) => b.id === chosen.id) || null);
+  }, [bins]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
-      <Modal open={open && !labels} onClose={onClose} title="Bins" size="md">
-        {error ? (
+      <Modal
+        open={open && !labels}
+        onClose={onClose}
+        title={chosen ? chosen.label : 'Bins'}
+        size="md"
+      >
+        {chosen ? (
+          <div className="space-y-3">
+            <button onClick={() => setChosen(null)} className="text-xs text-gray-400 hover:text-gray-600">
+              ← All bins
+            </button>
+            {chosen.kind === 'mail' ? (
+              <ScanMailBin bin={chosen} onChanged={load} />
+            ) : chosen.order ? (
+              <>
+                <p className="text-sm">
+                  <span className="font-bold text-primary">{chosen.order.order_number}</span>
+                  <span className="text-gray-500"> · {chosen.order.customer_name || 'No customer name'}</span>
+                  {chosen.order.promised_ship_date && (
+                    <span className="text-gray-500"> · due {shortDate(chosen.order.promised_ship_date)}</span>
+                  )}
+                </p>
+                <BinContents
+                  order={chosen.order}
+                  lines={chosen.contents?.lines}
+                  onChanged={async () => { await load(); onChanged?.(); }}
+                />
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">
+                Nothing in this one. Scan an order ticket and put it in a bin, or choose the bin from
+                the order's details.
+              </p>
+            )}
+          </div>
+        ) : error ? (
           <div className="space-y-3">
             <p className="text-sm text-red-600">{error}</p>
             <button onClick={load} className="btn-secondary">Try again</button>
@@ -43,7 +86,12 @@ export default function BinsPanel({ open, onClose, onChanged }) {
         ) : (
           <div className="space-y-2">
             {bins.map((bin) => (
-              <div key={bin.id} className="rounded-xl border border-linen p-3">
+              <button
+                key={bin.id}
+                type="button"
+                onClick={() => setChosen(bin)}
+                className="w-full text-left rounded-xl border border-linen p-3 hover:bg-linen transition-colors"
+              >
                 <div className="flex items-baseline gap-2 flex-wrap">
                   <p className="font-bold text-primary">{bin.label}</p>
                   <span className="font-mono text-[11px] text-gray-400">{bin.code}</span>
@@ -75,7 +123,7 @@ export default function BinsPanel({ open, onClose, onChanged }) {
                     {bin.orders.map((o) => o.order_number).join(', ')}
                   </p>
                 )}
-              </div>
+              </button>
             ))}
 
             <div className="flex gap-2 pt-1">
