@@ -463,6 +463,40 @@ The six numbered bins still hold one order each, and say whose it is if you try 
 second in. The Mail Bin is the only exception, and it is the only bin where "empty it"
 means something.
 
+### What a line still needs
+
+Six ordered is not six to print. Five may already be on the shelf and one on a plate, and
+the difference is the whole of what there is left to do — so every line on an order card
+spells it out behind the product name, small and in parentheses:
+
+```
+6 × Leopard Heart Pop Tab Opener  (5 on hand, 1 needed, 0 printing)
+```
+
+- **On hand** is the shelf: units that exist and will be picked rather than printed.
+- **Needed** is what is left to print — the number the **In Queue** list and its button
+  are counting.
+- **Printing** is what is on a plate now. A run going for stock counts here too, because
+  those units are on a printer whoever ends up with them.
+
+The three always add up to what was ordered, and none of them is stored: on hand is the
+shelf, printing is the jobs, and needed is what is left over. They cannot drift from the
+shop because there is nothing to drift.
+
+**Tap the note to change them.** On hand and printing are typed; needed follows, because
+it is the remainder and typing it would invite a number the next screen would contradict.
+Saving does the real thing behind each one: on hand moves the shelf and writes to the
+stock history, printing puts units on a plate or takes them off it. The In Queue button
+changes as soon as it is saved.
+
+Two things it refuses, because they cannot be true: more on hand and printing together
+than were ordered, and dropping printing below what is already on the bench.
+
+One thing worth knowing: **stock is one shelf**, handed out soonest-promise-first. Setting
+a later order's on-hand figure means the shelf has to hold that many *on top of* what the
+orders ahead of it could take — so it can cover an earlier order more fully than it did
+before. The message says what the shelf came to, rather than changing it quietly.
+
 ### Packing a box
 
 Scan the ticket of an order at **Packing** and the sheet leads with what should be in the

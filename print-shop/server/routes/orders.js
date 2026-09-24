@@ -11,6 +11,7 @@ const { parseTracking, trackingLink } = require('../utils/tracking');
 const packing = require('../services/packing');
 const allocation = require('../services/allocation');
 const bins = require('../services/bins');
+const lineCoverage = require('../services/line-coverage');
 
 const router = express.Router();
 
@@ -64,6 +65,13 @@ function hydrate(order, projectionsById, plan = null) {
       from_stock: where?.from_stock || 0,
       from_incoming: where?.from_incoming || 0,
       to_print: where?.to_print || 0,
+      // The three the card spells out behind the product name. They always add
+      // up to what was ordered: a run going for stock is on a printer too, so
+      // it counts as printing rather than as a fourth number.
+      on_hand: where?.from_stock || 0,
+      needed: where ? where.needs_printing : Number(line.quantity) || 0,
+      printing: where ? where.printing + where.from_incoming : 0,
+      shelf_total: where ? Number(where.qty_on_hand) || 0 : null,
     };
   });
 
@@ -278,6 +286,28 @@ router.post('/:id/jobs/:jobId/advance', (req, res) => {
 });
 
 /** Put this order in a bin, by the code scanned off the front of it. */
+/**
+ * Set what a line has on hand and what is on a printer. Needed is the rest of
+ * the order, so it follows rather than being set.
+ */
+router.post('/:id/items/:lineId/coverage', (req, res) => {
+  try {
+    const result = lineCoverage.setCoverage(Number(req.params.lineId), {
+      onHand: req.body.on_hand,
+      printing: req.body.printing,
+    });
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    const { projections } = orderProjections();
+    res.json({
+      data: hydrate(order, new Map(projections.map((p) => [p.order_id, p]))),
+      line: result,
+      message: result.message,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 router.post('/:id/bin', (req, res) => {
   try {
     if (req.body.clear) {

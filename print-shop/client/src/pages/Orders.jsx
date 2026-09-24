@@ -6,6 +6,7 @@ import printApi, { describeError, money, shortDate } from '../api/print';
 import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
 import OrderTicket from '../components/OrderTicket';
 import ShipDialog from '../components/ShipDialog';
+import LineCoverage, { CoverageNote } from '../components/LineCoverage';
 import { useScanner } from '../components/ScanContext';
 
 // How a single product's print job reads on the order card.
@@ -53,6 +54,8 @@ export default function Orders() {
   const [filter, setFilter] = useState('');
   const [expanded, setExpanded] = useState(null);
   const [shipping, setShipping] = useState(null);
+  // The line whose on hand / needed / printing is being adjusted.
+  const [coverage, setCoverage] = useState(null);
   const [shipBusy, setShipBusy] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(BLANK);
@@ -477,15 +480,12 @@ export default function Orders() {
                         return (
                           <div key={line.id} className="flex items-center gap-2 text-xs">
                             <span className="font-semibold w-8 shrink-0">{line.quantity} ×</span>
-                            <span className="min-w-0 flex-1 truncate">
+                            <span className="min-w-0 flex-1">
                               {line.item_name || line.description}
-                              {/* A line the shelf only half covers is worth
-                                  spelling out, or the pill is a half-truth. */}
-                              {line.from_stock > 0 && line.from_stock < line.quantity && (
-                                <span className="text-gray-400 ml-1.5">
-                                  {line.from_stock} from stock, {line.quantity - line.from_stock} to print
-                                </span>
-                              )}
+                              {/* Six ordered is not six to print. Where the
+                                  units are coming from, behind the name, and a
+                                  tap away from being changed. */}
+                              <CoverageNote line={line} onEdit={() => setCoverage({ order: o, line })} />
                             </span>
                             <Pill tone={state.tone}>{state.label}</Pill>
                             {startable ? (
@@ -637,6 +637,14 @@ export default function Orders() {
           ))}
         </div>
       )}
+
+      <LineCoverage
+        open={!!coverage}
+        order={coverage?.order}
+        line={coverage?.line}
+        onClose={() => setCoverage(null)}
+        onChanged={refresh}
+      />
 
       <ShipDialog
         open={!!shipping}
