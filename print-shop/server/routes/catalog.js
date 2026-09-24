@@ -7,6 +7,7 @@ const { logStock, applyUpdate } = require('./helpers');
 const { planImport, applyImport } = require('../services/catalog-import');
 const inventory = require('../services/inventory-sync');
 const printRun = require('../services/print-run');
+const duplicates = require('../services/duplicates');
 
 const router = express.Router();
 
@@ -162,6 +163,23 @@ router.get('/options', (req, res) => {
 });
 
 /** Live cost + suggested prices for an item still being edited. */
+/**
+ * Catalog rows that look like the same product twice.
+ *
+ * Registered above `/:id` so the word is read as a page rather than an item id.
+ */
+router.get('/duplicates', (req, res) => res.json({ data: duplicates.find() }));
+
+router.post('/duplicates/merge', (req, res) => {
+  try {
+    const keep = Number(req.body.keep);
+    const drop = Array.isArray(req.body.drop) ? req.body.drop : [req.body.drop];
+    res.json(duplicates.merge(keep, drop));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 router.post('/preview', (req, res) => {
   res.json({ data: previewItemCost(req.body) });
 });

@@ -92,6 +92,8 @@ export const printApi = {
   advanceOrder: (id, body) => api.post(`/orders/${id}/advance`, body || {}).then((r) => r.data),
   setTracking: (id, code) => api.post(`/orders/${id}/tracking`, { code }).then((r) => r.data),
   packing: (id) => unwrap(api.get(`/orders/${id}/packing`)),
+  duplicates: () => unwrap(api.get('/catalog/duplicates')),
+  mergeItems: (keep, drop) => api.post('/catalog/duplicates/merge', { keep, drop }).then((r) => r.data),
   bins: () => unwrap(api.get('/bins')),
   assignBin: (id, code) => api.post(`/orders/${id}/bin`, { code }).then((r) => r.data),
   toMailBin: (id) => api.post(`/orders/${id}/bin`, { mail: true }).then((r) => r.data),

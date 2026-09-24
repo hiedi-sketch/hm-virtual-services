@@ -581,10 +581,10 @@ works. *I already have an access token to paste* in Settings takes it.
 
 ### Pulling products
 
-Matched on SKU, and deliberately additive:
+Deliberately additive:
 
-- A Shopify variant whose SKU already exists here **keeps its local name, prices and
-  recipe** and only gains the Shopify link. Nothing you have costed is overwritten.
+- A Shopify variant that matches something already here **keeps its local name, prices
+  and recipe** and only gains the Shopify link. Nothing you have costed is overwritten.
 - A variant with no match is created as a product with its SKU, barcode and Shopify
   price as its retail override, and no recipe — add filament, materials and print time
   to make costing work.
@@ -592,6 +592,49 @@ Matched on SKU, and deliberately additive:
   and pull again.
 
 Running it twice changes nothing the second time.
+
+#### How a variant is recognised
+
+In order of how certain each one is, stopping at the first hit:
+
+1. **The Shopify variant id**, set by an earlier pull. Unambiguous.
+2. **The SKU** — this shop's own, for a catalog numbered the way Shopify is.
+3. **The barcode**, which is where a spreadsheet import puts the code the file carried.
+4. **The name, exactly.**
+5. **The name allowing for punctuation** — case, dashes, spacing and `&` against `and`.
+   Only when exactly one item reduces to that shape; two is a question, not an answer,
+   and guessing would move a Shopify link onto the wrong product.
+
+Miss all five and the variant is created as a new product. **That is the only way a pull
+puts a second copy of something in the catalog**, so a duplicate pair is always "the one
+you made", carrying the costing and a `PS-PRD-####` SKU, and "the one Shopify made",
+carrying the link and Shopify's SKU.
+
+Step 5 exists because step 4 kept missing by a character: "Pop-Tab" against "Pop Tab" was
+enough to make a second copy of a product. What it still cannot decide on its own is a
+product that **gained variants in Shopify** — one item here against `Small` and `Large`
+there is a real question about which is which, so both are created and the pair is left
+for you to sort out below.
+
+#### Duplicates
+
+When two catalog rows are the same product, the Catalog page says so: a **duplicates**
+button appears next to *Import products*, and only when there is something to fix.
+
+It shows each pair with what either side is carrying — order lines, print jobs, recipe
+lines, print time, stock — and marks the one it would keep. That is the fuller record:
+costing and history beat a freshly pulled stub, because the costing is the whole reason
+this app exists.
+
+**Merge** folds the other into it. The keeper's own details are left alone — its name,
+its SKU, its costing, its recipe are what you meant — and it only gains what it was
+missing: the Shopify link, the photo, a barcode, a channel price it had none for. Filling
+a blank cannot lose anything; overwriting could, which is why nothing is overwritten.
+Stock is added up rather than thrown away, since both rows were counting the same shelf.
+
+Everything that pointed at the copy is moved over first: order lines, print jobs, the
+stock history, and any kit that contained it. Then the copy goes. **Merge all** does the
+lot in one pass.
 
 ### Orders as they come in
 

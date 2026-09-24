@@ -6,6 +6,7 @@ import printApi, { describeError, hoursMinutes, money } from '../api/print';
 import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
 import CatalogImport from '../components/CatalogImport';
+import DuplicatesPanel from '../components/DuplicatesPanel';
 
 const TYPES = [
   { key: '', label: 'Everything' },
@@ -47,6 +48,10 @@ export default function Catalog() {
   const [adjust, setAdjust] = useState(null);
   const [adjustForm, setAdjustForm] = useState({ mode: 'receive', quantity: 1 });
   const [importing, setImporting] = useState(false);
+  // How many products read as the same thing twice. Checked alongside the
+  // catalog, because a doubled product is worth noticing before it is ordered.
+  const [dupes, setDupes] = useState(0);
+  const [merging, setMerging] = useState(false);
   const previewTimer = useRef(null);
 
   const load = useCallback(async () => {
@@ -65,7 +70,11 @@ export default function Catalog() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load, refreshKey]);
+  const countDupes = useCallback(() => {
+    printApi.duplicates().then((groups) => setDupes(groups.length)).catch(() => setDupes(0));
+  }, []);
+
+  useEffect(() => { load(); countDupes(); }, [load, countDupes, refreshKey]);
 
   // Cost and suggested prices come back from the server as the form changes,
   // so the editor never disagrees with what gets saved.
@@ -213,6 +222,12 @@ export default function Catalog() {
           <p className="text-sm text-gray-500">Products, the parts that go into them, and the tools you use to make them.</p>
         </div>
         <div className="flex gap-2">
+          {/* Only worth a button when there is something to fix. */}
+          {dupes > 0 && (
+            <button className="btn-secondary !border-amber-300 !text-amber-800" onClick={() => setMerging(true)}>
+              {dupes} duplicate{dupes === 1 ? '' : 's'}
+            </button>
+          )}
           <button className="btn-secondary" onClick={() => setImporting(true)}>Import products</button>
           <button className="btn-secondary" onClick={() => scan({ title: 'Scan a product' })}>Scan</button>
           <button className="btn-primary" onClick={openNew}>Add item</button>
@@ -600,6 +615,12 @@ export default function Catalog() {
           </div>
         </form>
       </Modal>
+
+      <DuplicatesPanel
+        open={merging}
+        onClose={() => setMerging(false)}
+        onChanged={() => { load(); countDupes(); }}
+      />
 
       <LabelModal open={!!label} onClose={() => setLabel(null)} {...(label || {})} />
     </div>
