@@ -72,11 +72,13 @@ function hydrate(order, projectionsById, plan = null) {
       // The three the card spells out behind the product name. They always add
       // up to what was ordered: a run going for stock is on a printer too, so
       // it counts as printing rather than as a fourth number.
-      // Made and already in this order's bin, plus what the shelf is holding
-      // for it: both mean "these exist, do not print them".
-      on_hand: (where?.packed || 0) + (where?.from_stock || 0),
-      needed: where ? where.needs_printing : Number(line.quantity) || 0,
+      // The four the card spells out behind the product name. They always add
+      // up to what was ordered: in the basket, on the shelf, on a printer, or
+      // still to make.
+      in_bin: where?.packed || 0,
+      in_stock: where?.from_stock || 0,
       printing: where ? where.printing + where.from_incoming : 0,
+      needed: where ? where.needs_printing : Number(line.quantity) || 0,
       shelf_total: where ? Number(where.qty_on_hand) || 0 : null,
       // Waiting, Queued, Printing or Printed — read off the job and the
       // allocation, so it cannot disagree with the queue or the shelf.
@@ -317,7 +319,7 @@ router.post('/:id/items/:lineId/status', (req, res) => {
 router.post('/:id/items/:lineId/coverage', (req, res) => {
   try {
     const result = lineCoverage.setCoverage(Number(req.params.lineId), {
-      onHand: req.body.on_hand,
+      inStock: req.body.in_stock,
       printing: req.body.printing,
     });
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);

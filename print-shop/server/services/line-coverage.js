@@ -4,14 +4,19 @@ const allocation = require('./allocation');
 /**
  * The three numbers behind an order line: where its units are coming from.
  *
- * Six ordered is not six to print. Five may already be on the shelf and one on
- * a plate, and the difference is the whole of what there is left to do. So a
- * line reads "6 × Leopard Heart (5 on hand, 1 needed, 0 printing)", and the
- * three always add up to what was ordered.
+ * Six ordered is not six to print. Two may be in the order's bin, three on the
+ * shelf, one on a plate, and the difference is the whole of what there is left
+ * to do. So a line reads "6 × Leopard Heart (2 in bin, 3 in stock, 1 printing,
+ * 0 needed)", and the four always add up to what was ordered.
  *
- * Nothing here is stored. On hand is the shelf, printing is the jobs, and
- * needed is what is left over — so the numbers cannot drift from the shop.
- * Editing them therefore means editing those things, which is what this does.
+ * Nothing here is stored. In bin is what has been put in it, in stock is the
+ * shelf, printing is the jobs, and needed is what is left over — so the
+ * numbers cannot drift from the shop. Editing them therefore means editing
+ * those things, which is what this does.
+ *
+ * In bin is not edited here. It moves when units are physically put in the
+ * basket or taken out of it, by scanning or from the bin's own list, and a
+ * second way to change it would be a way for it to become a guess.
  */
 
 function lineRow(orderItemId) {
@@ -77,14 +82,15 @@ function forLine(orderItemId, plan = null) {
     quantity,
     // A run already going for stock is on a printer too, so it counts as
     // printing rather than as a fourth number nobody asked for.
-    // What is in this order's bin is on hand for it as surely as the shelf is.
-    on_hand: where ? where.packed + where.from_stock : 0,
-    needed: where ? where.needs_printing : quantity,
+    // In the basket with this order's name on it, already off the shelf.
+    in_bin: where ? where.packed : 0,
+    // On the shelf and allocated to this line — picked rather than printed.
+    in_stock: where ? where.from_stock : 0,
+    // On a printer now. A run going for stock is on a printer too.
     printing: where ? where.printing + where.from_incoming : 0,
-    // Context for editing: the shelf as a whole, what is already set aside for
-    // this order, and what is spoken for.
+    needed: where ? where.needs_printing : quantity,
+    // Context for editing: the shelf as a whole, and what is spoken for.
     shelf_total: Number(line.qty_on_hand) || 0,
-    packed: where ? where.packed : 0,
     on_bench: onBench(line.id),
   };
 }
@@ -97,21 +103,16 @@ function forLine(orderItemId, plan = null) {
  * moved by the difference rather than set outright, so another order's claim
  * on the same shelf is not quietly taken away.
  */
-function setCoverage(orderItemId, { onHand = null, printing = null, reason = 'Adjusted from the order' } = {}) {
+function setCoverage(orderItemId, { inStock = null, printing = null, reason = 'Adjusted from the order' } = {}) {
   const before = forLine(orderItemId);
   const quantity = before.quantity;
 
-  const wantHand = onHand == null ? before.on_hand : Math.max(0, Math.min(quantity, Number(onHand) || 0));
+  const wantStock = inStock == null ? before.in_stock : Math.max(0, Math.min(quantity, Number(inStock) || 0));
   const wantPrinting = printing == null ? before.printing : Math.max(0, Math.min(quantity, Number(printing) || 0));
 
-  if (wantHand + wantPrinting > quantity) {
-    const err = new Error(`${quantity} were ordered — on hand and printing cannot come to more than that`);
-    err.status = 400;
-    throw err;
-  }
-  if (wantHand < before.packed) {
+  if (before.in_bin + wantStock + wantPrinting > quantity) {
     const err = new Error(
-      `${before.packed} of these are already in the bin, so on hand cannot go below that`
+      `${quantity} were ordered — the bin, the shelf and the printer cannot come to more than that`
     );
     err.status = 400;
     throw err;
@@ -124,10 +125,8 @@ function setCoverage(orderItemId, { onHand = null, printing = null, reason = 'Ad
 
   db.transaction(() => {
     // ── the shelf ──
-    if (wantHand !== before.on_hand) {
-      // The bin's share is already made and already off the shelf, so only the
-      // rest is the shelf's job.
-      const shelf = shelfNeededFor(before.item_id, orderItemId, wantHand - before.packed);
+    if (wantStock !== before.in_stock) {
+      const shelf = shelfNeededFor(before.item_id, orderItemId, wantStock);
       const change = shelf - before.shelf_total;
       db.prepare('UPDATE items SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
         .run(shelf, before.item_id);
@@ -180,7 +179,7 @@ function setCoverage(orderItemId, { onHand = null, printing = null, reason = 'Ad
   const moved = after.shelf_total !== before.shelf_total;
   return {
     ...after,
-    message: `${after.on_hand} on hand, ${after.needed} needed, ${after.printing} printing`
+    message: `${after.in_bin} in bin, ${after.in_stock} in stock, ${after.printing} printing, ${after.needed} needed`
       + (moved ? ` — the shelf now holds ${after.shelf_total}` : ''),
   };
 }

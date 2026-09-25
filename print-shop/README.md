@@ -626,33 +626,38 @@ either should read differently.
 
 ### What a line still needs
 
-Six ordered is not six to print. Five may already be on the shelf and one on a plate, and
-the difference is the whole of what there is left to do — so every line on an order card
-spells it out behind the product name, small and in parentheses:
+Nine ordered is not nine to print. Two may be in the order's bin, three on the shelf, two
+on a plate — and the difference is the whole of what there is left to do. So every line on
+an order card spells it out behind the product name, small and in parentheses:
 
 ```
-6 × Leopard Heart Pop Tab Opener  (5 on hand, 1 needed, 0 printing)
+9 × Leopard Heart Pop Tab Opener  (2 in bin, 3 in stock, 2 printing, 2 needed)
 ```
 
-- **On hand** is units that exist for this order and will be picked rather than printed —
-  what the shelf is holding for it, plus anything already in its bin.
-- **Needed** is what is left to print — the number the **To Print** list and its button
-  are counting.
+- **In bin** is units physically put in this order's basket, by scanning or from the bin's
+  own list. They are off the shelf: they have a customer's name on them.
+- **In stock** is what the shelf is holding for this line — there to pick rather than print.
 - **Printing** is what is on a plate now. A run going for stock counts here too, because
   those units are on a printer whoever ends up with them.
+- **Needed** is what is left: ordered, less the other three. It is the number the **To
+  Print** list and its button are counting.
 
-The three always add up to what was ordered, and none of them is stored: on hand is the
-shelf, printing is the jobs, and needed is what is left over. They cannot drift from the
-shop because there is nothing to drift.
+The four always add up to what was ordered, and none of them is stored: in bin is the
+basket, in stock is the shelf, printing is the jobs, and needed is the remainder. They
+cannot drift from the shop because there is nothing to drift.
 
-**Tap the note to change them.** On hand and printing are typed; needed follows, because
-it is the remainder and typing it would invite a number the next screen would contradict.
-Saving does the real thing behind each one: on hand moves the shelf and writes to the
+**Tap the note to change them.** In stock and printing are typed. In bin is not — it moves
+when units are actually put in the basket or taken out of it, and a second way to change it
+would be a way for it to become a guess. Needed follows the other three.
+
+Saving does the real thing behind each one: in stock moves the shelf and writes to the
 stock history, printing puts units on a plate or takes them off it. The To Print button
 changes as soon as it is saved.
 
-Two things it refuses, because they cannot be true: more on hand and printing together
-than were ordered, and dropping printing below what is already on the bench.
+Two things it refuses, because they cannot be true: the bin, the shelf and the printer
+coming to more than was ordered, and dropping printing below what is already on the bench.
+Starting a line by hand will not print past what is already in its bin either — those units
+exist, and making them twice is not an override worth having.
 
 One thing worth knowing: **stock is one shelf**, handed out soonest-promise-first. Setting
 a later order's on-hand figure means the shelf has to hold that many *on top of* what the

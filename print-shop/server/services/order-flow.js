@@ -34,7 +34,9 @@ function events(orderId, limit = 20) {
  * consulted first: a line the stock can already fill is left alone to be picked
  * rather than printed, and a line the stock can only half fill queues the half
  * that is missing. `forceLineId` overrides that for one line, because starting
- * a line by hand means printing it whatever the shelf says.
+ * a line by hand means printing it whatever the shelf says — but never past
+ * what is already in the order's own bin. Those units exist, they have this
+ * order's name on them, and printing them again would be making them twice.
  */
 function enqueueOrder(orderId, priority = 'normal', { skipCovered = false, forceLineId = null, onlyLineId = null } = {}) {
   const lines = db.prepare(`
@@ -60,7 +62,9 @@ function enqueueOrder(orderId, priority = 'normal', { skipCovered = false, force
   for (const line of lines) {
     if (already.get(line.id).count > 0) continue;
 
-    let quantity = line.quantity;
+    // What is in the bin is already made for this line, forced or not.
+    let quantity = Math.max(0, (Number(line.quantity) || 0) - (Number(line.packed_quantity) || 0));
+    if (!quantity) continue;
     if (shortfall && line.id !== forceLineId) {
       quantity = shortfall.get(line.id) || 0;
       if (quantity <= 0) continue;  // the shelf has this one covered
