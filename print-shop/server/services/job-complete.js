@@ -146,7 +146,16 @@ function settleOrder(orderId) {
     "SELECT COUNT(*) AS count FROM queue_jobs WHERE order_id = ? AND status IN ('queued','printing')"
   ).get(orderId).count;
   if (onPrinters > 0) return null;
-  return flow.advanceTo(orderId, 'finishing', { source: 'queue', note: 'nothing left on a printer' });
+
+  // Nothing on a printer is not the same as nothing left to print. Work only
+  // reaches the Print Queue when she puts it there, so an order can have an
+  // empty queue and three products still to make — and an order that walked
+  // itself to finishing on the strength of that would be lying about it.
+  const left = [...require('./allocation').forOrder(orderId).values()]
+    .some((line) => line.needs_printing > 0);
+  if (left) return null;
+
+  return flow.advanceTo(orderId, 'finishing', { source: 'queue', note: 'nothing left to print' });
 }
 
 /**

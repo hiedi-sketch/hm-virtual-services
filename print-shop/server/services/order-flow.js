@@ -36,12 +36,13 @@ function events(orderId, limit = 20) {
  * that is missing. `forceLineId` overrides that for one line, because starting
  * a line by hand means printing it whatever the shelf says.
  */
-function enqueueOrder(orderId, priority = 'normal', { skipCovered = false, forceLineId = null } = {}) {
+function enqueueOrder(orderId, priority = 'normal', { skipCovered = false, forceLineId = null, onlyLineId = null } = {}) {
   const lines = db.prepare(`
     SELECT oi.*, i.item_type FROM order_items oi
       JOIN items i ON oi.item_id = i.id
      WHERE oi.order_id = ? AND i.item_type <> 'tool'
-  `).all(orderId);
+       ${onlyLineId ? 'AND oi.id = ?' : ''}
+  `).all(...(onlyLineId ? [orderId, onlyLineId] : [orderId]));
 
   const shortfall = skipCovered ? allocation.shortfallFor(orderId) : null;
 
@@ -95,12 +96,12 @@ function setStatus(orderId, to, { source = 'manual', note = null, priority = 'no
     return { order, moved: false, queued: 0, message: `Already at ${stageInfo(to).label.toLowerCase()}` };
   }
 
-  let queued = 0;
+  const queued = 0;
   const apply = db.transaction(() => {
-    // Confirming an order is what puts its work in front of a printer: agreed
-    // to means it has to be made — except for what is already made, which is
-    // picked off the shelf instead of printed again.
-    if (to === 'confirmed') queued = enqueueOrder(order.id, priority, { skipCovered: true });
+    // Confirming an order says it has to be made. It does not decide when, or
+    // in what order, or on whose plate — so nothing is put on the Print Queue
+    // here. The work shows up on the To Print list from this moment, and goes
+    // on the queue when she puts it there, in the order she wants it printed.
 
     // Shipping is what takes the goods out of the building. Printing puts them
     // on the shelf; without this the on-hand figure only ever climbs.
@@ -177,10 +178,15 @@ function startProduction(orderId, { orderItemId = null, source = 'app' } = {}) {
     throw err;
   }
 
-  // Nothing can be printed that has no job behind it. Starting the whole order
-  // queues only what the shelf cannot cover; starting one line queues that line
-  // whatever the shelf says, because she asked for it by name.
-  enqueueOrder(order.id, 'normal', { skipCovered: true, forceLineId: orderItemId });
+  // Nothing can be printed that has no job behind it. Starting one product
+  // makes a job for that product and nothing else — she asked for it by name,
+  // not for everything sharing its order. Starting the whole order queues what
+  // the shelf cannot cover, which is what "start it all" means.
+  enqueueOrder(order.id, 'normal', {
+    skipCovered: true,
+    forceLineId: orderItemId,
+    onlyLineId: orderItemId,
+  });
 
   const jobs = db.prepare(`
     SELECT q.*, i.name AS item_name FROM queue_jobs q

@@ -390,7 +390,6 @@ export default function Orders() {
                     <p className="font-bold text-primary leading-tight">{o.order_number}</p>
                     <Pill tone={stageOf(o.status)?.tone || 'gray'}>{labelOf(o.status)}</Pill>
                     {o.order_type === 'wholesale' && <Pill tone="teal">Wholesale</Pill>}
-                    {o.needs_queueing && <Pill tone="amber">Not in the queue</Pill>}
                     {/* Which basket it is sitting in — the one thing you need
                         to know to go and put your hands on it. */}
                     {o.bin && <Pill tone="blue">{o.bin.label}</Pill>}
@@ -568,7 +567,7 @@ export default function Orders() {
                     work moving, and it confirms the order on the way, which is
                     what puts its products on the In Queue list. */}
                 {o.needs_queueing && (
-                  <button className="btn-secondary !py-1 !px-3" onClick={() => sendToQueue(o)}>Send to queue</button>
+                  <button className="btn-secondary !py-1 !px-3" onClick={() => sendToQueue(o)}>Send to Print Queue</button>
                 )}
                 {o.status === 'shipped' && (
                   <button className="btn-primary !py-1 !px-3" onClick={() => setStatus(o, 'completed')}>

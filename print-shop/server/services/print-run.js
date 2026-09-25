@@ -331,10 +331,10 @@ function queueDemand(itemId, { source = 'scan' } = {}) {
   for (const line of openLines(itemId).filter((l) => !l.job_status)) {
     if (queued.some((q) => q.order_id === line.order_id)) continue;
     if ((shortfall.get(line.order_item_id)?.needs_printing ?? line.quantity) <= 0) continue;
-    const moved = flow.advanceTo(line.order_id, 'confirmed', { source, note: `${item.name} queued from a scan` });
-    // Already past confirmed: just make the job — but only for what is not
-    // already covered by the shelf or sitting in the order's bin.
-    if (!moved) flow.enqueueOrder(line.order_id, 'normal', { skipCovered: true });
+    // Confirming no longer queues anything by itself, so the jobs are made
+    // here — only for what the shelf or the order's bin does not already cover.
+    flow.advanceTo(line.order_id, 'confirmed', { source, note: `${item.name} queued from a scan` });
+    flow.enqueueOrder(line.order_id, 'normal', { skipCovered: true });
     queued.push({
       order_id: line.order_id,
       order_number: line.order_number,

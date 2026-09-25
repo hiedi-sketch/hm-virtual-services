@@ -125,6 +125,11 @@ function plan() {
     };
     byLine.set(line.id, entry);
 
+    // The To Print list starts at Confirmed. A new order is a real claim on
+    // the shelf — the customer has paid — but it is not work to do until it
+    // has been agreed to, and a list that says otherwise is a list of guesses.
+    if (line.order_status === 'new') continue;
+
     const item = byItem.get(line.item_id) || {
       item_id: line.item_id,
       name: line.item_name,

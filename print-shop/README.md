@@ -240,6 +240,11 @@ take is queued for stock. A line the shelf or a bin already covers is left alone
 The header's **Send N to the Print Queue** is the one that does not ask, because the number
 is in the button: it queues everything outstanding, in one go.
 
+**Nothing reaches the Print Queue on its own.** Confirming an order does not queue it;
+starting one product queues that product and not the rest of its order; a Shopify order
+arriving queues nothing at all. The queue is the plate order, and the plate order is a
+decision — so it is always a decision someone made.
+
 Once queued, the units stay on the To Print list, because a job waiting its turn is still
 work to do; what changes is that they now have a job behind them, and the row's button
 counts down to what is still unqueued.
@@ -410,16 +415,19 @@ Tools have no print run; scanning one goes straight to the stock buttons.
 
 ### What each stage does
 
-Reaching **Confirmed** is what actually puts the work in front of a printer — agreeing
-to an order is what says it has to be made, less whatever the shelf can already fill, and
-from that moment the rest is on the **To Print** list. *Send to queue* does the same thing, so the ticket and the app never
-disagree about it. Reaching
+Reaching **Confirmed** is what says an order has to be made: from that moment what it owes,
+less whatever the shelf and its bin already cover, is on the **To Print** list. It does not
+put anything on the Print Queue — that is hers to decide, product by product and in the
+order she wants them printed. Reaching
 **Shipped** stamps the shipped date, takes the goods out of stock, and is where the
 tracking label is asked for. Everything else just records where the order is.
 
 The shop moves an order along by itself in one place only: when nothing of the order is
-left on a printer, it moves to **Finishing**. That only ever moves forward — if you
-have already scanned the order into packing, the queue does not drag it back.
+left on a printer **and** nothing on it still needs printing, it moves to **Finishing**.
+Both halves matter now that work only reaches the Print Queue when you put it there — an
+empty queue is not the same as a finished order, and one that walked itself to Finishing on
+the strength of that would be lying about it. It only ever moves forward, so an order
+already scanned into packing is not dragged back.
 
 ### Bins: where an order lives
 
