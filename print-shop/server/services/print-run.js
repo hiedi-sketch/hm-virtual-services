@@ -230,9 +230,95 @@ function startRun(itemId, quantity, { source = 'scan', printer = null, filamentI
 }
 
 /**
+ * Queue `quantity` units of a product without starting anything.
+ *
+ * Soonest promise first, and whatever the orders do not take becomes a stock
+ * job waiting its turn. She says how many — a plate holds what a plate holds,
+ * and the shop guessing at it is how a queue ends up describing work nobody
+ * is going to do.
+ *
+ * Unlike starting a run, a line can be filled part way. Half a line *printed*
+ * is not a line that can ship, so a run takes whole lines only; half a line
+ * queued is just the rest of it still to come, which is the ordinary way a
+ * seventeen goes on a bed that holds six.
+ */
+function queueRun(itemId, quantity, { source = 'scan' } = {}) {
+  const item = requireItem(itemId);
+
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    const err = new Error('Say how many you are queuing');
+    err.status = 400;
+    throw err;
+  }
+
+  // What each line still needs, so one the shelf or a bin already covers is
+  // not queued for nothing.
+  const need = allocation.plan().byLine;
+
+  const queued = [];
+  let remaining = qty;
+
+  const insert = db.prepare(`
+    INSERT INTO queue_jobs (order_id, order_item_id, item_id, quantity, status, position, estimated_minutes)
+    VALUES (?, ?, ?, ?, 'queued', ?, ?)
+  `);
+
+  for (const line of openLines(itemId).filter((l) => !l.job_status)) {
+    if (remaining <= 0) break;
+    const wants = need.get(line.order_item_id)?.needs_printing ?? (Number(line.quantity) || 0);
+    if (wants <= 0) continue;                      // the shelf or a bin has this one
+
+    const take = Math.min(remaining, wants);
+    const position = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM queue_jobs').get().max + 1;
+    insert.run(
+      line.order_id, line.order_item_id, item.id, take, position,
+      estimatedMinutes({ item_id: item.id, quantity: take, estimated_minutes: null }),
+    );
+
+    // Agreeing to make it is what confirming an order means. The line just
+    // given a job is skipped by that, so it is not queued twice.
+    flow.advanceTo(line.order_id, 'confirmed', { source, note: `${item.name} queued` });
+
+    remaining -= take;
+    queued.push({
+      order_id: line.order_id,
+      order_number: line.order_number,
+      promised_ship_date: line.promised_ship_date,
+      quantity: take,
+      partial: take < wants,
+    });
+  }
+
+  // The rest is stock: nobody has bought it yet, but it is going on a plate.
+  let stockJob = null;
+  if (remaining > 0) {
+    const position = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM queue_jobs').get().max + 1;
+    const info = db.prepare(`
+      INSERT INTO queue_jobs (item_id, quantity, status, position, estimated_minutes, notes)
+      VALUES (?, ?, 'queued', ?, ?, ?)
+    `).run(
+      item.id, remaining, position,
+      estimatedMinutes({ item_id: item.id, quantity: remaining, estimated_minutes: null }),
+      'For stock',
+    );
+    stockJob = { id: info.lastInsertRowid, quantity: remaining };
+  }
+
+  return {
+    item: { id: item.id, name: item.name, sku: item.sku },
+    queued_quantity: qty,
+    queued,
+    stock_quantity: remaining,
+    stock_job: stockJob,
+    demand: demandFor(item.id),
+  };
+}
+
+/**
  * Confirm every open order for a product without starting anything — for the
  * scan that says "I know these are coming, line them up". Confirming is what
- * puts the work on the In Queue list.
+ * puts the work on the To Print list.
  */
 function queueDemand(itemId, { source = 'scan' } = {}) {
   const item = requireItem(itemId);
@@ -259,4 +345,4 @@ function queueDemand(itemId, { source = 'scan' } = {}) {
   return { item: { id: item.id, name: item.name }, queued, demand: demandFor(item.id) };
 }
 
-module.exports = { demandFor, startRun, queueDemand, openLines, filamentsFor };
+module.exports = { demandFor, startRun, queueRun, queueDemand, openLines, filamentsFor };

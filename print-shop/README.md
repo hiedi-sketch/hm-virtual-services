@@ -227,13 +227,22 @@ what is already sitting in a bin. **Print Queue** is the jobs themselves, in the
 go on the machine.
 
 Work moves one way, from the first to the second. Each row on To Print carries a **Queue**
-button for the units that have no job behind them yet, and the header carries one for the
-lot. A row whose work is all queued says *on the Print Queue* instead.
+button, and so does the product's scan popup — and **both ask how many**. The number is
+never assumed: a bed holds what a bed holds, and a queue that describes work nobody is
+going to do is worse than no queue. The box opens with what the product still owes, so
+taking the lot is one tap, but seventeen wanted and six on the plate is what actually
+happens most days.
 
-Queueing a product queues whatever the orders it belongs to still need — you do not print
-half an order — and never more than that: a line the shelf or the bin already covers is
-left alone. Once queued, the units stay on the To Print list, because a job waiting its
-turn is still work to do; what changes is that they now have a job behind them.
+What you say is filled soonest promise first — part of an order if that is all it covers,
+since half a line *queued* is just the rest of it still to come. Whatever the orders do not
+take is queued for stock. A line the shelf or a bin already covers is left alone.
+
+The header's **Send N to the Print Queue** is the one that does not ask, because the number
+is in the button: it queues everything outstanding, in one go.
+
+Once queued, the units stay on the To Print list, because a job waiting its turn is still
+work to do; what changes is that they now have a job behind them, and the row's button
+counts down to what is still unqueued.
 
 ### The To Print list
 

@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useOutletContext } from 'react-router-dom';
 import printApi, { describeError, shortDate } from '../api/print';
 import { EmptyState, LoadError, Pill, StatCard } from '../components/ui';
+import Modal from '../components/Modal';
 import QueueSheet from '../components/QueueSheet';
 import Barcode from '../components/Barcode';
 import { useScanner } from '../components/ScanContext';
@@ -62,6 +63,9 @@ export default function InQueue() {
   const [sheet, setSheet] = useState(false);
   // Which row is being sent to the Print Queue, or 'all'.
   const [busy, setBusy] = useState(null);
+  // The row waiting on an answer to "how many?" — never assumed, because a
+  // plate holds what a plate holds.
+  const [asking, setAsking] = useState(null);   // { row, value }
   const [shopName, setShopName] = useState('Print Shop');
 
   const load = useCallback(async () => {
@@ -85,15 +89,17 @@ export default function InQueue() {
   // Units that still have no job behind them at all.
   const unqueued = (data?.needing || []).reduce((sum, r) => sum + (r.unqueued || 0), 0);
 
-  /** Make print jobs for what this product still owes, across every order. */
-  async function queue(row) {
+  /** Make print jobs for as many as she says — orders first, the rest to stock. */
+  async function queue(row, quantity) {
     setBusy(row.id);
     try {
-      const { data } = await printApi.queueItemDemand(row.id);
-      const queued = data?.queued || [];
-      toast.success(queued.length
-        ? `${row.name} sent to the Print Queue for ${queued.map((o) => o.order_number).join(', ')}`
-        : `${row.name} is already covered — nothing to send`);
+      const { data, message } = await printApi.queueItemDemand(row.id, { quantity: Number(quantity) });
+      const orders = data?.queued || [];
+      toast.success(orders.length
+        ? `${quantity} × ${row.name} queued for ${orders.map((o) => o.order_number).join(', ')}`
+          + (data.stock_quantity ? `, ${data.stock_quantity} for stock` : '')
+        : message || `${quantity} × ${row.name} queued for stock`);
+      setAsking(null);
     } catch (err) {
       toast.error(describeError(err, 'Could not send that to the Print Queue'));
     } finally {
@@ -245,7 +251,7 @@ export default function InQueue() {
                   {row.unqueued > 0 && (
                     <button
                       disabled={!!busy}
-                      onClick={() => queue(row)}
+                      onClick={() => setAsking({ row, value: row.unqueued })}
                       className="btn-secondary !py-1 !px-2 text-xs mt-1.5"
                     >
                       {busy === row.id ? 'Sending…' : `Queue ${row.unqueued}`}
@@ -268,6 +274,52 @@ export default function InQueue() {
           ))}
         </div>
       )}
+
+      <Modal
+        open={!!asking}
+        onClose={() => setAsking(null)}
+        title={asking?.row.name || 'Queue'}
+        size="sm"
+      >
+        {asking && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              <span className="font-bold text-primary">{asking.row.to_print}</span> still to print across{' '}
+              {asking.row.order_count} order{asking.row.order_count === 1 ? '' : 's'}.
+            </p>
+
+            <div>
+              <label className="label" htmlFor="queue-quantity">How many are you queuing?</label>
+              <input
+                id="queue-quantity"
+                type="number"
+                min="1"
+                inputMode="numeric"
+                autoFocus
+                value={asking.value}
+                onChange={(e) => setAsking({ ...asking, value: e.target.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter' && Number(asking.value)) queue(asking.row, asking.value); }}
+                className="input text-2xl font-bold text-center"
+              />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Orders are filled soonest promise first, part of one if that is all this covers;
+                whatever is left over is queued for stock.
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                disabled={!!busy || !Number(asking.value)}
+                onClick={() => queue(asking.row, asking.value)}
+                className="btn-primary flex-1 !py-3"
+              >
+                {busy ? 'Queueing…' : `Queue ${Number(asking.value) || 0}`}
+              </button>
+              <button onClick={() => setAsking(null)} className="btn-ghost">Cancel</button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <QueueSheet
         open={sheet}

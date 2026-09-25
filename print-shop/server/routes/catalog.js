@@ -322,12 +322,22 @@ router.post('/:id/print-run', (req, res) => {
 /** Line the waiting orders up without starting a print. */
 router.post('/:id/queue', (req, res) => {
   try {
-    const result = printRun.queueDemand(req.params.id, { source: req.body.source || 'scan' });
+    // A quantity means she said how many. Without one it is the older "line
+    // up everything this product owes" call.
+    const asked = req.body.quantity;
+    const result = asked == null || asked === ''
+      ? printRun.queueDemand(req.params.id, { source: req.body.source || 'scan' })
+      : printRun.queueRun(req.params.id, asked, { source: req.body.source || 'scan' });
+
+    const orders = result.queued.length;
+    const stock = result.stock_quantity || 0;
     res.json({
       data: result,
-      message: result.queued.length
-        ? `${result.queued.length} order(s) queued`
-        : 'Every order for this product is already queued',
+      message: orders
+        ? `${orders} order(s) queued${stock ? `, ${stock} for stock` : ''}`
+        : stock
+          ? `${stock} queued for stock`
+          : 'Every order for this product is already queued',
     });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });

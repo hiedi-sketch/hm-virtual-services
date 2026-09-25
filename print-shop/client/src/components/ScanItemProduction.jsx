@@ -55,7 +55,7 @@ export default function ScanItemProduction({ match, onChanged, onDone, onStock, 
   async function queueThem() {
     setBusy(true);
     try {
-      const { data, message } = await printApi.queueItemDemand(itemId);
+      const { data, message } = await printApi.queueItemDemand(itemId, { quantity: Number(quantity) });
       setDemand(data.demand);
       toast.success(message || 'Queued');
       await onChanged?.();
@@ -205,7 +205,7 @@ export default function ScanItemProduction({ match, onChanged, onDone, onStock, 
       )}
 
       <div>
-        <label className="label" htmlFor="print-run-quantity">How many are you printing?</label>
+        <label className="label" htmlFor="print-run-quantity">How many?</label>
         <input
           id="print-run-quantity"
           type="number"
@@ -216,7 +216,8 @@ export default function ScanItemProduction({ match, onChanged, onDone, onStock, 
           className="input text-2xl font-bold text-center"
         />
         <p className="text-[11px] text-gray-500 mt-1">
-          Orders are filled soonest promise first; the rest goes to stock.
+          Printing now takes whole orders only — half a line printed cannot ship. Queueing can
+          take part of one. Either way, soonest promise first, and the rest goes to stock.
         </p>
       </div>
 
@@ -229,12 +230,10 @@ export default function ScanItemProduction({ match, onChanged, onDone, onStock, 
       </button>
 
       <div className="grid grid-cols-2 gap-2">
-        <button
-          disabled={busy || !demand.orders.some((o) => !o.job_status)}
-          onClick={queueThem}
-          className="btn-secondary"
-        >
-          Queue the orders
+        {/* The same number, one step earlier: on the Print Queue rather than
+            on the plate. It is never assumed — a plate holds what it holds. */}
+        <button disabled={busy || !Number(quantity)} onClick={queueThem} className="btn-secondary">
+          {busy ? 'Queueing…' : `Queue ${Number(quantity) || 0}`}
         </button>
         <button onClick={onStock} className="btn-secondary">Adjust stock</button>
       </div>
