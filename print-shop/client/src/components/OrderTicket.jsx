@@ -4,14 +4,13 @@ import { money, shortDate } from '../api/print';
 
 /**
  * The paper that travels with the job. Everything needed to work the order is
- * on it. The barcode at the bottom moves the whole order a stage on when it is
- * scanned; the small one beside each product opens that product's print run —
+ * on it. The barcode in the header moves the whole order a stage on when it is
+ * scanned — up beside the order number, where a hand reaching for the sheet
+ * already is; the small one beside each product opens that product's print run —
  * how many the shop owes across every order, and how many she is putting on
  * the plate. So the sheet on the bench and the shop's own record stay the same
  * thing.
  */
-
-const STAGE_BOXES = ['Confirmed', 'Queued', 'Production', 'Finishing', 'Packing', 'Shipped'];
 
 function Ticket({ order, shopName, stages }) {
   const current = stages.findIndex((s) => s.key === order.status);
@@ -19,11 +18,19 @@ function Ticket({ order, shopName, stages }) {
   return (
     <div className="print-page p-6 text-gray-900" style={{ pageBreakInside: 'avoid' }}>
       <div className="flex items-start justify-between gap-4 border-b-2 border-gray-800 pb-2">
-        <div>
+        <div className="shrink-0">
           <p className="text-[11px] uppercase tracking-widest text-gray-500">{shopName}</p>
           <p className="text-2xl font-bold leading-tight">{order.order_number}</p>
         </div>
-        <div className="text-right text-xs leading-snug">
+
+        {/* Between the number and the dates: the three things you look for
+            when you pick the sheet up. It shrinks to fit a long order number
+            rather than pushing the dates off the edge. */}
+        <div className="min-w-0 flex-1 flex justify-center px-2">
+          <Barcode value={order.barcode || order.order_number} height={52} moduleWidth={2} />
+        </div>
+
+        <div className="text-right text-xs leading-snug shrink-0">
           <p><span className="text-gray-500">Ordered</span> {shortDate(order.order_date)}</p>
           <p><span className="text-gray-500">Promised</span> <span className="font-bold">{shortDate(order.promised_ship_date)}</span></p>
           {order.order_type === 'wholesale' && <p className="font-bold uppercase">Wholesale</p>}
@@ -92,24 +99,23 @@ function Ticket({ order, shopName, stages }) {
       {/* Ticked off as the order is scanned along, so the paper shows the same
           story as the screen even when it is sitting on a shelf. */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {STAGE_BOXES.map((label, i) => (
+        {/* The shop's own stages, not a copy of them — a second list here
+            drifted out of step the moment one was added. */}
+        {stages.map((stage, i) => (
           <span
-            key={label}
+            key={stage.key}
             className={`text-[11px] px-2 py-1 border rounded ${
-              current > i ? 'border-gray-800 bg-gray-800 text-white font-semibold' : 'border-gray-300 text-gray-500'
+              i <= current ? 'border-gray-800 bg-gray-800 text-white font-semibold' : 'border-gray-300 text-gray-500'
             }`}
           >
-            {current > i ? '✓ ' : ''}{label}
+            {i < current ? '✓ ' : ''}{stage.label}
           </span>
         ))}
       </div>
 
-      <div className="text-center border-t-2 border-gray-800 pt-3">
-        <Barcode value={order.barcode || order.order_number} height={70} moduleWidth={2} />
-        <p className="text-[11px] text-gray-500 mt-1">
-          Scan this to move the order on a stage · scan a product above to print a batch of it
-        </p>
-      </div>
+      <p className="text-[11px] text-gray-500 border-t border-gray-300 pt-2 mt-3 text-center">
+        Scan the code at the top to move the order on a stage · scan a product above to print a batch of it
+      </p>
     </div>
   );
 }
