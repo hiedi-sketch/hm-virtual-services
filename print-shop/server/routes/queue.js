@@ -14,6 +14,7 @@ const router = express.Router();
 const EDITABLE = [
   'order_id', 'order_item_id', 'item_id', 'quantity', 'status', 'priority',
   'position', 'printer', 'filament_id', 'estimated_minutes', 'notes', 'started_at',
+  'print_minutes_override',
 ];
 
 function queuePayload() {
@@ -76,34 +77,55 @@ router.post('/', (req, res) => {
   res.status(201).json({ data: queuePayload() });
 });
 
+/**
+ * Every job on the same plate. A run moves as one: it went on together and it
+ * comes off together, so starting, finishing or removing any of it is doing
+ * that to all of it.
+ */
+function runJobs(entry) {
+  if (!entry.run_id) return [entry];
+  return db.prepare("SELECT * FROM queue_jobs WHERE run_id = ? AND status NOT IN ('done','cancelled') ORDER BY id")
+    .all(entry.run_id);
+}
+
 router.put('/:id', (req, res) => {
   const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Queue entry not found' });
 
-  const nextStatus = req.body.status || entry.status;
-  const justCompleted = nextStatus === 'done' && entry.status !== 'done';
+  // A quantity is about one share, not the plate; everything else is the plate.
+  const perJob = req.body.quantity !== undefined || req.body.order_item_id !== undefined;
+  const members = perJob ? [entry] : runJobs(entry);
 
   const update = db.transaction(() => {
-    const keys = EDITABLE.filter((k) => req.body[k] !== undefined);
-    if (keys.length) {
-      db.prepare(
-        `UPDATE queue_jobs SET ${keys.map((k) => `${k}=?`).join(', ')}, updated_at=CURRENT_TIMESTAMP WHERE id=?`
-      ).run(...keys.map((k) => req.body[k]), entry.id);
-    }
-    if (nextStatus === 'printing' && !entry.started_at) {
-      db.prepare('UPDATE queue_jobs SET started_at = CURRENT_TIMESTAMP WHERE id = ?').run(entry.id);
-    }
-    // Starting a job here means the same thing as starting it from the order:
-    // that order is in production now. Forward only.
-    if (nextStatus === 'printing' && entry.order_id) {
-      flow.advanceTo(entry.order_id, 'in_production', { source: 'queue', note: 'a print started' });
-    }
-    if (justCompleted) {
-      db.prepare('UPDATE queue_jobs SET completed_at = CURRENT_TIMESTAMP WHERE id = ?').run(entry.id);
-      jobs.completeJob({ ...entry, ...req.body, id: entry.id });
+    for (const job of members) {
+      const nextStatus = req.body.status || job.status;
+      const justCompleted = nextStatus === 'done' && job.status !== 'done';
+
+      const keys = EDITABLE.filter((k) => req.body[k] !== undefined);
+      if (keys.length) {
+        db.prepare(
+          `UPDATE queue_jobs SET ${keys.map((k) => `${k}=?`).join(', ')}, updated_at=CURRENT_TIMESTAMP WHERE id=?`
+        ).run(...keys.map((k) => req.body[k]), job.id);
+      }
+      if (nextStatus === 'printing' && !job.started_at) {
+        db.prepare('UPDATE queue_jobs SET started_at = CURRENT_TIMESTAMP WHERE id = ?').run(job.id);
+      }
+      // Starting a job here means the same thing as starting it from the
+      // order: that order is in production now. Forward only.
+      if (nextStatus === 'printing' && job.order_id) {
+        flow.advanceTo(job.order_id, 'in_production', { source: 'queue', note: 'a print started' });
+      }
+      if (justCompleted) {
+        db.prepare('UPDATE queue_jobs SET completed_at = CURRENT_TIMESTAMP WHERE id = ?').run(job.id);
+        jobs.completeJob({ ...job, ...req.body, id: job.id, quantity: job.quantity });
+      }
     }
 
-    jobs.settleOrder(entry.order_id);
+    // Settled after the whole plate has moved, or the first share would send
+    // its order to finishing while the rest of the plate is still on it.
+    for (const orderId of new Set(members.map((j) => j.order_id).filter(Boolean))) {
+      jobs.settleOrder(orderId);
+    }
   });
   update();
 
@@ -113,7 +135,8 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
   const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Queue entry not found' });
-  db.prepare('DELETE FROM queue_jobs WHERE id = ?').run(req.params.id);
+  const ids = runJobs(entry).map((j) => j.id);
+  db.prepare(`DELETE FROM queue_jobs WHERE id IN (${ids.map(() => '?').join(',')})`).run(...ids);
   res.json({ data: queuePayload() });
 });
 
@@ -121,7 +144,13 @@ router.delete('/:id', (req, res) => {
 router.put('/reorder/positions', (req, res) => {
   const { ids = [] } = req.body;
   const update = db.prepare('UPDATE queue_jobs SET position = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
-  db.transaction(() => ids.forEach((id, index) => update.run(index + 1, id)))();
+  db.transaction(() => ids.forEach((id, index) => {
+    const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(id);
+    if (!entry) return;
+    // The list sends one id per plate. Every share of that plate takes the
+    // same place, or the plate would come apart the moment it is moved.
+    for (const job of runJobs(entry)) update.run(index + 1, job.id);
+  }))();
   res.json({ data: queuePayload() });
 });
 
@@ -145,9 +174,18 @@ function pickListPayload(entry) {
 router.get('/:id/picklist', (req, res) => {
   const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
   if (!entry) return res.status(404).json({ error: 'Queue job not found' });
-  ensurePicks(entry);
-  res.json({ data: pickListPayload(entry) });
+  // Gathering is done for the plate: nine openers is nine openers' worth of
+  // filament, whoever they are for.
+  ensurePicks(wholeRun(entry));
+  res.json({ data: pickListPayload(wholeRun(entry)) });
 });
+
+/** The primary job of a run, carrying the run's whole quantity. */
+function wholeRun(entry) {
+  const members = runJobs(entry);
+  const primary = members[0] || entry;
+  return { ...primary, quantity: members.reduce((sum, j) => sum + (Number(j.quantity) || 0), 0) };
+}
 
 /** Rebuild from current stock — useful if the recipe or shelf changed. */
 router.delete('/:id/picklist', (req, res) => {

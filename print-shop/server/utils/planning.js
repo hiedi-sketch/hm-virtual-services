@@ -38,13 +38,87 @@ function activeQueue() {
     )
     .all(...ACTIVE_QUEUE_STATUSES);
 
-  return rows.sort((a, b) => {
+  const sorted = rows.sort((a, b) => {
     const p = (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1);
     if (p !== 0) return p;
     if (a.position !== b.position) return (a.position || 0) - (b.position || 0);
     return a.id - b.id;
   });
+
+  return groupRuns(sorted);
 }
+
+/** Least advanced first: a run is only started when all of it is. */
+const RUN_RANK = { queued: 0, printing: 1, post_processing: 2 };
+
+/**
+ * Jobs queued in one go are one plate, so the queue shows them as one job.
+ *
+ * Nine Fox openers is nine on the bed, whether they are three for Susie, six
+ * for Pam, or one for the shelf — and a queue that lists those as three jobs
+ * is describing the paperwork rather than the work. The shares are kept, and
+ * listed underneath, because that is what comes off the plate and goes where.
+ *
+ * A job with no run behind it — started from an order, or made before runs
+ * existed — is a run of one, so nothing has to know the difference.
+ */
+function groupRuns(rows) {
+  const runs = new Map();
+
+  for (const row of rows) {
+    const key = row.run_id || `job:${row.id}`;
+    const run = runs.get(key);
+    if (!run) {
+      runs.set(key, { key, rows: [row] });
+      continue;
+    }
+    run.rows.push(row);
+  }
+
+  return [...runs.values()].map(({ key, rows: group }) => {
+    const first = group[0];
+    const quantity = group.reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+
+    // What each order gets off this plate, and what is left for the shelf.
+    const parts = group.map((r) => ({
+      job_id: r.id,
+      order_id: r.order_id || null,
+      order_item_id: r.order_item_id || null,
+      order_number: r.order_number || null,
+      customer_name: r.customer_name || null,
+      promised_ship_date: r.promised_ship_date || null,
+      quantity: Number(r.quantity) || 0,
+      stock: !r.order_id,
+    })).sort((a, b) => {
+      if (a.stock !== b.stock) return a.stock ? 1 : -1;   // the shelf goes last
+      return (a.promised_ship_date || '9999-12-31').localeCompare(b.promised_ship_date || '9999-12-31');
+    });
+
+    const status = group
+      .map((r) => r.status)
+      .sort((a, b) => (RUN_RANK[a] ?? 0) - (RUN_RANK[b] ?? 0))[0];
+
+    return {
+      ...first,
+      // The plate's own figures, not the first share's.
+      id: first.id,
+      run_id: row_run_id(key),
+      job_ids: group.map((r) => r.id),
+      quantity,
+      status,
+      // Her figure for this plate if she has given one, and otherwise cleared
+      // so the schedule works one out for the whole plate — nine in a run is
+      // not three runs of three, and units_per_print is why it is not.
+      estimated_minutes: first.print_minutes_override ?? null,
+      print_minutes_override: first.print_minutes_override ?? null,
+      parts,
+      order_count: parts.filter((p) => !p.stock).length,
+      stock_quantity: parts.filter((p) => p.stock).reduce((sum, p) => sum + p.quantity, 0),
+    };
+  });
+}
+
+const row_run_id = (key) => (key.startsWith('job:') ? null : key);
 
 function estimatedMinutes(row) {
   if (row.estimated_minutes != null) return row.estimated_minutes;

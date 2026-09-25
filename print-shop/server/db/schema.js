@@ -356,6 +356,13 @@ function createSchema() {
     'ALTER TABLE orders ADD COLUMN bin_id INTEGER REFERENCES bins(id)',
     // Whether a bin holds one order or a shelf of outgoing parcels.
     "ALTER TABLE bins ADD COLUMN kind TEXT NOT NULL DEFAULT 'order'",
+    // Jobs queued in one go are one plate: they share a run id and the Print
+    // Queue shows them as a single job with the orders listed underneath.
+    'ALTER TABLE queue_jobs ADD COLUMN run_id TEXT',
+    // What this plate actually takes. Six on a bed is not six times one, so the
+    // figure worked out from the recipe is a starting point she can correct —
+    // and the corrected one is what the queue's hours are built from.
+    'ALTER TABLE queue_jobs ADD COLUMN print_minutes_override REAL',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }

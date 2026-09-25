@@ -240,6 +240,34 @@ take is queued for stock. A line the shelf or a bin already covers is left alone
 The header's **Send N to the Print Queue** is the one that does not ask, because the number
 is in the button: it queues everything outstanding, in one go.
 
+#### One plate, one job
+
+What goes on a bed together is one job on the queue, however many orders it serves:
+
+```
+2   10 × Fox Tab Opener            Queued
+    4h of print time · yours
+      3   11161 · Susie Bowers     due Sep 29
+      6   11162 · Pam Schwetman    due Oct 1
+      1   Stock build
+```
+
+Nine for two customers and one for the shelf is not three jobs — it is one plate, and a
+queue that lists it as three is describing the paperwork rather than the work. The shares
+are kept and listed underneath, because that is what comes off the plate and where each
+part of it goes. Queue another ten Foxes tomorrow and that is its own job, sitting
+separately in the order you put it there.
+
+The whole plate moves as one: starting, finishing, reordering or removing any of it does
+that to all of it, and the pick list covers the plate rather than one share of it — nine
+openers is nine openers' worth of filament, whoever they are for.
+
+**The print time is yours to correct.** The figure worked out from the recipe assumes one
+product at a time, and a bed of six rarely takes six times as long. Tap the time on a job
+and type what it really takes; the job is marked *yours*, and **Print hours queued** — and
+therefore when the queue clears and when each order is projected to ship — is built from
+your figure rather than the arithmetic.
+
 **Nothing reaches the Print Queue on its own.** Confirming an order does not queue it;
 starting one product queues that product and not the rest of its order; a Shopify order
 arriving queues nothing at all. The queue is the plate order, and the plate order is a

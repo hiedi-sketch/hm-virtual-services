@@ -23,6 +23,8 @@ export default function Queue() {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ item_id: '', quantity: 1, priority: 'normal', filament_id: '', printer: '', order_id: '' });
   const [picking, setPicking] = useState(null);
+  // The job whose print time is being corrected.
+  const [timing, setTiming] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,6 +55,24 @@ export default function Queue() {
       refresh();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not update that job');
+    }
+  }
+
+  /**
+   * What this plate really takes. The figure from the recipe assumes one
+   * product at a time; a bed of six rarely takes six times as long, and the
+   * queue's hours are only worth reading if they say what she says.
+   */
+  async function saveTime(entry, minutes) {
+    const n = Math.max(0, Number(minutes) || 0);
+    setTiming(null);
+    if (!n || n === Math.round(entry.estimated_minutes)) return;
+    try {
+      setData(await printApi.updateQueue(entry.id, { print_minutes_override: n }));
+      toast.success(`${entry.item_name}: ${hoursMinutes(n)} on the plate`);
+      refresh();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not change that print time'));
     }
   }
 
@@ -176,10 +196,57 @@ export default function Queue() {
                     {entry.priority === 'low' && <Pill tone="gray">Low</Pill>}
                   </div>
                   <p className="text-xs text-gray-500">
-                    {entry.order_number ? `${entry.order_number} · ${entry.customer_name || 'no name'}` : 'Stock build'}
-                    {' · '}{hoursMinutes(entry.estimated_minutes)} of print time
+                    {/* The plate's own time, and hers if she has given one —
+                        six on a bed is not six times one. */}
+                    {timing?.id === entry.id ? (
+                      <input
+                        type="number"
+                        min="1"
+                        inputMode="numeric"
+                        autoFocus
+                        value={timing.value}
+                        onChange={(e) => setTiming({ id: entry.id, value: e.target.value })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveTime(entry, timing.value);
+                          if (e.key === 'Escape') setTiming(null);
+                        }}
+                        onBlur={() => saveTime(entry, timing.value)}
+                        className="input !w-20 !py-0 !px-1 text-xs text-center"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setTiming({ id: entry.id, value: Math.round(entry.estimated_minutes) })}
+                        title="Say what this plate really takes"
+                        className="hover:underline decoration-dotted"
+                      >
+                        {hoursMinutes(entry.estimated_minutes)}
+                      </button>
+                    )}
+                    {' of print time'}
+                    {entry.print_minutes_override != null && <span className="text-teal-700"> · yours</span>}
                     {entry.printer && ` · ${entry.printer}`}
                   </p>
+
+                  {/* What comes off this plate and where it goes. One line each,
+                      because a plate serving two orders is still one plate. */}
+                  <ul className="mt-1.5 text-xs space-y-0.5">
+                    {entry.parts?.map((part) => (
+                      <li key={part.job_id} className="flex items-baseline gap-2">
+                        <span className="font-bold tabular-nums w-7 shrink-0 text-right text-gray-700">
+                          {part.quantity}
+                        </span>
+                        <span className={`min-w-0 truncate ${part.stock ? 'text-emerald-800' : 'text-gray-600'}`}>
+                          {part.stock
+                            ? 'Stock build'
+                            : `${part.order_number} · ${part.customer_name || 'no name'}`}
+                        </span>
+                        {part.promised_ship_date && (
+                          <span className="text-gray-400 shrink-0">due {shortDate(part.promised_ship_date)}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="text-xs text-gray-500">Off the printer</p>

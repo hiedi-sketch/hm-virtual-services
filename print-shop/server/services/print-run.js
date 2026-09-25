@@ -259,9 +259,12 @@ function queueRun(itemId, quantity, { source = 'scan' } = {}) {
   const queued = [];
   let remaining = qty;
 
+  // One plate, however many orders it serves. The run id is what keeps them
+  // together on the Print Queue instead of scattering into a job each.
+  const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const insert = db.prepare(`
-    INSERT INTO queue_jobs (order_id, order_item_id, item_id, quantity, status, position, estimated_minutes)
-    VALUES (?, ?, ?, ?, 'queued', ?, ?)
+    INSERT INTO queue_jobs (order_id, order_item_id, item_id, quantity, status, position, estimated_minutes, run_id)
+    VALUES (?, ?, ?, ?, 'queued', ?, ?, ?)
   `);
 
   for (const line of openLines(itemId).filter((l) => !l.job_status)) {
@@ -274,6 +277,7 @@ function queueRun(itemId, quantity, { source = 'scan' } = {}) {
     insert.run(
       line.order_id, line.order_item_id, item.id, take, position,
       estimatedMinutes({ item_id: item.id, quantity: take, estimated_minutes: null }),
+      runId,
     );
 
     // Agreeing to make it is what confirming an order means. The line just
@@ -295,18 +299,19 @@ function queueRun(itemId, quantity, { source = 'scan' } = {}) {
   if (remaining > 0) {
     const position = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM queue_jobs').get().max + 1;
     const info = db.prepare(`
-      INSERT INTO queue_jobs (item_id, quantity, status, position, estimated_minutes, notes)
-      VALUES (?, ?, 'queued', ?, ?, ?)
+      INSERT INTO queue_jobs (item_id, quantity, status, position, estimated_minutes, notes, run_id)
+      VALUES (?, ?, 'queued', ?, ?, ?, ?)
     `).run(
       item.id, remaining, position,
       estimatedMinutes({ item_id: item.id, quantity: remaining, estimated_minutes: null }),
-      'For stock',
+      'For stock', runId,
     );
     stockJob = { id: info.lastInsertRowid, quantity: remaining };
   }
 
   return {
     item: { id: item.id, name: item.name, sku: item.sku },
+    run_id: runId,
     queued_quantity: qty,
     queued,
     stock_quantity: remaining,
