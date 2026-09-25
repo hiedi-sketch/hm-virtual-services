@@ -596,6 +596,34 @@ there — the same path as any other print.
 **Something else on the plate, for stock** adds a run that belongs to no order at all, for
 the times the bed is shared between a product and a few spares of something else.
 
+### Where each product has got to
+
+Every product on an order card carries one of four statuses, and each one is also a place
+you can put it — tap it and pick:
+
+| | |
+| --- | --- |
+| **Waiting** | nothing made, nothing queued — it is on the To Print list |
+| **Queued** | it has a job on the Print Queue, waiting its turn |
+| **Printing** | it is on a printer, or off it and being finished by hand |
+| **Printed** | its units exist: the job is done, or the shelf or its bin already had them |
+
+None of it is stored. The status is read off the job and the allocation, so it cannot
+disagree with the queue or the shelf — and picking one *does the thing it describes* rather
+than writing the word down. **Queued** makes the job; **Printing** starts it and moves the
+order into production; **Waiting** takes the job back off the queue, and only this line's
+share of it, since the rest of that plate belongs to other orders.
+
+**Printed is one way.** Reaching it puts units on the shelf and takes filament off the
+spools, and there is no honest way to walk that back from a dropdown — the stock has moved.
+Going backwards is refused and says so; correcting it is a stock adjustment in the catalog,
+which is a thing that admits what it is doing.
+
+Two calls worth knowing about: a product on the bench still reads **Printing**, because it
+is work in progress rather than a finished thing, and a line the shelf or its bin already
+covers reads **Printed**, because its units are made and sitting there. Say the word if
+either should read differently.
+
 ### What a line still needs
 
 Six ordered is not six to print. Five may already be on the shelf and one on a plate, and

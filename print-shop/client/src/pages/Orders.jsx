@@ -10,24 +10,28 @@ import LineCoverage, { CoverageNote } from '../components/LineCoverage';
 import BinPicker from '../components/BinPicker';
 import { useScanner } from '../components/ScanContext';
 
-// How a single product's print job reads on the order card.
-const JOB_LABEL = {
-  queued: 'Waiting', printing: 'Printing', post_processing: 'Finishing', done: 'Printed', cancelled: 'Cancelled',
-};
-const JOB_TONE = {
-  queued: 'gray', printing: 'amber', post_processing: 'violet', done: 'green', cancelled: 'gray',
-};
+/**
+ * Where one product on an order has got to. Four, because four is what there
+ * is to know standing at the bench — and each one is a place she can put it,
+ * not just a word the shop chose.
+ */
+const LINE_STATUSES = [
+  { key: 'waiting', label: 'Waiting', tone: 'gray' },
+  { key: 'queued', label: 'Queued', tone: 'blue' },
+  { key: 'printing', label: 'Printing', tone: 'amber' },
+  { key: 'printed', label: 'Printed', tone: 'green' },
+];
 
-// Where a line's units are coming from, when there is no job to speak for it.
-const SOURCE_LABEL = { stock: 'Pull stock', incoming: 'Printing for stock', print: 'To print' };
-const SOURCE_TONE = { stock: 'teal', incoming: 'amber', print: 'gray' };
+const lineState = (line) =>
+  LINE_STATUSES.find((s) => s.key === line.line_status) || { label: 'Waiting', tone: 'gray' };
 
-/** What a line reads as: its job if it has one, else where its units come from. */
-function lineState(line) {
-  if (line.job_status) return { label: JOB_LABEL[line.job_status], tone: JOB_TONE[line.job_status] };
-  if (line.source) return { label: SOURCE_LABEL[line.source], tone: SOURCE_TONE[line.source] };
-  return { label: 'No job yet', tone: 'gray' };
-}
+// The pill colours, as a dropdown has to carry them itself.
+const PILL_CLASS = {
+  gray: 'bg-linen text-gray-600',
+  blue: 'bg-blue-100 text-blue-800',
+  amber: 'bg-amber-100 text-amber-800',
+  green: 'bg-emerald-100 text-emerald-800',
+};
 
 // Only used until the real list arrives from the server, which owns it.
 const FALLBACK_STAGES = [
@@ -58,6 +62,8 @@ export default function Orders() {
   const [shipping, setShipping] = useState(null);
   // The line whose on hand / needed / printing is being adjusted.
   const [coverage, setCoverage] = useState(null);
+  // The line whose status is mid-change, so it cannot be clicked twice.
+  const [lineBusy, setLineBusy] = useState(null);
   const [shipBusy, setShipBusy] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(BLANK);
@@ -248,6 +254,22 @@ export default function Orders() {
       refresh();
     } catch (err) {
       toast.error(describeError(err, 'Could not move that product on'));
+    }
+  }
+
+  /** Put one product where it really is: waiting, queued, printing or printed. */
+  async function setLineStatus(order, line, status) {
+    setLineBusy(line.id);
+    try {
+      const { message } = await printApi.setLineStatus(order.id, line.id, status);
+      toast.success(message);
+      await load();
+      refresh();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not move that product'));
+      await load();
+    } finally {
+      setLineBusy(null);
     }
   }
 
@@ -469,7 +491,7 @@ export default function Orders() {
                 <div className="mt-3 border border-linen rounded-lg p-2.5">
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <p className="text-[11px] uppercase tracking-wide text-gray-500">Products on this order</p>
-                    {o.items.some((l) => l.can_start || (l.item_id && !l.job_status)) && (
+                    {o.items.some((l) => l.item_id && ['waiting', 'queued'].includes(l.line_status)) && (
                       <button
                         className="btn-primary !py-1 !px-2.5 text-xs"
                         onClick={() => startProduction(o)}
@@ -482,7 +504,9 @@ export default function Orders() {
                   {o.items.some((l) => l.item_id) ? (
                     <div className="space-y-1">
                       {o.items.filter((l) => l.item_id).map((line) => {
-                        const startable = line.can_start || !line.job_status;
+                        // Anything not yet on a printer can be started; what is
+                        // on one moves along its own short chain.
+                        const startable = line.line_status === 'waiting' || line.line_status === 'queued';
                         const state = lineState(line);
                         return (
                           <div key={line.id} className="flex items-center gap-2 text-xs">
@@ -494,7 +518,19 @@ export default function Orders() {
                                   tap away from being changed. */}
                               <CoverageNote line={line} onEdit={() => setCoverage({ order: o, line })} />
                             </span>
-                            <Pill tone={state.tone}>{state.label}</Pill>
+                            {/* The status is also the way to change it: tap it
+                                and put the product where it really is. */}
+                            <select
+                              value={line.line_status || 'waiting'}
+                              disabled={lineBusy === line.id}
+                              onChange={(e) => setLineStatus(o, line, e.target.value)}
+                              title="Move this product"
+                              className={`shrink-0 appearance-none cursor-pointer rounded-full border-0 px-2 py-0.5 text-[11px] font-semibold ${PILL_CLASS[state.tone]}`}
+                            >
+                              {LINE_STATUSES.map((st) => (
+                                <option key={st.key} value={st.key}>{st.label}</option>
+                              ))}
+                            </select>
                             {startable ? (
                               <button
                                 className="btn-secondary !py-0.5 !px-2 text-xs shrink-0"

@@ -12,6 +12,7 @@ const packing = require('../services/packing');
 const allocation = require('../services/allocation');
 const bins = require('../services/bins');
 const lineCoverage = require('../services/line-coverage');
+const lineStatus = require('../services/line-status');
 
 const router = express.Router();
 
@@ -50,7 +51,10 @@ function hydrate(order, projectionsById, plan = null) {
   // from, so a card can show what to do with that one product rather than
   // only where the order has got to.
   const byLine = new Map(queue.filter((q) => q.order_item_id).map((q) => [q.order_item_id, q]));
-  const allocated = allocation.forOrder(order.id, plan);
+  // Worked out once for the whole card: every line's coverage and every line's
+  // status read from the same picture of the shop.
+  const shop = plan || allocation.plan();
+  const allocated = allocation.forOrder(order.id, shop);
   const items = totals.items.map((line) => {
     const job = byLine.get(line.id);
     const where = allocated.get(line.id) || null;
@@ -74,6 +78,9 @@ function hydrate(order, projectionsById, plan = null) {
       needed: where ? where.needs_printing : Number(line.quantity) || 0,
       printing: where ? where.printing + where.from_incoming : 0,
       shelf_total: where ? Number(where.qty_on_hand) || 0 : null,
+      // Waiting, Queued, Printing or Printed — read off the job and the
+      // allocation, so it cannot disagree with the queue or the shelf.
+      line_status: line.item_id ? lineStatus.statusOf(line, shop) : null,
     };
   });
 
@@ -292,6 +299,21 @@ router.post('/:id/jobs/:jobId/advance', (req, res) => {
  * Set what a line has on hand and what is on a printer. Needed is the rest of
  * the order, so it follows rather than being set.
  */
+/** Move one product on this order to a state by hand. */
+router.post('/:id/items/:lineId/status', (req, res) => {
+  try {
+    const result = lineStatus.setLineStatus(Number(req.params.lineId), req.body.status);
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    const { projections } = orderProjections();
+    res.json({
+      data: hydrate(order, new Map(projections.map((p) => [p.order_id, p]))),
+      message: result.message,
+    });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 router.post('/:id/items/:lineId/coverage', (req, res) => {
   try {
     const result = lineCoverage.setCoverage(Number(req.params.lineId), {

@@ -92,6 +92,8 @@ export const printApi = {
   advanceOrder: (id, body) => api.post(`/orders/${id}/advance`, body || {}).then((r) => r.data),
   setTracking: (id, code) => api.post(`/orders/${id}/tracking`, { code }).then((r) => r.data),
   packing: (id) => unwrap(api.get(`/orders/${id}/packing`)),
+  setLineStatus: (orderId, lineId, status) =>
+    api.post(`/orders/${orderId}/items/${lineId}/status`, { status }).then((r) => r.data),
   setLineCoverage: (orderId, lineId, body) =>
     api.post(`/orders/${orderId}/items/${lineId}/coverage`, body).then((r) => r.data),
   duplicates: () => unwrap(api.get('/catalog/duplicates')),
