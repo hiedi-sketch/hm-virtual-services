@@ -33,6 +33,17 @@ const GROUPS = [
     ],
   },
   {
+    title: 'Where orders come from',
+    fields: [
+      {
+        key: 'sales_channels',
+        label: 'Sales channels',
+        type: 'text',
+        hint: 'Comma separated. These are the choices on an order\'s "where it came from", and the columns on catalog pricing.',
+      },
+    ],
+  },
+  {
     title: 'Where filament lives',
     fields: [
       { key: 'shelf_locations', label: 'Shelf slots', type: 'text', hint: 'Comma separated. Add more as the shelf grows.' },

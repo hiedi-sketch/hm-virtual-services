@@ -48,11 +48,23 @@ const FALLBACK_STAGES = [
  * Where an order came from. Everything arrives through Shopify, which is not
  * the same as everything coming from Shopify — a Faire order and an Etsy one
  * both land the same way and need telling apart afterwards.
+ *
+ * The list is the shop's own sales channels, from Settings, so adding a place
+ * she sells is an edit there rather than a change here. These are only the
+ * fallback for before that has loaded.
  */
-const ORDER_SOURCES = ['Shopify', 'Etsy', 'Faire'];
+const ORDER_SOURCES = ['Shopify', 'Etsy', 'Faire', 'TikTok', 'Amazon'];
 
-/** The three, plus whatever this order already says, so nothing is lost. */
-const sourcesFor = (channel) => [...new Set([...(channel ? [channel] : []), ...ORDER_SOURCES])];
+/**
+ * The shop's channels, plus whatever this order already says, so nothing is
+ * lost.
+ *
+ * A select shows its first option when its value matches none of them, which
+ * would quietly relabel an order that came from somewhere else — an old import
+ * saying "web", say — the moment anyone opened it. Its own value goes first.
+ */
+const sourcesFor = (channel, known = ORDER_SOURCES) =>
+  [...new Set([...(channel ? [channel] : []), ...known])];
 
 const BLANK = {
   customer_name: '', customer_email: '', channel: 'Shopify', order_type: 'retail',
@@ -83,6 +95,7 @@ export default function Orders() {
   const [offChain, setOffChain] = useState([]);
   const [ticket, setTicket] = useState(null);
   const [shopName, setShopName] = useState('Print Shop');
+  const [sources, setSources] = useState(ORDER_SOURCES);
   const { scan } = useScanner();
 
   // The pipeline is defined once, on the server.
@@ -90,7 +103,11 @@ export default function Orders() {
     printApi.orderStages()
       .then((d) => { setStages(d.stages); setOffChain(d.off_chain); })
       .catch(() => { /* the fallback list still renders */ });
-    printApi.getSettings().then((s) => setShopName(s.shop_name || 'Print Shop')).catch(() => {});
+    printApi.getSettings().then((s) => {
+      setShopName(s.shop_name || 'Print Shop');
+      const listed = String(s.sales_channels || '').split(',').map((c) => c.trim()).filter(Boolean);
+      if (listed.length) setSources(listed);
+    }).catch(() => { /* the fallback list still renders */ });
   }, []);
 
   const load = useCallback(async () => {
@@ -448,7 +465,7 @@ export default function Orders() {
                       title="Where this order came from"
                       className="appearance-none cursor-pointer rounded-full border-0 bg-linen text-gray-600 px-2 py-0.5 text-[11px] font-semibold"
                     >
-                      {sourcesFor(o.channel).map((c) => (
+                      {sourcesFor(o.channel, sources).map((c) => (
                         <option key={c} value={c}>{c}</option>
                       ))}
                     </select>
@@ -761,12 +778,19 @@ export default function Orders() {
               <input type="email" className="input" value={form.customer_email || ''} onChange={(e) => setForm({ ...form, customer_email: e.target.value })} />
             </Field>
             <Field label="Where it came from">
-              <input list="order-channels" className="input" value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })} />
-              {/* The three places orders come from. Still free text, so a
-                  market stall in a church hall can be one too. */}
-              <datalist id="order-channels">
-                {sourcesFor(form.channel).map((c) => <option key={c} value={c} />)}
-              </datalist>
+              {/* A list you pick from, not a box you type in. This was a
+                  datalist, which looks like a dropdown and is not one: the
+                  browser filters its suggestions by what is already in the
+                  field, so an order that said Shopify offered exactly one
+                  choice — Shopify — and there was no way to see the other
+                  places she sells without emptying the box first. */}
+              <select className="input" value={form.channel || ''} onChange={(e) => setForm({ ...form, channel: e.target.value })}>
+                {/* An order that never said where it came from keeps saying so
+                    until someone picks. A select with no matching option shows
+                    its first one, which would have quietly relabelled it. */}
+                {!form.channel && <option value="">Not set</option>}
+                {sourcesFor(form.channel, sources).map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </Field>
             <Field label="Pricing">
               <select className="input" value={form.order_type} onChange={(e) => setForm({ ...form, order_type: e.target.value })}>

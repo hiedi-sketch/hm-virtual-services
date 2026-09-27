@@ -16,7 +16,9 @@ const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const dayName = (iso) => WEEKDAY[new Date(`${iso}T00:00:00`).getDay()];
 
 /** Enough to tell one platform from another at a glance. */
-const CHANNEL_TONE = { shopify: 'green', etsy: 'amber', faire: 'violet' };
+const CHANNEL_TONE = {
+  shopify: 'green', etsy: 'amber', faire: 'violet', tiktok: 'red', amazon: 'blue',
+};
 const toneFor = (channel) => CHANNEL_TONE[String(channel || '').toLowerCase()] || 'gray';
 
 function OrderLine({ order, onOpen }) {
