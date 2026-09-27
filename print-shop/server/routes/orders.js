@@ -13,6 +13,7 @@ const allocation = require('../services/allocation');
 const bins = require('../services/bins');
 const lineCoverage = require('../services/line-coverage');
 const lineStatus = require('../services/line-status');
+const calendar = require('../services/calendar');
 
 const router = express.Router();
 
@@ -142,6 +143,15 @@ router.get('/stages', (req, res) => {
 
 router.get('/suggest-ship-date', (req, res) => {
   res.json({ data: suggestShipDate(req.query.order_date || null, Number(req.query.minutes) || 0) });
+});
+
+/**
+ * The next fortnight of promises, by day. Registered above `/:id` so the word
+ * is read as a page rather than an order id.
+ */
+router.get('/calendar', (req, res) => {
+  const days = Math.max(1, Math.min(60, Number(req.query.days) || 14));
+  res.json({ data: calendar.fortnight(days) });
 });
 
 router.get('/:id', (req, res) => {

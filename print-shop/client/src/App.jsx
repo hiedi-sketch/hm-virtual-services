@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Orders from './pages/Orders';
+import Calendar from './pages/Calendar';
 import Catalog from './pages/Catalog';
 import Filament from './pages/Filament';
 import Materials from './pages/Materials';
@@ -29,6 +30,7 @@ export default function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="orders" element={<Orders />} />
+            <Route path="calendar" element={<Calendar />} />
             <Route path="catalog" element={<Catalog />} />
             <Route path="filament" element={<Filament />} />
             <Route path="materials" element={<Materials />} />

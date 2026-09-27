@@ -44,8 +44,18 @@ const FALLBACK_STAGES = [
   { key: 'shipped', label: 'Shipped', tone: 'green' },
 ];
 
+/**
+ * Where an order came from. Everything arrives through Shopify, which is not
+ * the same as everything coming from Shopify — a Faire order and an Etsy one
+ * both land the same way and need telling apart afterwards.
+ */
+const ORDER_SOURCES = ['Shopify', 'Etsy', 'Faire'];
+
+/** The three, plus whatever this order already says, so nothing is lost. */
+const sourcesFor = (channel) => [...new Set([...(channel ? [channel] : []), ...ORDER_SOURCES])];
+
 const BLANK = {
-  customer_name: '', customer_email: '', channel: 'direct', order_type: 'retail',
+  customer_name: '', customer_email: '', channel: 'Shopify', order_type: 'retail',
   order_date: new Date().toISOString().slice(0, 10), promised_ship_date: '', notes: '',
   items: [],
 };
@@ -257,6 +267,20 @@ export default function Orders() {
     }
   }
 
+  /** Where an order came from. They all arrive through Shopify; that is not
+   *  the same as all coming from Shopify. */
+  async function setChannel(order, channel) {
+    if (channel === (order.channel || 'direct')) return;
+    try {
+      await printApi.updateOrder(order.id, { channel });
+      toast.success(`${order.order_number} came from ${channel}`);
+      await load();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not change where it came from'));
+      await load();
+    }
+  }
+
   /** Put one product where it really is: waiting, queued, printing or printed. */
   async function setLineStatus(order, line, status) {
     setLineBusy(line.id);
@@ -415,6 +439,19 @@ export default function Orders() {
                     {/* Which basket it is sitting in — the one thing you need
                         to know to go and put your hands on it. */}
                     {o.bin && <Pill tone="blue">{o.bin.label}</Pill>}
+                    {/* Everything imports from Shopify, but an order can have
+                        come from Faire or a market — so it is changed here,
+                        not buried in the edit form. */}
+                    <select
+                      value={o.channel || 'direct'}
+                      onChange={(e) => setChannel(o, e.target.value)}
+                      title="Where this order came from"
+                      className="appearance-none cursor-pointer rounded-full border-0 bg-linen text-gray-600 px-2 py-0.5 text-[11px] font-semibold"
+                    >
+                      {sourcesFor(o.channel).map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
                     {/* How far the box has got, for the one being packed. */}
                     {o.pull_from_stock > 0 && !['shipped', 'completed', 'cancelled'].includes(o.status) && (
                       <Pill tone="teal">
@@ -725,8 +762,10 @@ export default function Orders() {
             </Field>
             <Field label="Where it came from">
               <input list="order-channels" className="input" value={form.channel} onChange={(e) => setForm({ ...form, channel: e.target.value })} />
+              {/* The three places orders come from. Still free text, so a
+                  market stall in a church hall can be one too. */}
               <datalist id="order-channels">
-                {['direct', 'etsy', 'shopify', 'market', 'wholesale', 'custom'].map((c) => <option key={c} value={c} />)}
+                {sourcesFor(form.channel).map((c) => <option key={c} value={c} />)}
               </datalist>
             </Field>
             <Field label="Pricing">

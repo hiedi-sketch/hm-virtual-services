@@ -9,6 +9,7 @@ import printApi from '../api/print';
 const NAV = [
   { to: '/', label: 'Dashboard', icon: '▦', end: true },
   { to: '/orders', label: 'Orders', icon: '🧾' },
+  { to: '/calendar', label: 'Calendar', icon: '🗓' },
   { to: '/catalog', label: 'Catalog', icon: '📦' },
   { to: '/filament', label: 'Filament', icon: '🧵' },
   { to: '/materials', label: 'Materials', icon: '🔩' },

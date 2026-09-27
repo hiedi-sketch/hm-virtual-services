@@ -132,6 +132,36 @@ recursively. Self-references are detected and ignored rather than looping.
 
 ---
 
+## The calendar
+
+**Calendar** is the fortnight of promises: two rows of seven days, each listing the orders
+due that day as *order number · (items on it) · where it came from*. It is the wall chart
+version of the Orders page — what is due and when, rather than what any one order is.
+
+Nothing on it is stored. It is read fresh on every visit, whenever anything in the shop
+changes, when the tab comes back to the front, and on a minute's tick besides — so an order
+that ships at ten is off it by ten past, without a reload. Shipped, completed and cancelled
+orders never appear: this is what is still owed.
+
+Three things a fortnight cannot hold get their own rows underneath rather than being
+quietly dropped: **overdue** (promised before today and still outstanding), **no promised
+date**, and anything promised **after** the end of the window. Any order number on the page
+is a link into the Orders tab.
+
+**Print the fortnight** puts it on paper for the wall, one page, with the same three rows
+below the grid. A printed sheet is a snapshot; the screen is the truth.
+
+## Where an order came from
+
+Everything imports through Shopify, which is not the same as everything *coming* from
+Shopify — a Faire order and an Etsy one land the same way and need telling apart
+afterwards. So the source is a dropdown on the order card itself: **Shopify**, **Etsy**,
+**Faire**. It shows on the calendar beside each order, and on the order ticket.
+
+The field is still free text in the edit form, so a market stall in a church hall can be a
+place an order came from too; whatever an order already says is kept in its list rather
+than being silently changed to one of the three.
+
 ## Ship dates
 
 The queue is walked in print order — rush first, then position. Cumulative print hours
