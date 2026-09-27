@@ -341,11 +341,21 @@ unshipped orders currently shown, one to a sheet, with the count on the button s
 what is about to come out of the printer. Shipped, completed and cancelled orders are left
 out — a ticket travels with the job, and those have no job left. Reprinting one of those is
 still a tap on its own card's **Print**, and on a view with nothing unshipped in it the
-batch button steps aside rather than printing an empty stack. A ticket carries the order number, who it is for,
-the promised ship date, every line with quantity and SKU, the total, any note, a row of
-stage boxes ticked off as far as the order has got, and a Code 128 barcode.
+batch button steps aside rather than printing an empty stack.
 
-The barcode at the foot is the order's own code — `ORD-` and its order number, so `#1001`
+A ticket reads top to bottom in the order you need it. Above the first line: the shop's
+name, the order number, when it was promised and ordered, who it is for, their email, and
+where the order came from. Under that line and before any of the work: the order's own
+barcode, and beneath it the seven stage boxes — New, Confirmed, Production, Finishing,
+Packing, Mailed, Shipped — ticked off as far as the order has got. Then the lines
+themselves, with quantity, SKU, price and their own barcodes, the total, and any note.
+
+The boxes come from the shop's own stage list, so a stage added or renamed cannot leave a
+stale row printed on paper. The one word that differs is the Mail Bin stage, which the
+ticket calls **Mailed** — a box to tick when the parcel goes, rather than the name of the
+basket it waits in.
+
+The barcode under the line is the order's own code — `ORD-` and its order number, so `#1001`
 from Shopify prints as `ORD-1001`. The prefix means an order code can never be mistaken
 for a product SKU at the scanner. It is generated when the order is created, whether by
 hand, by import or by Shopify, and it never changes.
