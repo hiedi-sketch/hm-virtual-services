@@ -24,11 +24,17 @@ function OrderLine({ order, onOpen }) {
     <button
       type="button"
       onClick={() => onOpen(order)}
-      className="w-full text-left flex items-baseline gap-1.5 text-xs hover:bg-linen rounded px-1 py-0.5"
+      className="w-full text-left text-xs leading-tight hover:bg-linen rounded px-1 py-0.5"
     >
-      <span className="font-bold text-primary tabular-nums">{order.order_number}</span>
-      <span className="tabular-nums text-gray-500">({order.units})</span>
-      <span className="min-w-0 truncate text-gray-500">{order.channel}</span>
+      <span className="flex items-baseline gap-1.5">
+        <span className="font-bold text-primary tabular-nums">{order.order_number}</span>
+        <span className="tabular-nums text-gray-500">({order.units})</span>
+      </span>
+      {/* Its own line, and no truncation: a narrow cell must not hide where an
+          order came from. This is what she reads the calendar for. */}
+      <span className="block text-[10px] uppercase tracking-wide text-gray-500 break-words">
+        {order.channel || 'unknown'}
+      </span>
     </button>
   );
 }
