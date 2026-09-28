@@ -125,7 +125,9 @@ export const printApi = {
   suggestShipDate: (params) => unwrap(api.get('/orders/suggest-ship-date', { params })),
 
   queue: () => unwrap(api.get('/queue')),
-  addToQueue: (body) => unwrap(api.post('/queue', body)),
+  // The whole envelope, not just the payload: queuing a plate across several
+  // orders says what went where, and that message is worth showing.
+  addToQueue: (body) => api.post('/queue', body).then((r) => r.data),
   updateQueue: (id, body) => unwrap(api.put(`/queue/${id}`, body)),
   removeFromQueue: (id) => unwrap(api.delete(`/queue/${id}`)),
   reorderQueue: (ids) => unwrap(api.put('/queue/reorder/positions', { ids })),

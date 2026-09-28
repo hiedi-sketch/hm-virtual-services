@@ -11,6 +11,22 @@ const {
 const PRIORITY_RANK = { rush: 0, normal: 1, low: 2 };
 const ACTIVE_QUEUE_STATUSES = ['queued', 'printing', 'post_processing'];
 
+/**
+ * What is actually waiting for a printer, or on one.
+ *
+ * A job in finishing is not in the print queue any more: it has come off the
+ * bed and is on the bench, where the Finishing bin lists it. Leaving it on the
+ * queue put a "Mark done" button next to work that only needed taking off the
+ * printer — which is how a plate got marked finished, and its units went onto
+ * the shelf, before anyone had touched it. It also charged the queue's hours
+ * for printer time that had already been spent.
+ *
+ * It stays in ACTIVE_QUEUE_STATUSES because its filament has not been taken
+ * off the spools yet — that happens at done — so the shop is still counting on
+ * having it.
+ */
+const PRINTER_QUEUE_STATUSES = ['queued', 'printing'];
+
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -87,6 +103,9 @@ function groupRuns(rows) {
       order_item_id: r.order_item_id || null,
       order_number: r.order_number || null,
       customer_name: r.customer_name || null,
+      // Its own dates, not the plate's first order's — the turnaround floor a
+      // projection is measured from is per order.
+      order_date: r.order_date || null,
       promised_ship_date: r.promised_ship_date || null,
       quantity: Number(r.quantity) || 0,
       stock: !r.order_id,
@@ -147,7 +166,8 @@ function scheduleQueue(settings = getSettings()) {
   const capacityPerDay =
     Math.max(1, settings.print_hours_per_day) * Math.max(1, settings.printer_count);
   const start = today();
-  const rows = activeQueue();
+  const all = activeQueue();
+  const rows = all.filter((row) => PRINTER_QUEUE_STATUSES.includes(row.status));
 
   let cumulativeMinutes = 0;
   const scheduled = rows.map((row, index) => {
@@ -167,7 +187,18 @@ function scheduleQueue(settings = getSettings()) {
     };
   });
 
-  return { scheduled, capacity_hours_per_day: capacityPerDay, queue_hours: round2(cumulativeMinutes / 60) };
+  return {
+    scheduled,
+    // Off the printer and on the bench: not on the queue, but its order still
+    // has to ship, so it carries a finish date of today for the projection.
+    finishing: all.filter((row) => row.status === 'post_processing').map((row) => ({
+      ...row,
+      estimated_minutes: round2(estimatedMinutes(row)),
+      prints_done_on: toISODate(start),
+    })),
+    capacity_hours_per_day: capacityPerDay,
+    queue_hours: round2(cumulativeMinutes / 60),
+  };
 }
 
 /**
@@ -176,19 +207,28 @@ function scheduleQueue(settings = getSettings()) {
  * floor. Flags anything that would blow past the turnaround window.
  */
 function orderProjections(settings = getSettings()) {
-  const { scheduled, capacity_hours_per_day, queue_hours } = scheduleQueue(settings);
+  const { scheduled, finishing, capacity_hours_per_day, queue_hours } = scheduleQueue(settings);
   const byOrder = new Map();
 
-  for (const row of scheduled) {
-    if (!row.order_id) continue;
-    const current = byOrder.get(row.order_id);
-    if (!current || row.prints_done_on > current.prints_done_on) {
-      byOrder.set(row.order_id, {
-        order_id: row.order_id,
-        order_number: row.order_number,
-        customer_name: row.customer_name,
-        order_date: row.order_date,
-        promised_ship_date: row.promised_ship_date,
+  // Work on the bench counts towards when an order ships even though it is off
+  // the queue — otherwise an order with nothing left to print would lose its
+  // projected date entirely the moment its last plate came off.
+  //
+  // Every order on a plate, not just the first. A plate is one entry carrying
+  // several orders' shares, and reading only its own order_id gave the second
+  // and third orders on it no projected date at all — they simply were not in
+  // the list, which reads as nothing to worry about rather than as a gap.
+  for (const row of [...scheduled, ...finishing]) {
+    const parts = row.parts?.length ? row.parts.filter((p) => p.order_id) : (row.order_id ? [row] : []);
+    for (const part of parts) {
+      const current = byOrder.get(part.order_id);
+      if (current && current.prints_done_on >= row.prints_done_on) continue;
+      byOrder.set(part.order_id, {
+        order_id: part.order_id,
+        order_number: part.order_number ?? row.order_number,
+        customer_name: part.customer_name ?? row.customer_name,
+        order_date: part.order_date ?? row.order_date,
+        promised_ship_date: part.promised_ship_date ?? row.promised_ship_date,
         prints_done_on: row.prints_done_on,
       });
     }

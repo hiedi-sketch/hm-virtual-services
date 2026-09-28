@@ -99,6 +99,16 @@ router.post('/', (req, res) => {
     }
   }
 
+  // One plate can serve several orders. Shares say how many of it are whose,
+  // and whatever is left over on the plate is stock.
+  if (!custom && Array.isArray(req.body.shares) && req.body.shares.length) {
+    try {
+      return res.status(201).json(queueShared(item_id, qty, req.body));
+    } catch (err) {
+      return res.status(err.status || 500).json({ error: err.message });
+    }
+  }
+
   const maxPosition = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM queue_jobs').get().max;
   const body = {
     ...req.body,
@@ -132,6 +142,115 @@ router.post('/', (req, res) => {
 
   res.status(201).json({ data: queuePayload() });
 });
+
+/**
+ * One plate, several orders.
+ *
+ * Nine openers is nine on the bed whether three are Susie's and six are Pam's,
+ * so they go on as one run: a job per share, all carrying the same run id,
+ * which is what keeps them together as one entry on the Print Queue with the
+ * shares listed underneath. Whatever is left over is stock.
+ *
+ * Each share is tied to that order's own line where there is one, because a
+ * job with no line behind it cannot count towards what the order still needs
+ * — it would print and the order would still be asking for them.
+ */
+function queueShared(itemId, total, body) {
+  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId);
+  const shares = [];
+
+  for (const raw of body.shares) {
+    const orderId = Number(raw.order_id);
+    const quantity = Number(raw.quantity);
+    if (!orderId) continue;
+    if (!(quantity > 0)) {
+      const err = new Error('Say how many of the plate are for each order');
+      err.status = 400;
+      throw err;
+    }
+
+    const order = db.prepare('SELECT id, order_number FROM orders WHERE id = ?').get(orderId);
+    if (!order) {
+      const err = new Error('One of those orders is not here any more');
+      err.status = 404;
+      throw err;
+    }
+    if (shares.some((sh) => sh.order_id === orderId)) {
+      const err = new Error(`${order.order_number} is on the plate twice — put it on once for the whole amount`);
+      err.status = 400;
+      throw err;
+    }
+
+    const line = db.prepare(
+      'SELECT id FROM order_items WHERE order_id = ? AND item_id = ? ORDER BY id LIMIT 1'
+    ).get(orderId, itemId);
+    if (!line) {
+      const err = new Error(`${order.order_number} does not have ${item.name} on it`);
+      err.status = 400;
+      throw err;
+    }
+
+    shares.push({ order_id: orderId, order_number: order.order_number, order_item_id: line.id, quantity });
+  }
+
+  if (!shares.length) {
+    const err = new Error('Choose an order, or leave the plate for stock');
+    err.status = 400;
+    throw err;
+  }
+
+  const claimed = shares.reduce((sum, sh) => sum + sh.quantity, 0);
+  if (claimed > total) {
+    const err = new Error(`The orders want ${claimed} but the plate is ${total}`);
+    err.status = 400;
+    throw err;
+  }
+  const forStock = total - claimed;
+
+  const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const insert = db.prepare(`
+    INSERT INTO queue_jobs
+      (order_id, order_item_id, item_id, quantity, status, priority, position, printer, filament_id,
+       estimated_minutes, run_id)
+    VALUES (?, ?, ?, ?, 'queued', ?, ?, ?, ?, ?, ?)
+  `);
+  const priority = body.priority || 'normal';
+  const printer = body.printer || null;
+  const filamentId = body.filament_id || null;
+
+  db.transaction(() => {
+    let position = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM queue_jobs').get().max;
+    for (const share of shares) {
+      position += 1;
+      insert.run(
+        share.order_id, share.order_item_id, itemId, share.quantity, priority, position, printer, filamentId,
+        estimatedMinutes({ item_id: itemId, quantity: share.quantity, estimated_minutes: null }),
+        runId,
+      );
+    }
+    if (forStock > 0) {
+      position += 1;
+      insert.run(
+        null, null, itemId, forStock, priority, position, printer, filamentId,
+        estimatedMinutes({ item_id: itemId, quantity: forStock, estimated_minutes: null }),
+        runId,
+      );
+    }
+  })();
+
+  // Agreeing to make it is what confirming an order means, the same as queuing
+  // from the To Print list. Forward only, so an order already past this stays.
+  for (const share of shares) {
+    flow.advanceTo(share.order_id, 'confirmed', { source: 'queue', note: `${item.name} queued` });
+  }
+
+  const named = shares.map((sh) => `${sh.quantity} for ${sh.order_number}`).join(', ');
+  return {
+    data: queuePayload(),
+    run_id: runId,
+    message: `${total} × ${item.name} on the queue — ${named}${forStock > 0 ? `, ${forStock} for stock` : ''}`,
+  };
+}
 
 /**
  * The rest of what a one-off needs: a material, or a part already on the shelf.

@@ -38,6 +38,8 @@ export default function Queue() {
   const [kind, setKind] = useState('catalog');
   // What else a one-off needs: a material, or a part already on the shelf.
   const [extras, setExtras] = useState([]);
+  // Who a catalog plate is for. One plate can serve several orders at once.
+  const [shares, setShares] = useState([]);
   const [picking, setPicking] = useState(null);
   // Recently finished is history, not work, so it folds away — and stays
   // folded, because a preference that resets on every visit is not one.
@@ -58,7 +60,10 @@ export default function Queue() {
       ]);
       setData(queue);
       setOptions(opts);
-      setOrders(orderList.filter((o) => ['new', 'in_production'].includes(o.status)));
+      // Every order still being made. It used to be 'new' and 'in_production'
+      // only, which left out 'confirmed' — the state an order sits in for most
+      // of its life, and exactly the one she is queuing work for.
+      setOrders(orderList.filter((o) => !['shipped', 'completed', 'cancelled'].includes(o.status)));
     } catch (err) {
       const message = describeError(err, 'Could not load the production queue');
       setError(message);
@@ -129,6 +134,7 @@ export default function Queue() {
     setAdding(false);
     setForm(BLANK_JOB);
     setExtras([]);
+    setShares([]);
     setKind('catalog');
   }
 
@@ -161,8 +167,9 @@ export default function Queue() {
     const custom = kind === 'custom';
     if (custom ? !form.custom_name.trim() : !form.item_id) return;
 
+    const claimed = custom ? [] : shares.filter((sh) => sh.order_id && Number(sh.quantity) > 0);
     try {
-      setData(await printApi.addToQueue({
+      const response = await printApi.addToQueue({
         // One or the other, never both: the server reads a job with no item as
         // a one-off and keeps it away from stock and orders entirely.
         item_id: custom ? null : Number(form.item_id),
@@ -182,16 +189,27 @@ export default function Queue() {
             .filter((x) => x.ref_id && Number(x.quantity) > 0)
             .map((x) => ({ line_type: x.line_type, ref_id: Number(x.ref_id), quantity: Number(x.quantity) })),
         } : {
-          order_id: form.order_id ? Number(form.order_id) : null,
+          // Several orders off one plate, or one, or none at all. A plate with
+          // shares is queued as a run, so it stays one entry on the queue with
+          // the shares listed underneath.
+          ...(claimed.length
+            ? { shares: claimed.map((sh) => ({ order_id: Number(sh.order_id), quantity: Number(sh.quantity) })) }
+            : { order_id: form.order_id ? Number(form.order_id) : null }),
         }),
-      }));
-      toast.success(custom ? `${form.custom_name.trim()} is on the queue` : 'Added to the queue');
+      });
+      setData(response.data ?? response);
+      toast.success(response.message
+        || (custom ? `${form.custom_name.trim()} is on the queue` : 'Added to the queue'));
       closeAdding();
       refresh();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not queue that');
     }
   }
+
+  // What the orders on this plate have claimed, and what is left for stock.
+  const spokenFor = shares.reduce((sum, sh) => sum + (Number(sh.quantity) || 0), 0);
+  const leftover = (Number(form.quantity) || 0) - spokenFor;
 
   if (error && !data) {
     return <LoadError message={error} onRetry={load} what="the production queue" />;
@@ -208,7 +226,9 @@ export default function Queue() {
         <div>
           <h1 className="text-2xl font-bold text-primary">Print Queue</h1>
           <p className="text-sm text-gray-500">
-            Every job in print order, with its pick list. Ship dates come from a{' '}
+            What is waiting for a printer, or on one, in print order and with its pick list. A plate
+            leaves this list when it comes off the printer — it is on the bench then, in the{' '}
+            <b>Finishing</b> bin. Ship dates come from a{' '}
             {data.settings.turnaround_min_days}–{data.settings.turnaround_max_days} day turnaround and what is
             already ahead of it. For what still has to be printed by product, see <b>To Print</b>.
           </p>
@@ -491,11 +511,8 @@ export default function Queue() {
             </Field>
 
             {kind === 'catalog' ? (
-              <Field label="For an order" hint="Leave blank to build stock.">
-                <select className="input" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
-                  <option value="">No order</option>
-                  {orders.map((o) => <option key={o.id} value={o.id}>{o.order_number} — {o.customer_name}</option>)}
-                </select>
+              <Field label="Printer">
+                <input className="input" placeholder="P1S #2" value={form.printer} onChange={(e) => setForm({ ...form, printer: e.target.value })} />
               </Field>
             ) : (
               <Field label="Print time (minutes)" hint="What the slicer says for the whole plate.">
@@ -510,9 +527,11 @@ export default function Queue() {
               </Field>
             )}
 
-            <Field label="Printer">
-              <input className="input" placeholder="P1S #2" value={form.printer} onChange={(e) => setForm({ ...form, printer: e.target.value })} />
-            </Field>
+            {kind === 'custom' && (
+              <Field label="Printer">
+                <input className="input" placeholder="P1S #2" value={form.printer} onChange={(e) => setForm({ ...form, printer: e.target.value })} />
+              </Field>
+            )}
 
             <Field
               label={kind === 'custom' ? 'Filament' : 'Print it in'}
@@ -571,6 +590,82 @@ export default function Queue() {
               </>
             )}
           </div>
+
+          {/* Who the plate is for. Nine openers is nine on the bed whether
+              three are Susie's and six are Pam's, so a plate can carry several
+              orders at once and whatever is left over is stock. */}
+          {kind === 'catalog' && (
+            <div className="border-t border-linen pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="label !mb-0">Who it is for</p>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-primary hover:underline"
+                  onClick={() => setShares([...shares, { order_id: '', quantity: '' }])}
+                >
+                  + Add an order
+                </button>
+              </div>
+
+              {shares.length === 0 ? (
+                <p className="text-xs text-gray-400">
+                  Nobody yet — the whole plate goes to stock. Add an order to put some of it against one.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {shares.map((share, i) => (
+                    <li key={i} className="flex gap-2">
+                      <select
+                        className="input min-w-0 flex-1"
+                        value={share.order_id}
+                        onChange={(e) => setShares(shares.map((x, j) => (j === i ? { ...x, order_id: e.target.value } : x)))}
+                      >
+                        <option value="">Choose an order…</option>
+                        {/* An order already on the plate is not offered twice:
+                            one share each, for the whole amount. */}
+                        {orders
+                          .filter((o) => o.id === Number(share.order_id)
+                            || !shares.some((x, j) => j !== i && Number(x.order_id) === o.id))
+                          .map((o) => (
+                            <option key={o.id} value={o.id}>{o.order_number} — {o.customer_name}</option>
+                          ))}
+                      </select>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        inputMode="numeric"
+                        className="input !w-20 shrink-0"
+                        placeholder="Qty"
+                        value={share.quantity}
+                        onChange={(e) => setShares(shares.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShares(shares.filter((_, j) => j !== i))}
+                        className="text-silver hover:text-red-600 px-1 text-lg leading-none shrink-0"
+                        title="Take this order off the plate"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {/* What is left after the orders have had their share, said out
+                  loud rather than left for her to work out. */}
+              {shares.length > 0 && (
+                <p className={`text-xs mt-2 ${leftover < 0 ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                  {leftover < 0
+                    ? `The orders want ${spokenFor} but the plate is ${Number(form.quantity) || 0} — raise the quantity or lower a share.`
+                    : leftover > 0
+                      ? `${spokenFor} spoken for, ${leftover} for stock.`
+                      : 'The whole plate is spoken for.'}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Anything else it needs gathered. These go onto the same pick list
               the printer already prints for every other job. */}
@@ -636,7 +731,7 @@ export default function Queue() {
 
           <div className="flex justify-end gap-2">
             <button type="button" className="btn-secondary" onClick={closeAdding}>Cancel</button>
-            <button type="submit" className="btn-primary">Add</button>
+            <button type="submit" className="btn-primary" disabled={kind === 'catalog' && leftover < 0}>Add</button>
           </div>
         </form>
       </Modal>
