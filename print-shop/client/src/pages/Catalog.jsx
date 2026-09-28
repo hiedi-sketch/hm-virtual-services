@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
-import printApi, { describeError, hoursMinutes, money } from '../api/print';
+import printApi, { describeError, grams, hoursMinutes, money } from '../api/print';
 import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
 import CatalogImport from '../components/CatalogImport';
@@ -305,7 +305,7 @@ export default function Catalog() {
                     <span className="font-mono">{i.sku}</span>
                     {i.category && ` · ${i.category}`}
                     {i.print_time_minutes > 0 && ` · ${hoursMinutes(i.cost_breakdown.print_minutes_per_unit)} print`}
-                    {i.cost_breakdown.total_grams > 0 && ` · ${Math.round(i.cost_breakdown.total_grams)}g`}
+                    {i.cost_breakdown.total_grams > 0 && ` · ${grams(i.cost_breakdown.total_grams)}`}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
@@ -516,7 +516,7 @@ export default function Catalog() {
                   </div>
                 </div>
                 <p className="text-[11px] text-gray-500">
-                  {hoursMinutes(breakdown.print_minutes_per_unit)} of print time and {Math.round(breakdown.total_grams)}g of filament per unit.
+                  {hoursMinutes(breakdown.print_minutes_per_unit)} of print time and {grams(breakdown.total_grams)} of filament per unit.
                   Markups live in Settings.
                 </p>
               </>

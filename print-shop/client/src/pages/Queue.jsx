@@ -450,11 +450,12 @@ export default function Queue() {
 
             {kind === 'custom' && (
               <>
-                <Field label="Grams" hint="Comes off the spool when it finishes.">
+                <Field label="Grams" hint="Comes off the spool when it finishes. Two decimals if you need them.">
                   <input
                     type="number"
                     min="0"
-                    step="0.1"
+                    step="0.01"
+                    inputMode="decimal"
                     className="input"
                     placeholder="24"
                     value={form.filament_grams}
@@ -473,7 +474,7 @@ export default function Queue() {
                     <option value="">Whichever is open</option>
                     {spoolsFor(options.spools, form.filament_id).map((sp) => (
                       <option key={sp.id} value={sp.id}>
-                        {sp.label} · {Math.round(sp.grams_remaining || 0)}g{sp.location ? ` · ${sp.location}` : ''}
+                        {sp.label} · {grams(sp.grams_remaining)}{sp.location ? ` · ${sp.location}` : ''}
                       </option>
                     ))}
                   </select>
@@ -530,7 +531,8 @@ export default function Queue() {
                       <input
                         type="number"
                         min="0"
-                        step="0.1"
+                        step="0.01"
+                        inputMode="decimal"
                         className="input !w-20 shrink-0"
                         placeholder="Qty"
                         value={line.quantity}

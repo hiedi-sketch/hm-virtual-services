@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db/database');
-const { getSettings } = require('../utils/costing');
+const { getSettings, round2 } = require('../utils/costing');
 const {
   scheduleQueue, orderProjections, estimatedMinutes, filamentSummary, materialSummary,
 } = require('../utils/planning');
@@ -79,7 +79,9 @@ router.post('/', (req, res) => {
 
   const custom = !item_id;
   const qty = Number(quantity) || 1;
-  const grams = Number(req.body.filament_grams) || 0;
+  // Two decimals, settled here rather than left to drift: the pick list rounds
+  // to two, and a job saying 24.3456 while its list says 24.35 is two numbers.
+  const grams = round2(Number(req.body.filament_grams) || 0);
 
   if (custom) {
     if (req.body.filament_id && !db.prepare('SELECT id FROM filaments WHERE id = ?').get(req.body.filament_id)) {
@@ -146,7 +148,7 @@ function addExtraPicks(queueId, lines) {
   db.transaction(() => {
     for (const line of lines) {
       const refId = Number(line.ref_id);
-      const quantity = Number(line.quantity);
+      const quantity = round2(Number(line.quantity));
       if (!refId || !(quantity > 0)) continue;
 
       if (line.line_type === 'material') {

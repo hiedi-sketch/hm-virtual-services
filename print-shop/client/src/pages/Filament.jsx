@@ -182,7 +182,11 @@ export default function Filament() {
     const value = window.prompt('Grams remaining on this spool?', spool.grams_remaining ?? '');
     if (value === null) return;
     try {
-      await printApi.updateSpool(spool.id, { status: 'opened', grams_remaining: Number(value) || 0 });
+      // A scale reads in tenths; two decimals is as fine as the shelf records get.
+      await printApi.updateSpool(spool.id, {
+        status: 'opened',
+        grams_remaining: Math.round((Number(value) || 0) * 100) / 100,
+      });
       load();
       refresh();
     } catch (err) {

@@ -164,9 +164,19 @@ export function describeError(err, fallback = 'Something went wrong') {
 export const money = (n) =>
   (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 
+/**
+ * Grams, as she typed them.
+ *
+ * This used to round to the nearest whole gram, which quietly turned a recipe
+ * of 24.35 g into "24 g" in every place she read it back — the pick list, the
+ * queue, the shelf. A tenth of a gram is not noise on a part that takes twenty:
+ * it is the difference between a spool covering a run and not. Two decimals are
+ * kept, and trailing zeros are not shown, so a whole number still reads whole.
+ */
 export const grams = (n) => {
   const value = Number(n) || 0;
-  return value >= 1000 ? `${(value / 1000).toFixed(2)} kg` : `${Math.round(value)} g`;
+  if (value >= 1000) return `${(value / 1000).toFixed(2)} kg`;
+  return `${Math.round(value * 100) / 100} g`;
 };
 
 export const hoursMinutes = (minutes) => {

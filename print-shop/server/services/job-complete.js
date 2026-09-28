@@ -1,5 +1,5 @@
 const db = require('../db/database');
-const { filamentDemandForItem, materialDemandForItem } = require('../utils/costing');
+const { filamentDemandForItem, materialDemandForItem, round2 } = require('../utils/costing');
 const { logStock } = require('../routes/helpers');
 const inventory = require('./inventory-sync');
 const flow = require('./order-flow');
@@ -66,7 +66,10 @@ function drawFilament(filamentId, grams, reference, preferSpoolId = null) {
     }
 
     const take = Math.min(remaining, spool.grams_remaining);
-    const left = spool.grams_remaining - take;
+    // Rounded before it is stored. Grams carry two decimals now, and binary
+    // floating point turns 115.65 − 24.35 into 91.30000000000001 — which is
+    // what the shelf would then say it holds.
+    const left = round2(spool.grams_remaining - take);
     db.prepare(`
       UPDATE filament_spools
          SET grams_remaining=?, status = CASE WHEN ? <= 0 THEN 'empty' ELSE 'opened' END,
@@ -75,7 +78,7 @@ function drawFilament(filamentId, grams, reference, preferSpoolId = null) {
     `).run(left, left, left, todayStr, spool.id);
     remaining -= take;
   }
-  logStock('filament', f.id, -(grams - Math.max(0, remaining)), 'g', 'print completed', reference);
+  logStock('filament', f.id, -round2(grams - Math.max(0, remaining)), 'g', 'print completed', reference);
 }
 
 /**
@@ -94,7 +97,7 @@ function completeFromPicks(entry, picks) {
       const m = db.prepare('SELECT * FROM materials WHERE id = ?').get(line.ref_id);
       if (!m) continue;
       db.prepare('UPDATE materials SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .run((m.qty_on_hand || 0) - line.quantity, m.id);
+        .run(round2((m.qty_on_hand || 0) - line.quantity), m.id);
       logStock('material', m.id, -line.quantity, m.unit, 'print completed', reference);
     } else {
       // A part pulled from the shelf rather than printed.
@@ -144,7 +147,7 @@ function completeEntry(entry) {
     const m = db.prepare('SELECT * FROM materials WHERE id = ?').get(materialId);
     if (!m) continue;
     db.prepare('UPDATE materials SET qty_on_hand = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-      .run((m.qty_on_hand || 0) - used, m.id);
+      .run(round2((m.qty_on_hand || 0) - used), m.id);
     logStock('material', m.id, -used, m.unit, 'print completed', reference);
   }
 
