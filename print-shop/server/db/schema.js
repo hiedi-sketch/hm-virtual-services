@@ -232,8 +232,10 @@ function createSchema() {
       code TEXT NOT NULL UNIQUE,
       label TEXT NOT NULL,
       -- An 'order' bin holds one order while it is being made. The 'mail' bin
-      -- holds every parcel waiting for the post office, so it takes many.
-      kind TEXT NOT NULL DEFAULT 'order' CHECK(kind IN ('order','mail')),
+      -- holds every parcel waiting for the post office, so it takes many. The
+      -- 'stock' bin holds loose finished things rather than orders at all —
+      -- what has come off the printer for the shelf and not been put away yet.
+      kind TEXT NOT NULL DEFAULT 'order' CHECK(kind IN ('order','mail','stock')),
       position INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
@@ -254,6 +256,27 @@ function createSchema() {
       picked INTEGER NOT NULL DEFAULT 0,
       picked_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Loose things in a bin, belonging to no order.
+    --
+    -- The order bins hold orders, which is why an order carries its bin_id and
+    -- no table like this was needed. The Stock bin holds a pile of finished
+    -- products waiting to be carried to the inventory shelves, so it needs to
+    -- say what is in the pile and how many.
+    --
+    -- This is a note of where things physically are, not a second stock count.
+    -- A finished print is on hand the moment it is finished, whether it is on
+    -- the shelf or still in the basket by the printer; what this answers is
+    -- "what still has to be put away".
+    CREATE TABLE IF NOT EXISTS bin_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bin_id INTEGER NOT NULL REFERENCES bins(id) ON DELETE CASCADE,
+      item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      quantity REAL NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (bin_id, item_id)
     );
 
     -- Third-party settings and credentials. Kept out of the general settings
@@ -385,8 +408,10 @@ function createSchema() {
   allowCustomQueueJobs();
   addSalesChannel('TikTok', 'channels_tiktok_added');
   addMailBinStage();
+  allowStockBin();
   seedBins(6);
   seedMailBin();
+  seedStockBin();
   backfillOrderBarcodes();
 
   // Indexes over the columns added above, once they are guaranteed to exist.
@@ -677,6 +702,70 @@ function allowCustomQueueJobs() {
   } finally {
     db.pragma('legacy_alter_table = OFF');
     if (hadForeignKeys) db.pragma('foreign_keys = ON');
+  }
+}
+
+/**
+ * Let a bin be a Stock bin.
+ *
+ * Only some databases need this. `kind` arrived as a plain ALTER, which SQLite
+ * cannot attach a CHECK to, so a shop upgraded through that path has no
+ * constraint to widen and this does nothing. One created from the schema since
+ * has `CHECK(kind IN ('order','mail'))` written into the table, and that has to
+ * be rebuilt — the same swap as the order stages, for the same reason.
+ */
+function allowStockBin() {
+  const current = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='bins'").get()?.sql;
+  if (!current) return;
+  // No constraint to widen, or already wide enough.
+  if (!/CHECK\s*\(\s*kind\s+IN/i.test(current) || current.includes("'stock'")) return;
+
+  const rebuilt = current
+    .replace(/CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?["'`[]?bins["'`\]]?/i, 'CREATE TABLE bins_migrating')
+    .replace(/CHECK\s*\(\s*kind\s+IN\s*\([^)]*\)\s*\)/i, "CHECK(kind IN ('order','mail','stock'))");
+
+  if (!rebuilt.includes('bins_migrating') || !rebuilt.includes("'stock'")) {
+    console.error('Could not add the Stock bin kind — leaving the bins table as it is.');
+    return;
+  }
+
+  const columns = db.prepare('PRAGMA table_info(bins)').all().map((c) => `"${c.name}"`).join(', ');
+
+  const hadForeignKeys = db.pragma('foreign_keys', { simple: true });
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  try {
+    db.transaction(() => {
+      db.exec(rebuilt);
+      db.exec(`INSERT INTO bins_migrating (${columns}) SELECT ${columns} FROM bins`);
+      db.exec('DROP TABLE bins');
+      db.exec('ALTER TABLE bins_migrating RENAME TO bins');
+    })();
+    console.log('Bins can now be Stock bins.');
+  } finally {
+    db.pragma('legacy_alter_table = OFF');
+    if (hadForeignKeys) db.pragma('foreign_keys = ON');
+  }
+}
+
+/**
+ * The Stock bin: where a print for the shelf waits to be carried to inventory.
+ *
+ * Its code is as short as the others' so its barcode is as coarse — five
+ * characters gives the same 18 mil bars on a 2" label that BIN-M and the
+ * numbered bins get, which is what makes them read first time.
+ */
+function seedStockBin() {
+  const existing = db.prepare("SELECT id FROM bins WHERE kind = 'stock' OR code = 'BIN-S'").get();
+  if (existing) return;
+
+  const after = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM bins').get().max;
+  try {
+    db.prepare("INSERT INTO bins (code, label, kind, position) VALUES ('BIN-S', 'Stock', 'stock', ?)")
+      .run(after + 1);
+    console.log('Stock bin created — print its label from the Bins panel.');
+  } catch (err) {
+    console.error('Could not create the Stock bin:', err.message);
   }
 }
 

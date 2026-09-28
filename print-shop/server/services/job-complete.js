@@ -170,6 +170,11 @@ function addFinished(entry, reference) {
     .run((item.qty_on_hand || 0) + qty, item.id);
   logStock('item', item.id, qty, 'each', 'print completed', reference);
   inventory.changed(item.id);
+
+  // A print for the shelf comes off into the Stock bin and waits there to be
+  // carried to inventory. A print for an order does not: it goes into that
+  // order's own bin, which the panel asks about while it is still in her hand.
+  if (!entry.order_id) require('./bins').putInStock(item.id, qty);
 }
 
 /** Finish one job: its pick list decides how, if it has one. */

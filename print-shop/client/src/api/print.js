@@ -107,6 +107,13 @@ export const printApi = {
   binPickedUp: (code, orderIds = null) =>
     api.post(`/bins/${encodeURIComponent(code)}/picked-up`, orderIds ? { order_ids: orderIds } : {})
       .then((r) => r.data),
+  // The Stock bin: what is in the basket by the printer, waiting to be carried
+  // to the inventory shelves.
+  stockBinAdd: (body) => api.post('/bins/stock/items', body).then((r) => r.data),
+  stockBinAway: (itemId, quantity = undefined) =>
+    api.post(`/bins/stock/items/${itemId}/away`, quantity === undefined ? {} : { quantity })
+      .then((r) => r.data),
+  stockBinEmpty: () => api.post('/bins/stock/empty', {}).then((r) => r.data),
   packScan: (id, code) => api.post(`/orders/${id}/packing/scan`, { code }).then((r) => r.data),
   setPacked: (id, body) => unwrap(api.put(`/orders/${id}/packing`, body)),
   startProduction: (id, body) => api.post(`/orders/${id}/production`, body || {}).then((r) => r.data),

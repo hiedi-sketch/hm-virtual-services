@@ -25,6 +25,7 @@ const HOLDING = "o.status NOT IN ('shipped', 'completed', 'cancelled')";
 function binRow(bin) {
   if (!bin) return null;
   if (bin.kind === 'mail') return mailBinRow(bin);
+  if (bin.kind === 'stock') return stockBinRow(bin);
 
   const order = db.prepare(`
     SELECT o.id, o.order_number, o.status, o.customer_name, o.promised_ship_date
@@ -70,6 +71,178 @@ function mailBinRow(bin) {
     contents: null,
     waiting: orders.length,
     empty: orders.length === 0,
+  };
+}
+
+/**
+ * The Stock bin: finished things for the shelf that have not been carried to
+ * the inventory shelves yet.
+ *
+ * It holds products rather than orders, so it is the one bin with a list of
+ * its own. Nothing here is a second stock count — a print is on hand the moment
+ * it is finished, whether it is on the inventory shelf or still in the basket
+ * by the printer. What this answers is "what still has to be put away", which
+ * is a question about her feet, not about her numbers.
+ */
+function stockBinRow(bin) {
+  const items = db.prepare(`
+    SELECT bi.item_id, bi.quantity, bi.updated_at,
+           i.name AS item_name, i.sku AS item_sku, i.barcode, i.image_url,
+           i.qty_on_hand
+      FROM bin_items bi JOIN items i ON bi.item_id = i.id
+     WHERE bi.bin_id = ? AND bi.quantity > 0
+     ORDER BY bi.updated_at DESC, i.name
+  `).all(bin.id).map((row) => ({ ...row, quantity: Number(row.quantity) || 0 }));
+
+  const units = items.reduce((sum, r) => sum + r.quantity, 0);
+  return {
+    ...bin,
+    order: null,
+    contents: null,
+    items,
+    units,
+    waiting: items.length,
+    empty: items.length === 0,
+  };
+}
+
+/** The bin by the printer, whatever it ends up being called. */
+function stockBin() {
+  const bin = db.prepare("SELECT * FROM bins WHERE kind = 'stock' AND is_active = 1 ORDER BY position, id").get();
+  return bin ? binRow(bin) : null;
+}
+
+/** The raw row, for the writers below, without the cost of reading its list. */
+function stockBinRaw() {
+  return db.prepare("SELECT * FROM bins WHERE kind = 'stock' AND is_active = 1 ORDER BY position, id").get() || null;
+}
+
+const round2 = (n) => Math.round(((Number(n) || 0) + Number.EPSILON) * 100) / 100;
+
+/**
+ * Put finished units into the Stock bin.
+ *
+ * Called when a print for the shelf comes off, and by hand when she scans
+ * something into the basket. It never touches qty_on_hand: those units are
+ * already on hand, and this only records that they are still in the basket.
+ *
+ * A shop with no Stock bin — one she has deleted — simply has nowhere to put
+ * them, and the print finishes as it always did.
+ */
+function putInStock(itemId, quantity = 1) {
+  const bin = stockBinRaw();
+  const qty = round2(quantity);
+  if (!bin || !itemId || qty <= 0) return null;
+  if (!db.prepare('SELECT id FROM items WHERE id = ?').get(itemId)) return null;
+
+  db.prepare(`
+    INSERT INTO bin_items (bin_id, item_id, quantity) VALUES (?, ?, ?)
+    ON CONFLICT(bin_id, item_id) DO UPDATE
+      SET quantity = quantity + excluded.quantity, updated_at = CURRENT_TIMESTAMP
+  `).run(bin.id, itemId, qty);
+  return { bin_id: bin.id, item_id: itemId, added: qty };
+}
+
+/**
+ * Take units out of the Stock bin, because they have been put away.
+ *
+ * Nothing moves in the stock figures: they were on hand in the basket and they
+ * are on hand on the shelf. `quantity` null means all of that line.
+ */
+function putAwayStock(itemId, quantity = null) {
+  const bin = stockBinRaw();
+  if (!bin) {
+    const err = new Error('There is no Stock bin');
+    err.status = 404;
+    throw err;
+  }
+  const row = db.prepare('SELECT * FROM bin_items WHERE bin_id = ? AND item_id = ?').get(bin.id, itemId);
+  const name = db.prepare('SELECT name FROM items WHERE id = ?').get(itemId)?.name || 'That';
+  if (!row || row.quantity <= 0) {
+    const err = new Error(`${name} is not in ${bin.label}`);
+    err.status = 400;
+    throw err;
+  }
+
+  const taking = quantity == null ? row.quantity : Math.min(row.quantity, round2(quantity));
+  if (taking <= 0) {
+    const err = new Error('Nothing to put away');
+    err.status = 400;
+    throw err;
+  }
+  const left = round2(row.quantity - taking);
+
+  if (left > 0) {
+    db.prepare('UPDATE bin_items SET quantity = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(left, row.id);
+  } else {
+    db.prepare('DELETE FROM bin_items WHERE id = ?').run(row.id);
+  }
+
+  return {
+    bin: byId(bin.id),
+    item_name: name,
+    put_away: taking,
+    left,
+    message: left > 0
+      ? `${taking} × ${name} put away — ${left} still in ${bin.label}`
+      : `${name} put away — none left in ${bin.label}`,
+  };
+}
+
+/** Say exactly how many of something are in the basket, counted by hand. */
+function countInStock(itemId, quantity) {
+  const bin = stockBinRaw();
+  if (!bin) {
+    const err = new Error('There is no Stock bin');
+    err.status = 404;
+    throw err;
+  }
+  const item = db.prepare('SELECT name FROM items WHERE id = ?').get(itemId);
+  if (!item) {
+    const err = new Error('That is not in the catalog');
+    err.status = 404;
+    throw err;
+  }
+  const qty = Math.max(0, round2(quantity));
+
+  if (qty > 0) {
+    db.prepare(`
+      INSERT INTO bin_items (bin_id, item_id, quantity) VALUES (?, ?, ?)
+      ON CONFLICT(bin_id, item_id) DO UPDATE SET quantity = excluded.quantity, updated_at = CURRENT_TIMESTAMP
+    `).run(bin.id, itemId, qty);
+  } else {
+    db.prepare('DELETE FROM bin_items WHERE bin_id = ? AND item_id = ?').run(bin.id, itemId);
+  }
+
+  return {
+    bin: byId(bin.id),
+    item_name: item.name,
+    quantity: qty,
+    message: qty > 0 ? `${qty} × ${item.name} in ${bin.label}` : `No ${item.name} in ${bin.label}`,
+  };
+}
+
+/** The whole basket put away in one go, for when she carries the lot over. */
+function emptyStock() {
+  const bin = stockBinRaw();
+  if (!bin) {
+    const err = new Error('There is no Stock bin');
+    err.status = 404;
+    throw err;
+  }
+  const lines = db.prepare('SELECT COUNT(*) AS n, IFNULL(SUM(quantity), 0) AS units FROM bin_items WHERE bin_id = ?')
+    .get(bin.id);
+  if (!lines.n) {
+    const err = new Error(`${bin.label} is already empty`);
+    err.status = 400;
+    throw err;
+  }
+  db.prepare('DELETE FROM bin_items WHERE bin_id = ?').run(bin.id);
+
+  return {
+    bin: byId(bin.id),
+    put_away: lines.units,
+    message: `${lines.units} put away — ${bin.label} is empty`,
   };
 }
 
@@ -121,6 +294,14 @@ function assign(orderId, code, { skipStage = false } = {}) {
   if (!bin) {
     const err = new Error(`${String(code || '').trim() || 'That code'} is not one of the bins`);
     err.status = 404;
+    throw err;
+  }
+
+  // The Stock bin holds loose products for the shelf, not orders. An order
+  // scanned into it is a mis-scan, and taking it would lose the order.
+  if (bin.kind === 'stock') {
+    const err = new Error(`${bin.label} is for finished things going to inventory — it does not hold orders`);
+    err.status = 400;
     throw err;
   }
 
@@ -348,4 +529,7 @@ function pickedUp(code, { orderIds = null } = {}) {
   };
 }
 
-module.exports = { list, byCode, byId, mailBin, forOrder, assign, release, putIn, pickedUp };
+module.exports = {
+  list, byCode, byId, mailBin, forOrder, assign, release, putIn, pickedUp,
+  stockBin, putInStock, putAwayStock, countInStock, emptyStock,
+};
