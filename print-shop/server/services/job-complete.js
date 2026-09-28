@@ -13,16 +13,42 @@ const flow = require('./order-flow');
  * rather than in whichever route got there first.
  */
 
-/** Take grams off the open spools, opening a sealed one when needed. */
-function drawFilament(filamentId, grams, reference) {
+/**
+ * Take grams off the open spools, opening a sealed one when needed.
+ *
+ * `preferSpoolId` is the spool she named on the job, and it is drained first —
+ * the same spool the pick list sent her to, so what the paper said and what the
+ * shelf records agree. When it runs out the rest comes off the oldest open one,
+ * as always.
+ */
+function drawFilament(filamentId, grams, reference, preferSpoolId = null) {
   const f = db.prepare('SELECT * FROM filaments WHERE id = ?').get(filamentId);
   if (!f || !grams) return;
   const fullGrams = (f.spool_size_kg || 1) * 1000;
   const todayStr = new Date().toISOString().slice(0, 10);
   let remaining = grams;
+  let prefer = preferSpoolId ? Number(preferSpoolId) : null;
 
   while (remaining > 0) {
-    let spool = db.prepare(`
+    let spool = prefer
+      ? db.prepare(`
+          SELECT * FROM filament_spools
+           WHERE id = ? AND filament_id = ? AND status IN ('new','opened')
+        `).get(prefer, f.id)
+      : null;
+    // Asked for once: if it is empty or not this filament, fall through to the
+    // usual order rather than looping on it.
+    prefer = null;
+
+    if (spool && spool.status === 'new') {
+      db.prepare(
+        "UPDATE filament_spools SET status='opened', grams_remaining=?, opened_at=?, updated_at=CURRENT_TIMESTAMP WHERE id=?"
+      ).run(fullGrams, todayStr, spool.id);
+      spool = { ...spool, grams_remaining: fullGrams };
+    }
+    if (spool && !(spool.grams_remaining > 0)) spool = null;
+
+    if (!spool) spool = db.prepare(`
       SELECT * FROM filament_spools
        WHERE filament_id = ? AND status = 'opened' AND IFNULL(grams_remaining, 0) > 0
        ORDER BY opened_at, id LIMIT 1
@@ -63,7 +89,7 @@ function completeFromPicks(entry, picks) {
 
   for (const line of picks) {
     if (line.line_type === 'filament') {
-      drawFilament(line.ref_id, line.quantity, reference);
+      drawFilament(line.ref_id, line.quantity, reference, line.spool_id);
     } else if (line.line_type === 'material') {
       const m = db.prepare('SELECT * FROM materials WHERE id = ?').get(line.ref_id);
       if (!m) continue;
@@ -89,6 +115,15 @@ function completeFromPicks(entry, picks) {
  * treating every component as printed.
  */
 function completeEntry(entry) {
+  // A one-off with no list left to cost: it takes what the job itself says, and
+  // leaves nothing behind on the shelf.
+  if (!entry.item_id) {
+    if (entry.filament_id && entry.filament_grams) {
+      drawFilament(entry.filament_id, entry.filament_grams, `Queue #${entry.id}`, entry.spool_id);
+    }
+    return;
+  }
+
   const filament = filamentDemandForItem(entry.item_id);
   const materials = materialDemandForItem(entry.item_id);
   const qty = entry.quantity || 0;
@@ -116,8 +151,15 @@ function completeEntry(entry) {
   addFinished(entry, reference);
 }
 
-/** The units themselves, onto the shelf. */
+/**
+ * The units themselves, onto the shelf.
+ *
+ * A one-off has no item, and nothing to add: a test print is not stock, has no
+ * price and must never reach Shopify. It went through the printer and came off
+ * it, and that is the whole of its life.
+ */
 function addFinished(entry, reference) {
+  if (!entry.item_id) return;
   const item = db.prepare('SELECT * FROM items WHERE id = ?').get(entry.item_id);
   if (!item) return;
   const qty = entry.quantity || 0;
@@ -175,8 +217,8 @@ const JOB_SAID = {
 
 function advanceJob(jobId, { to = null, source = 'app' } = {}) {
   const entry = db.prepare(`
-    SELECT q.*, i.name AS item_name FROM queue_jobs q
-      JOIN items i ON q.item_id = i.id
+    SELECT q.*, IFNULL(i.name, q.custom_name) AS item_name FROM queue_jobs q
+      LEFT JOIN items i ON q.item_id = i.id
      WHERE q.id = ?
   `).get(jobId);
 

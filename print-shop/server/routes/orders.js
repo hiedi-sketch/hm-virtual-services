@@ -43,8 +43,8 @@ function orderTotals(orderId) {
 function hydrate(order, projectionsById, plan = null) {
   const totals = orderTotals(order.id);
   const queue = db.prepare(`
-    SELECT q.*, i.name AS item_name FROM queue_jobs q
-      JOIN items i ON q.item_id = i.id
+    SELECT q.*, IFNULL(i.name, q.custom_name) AS item_name FROM queue_jobs q
+      LEFT JOIN items i ON q.item_id = i.id
      WHERE q.order_id = ? ORDER BY q.position, q.id
   `).all(order.id);
 

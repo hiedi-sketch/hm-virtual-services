@@ -28,11 +28,12 @@ function daysBetween(a, b) {
 function activeQueue() {
   const rows = db
     .prepare(
-      `SELECT q.*, i.name AS item_name, i.sku AS item_sku, i.print_time_minutes,
-              i.units_per_print, o.order_number, o.customer_name, o.order_date,
+      `SELECT q.*, IFNULL(i.name, q.custom_name) AS item_name, i.sku AS item_sku,
+              i.print_time_minutes, i.units_per_print, q.item_id IS NULL AS is_custom,
+              o.order_number, o.customer_name, o.order_date,
               o.promised_ship_date, o.status AS order_status
          FROM queue_jobs q
-         JOIN items i ON q.item_id = i.id
+         LEFT JOIN items i ON q.item_id = i.id
          LEFT JOIN orders o ON q.order_id = o.id
         WHERE q.status IN (${ACTIVE_QUEUE_STATUSES.map(() => '?').join(',')})`
     )
@@ -89,6 +90,9 @@ function groupRuns(rows) {
       promised_ship_date: r.promised_ship_date || null,
       quantity: Number(r.quantity) || 0,
       stock: !r.order_id,
+      // Not a stock build: a one-off goes nowhere afterwards, and a plate
+      // labelled "Stock build" would have her looking for it on the shelf.
+      custom: !r.item_id,
     })).sort((a, b) => {
       if (a.stock !== b.stock) return a.stock ? 1 : -1;   // the shelf goes last
       return (a.promised_ship_date || '9999-12-31').localeCompare(b.promised_ship_date || '9999-12-31');
@@ -109,7 +113,12 @@ function groupRuns(rows) {
       // Her figure for this plate if she has given one, and otherwise cleared
       // so the schedule works one out for the whole plate — nine in a run is
       // not three runs of three, and units_per_print is why it is not.
-      estimated_minutes: first.print_minutes_override ?? null,
+      //
+      // A one-off is the exception, because there is nothing to work one out
+      // from: its minutes came off her slicer and clearing them would price the
+      // job at nothing and quietly shorten the whole queue.
+      estimated_minutes: first.print_minutes_override
+        ?? (first.item_id ? null : group.reduce((sum, r) => sum + (Number(r.estimated_minutes) || 0), 0)),
       print_minutes_override: first.print_minutes_override ?? null,
       parts,
       order_count: parts.filter((p) => !p.stock).length,
@@ -122,7 +131,11 @@ const row_run_id = (key) => (key.startsWith('job:') ? null : key);
 
 function estimatedMinutes(row) {
   if (row.estimated_minutes != null) return row.estimated_minutes;
-  const perUnit = computeItemCost(row.item_id).print_minutes_per_unit || 0;
+  // A one-off has no recipe to cost, so its time is whatever she typed. If she
+  // typed none it is zero rather than a guess — the queue would rather be short
+  // than invent hours for a test print.
+  if (!row.item_id) return 0;
+  const perUnit = computeItemCost(row.item_id)?.print_minutes_per_unit || 0;
   return perUnit * (row.quantity || 0);
 }
 
@@ -224,6 +237,27 @@ function suggestShipDate(orderDate, extraMinutes = 0, settings = getSettings()) 
   };
 }
 
+/**
+ * What a one-off draws, from its own pick list — the lines she wrote when she
+ * added it. A run groups jobs, so every job in it is asked, not just the first.
+ */
+function customDemand(run) {
+  const ids = run.job_ids || [run.id];
+  const lines = [];
+  for (const id of ids) {
+    const picks = db.prepare(
+      "SELECT line_type, ref_id, quantity FROM queue_picks WHERE queue_id = ? AND line_type IN ('filament','material')"
+    ).all(id);
+    if (picks.length) { lines.push(...picks); continue; }
+    // No list yet — fall back to the job's own figures.
+    const job = db.prepare('SELECT filament_id, filament_grams FROM queue_jobs WHERE id = ?').get(id);
+    if (job?.filament_id && job.filament_grams) {
+      lines.push({ line_type: 'filament', ref_id: job.filament_id, quantity: job.filament_grams });
+    }
+  }
+  return lines;
+}
+
 /** Everything the active queue will consume: filament grams and material units. */
 function queueDemand() {
   const rows = activeQueue();
@@ -232,6 +266,18 @@ function queueDemand() {
 
   for (const row of rows) {
     const qty = row.quantity || 0;
+
+    // A one-off has no recipe. What it takes is what she wrote down, which is
+    // also exactly what comes off the spool when it finishes — so the queue's
+    // claim on the shelf and the deduction agree by construction.
+    if (!row.item_id) {
+      for (const line of customDemand(row)) {
+        const bucket = line.line_type === 'filament' ? filament : materials;
+        bucket[line.ref_id] = (bucket[line.ref_id] || 0) + line.quantity;
+      }
+      continue;
+    }
+
     const perUnitFilament = filamentDemandForItem(row.item_id);
     // A queue entry can pin a specific colour, which overrides the BOM default.
     if (row.filament_id) {

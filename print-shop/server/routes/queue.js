@@ -12,9 +12,9 @@ const board = require('../services/production-board');
 const router = express.Router();
 
 const EDITABLE = [
-  'order_id', 'order_item_id', 'item_id', 'quantity', 'status', 'priority',
-  'position', 'printer', 'filament_id', 'estimated_minutes', 'notes', 'started_at',
-  'print_minutes_override',
+  'order_id', 'order_item_id', 'item_id', 'custom_name', 'quantity', 'status', 'priority',
+  'position', 'printer', 'filament_id', 'filament_grams', 'spool_id',
+  'estimated_minutes', 'notes', 'started_at', 'print_minutes_override',
 ];
 
 function queuePayload() {
@@ -31,8 +31,8 @@ function queuePayload() {
     queue_days: Math.ceil(queue_hours / capacity_hours_per_day),
     settings,
     done: db.prepare(`
-      SELECT q.*, i.name AS item_name, o.order_number FROM queue_jobs q
-        JOIN items i ON q.item_id = i.id
+      SELECT q.*, IFNULL(i.name, q.custom_name) AS item_name, o.order_number FROM queue_jobs q
+        LEFT JOIN items i ON q.item_id = i.id
         LEFT JOIN orders o ON q.order_id = o.id
        WHERE q.status IN ('done','cancelled')
        ORDER BY q.completed_at DESC, q.id DESC LIMIT 25
@@ -51,31 +51,115 @@ router.get('/printing', (req, res) => res.json({ data: board.printingNow() }));
 /** Everything ordered that still has to be printed, gathered by product. */
 router.get('/in-queue', (req, res) => res.json({ data: board.inQueue() }));
 
+/**
+ * Put something on the queue.
+ *
+ * Two kinds of thing go through a printer. One is a product: it has a recipe,
+ * the time and the filament are worked out from it, and what comes off goes on
+ * the shelf as stock. The other is a one-off — a test piece, a bracket, a spare
+ * for the machine — which has none of that and must not be given any, because a
+ * catalog entry made to get a test print queued would show up in stock counts,
+ * in what is owed on orders, and eventually in Shopify.
+ *
+ * So a one-off is named rather than chosen, and carries its own figures: the
+ * minutes it takes, the filament and grams it eats, the spool to take them off.
+ * Anything else it needs goes on its pick list, which is the same list the
+ * printer prints for every other job.
+ */
 router.post('/', (req, res) => {
-  const { item_id, quantity = 1 } = req.body;
-  if (!item_id) return res.status(400).json({ error: 'An item is required' });
-  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(item_id);
-  if (!item) return res.status(404).json({ error: 'Item not found' });
+  const { item_id, custom_name, quantity = 1, picks = [] } = req.body;
+  const name = typeof custom_name === 'string' ? custom_name.trim() : '';
+
+  if (!item_id && !name) {
+    return res.status(400).json({ error: 'Choose an item, or give the one-off a name' });
+  }
+  if (item_id && !db.prepare('SELECT id FROM items WHERE id = ?').get(item_id)) {
+    return res.status(404).json({ error: 'Item not found' });
+  }
+
+  const custom = !item_id;
+  const qty = Number(quantity) || 1;
+  const grams = Number(req.body.filament_grams) || 0;
+
+  if (custom) {
+    if (req.body.filament_id && !db.prepare('SELECT id FROM filaments WHERE id = ?').get(req.body.filament_id)) {
+      return res.status(404).json({ error: 'That filament is not in the shop' });
+    }
+    if (grams > 0 && !req.body.filament_id) {
+      return res.status(400).json({ error: 'Say which filament those grams come off' });
+    }
+    if (req.body.spool_id) {
+      const spool = db.prepare('SELECT * FROM filament_spools WHERE id = ?').get(req.body.spool_id);
+      if (!spool) return res.status(404).json({ error: 'That spool is not on the shelf' });
+      if (req.body.filament_id && spool.filament_id !== Number(req.body.filament_id)) {
+        return res.status(400).json({ error: 'That spool is a different filament' });
+      }
+    }
+  }
 
   const maxPosition = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM queue_jobs').get().max;
   const body = {
     ...req.body,
-    quantity: Number(quantity) || 1,
+    item_id: custom ? null : item_id,
+    custom_name: custom ? name : null,
+    quantity: qty,
+    filament_grams: custom && grams > 0 ? grams : null,
+    spool_id: custom && req.body.spool_id ? Number(req.body.spool_id) : null,
     position: req.body.position ?? maxPosition + 1,
     // A job created already on a plate has been running since now, not since
     // never — the panel counts elapsed time from this.
     started_at: req.body.status === 'printing' ? new Date().toISOString() : req.body.started_at,
+    // Hers if she gave one. A one-off has no recipe to work one out from, so
+    // an unanswered box means zero rather than a guess.
     estimated_minutes: req.body.estimated_minutes ??
-      estimatedMinutes({ item_id, quantity: Number(quantity) || 1, estimated_minutes: null }),
+      (custom ? 0 : estimatedMinutes({ item_id, quantity: qty, estimated_minutes: null })),
   };
   const keys = EDITABLE.filter((k) => body[k] !== undefined);
 
-  db.prepare(
+  const created = db.prepare(
     `INSERT INTO queue_jobs (${keys.join(', ')}) VALUES (${keys.map(() => '?').join(', ')})`
   ).run(...keys.map((k) => body[k]));
 
+  // A one-off's list is written now, while she is the one who knows what it is
+  // made of. The filament line comes from the job; everything else she added.
+  if (custom) {
+    const job = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(created.lastInsertRowid);
+    ensurePicks(job);
+    addExtraPicks(job.id, picks);
+  }
+
   res.status(201).json({ data: queuePayload() });
 });
+
+/**
+ * The rest of what a one-off needs: a material, or a part already on the shelf.
+ * Anything that does not name something real is dropped rather than stored as a
+ * line pointing at nothing, which would read as "Missing material" at the
+ * printer and tell her nothing about what went wrong.
+ */
+function addExtraPicks(queueId, lines) {
+  if (!Array.isArray(lines) || !lines.length) return;
+  const insert = db.prepare(`
+    INSERT INTO queue_picks (queue_id, line_type, ref_id, quantity, unit, spool_id)
+    VALUES (?, ?, ?, ?, ?, NULL)
+  `);
+  db.transaction(() => {
+    for (const line of lines) {
+      const refId = Number(line.ref_id);
+      const quantity = Number(line.quantity);
+      if (!refId || !(quantity > 0)) continue;
+
+      if (line.line_type === 'material') {
+        const m = db.prepare('SELECT unit FROM materials WHERE id = ?').get(refId);
+        if (!m) continue;
+        insert.run(queueId, 'material', refId, quantity, m.unit || 'each');
+      } else if (line.line_type === 'item') {
+        if (!db.prepare('SELECT id FROM items WHERE id = ?').get(refId)) continue;
+        insert.run(queueId, 'item', refId, quantity, 'each');
+      }
+    }
+  })();
+}
 
 /**
  * Every job on the same plate. A run moves as one: it went on together and it
@@ -160,7 +244,11 @@ function pickListPayload(entry) {
   const lines = readPicks(entry.id);
   return {
     queue_id: entry.id,
-    item_name: db.prepare('SELECT name FROM items WHERE id = ?').get(entry.item_id)?.name,
+    // A job's name is its item's, or the name she typed for a one-off — the
+    // same rule the queue itself reads by.
+    item_name: (entry.item_id
+      ? db.prepare('SELECT name FROM items WHERE id = ?').get(entry.item_id)?.name
+      : entry.custom_name) || 'this job',
     quantity: entry.quantity,
     status: entry.status,
     lines,

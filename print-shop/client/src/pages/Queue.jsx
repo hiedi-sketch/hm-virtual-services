@@ -11,17 +11,31 @@ const STATUS_LABEL = { queued: 'Queued', printing: 'Printing', post_processing: 
 const NEXT_STATUS = { queued: 'printing', printing: 'post_processing', post_processing: 'done' };
 const NEXT_LABEL = { queued: 'Start print', printing: 'Move to finishing', post_processing: 'Mark done' };
 
+/** The spools of one filament, so the list to choose from is short. */
+const spoolsFor = (spools, filamentId) =>
+  (spools || []).filter((s) => !filamentId || s.filament_id === Number(filamentId));
+
+const BLANK_JOB = {
+  item_id: '', custom_name: '', quantity: 1, priority: 'normal', filament_id: '',
+  filament_grams: '', spool_id: '', minutes: '', printer: '', order_id: '', notes: '',
+};
+
 export default function Queue() {
   const { refreshKey, refresh } = useOutletContext();
 
   const [data, setData] = useState(null);
   const [shortages, setShortages] = useState({ filament: [], materials: [] });
-  const [options, setOptions] = useState({ items: [], filaments: [] });
+  const [options, setOptions] = useState({ items: [], filaments: [], materials: [], spools: [] });
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ item_id: '', quantity: 1, priority: 'normal', filament_id: '', printer: '', order_id: '' });
+  const [form, setForm] = useState(BLANK_JOB);
+  // Two kinds of thing go on a queue: something out of the catalog, and a
+  // one-off that is not in it and must never end up in it.
+  const [kind, setKind] = useState('catalog');
+  // What else a one-off needs: a material, or a part already on the shelf.
+  const [extras, setExtras] = useState([]);
   const [picking, setPicking] = useState(null);
   // The job whose print time is being corrected.
   const [timing, setTiming] = useState(null);
@@ -103,21 +117,44 @@ export default function Queue() {
     refresh();
   }
 
+  function closeAdding() {
+    setAdding(false);
+    setForm(BLANK_JOB);
+    setExtras([]);
+    setKind('catalog');
+  }
+
   async function addJob(e) {
     e.preventDefault();
-    if (!form.item_id) return;
+    const custom = kind === 'custom';
+    if (custom ? !form.custom_name.trim() : !form.item_id) return;
+
     try {
       setData(await printApi.addToQueue({
-        item_id: Number(form.item_id),
+        // One or the other, never both: the server reads a job with no item as
+        // a one-off and keeps it away from stock and orders entirely.
+        item_id: custom ? null : Number(form.item_id),
+        custom_name: custom ? form.custom_name.trim() : null,
         quantity: Number(form.quantity) || 1,
         priority: form.priority,
         printer: form.printer || null,
+        notes: form.notes || null,
         filament_id: form.filament_id ? Number(form.filament_id) : null,
-        order_id: form.order_id ? Number(form.order_id) : null,
+        // A one-off has no recipe, so these are hers to give and nobody else's
+        // to work out.
+        ...(custom ? {
+          estimated_minutes: Number(form.minutes) || 0,
+          filament_grams: Number(form.filament_grams) || 0,
+          spool_id: form.spool_id ? Number(form.spool_id) : null,
+          picks: extras
+            .filter((x) => x.ref_id && Number(x.quantity) > 0)
+            .map((x) => ({ line_type: x.line_type, ref_id: Number(x.ref_id), quantity: Number(x.quantity) })),
+        } : {
+          order_id: form.order_id ? Number(form.order_id) : null,
+        }),
       }));
-      toast.success('Added to the queue');
-      setAdding(false);
-      setForm({ item_id: '', quantity: 1, priority: 'normal', filament_id: '', printer: '', order_id: '' });
+      toast.success(custom ? `${form.custom_name.trim()} is on the queue` : 'Added to the queue');
+      closeAdding();
       refresh();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Could not queue that');
@@ -192,6 +229,7 @@ export default function Queue() {
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-bold text-primary leading-tight">{entry.quantity} × {entry.item_name}</p>
                     <Pill tone={STATUS_TONE[entry.status]}>{STATUS_LABEL[entry.status]}</Pill>
+                    {entry.is_custom ? <Pill tone="violet">One-off</Pill> : null}
                     {entry.priority === 'rush' && <Pill tone="red">Rush</Pill>}
                     {entry.priority === 'low' && <Pill tone="gray">Low</Pill>}
                   </div>
@@ -236,10 +274,12 @@ export default function Queue() {
                         <span className="font-bold tabular-nums w-7 shrink-0 text-right text-gray-700">
                           {part.quantity}
                         </span>
-                        <span className={`min-w-0 truncate ${part.stock ? 'text-emerald-800' : 'text-gray-600'}`}>
-                          {part.stock
-                            ? 'Stock build'
-                            : `${part.order_number} · ${part.customer_name || 'no name'}`}
+                        <span className={`min-w-0 truncate ${part.custom ? 'text-violet-800' : part.stock ? 'text-emerald-800' : 'text-gray-600'}`}>
+                          {part.custom
+                            ? 'One-off — not stock'
+                            : part.stock
+                              ? 'Stock build'
+                              : `${part.order_number} · ${part.customer_name || 'no name'}`}
                         </span>
                         {part.promised_ship_date && (
                           <span className="text-gray-400 shrink-0">due {shortDate(part.promised_ship_date)}</span>
@@ -314,14 +354,49 @@ export default function Queue() {
         }}
       />
 
-      <Modal open={adding} onClose={() => setAdding(false)} title="Add to the queue">
+      <Modal open={adding} onClose={closeAdding} title="Add to the queue">
         <form onSubmit={addJob} className="space-y-4">
-          <Field label="Item">
-            <select className="input" required value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}>
-              <option value="">Choose an item…</option>
-              {options.items.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
-            </select>
-          </Field>
+          {/* Which kind of thing this is. It decides everything below it, because
+              a product is costed from its recipe and a one-off is not costed at
+              all — she says what it takes. */}
+          <div className="flex gap-1 p-1 bg-linen rounded-xl">
+            {[
+              ['catalog', 'From the catalog'],
+              ['custom', 'A one-off'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setKind(key)}
+                className={`flex-1 rounded-lg py-1.5 text-sm font-semibold transition ${
+                  kind === key ? 'bg-white text-primary shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {kind === 'catalog' ? (
+            <Field label="Item">
+              <select className="input" required value={form.item_id} onChange={(e) => setForm({ ...form, item_id: e.target.value })}>
+                <option value="">Choose an item…</option>
+                {options.items.map((i) => <option key={i.id} value={i.id}>{i.label}</option>)}
+              </select>
+            </Field>
+          ) : (
+            <Field label="What is it" hint="A test piece, a bracket, a spare for the printer. It stays off the catalog and never counts as stock.">
+              <input
+                className="input"
+                required
+                autoFocus
+                placeholder="Bed level test — 0.2 layer"
+                value={form.custom_name}
+                onChange={(e) => setForm({ ...form, custom_name: e.target.value })}
+              />
+            </Field>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <Field label="Quantity">
               <input type="number" min="1" className="input" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
@@ -333,24 +408,151 @@ export default function Queue() {
                 <option value="low">Low</option>
               </select>
             </Field>
-            <Field label="For an order" hint="Leave blank to build stock.">
-              <select className="input" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
-                <option value="">No order</option>
-                {orders.map((o) => <option key={o.id} value={o.id}>{o.order_number} — {o.customer_name}</option>)}
-              </select>
-            </Field>
+
+            {kind === 'catalog' ? (
+              <Field label="For an order" hint="Leave blank to build stock.">
+                <select className="input" value={form.order_id} onChange={(e) => setForm({ ...form, order_id: e.target.value })}>
+                  <option value="">No order</option>
+                  {orders.map((o) => <option key={o.id} value={o.id}>{o.order_number} — {o.customer_name}</option>)}
+                </select>
+              </Field>
+            ) : (
+              <Field label="Print time (minutes)" hint="What the slicer says for the whole plate.">
+                <input
+                  type="number"
+                  min="0"
+                  className="input"
+                  placeholder="45"
+                  value={form.minutes}
+                  onChange={(e) => setForm({ ...form, minutes: e.target.value })}
+                />
+              </Field>
+            )}
+
             <Field label="Printer">
               <input className="input" placeholder="P1S #2" value={form.printer} onChange={(e) => setForm({ ...form, printer: e.target.value })} />
             </Field>
-            <Field label="Print it in" hint="Overrides the colour on the recipe." className="col-span-2">
-              <select className="input" value={form.filament_id} onChange={(e) => setForm({ ...form, filament_id: e.target.value })}>
-                <option value="">Use the recipe colours</option>
+
+            <Field
+              label={kind === 'custom' ? 'Filament' : 'Print it in'}
+              hint={kind === 'custom' ? null : 'Overrides the colour on the recipe.'}
+              className={kind === 'custom' ? '' : 'col-span-2'}
+            >
+              <select
+                className="input"
+                value={form.filament_id}
+                onChange={(e) => setForm({ ...form, filament_id: e.target.value, spool_id: '' })}
+              >
+                <option value="">{kind === 'custom' ? 'No filament' : 'Use the recipe colours'}</option>
                 {options.filaments.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
               </select>
             </Field>
+
+            {kind === 'custom' && (
+              <>
+                <Field label="Grams" hint="Comes off the spool when it finishes.">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="input"
+                    placeholder="24"
+                    value={form.filament_grams}
+                    onChange={(e) => setForm({ ...form, filament_grams: e.target.value })}
+                  />
+                </Field>
+                {/* Which physical spool. Only the ones of that colour, because
+                    the half-empty spool is the point of choosing at all. */}
+                <Field label="Off which spool" hint="Leave on whichever is open." className="col-span-2">
+                  <select
+                    className="input"
+                    value={form.spool_id}
+                    disabled={!form.filament_id}
+                    onChange={(e) => setForm({ ...form, spool_id: e.target.value })}
+                  >
+                    <option value="">Whichever is open</option>
+                    {spoolsFor(options.spools, form.filament_id).map((sp) => (
+                      <option key={sp.id} value={sp.id}>
+                        {sp.label} · {Math.round(sp.grams_remaining || 0)}g{sp.location ? ` · ${sp.location}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Notes" className="col-span-2">
+                  <input
+                    className="input"
+                    placeholder="For the shop printer, not an order"
+                    value={form.notes}
+                    onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  />
+                </Field>
+              </>
+            )}
           </div>
+
+          {/* Anything else it needs gathered. These go onto the same pick list
+              the printer already prints for every other job. */}
+          {kind === 'custom' && (
+            <div className="border-t border-linen pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="label !mb-0">Anything else it needs</p>
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-primary hover:underline"
+                  onClick={() => setExtras([...extras, { line_type: 'material', ref_id: '', quantity: '' }])}
+                >
+                  + Add a line
+                </button>
+              </div>
+              {extras.length === 0 ? (
+                <p className="text-xs text-gray-400">Magnets, screws, a part off the shelf — optional.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {extras.map((line, i) => (
+                    <li key={i} className="flex gap-2">
+                      <select
+                        className="input !w-28 shrink-0"
+                        value={line.line_type}
+                        onChange={(e) => setExtras(extras.map((x, j) => (j === i ? { ...x, line_type: e.target.value, ref_id: '' } : x)))}
+                      >
+                        <option value="material">Material</option>
+                        <option value="item">Part</option>
+                      </select>
+                      <select
+                        className="input min-w-0 flex-1"
+                        value={line.ref_id}
+                        onChange={(e) => setExtras(extras.map((x, j) => (j === i ? { ...x, ref_id: e.target.value } : x)))}
+                      >
+                        <option value="">Choose…</option>
+                        {(line.line_type === 'material' ? options.materials : options.items)
+                          .map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                      </select>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        className="input !w-20 shrink-0"
+                        placeholder="Qty"
+                        value={line.quantity}
+                        onChange={(e) => setExtras(extras.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setExtras(extras.filter((_, j) => j !== i))}
+                        className="text-silver hover:text-red-600 px-1 text-lg leading-none shrink-0"
+                        title="Take this line off"
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-2">
-            <button type="button" className="btn-secondary" onClick={() => setAdding(false)}>Cancel</button>
+            <button type="button" className="btn-secondary" onClick={closeAdding}>Cancel</button>
             <button type="submit" className="btn-primary">Add</button>
           </div>
         </form>

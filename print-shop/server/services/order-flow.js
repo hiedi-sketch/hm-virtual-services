@@ -193,8 +193,8 @@ function startProduction(orderId, { orderItemId = null, source = 'app' } = {}) {
   });
 
   const jobs = db.prepare(`
-    SELECT q.*, i.name AS item_name FROM queue_jobs q
-      JOIN items i ON q.item_id = i.id
+    SELECT q.*, IFNULL(i.name, q.custom_name) AS item_name FROM queue_jobs q
+      LEFT JOIN items i ON q.item_id = i.id
      WHERE q.order_id = ? AND q.status = 'queued'
        ${orderItemId ? 'AND q.order_item_id = ?' : ''}
      ORDER BY q.position, q.id

@@ -26,7 +26,7 @@ function directDemand(itemId) {
 }
 
 /** Which spools to take the grams off, oldest open one first. */
-function suggestSpools(filamentId, grams) {
+function suggestSpools(filamentId, grams, preferSpoolId = null) {
   const filament = db.prepare('SELECT * FROM filaments WHERE id = ?').get(filamentId);
   if (!filament) return [];
   const fullGrams = (filament.spool_size_kg || 1) * 1000;
@@ -42,7 +42,15 @@ function suggestSpools(filamentId, grams) {
 
   const plan = [];
   let remaining = grams;
-  for (const spool of [...opened, ...sealed]) {
+  // A spool named on the job goes first: a test print is what the half-empty
+  // spool is for, and the list has to say so rather than sending her to the
+  // oldest open one.
+  const ordered = [...opened, ...sealed];
+  if (preferSpoolId) {
+    const at = ordered.findIndex((s) => s.id === Number(preferSpoolId));
+    if (at > 0) ordered.unshift(...ordered.splice(at, 1));
+  }
+  for (const spool of ordered) {
     if (remaining <= 0) break;
     const available = spool.status === 'new' ? fullGrams : spool.grams_remaining;
     const take = Math.min(remaining, available);
@@ -63,6 +71,22 @@ function suggestSpools(filamentId, grams) {
  * Work out the lines for a job. Pure calculation — nothing is written here.
  */
 function planPicks(entry) {
+  // A one-off has no recipe to walk. It takes the filament she named, in the
+  // amount she gave, off the spool she picked if she picked one. Anything else
+  // it needs — a material, a part off the shelf — is added to the list when the
+  // job is created, because only she knows what a one-off is made of.
+  if (!entry.item_id) {
+    const grams = Number(entry.filament_grams) || 0;
+    if (!entry.filament_id || grams <= 0) return [];
+    return [{
+      line_type: 'filament',
+      ref_id: Number(entry.filament_id),
+      quantity: round2(grams),
+      unit: 'g',
+      spool_id: entry.spool_id ? Number(entry.spool_id) : null,
+    }];
+  }
+
   const quantity = entry.quantity || 0;
   const components = db
     .prepare('SELECT * FROM item_components WHERE item_id = ?')
@@ -143,7 +167,7 @@ function ensurePicks(entry) {
       if (line.line_type === 'material') {
         unit = db.prepare('SELECT unit FROM materials WHERE id = ?').get(line.ref_id)?.unit || 'each';
       }
-      insert.run(entry.id, line.line_type, line.ref_id, line.quantity, unit, null);
+      insert.run(entry.id, line.line_type, line.ref_id, line.quantity, unit, line.spool_id ?? null);
     }
   })();
 }
@@ -156,7 +180,7 @@ function readPicks(queueId) {
     if (row.line_type === 'filament') {
       const f = db.prepare('SELECT * FROM filaments WHERE id = ?').get(row.ref_id);
       if (!f) return { ...row, label: 'Missing filament', missing: true };
-      const spools = suggestSpools(f.id, row.quantity);
+      const spools = suggestSpools(f.id, row.quantity, row.spool_id);
       // Stock is every spool on the shelf, not just the ones this job needs.
       const fullGrams = (f.spool_size_kg || 1) * 1000;
       const onHand = db.prepare(`

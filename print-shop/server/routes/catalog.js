@@ -154,6 +154,22 @@ router.get('/options', (req, res) => {
       materials: materialSummary().map((m) => ({
         id: m.id, label: m.name, unit: m.unit, unit_cost: m.unit_cost, qty_on_hand: m.qty_on_hand,
       })),
+      // Individual spools, for a job that wants a particular one — the
+      // half-empty spool a test print is exactly what is for.
+      spools: db.prepare(`
+        SELECT s.id, s.spool_code, s.status, s.grams_remaining, s.location, s.filament_id,
+               f.brand, f.material_type, f.color_name, f.spool_size_kg
+          FROM filament_spools s JOIN filaments f ON s.filament_id = f.id
+         WHERE s.status IN ('new','opened')
+         ORDER BY f.brand, f.color_name, s.status, s.id
+      `).all().map((s) => ({
+        id: s.id,
+        filament_id: s.filament_id,
+        label: `${s.spool_code || `Spool #${s.id}`} — ${s.brand} ${s.color_name}`,
+        status: s.status,
+        grams_remaining: s.status === 'new' ? (s.spool_size_kg || 1) * 1000 : s.grams_remaining,
+        location: s.location,
+      })),
       items: db.prepare("SELECT id, name, sku, item_type FROM items WHERE item_type IN ('component','product') ORDER BY name").all()
         .map((i) => ({ id: i.id, label: `${i.name} (${i.sku})`, item_type: i.item_type })),
       channels: salesChannels(),

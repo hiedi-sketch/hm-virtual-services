@@ -204,7 +204,11 @@ function createSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER REFERENCES orders(id) ON DELETE CASCADE,
       order_item_id INTEGER REFERENCES order_items(id) ON DELETE CASCADE,
-      item_id INTEGER NOT NULL REFERENCES items(id),
+      -- Null for a one-off: a test print, a bracket, a part for the printer
+      -- itself. Those are named by custom_name and never touch the catalog,
+      -- so nothing about them can reach stock, orders or Shopify.
+      item_id INTEGER REFERENCES items(id),
+      custom_name TEXT,
       quantity REAL NOT NULL DEFAULT 1,
       status TEXT NOT NULL DEFAULT 'queued' CHECK(status IN ('queued','printing','post_processing','done','cancelled')),
       priority TEXT NOT NULL DEFAULT 'normal' CHECK(priority IN ('rush','normal','low')),
@@ -363,6 +367,14 @@ function createSchema() {
     // figure worked out from the recipe is a starting point she can correct —
     // and the corrected one is what the queue's hours are built from.
     'ALTER TABLE queue_jobs ADD COLUMN print_minutes_override REAL',
+    // A one-off print: something not in the catalog, named here. A job has
+    // either an item or one of these.
+    'ALTER TABLE queue_jobs ADD COLUMN custom_name TEXT',
+    // What a one-off takes, since it has no recipe to work it out from.
+    'ALTER TABLE queue_jobs ADD COLUMN filament_grams REAL',
+    // The particular spool to take it off, when she has one in mind — a test
+    // print is what the half-empty spool is for.
+    'ALTER TABLE queue_jobs ADD COLUMN spool_id INTEGER REFERENCES filament_spools(id)',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
@@ -370,6 +382,7 @@ function createSchema() {
 
   migrateOrderStages();
   dropQueuedStage();
+  allowCustomQueueJobs();
   addSalesChannel('TikTok', 'channels_tiktok_added');
   addMailBinStage();
   seedBins(6);
@@ -614,6 +627,53 @@ function addMailBinStage() {
       db.exec('ALTER TABLE orders_migrating RENAME TO orders');
     })();
     console.log('Mail Bin stage added between packing and shipped.');
+  } finally {
+    db.pragma('legacy_alter_table = OFF');
+    if (hadForeignKeys) db.pragma('foreign_keys = ON');
+  }
+}
+
+/**
+ * Free a print job from having to be a catalog item.
+ *
+ * `item_id` was NOT NULL, which is right for everything an order asks for and
+ * wrong for the rest of what goes through a printer: a test piece, a bracket, a
+ * spare for the machine itself. Those have no product, no price and no stock to
+ * land in, and giving each one a catalog entry to get it onto the queue would
+ * silently fill the catalog — and Shopify — with things she does not sell.
+ *
+ * SQLite cannot drop NOT NULL in place, so the table is rebuilt. Same shape as
+ * the stage migrations above, and the same care: foreign keys off while the old
+ * table is dropped, so the rows pointing at it survive the swap.
+ */
+function allowCustomQueueJobs() {
+  const current = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='queue_jobs'").get()?.sql;
+  if (!current) return;
+  // Already free — either rebuilt before, or created fresh from the schema.
+  if (!/\bitem_id\s+INTEGER\s+NOT\s+NULL/i.test(current)) return;
+
+  const rebuilt = current
+    .replace(/CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?["'`[]?queue_jobs["'`\]]?/i, 'CREATE TABLE queue_jobs_migrating')
+    .replace(/\bitem_id\s+INTEGER\s+NOT\s+NULL\s+REFERENCES/i, 'item_id INTEGER REFERENCES');
+
+  if (!rebuilt.includes('queue_jobs_migrating') || /\bitem_id\s+INTEGER\s+NOT\s+NULL/i.test(rebuilt)) {
+    console.error('Could not free the print queue for one-off jobs — leaving the table as it is.');
+    return;
+  }
+
+  const columns = db.prepare('PRAGMA table_info(queue_jobs)').all().map((c) => `"${c.name}"`).join(', ');
+
+  const hadForeignKeys = db.pragma('foreign_keys', { simple: true });
+  db.pragma('foreign_keys = OFF');
+  db.pragma('legacy_alter_table = ON');
+  try {
+    db.transaction(() => {
+      db.exec(rebuilt);
+      db.exec(`INSERT INTO queue_jobs_migrating (${columns}) SELECT ${columns} FROM queue_jobs`);
+      db.exec('DROP TABLE queue_jobs');
+      db.exec('ALTER TABLE queue_jobs_migrating RENAME TO queue_jobs');
+    })();
+    console.log('The print queue can now hold one-off jobs that are not in the catalog.');
   } finally {
     db.pragma('legacy_alter_table = OFF');
     if (hadForeignKeys) db.pragma('foreign_keys = ON');

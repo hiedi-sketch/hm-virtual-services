@@ -23,11 +23,12 @@ function printingNow() {
   const jobs = db.prepare(`
     SELECT q.id, q.quantity, q.status, q.started_at, q.printer, q.estimated_minutes,
            q.order_item_id, oi.quantity AS order_quantity,
-           i.id AS item_id, i.name AS item_name, i.sku AS item_sku, i.image_url,
+           i.id AS item_id, IFNULL(i.name, q.custom_name) AS item_name, i.sku AS item_sku,
+           i.image_url, q.item_id IS NULL AS is_custom,
            o.id AS order_id, o.order_number, o.promised_ship_date, o.customer_name,
            b.id AS bin_id, b.code AS bin_code, b.label AS bin_label
       FROM queue_jobs q
-      JOIN items i ON q.item_id = i.id
+      LEFT JOIN items i ON q.item_id = i.id
       LEFT JOIN orders o ON q.order_id = o.id
       LEFT JOIN order_items oi ON q.order_item_id = oi.id
       LEFT JOIN bins b ON o.bin_id = b.id

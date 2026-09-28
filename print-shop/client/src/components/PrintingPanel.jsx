@@ -30,10 +30,18 @@ const MODES = {
   },
 };
 
-/** The distinct products on the plates, for adding a stock run beside one. */
+/**
+ * The distinct products on the plates, for adding a stock run beside one.
+ *
+ * A one-off is skipped: it is not a product, so there is no stock run of it to
+ * add, and offering one would be a button that could only fail.
+ */
 function uniqueItems(jobs) {
   const seen = new Map();
-  for (const job of jobs) if (!seen.has(job.item_id)) seen.set(job.item_id, job);
+  for (const job of jobs) {
+    if (!job.item_id) continue;
+    if (!seen.has(job.item_id)) seen.set(job.item_id, job);
+  }
   return [...seen.values()];
 }
 
@@ -69,7 +77,7 @@ export default function PrintingPanel({ open, mode = 'printing', onClose, onChan
     try {
       await printApi.updateQueue(job.id, { status });
       toast.success(status === 'done'
-        ? `${job.item_name} is finished and on the shelf`
+        ? `${job.item_name} ${job.is_custom ? 'is finished' : 'is finished and on the shelf'}`
         : `${job.item_name} is off the printer`);
       // Finished units for an order have somewhere to go. Ask while they are
       // still in her hand rather than hoping she remembers at packing time.
@@ -217,9 +225,13 @@ export default function PrintingPanel({ open, mode = 'printing', onClose, onChan
                     <span className="min-w-0">{job.item_name}</span>
                   </p>
                   <p className="text-xs text-gray-500">
-                    {job.order_number
-                      ? <>for {job.order_number}{job.customer_name ? ` · ${job.customer_name}` : ''}</>
-                      : 'for stock'}
+                    {/* A one-off goes nowhere afterwards, so it must not read
+                        as "for stock" and have her looking for it on a shelf. */}
+                    {job.is_custom
+                      ? <span className="text-violet-700">a one-off · not stock</span>
+                      : job.order_number
+                        ? <>for {job.order_number}{job.customer_name ? ` · ${job.customer_name}` : ''}</>
+                        : 'for stock'}
                     {job.promised_ship_date && ` · due ${shortDate(job.promised_ship_date)}`}
                   </p>
                   {/* More on the plate than the order asked for: the rest is
