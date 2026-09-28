@@ -34,6 +34,18 @@ function encode(value) {
   return [START_B, ...codes, checksum, STOP].map((i) => PATTERNS[i]).join('');
 }
 
+/**
+ * How many modules wide the symbol is, before any quiet zone.
+ *
+ * A label that has to fit a fixed width works backwards from this: the module
+ * width is the space available divided by the symbol plus its two ten-module
+ * quiet zones, so the bars come out as coarse as the paper allows.
+ */
+export function moduleCount(value) {
+  if (!value) return 0;
+  return encode(value).split('').map(Number).reduce((a, b) => a + b, 0);
+}
+
 export default function Barcode({ value, height = 48, moduleWidth = 2, showText = true, className = '' }) {
   if (!value) return null;
 

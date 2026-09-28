@@ -44,6 +44,17 @@ const GROUPS = [
     ],
   },
   {
+    title: 'Where stock lives',
+    fields: [
+      {
+        key: 'stock_drawers',
+        label: 'Inventory drawers',
+        type: 'text',
+        hint: 'Comma separated. The drawers finished stock is kept in, waiting for an order.',
+      },
+    ],
+  },
+  {
     title: 'Where filament lives',
     fields: [
       { key: 'shelf_locations', label: 'Shelf slots', type: 'text', hint: 'Comma separated. Add more as the shelf grows.' },

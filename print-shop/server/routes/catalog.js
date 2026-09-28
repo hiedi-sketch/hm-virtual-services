@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db/database');
 const { nextSku, defaultBarcode } = require('../utils/sku');
 const { getSettings, priceItem, computeItemCost, previewItemCost, salesChannels } = require('../utils/costing');
+const drawers = require('../utils/drawers');
 const { materialSummary, filamentSummary } = require('../utils/planning');
 const { logStock, applyUpdate } = require('./helpers');
 const { planImport, applyImport } = require('../services/catalog-import');
@@ -173,9 +174,25 @@ router.get('/options', (req, res) => {
       items: db.prepare("SELECT id, name, sku, item_type FROM items WHERE item_type IN ('component','product') ORDER BY name").all()
         .map((i) => ({ id: i.id, label: `${i.name} (${i.sku})`, item_type: i.item_type })),
       channels: salesChannels(),
+      drawers: drawers.drawerList(),
       settings: getSettings(),
     },
   });
+});
+
+/**
+ * The drawers, and what is kept in each. Registered above `/:id` so the word
+ * is read as a page rather than an item id.
+ */
+router.get('/drawers', (req, res) => res.json({ data: drawers.occupancy() }));
+
+/** File a product in a drawer, or take it out of one with a blank. */
+router.post('/:id/drawer', (req, res) => {
+  try {
+    res.json(drawers.assign(Number(req.params.id), req.body?.drawer ?? null));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
 });
 
 /** Live cost + suggested prices for an item still being edited. */

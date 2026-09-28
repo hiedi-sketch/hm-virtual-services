@@ -13,6 +13,7 @@ import ScanOrderActions, { OrderResultCard } from './ScanOrderActions';
 import ScanItemProduction from './ScanItemProduction';
 import ScanBinCard from './ScanBinCard';
 import ScanLocationCard from './ScanLocationCard';
+import ScanDrawerCard from './ScanDrawerCard';
 
 const ScanContext = createContext(null);
 
@@ -35,6 +36,7 @@ function ResultCard({ match, onChanged }) {
   if (match.type === 'order') return <OrderResultCard order={match.order} />;
   if (match.type === 'bin') return <ScanBinCard bin={match.bin} onChanged={onChanged} />;
   if (match.type === 'location') return <ScanLocationCard location={match.location} />;
+  if (match.type === 'drawer') return <ScanDrawerCard drawer={match.drawer} />;
 
   if (match.type === 'filament' || match.type === 'filament_spool') {
     const f = match.filament;

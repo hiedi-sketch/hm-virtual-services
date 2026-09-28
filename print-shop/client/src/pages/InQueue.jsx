@@ -228,11 +228,16 @@ export default function InQueue() {
                     <Pill tone="gray">{row.ordered} ordered</Pill>
                     {row.from_stock > 0 && <Pill tone="teal">{row.from_stock} from stock</Pill>}
                     {row.in_bins > 0 && <Pill tone="blue">{row.in_bins} in bins</Pill>}
-                    {/* A shelf can read below nothing when more has been set
-                        aside than was ever counted in. That is worth saying
-                        plainly rather than as a minus sign. */}
+                    {/* A stock count can read below nothing when more has been
+                        set aside into bins than was ever counted in. It is not
+                        an amount she has — it is the count being wrong, which
+                        wants saying as such rather than as a kind of stock. */}
                     {row.on_hand < 0
-                      ? <Pill tone="amber">{Math.abs(row.on_hand)} short on the shelf</Pill>
+                      ? (
+                        <span title="More has gone into bins than was ever counted in. Count this one and set it right.">
+                          <Pill tone="red">stock count is {Math.abs(row.on_hand)} under — count it</Pill>
+                        </span>
+                      )
                       : <Pill tone={row.on_hand > 0 ? 'green' : 'gray'}>{row.on_hand} on hand</Pill>}
                     {row.printing > 0 && <Pill tone="amber">{row.printing} printing</Pill>}
                     <Pill tone="blue">{row.order_count} order{row.order_count === 1 ? '' : 's'}</Pill>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
+import DrawerRack from '../components/DrawerRack';
 import printApi, { describeError, grams, hoursMinutes, money } from '../api/print';
 import { EmptyState, Field, LabelModal, LoadError, Pill, StatCard } from '../components/ui';
 import { useScanner } from '../components/ScanContext';
@@ -46,6 +47,8 @@ export default function Catalog() {
   const [saving, setSaving] = useState(false);
   const [label, setLabel] = useState(null);
   const [adjust, setAdjust] = useState(null);
+  // The drawer map, or the drawer picker for one product.
+  const [filing, setFiling] = useState(null);   // { item } or { item: null } for the map
   const [adjustForm, setAdjustForm] = useState({ mode: 'receive', quantity: 1 });
   const [importing, setImporting] = useState(false);
   // How many products read as the same thing twice. Checked alongside the
@@ -228,6 +231,7 @@ export default function Catalog() {
               {dupes} duplicate{dupes === 1 ? '' : 's'}
             </button>
           )}
+          <button className="btn-secondary" onClick={() => setFiling({ item: null })}>Drawers</button>
           <button className="btn-secondary" onClick={() => setImporting(true)}>Import products</button>
           <button className="btn-secondary" onClick={() => scan({ title: 'Scan a product' })}>Scan</button>
           <button className="btn-primary" onClick={openNew}>Add item</button>
@@ -311,6 +315,20 @@ export default function Catalog() {
                 <div className="text-right shrink-0">
                   <p className="text-lg font-bold text-primary leading-tight">{i.qty_on_hand}</p>
                   <p className="text-[11px] text-gray-500">on hand</p>
+                  {/* Where to go and get it. A product with no drawer says so,
+                      because "somewhere" is the thing worth fixing. */}
+                  {i.item_type !== 'tool' && (
+                    <button
+                      type="button"
+                      onClick={() => setFiling({ item: i })}
+                      title="Which drawer this is kept in"
+                      className={`text-[11px] font-mono hover:underline decoration-dotted ${
+                        i.drawer ? 'text-primary font-semibold' : 'text-gray-400'
+                      }`}
+                    >
+                      {i.drawer || 'no drawer'}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -623,6 +641,13 @@ export default function Catalog() {
       />
 
       <LabelModal open={!!label} onClose={() => setLabel(null)} {...(label || {})} />
+
+      <DrawerRack
+        open={!!filing}
+        item={filing?.item || null}
+        onClose={() => setFiling(null)}
+        onMoved={() => { setFiling(null); load(); }}
+      />
     </div>
   );
 }

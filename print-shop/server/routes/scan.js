@@ -11,6 +11,7 @@ const { trackingLink } = require('../utils/tracking');
 const packing = require('../services/packing');
 const bins = require('../services/bins');
 const { kindOf, occupancy } = require('../utils/locations');
+const drawers = require('../utils/drawers');
 
 const router = express.Router();
 
@@ -38,6 +39,11 @@ function resolve(rawCode) {
   // refuses a code that already resolves, and this is what makes it refuse.
   const slot = locationRow(code);
   if (slot) return { type: 'location', code, location: slot };
+
+  // An inventory drawer. Like a shelf slot, its label carries its own name, so
+  // it is matched before anything whose code could be typed to look like one.
+  const drawer = drawers.isKnown(code) ? drawers.find(code) : null;
+  if (drawer) return { type: 'drawer', code: drawer.code, drawer };
 
   const spool = db.prepare('SELECT * FROM filament_spools WHERE spool_code = ?').get(code);
   if (spool) {
@@ -181,6 +187,9 @@ router.post('/action', (req, res) => {
   }
   if (match.type === 'location') {
     return res.status(400).json({ error: 'That is a shelf label — scan a spool to move it there' });
+  }
+  if (match.type === 'drawer') {
+    return res.status(400).json({ error: 'That is a drawer label — scan a product to count it' });
   }
 
   const qty = Number(quantity);

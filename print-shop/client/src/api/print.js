@@ -70,6 +70,9 @@ export const printApi = {
 
   catalog: (params) => unwrap(api.get('/catalog', { params })),
   catalogOptions: () => unwrap(api.get('/catalog/options')),
+  // The inventory drawers, and what is kept in each.
+  drawers: () => unwrap(api.get('/catalog/drawers')),
+  setDrawer: (id, drawer) => api.post(`/catalog/${id}/drawer`, { drawer }).then((r) => r.data),
   previewCatalogImport: (csv, options) => unwrap(api.post('/catalog/import', { csv, apply: false, ...options })),
   applyCatalogImport: (csv, options) => api.post('/catalog/import', { csv, apply: true, ...options }).then((r) => r.data),
   item: (id) => unwrap(api.get(`/catalog/${id}`)),

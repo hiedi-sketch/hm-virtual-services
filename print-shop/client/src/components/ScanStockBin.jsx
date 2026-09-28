@@ -100,6 +100,13 @@ export default function ScanStockBin({ bin, onChanged }) {
                   {row.item_sku}
                   {row.qty_on_hand != null && ` · ${row.qty_on_hand} in stock all told`}
                 </p>
+                {/* Which drawer to carry it to, so putting away is one trip
+                    rather than a hunt. */}
+                <p className="text-xs">
+                  {row.drawer
+                    ? <span className="text-primary font-semibold font-mono">→ {row.drawer}</span>
+                    : <span className="text-gray-400">no drawer yet</span>}
+                </p>
               </div>
 
               {counting?.item_id === row.item_id ? (

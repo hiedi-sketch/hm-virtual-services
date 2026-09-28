@@ -104,6 +104,9 @@ function createSchema() {
       labor_minutes REAL,
       qty_on_hand REAL DEFAULT 0,
       reorder_point REAL DEFAULT 0,
+      -- Which drawer this lives in once it is put away. A drawer holds one or
+      -- two products; a product lives in one drawer.
+      drawer TEXT,
       purchase_cost REAL,
       cost_override REAL,
       wholesale_override REAL,
@@ -343,6 +346,8 @@ function createSchema() {
     ['printer_count', '1'],
     // Where spools live. Editable, because shelves grow.
     ['sales_channels', 'Shopify,Faire,Etsy,Amazon,TikTok'],
+    // The drawers finished stock is kept in, waiting for an order.
+    ['stock_drawers', Array.from({ length: 24 }, (_, i) => `D${i + 1}`).join(',')],
     ['shelf_locations', 'A1,A2,A3,A4,A5,A6,B1,B2,B3'],
     ['ams_slots', 'AMS1,AMS2,AMS3,AMS4'],
     // Which Shopify figure the push sets, and whether it pushes at all.
@@ -400,6 +405,8 @@ function createSchema() {
     // The particular spool to take it off, when she has one in mind — a test
     // print is what the half-empty spool is for.
     'ALTER TABLE queue_jobs ADD COLUMN spool_id INTEGER REFERENCES filament_spools(id)',
+    // Which inventory drawer a finished product is kept in.
+    'ALTER TABLE items ADD COLUMN drawer TEXT',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
@@ -428,6 +435,8 @@ function createSchema() {
   } catch { /* column not there yet on a brand new database */ }
 
   for (const sql of [
+    // Which drawer a product is in gets asked of every drawer label scanned.
+    'CREATE INDEX IF NOT EXISTS idx_items_drawer ON items(drawer) WHERE drawer IS NOT NULL',
     // Exclusivity applies to AMS bays only — a shelf slot holds a stack.
     'DROP INDEX IF EXISTS idx_spool_location',
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_spool_ams_bay ON filament_spools(location) WHERE location_kind = 'ams' AND location IS NOT NULL",

@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import Barcode from './Barcode';
+import Barcode, { moduleCount } from './Barcode';
 
 /**
  * Labels for a 2" × 1" roll — two per thing.
@@ -17,8 +17,8 @@ import Barcode from './Barcode';
  * the shop needs to name and scan — comes in as a list, so there is one
  * implementation of the print CSS rather than one per kind of label.
  */
-const LABEL_W = 2; // inches
-const LABEL_H = 1;
+const DEFAULT_W = 2; // inches
+const DEFAULT_H = 1;
 
 /**
  * The quiet zone Code 128 needs is ten modules of clear space either side, and
@@ -30,34 +30,84 @@ const LABEL_H = 1;
 const QUIET = 0.2;
 
 /** Big, but never wider than the label — a long name shrinks to fit. */
-function nameSize(label) {
-  return `${Math.min(0.58, 3.4 / Math.max(1, String(label).length)).toFixed(2)}in`;
+function nameSize(label, width) {
+  return `${Math.min(0.29 * width, (1.7 * width) / Math.max(1, String(label).length)).toFixed(2)}in`;
 }
 
 /**
  * One label. Plain black rather than the app's near-black navy: a thermal roll
  * has one colour and a laser should not tint the bars.
  */
-function Label({ children, style }) {
+function Label({ children, style, width = DEFAULT_W, height = DEFAULT_H }) {
   return (
     <div
       className="bin-label print-page bg-white flex flex-col items-center justify-center overflow-hidden"
-      style={{ width: `${LABEL_W}in`, height: `${LABEL_H}in`, boxSizing: 'border-box', color: '#111', ...style }}
+      style={{ width: `${width}in`, height: `${height}in`, boxSizing: 'border-box', color: '#111', ...style }}
     >
       {children}
     </div>
   );
 }
 
-export default function LabelSheet({ open, title, subtitle, labels: things, onClose }) {
+/**
+ * One label, name and barcode side by side, for stock too small to give each
+ * its own — a drawer front is an inch and a half by a quarter.
+ *
+ * The bars are drawn as coarse as the paper allows. The space left after the
+ * name is divided by the symbol's own modules plus the twenty of clear paper
+ * Code 128 needs — ten either side — so the module width falls out of the
+ * label rather than being guessed at, and the symbol lands centred with
+ * exactly its quiet zones around it.
+ *
+ * Getting that wrong is quiet: a symbol with five modules of clear paper on
+ * one side still looks like a barcode and still fails to read, which is why
+ * the width is arithmetic here rather than padding.
+ */
+function InlineLabel({ thing, width, height }) {
+  const nameWidth = Math.max(0.2, width * 0.2);
+  const barWidth = width - nameWidth;                       // symbol + both quiet zones
+  const modules = moduleCount(thing.code) + 20;
+  const moduleWidth = (barWidth / modules) * 96;            // inches → CSS pixels
+  const nameSizeIn = Math.min(height * 0.62, (nameWidth * 1.5) / Math.max(1, String(thing.name).length));
+
+  return (
+    <Label width={width} height={height} style={{ border: '1px dashed #9ca3af', flexDirection: 'row' }}>
+      <span
+        className="font-bold leading-none whitespace-nowrap text-center shrink-0"
+        style={{ width: `${nameWidth}in`, fontSize: `${nameSizeIn.toFixed(3)}in` }}
+      >
+        {thing.name}
+      </span>
+      {/* Exactly the barcode's share of the label, with the symbol centred in
+          it, so the clear paper either side is its ten modules and no less. */}
+      <span className="flex items-center justify-center shrink-0" style={{ width: `${barWidth}in` }}>
+        <Barcode
+          value={thing.code}
+          height={Math.round(height * 96) - 2}
+          moduleWidth={moduleWidth}
+          showText={false}
+        />
+      </span>
+    </Label>
+  );
+}
+
+export default function LabelSheet({
+  open, title, subtitle, labels: things, onClose,
+  width = DEFAULT_W, height = DEFAULT_H, layout = 'pair',
+}) {
   if (!open || !things?.length) return null;
 
-  // Two labels per thing, kept next to each other so the pair comes off the
-  // roll together rather than every name then every barcode.
-  const labels = things.flatMap((thing) => [
-    { key: `${thing.key}-name`, kind: 'name', thing },
-    { key: `${thing.key}-code`, kind: 'code', thing },
-  ]);
+  // A pair per thing — the name to read, the barcode to scan — kept next to
+  // each other so both come off the roll together rather than every name and
+  // then every barcode. On stock too small for two, they share one label.
+  const inline = layout === 'inline';
+  const labels = inline
+    ? things.map((thing) => ({ key: thing.key, kind: 'inline', thing }))
+    : things.flatMap((thing) => [
+      { key: `${thing.key}-name`, kind: 'name', thing },
+      { key: `${thing.key}-code`, kind: 'code', thing },
+    ]);
 
   return createPortal(
     <div className="print-portal fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto print:p-0 print:static print:overflow-visible">
@@ -65,7 +115,7 @@ export default function LabelSheet({ open, title, subtitle, labels: things, onCl
           shop prints, so the page size is set only while this sheet is open. */}
       <style>{`
         @media print {
-          @page { size: ${LABEL_W}in ${LABEL_H}in; margin: 0; }
+          @page { size: ${width}in ${height}in; margin: 0; }
           html, body { margin: 0 !important; padding: 0 !important; }
           .print-portal, .print-sheet, #print-area, .label-grid {
             display: block !important; gap: 0 !important; padding: 0 !important; width: auto !important;
@@ -83,26 +133,28 @@ export default function LabelSheet({ open, title, subtitle, labels: things, onCl
           <div>
             <h2 className="text-lg font-bold text-primary">{title}</h2>
             <p className="text-xs text-gray-500">
-              {labels.length} labels on 2″ × 1″ stock — {subtitle}
+              {labels.length} labels on {width}″ × {height}″ stock — {subtitle}
             </p>
           </div>
           <button onClick={onClose} className="text-silver hover:text-gray-600 text-2xl leading-none">×</button>
         </div>
 
         <div id="print-area" className="max-h-[70vh] overflow-y-auto p-5 print:max-h-none print:overflow-visible print:p-0">
-          <div className="label-grid grid grid-cols-2 gap-3 justify-items-center print:block">
+          <div className={`label-grid grid gap-3 justify-items-center print:block ${inline ? 'grid-cols-1' : 'grid-cols-2'}`}>
             {labels.map(({ key, kind, thing }) => (
-              kind === 'name' ? (
-                <Label key={key} style={{ border: '1px dashed #9ca3af' }}>
+              kind === 'inline' ? (
+                <InlineLabel key={key} thing={thing} width={width} height={height} />
+              ) : kind === 'name' ? (
+                <Label key={key} width={width} height={height} style={{ border: '1px dashed #9ca3af' }}>
                   <span
                     className="font-bold leading-none whitespace-nowrap"
-                    style={{ fontSize: nameSize(thing.name) }}
+                    style={{ fontSize: nameSize(thing.name, width) }}
                   >
                     {thing.name}
                   </span>
                 </Label>
               ) : (
-                <Label key={key} style={{ border: '1px dashed #9ca3af', padding: `0.06in ${QUIET}in` }}>
+                <Label key={key} width={width} height={height} style={{ border: '1px dashed #9ca3af', padding: `0.06in ${QUIET}in` }}>
                   {/* Sized so the symbol's own width matches the space left
                       between the quiet zones — no scaling down, so the bars
                       stay as tall as they are drawn. */}
@@ -127,8 +179,8 @@ export default function LabelSheet({ open, title, subtitle, labels: things, onCl
           style={{ paddingBottom: 'calc(1.25rem + var(--safe-bottom))' }}
         >
           <p className="text-xs text-gray-500 mb-3">
-            Set the printer to the 2″ × 1″ label and leave scaling at 100% — each label is its own page,
-            so one label comes out per label.
+            Set the printer to the {width}″ × {height}″ label and leave scaling at 100% — each label is
+            its own page, so one label comes out per label.
           </p>
           <div className="flex gap-2 justify-end">
             <button onClick={onClose} className="btn-secondary">Close</button>

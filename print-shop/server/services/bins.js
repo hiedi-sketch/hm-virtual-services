@@ -89,7 +89,7 @@ function stockBinRow(bin) {
   const items = db.prepare(`
     SELECT bi.item_id, bi.quantity, bi.updated_at,
            i.name AS item_name, i.sku AS item_sku, i.barcode, i.image_url,
-           i.qty_on_hand
+           i.qty_on_hand, i.drawer
       FROM bin_items bi JOIN items i ON bi.item_id = i.id
      WHERE bi.bin_id = ? AND bi.quantity > 0
      ORDER BY bi.updated_at DESC, i.name
