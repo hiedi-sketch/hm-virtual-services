@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import Modal from './Modal';
+import LabelSheet from './LabelSheet';
 import printApi, { describeError, grams } from '../api/print';
 import { LoadError } from './ui';
 
@@ -63,6 +64,7 @@ export default function LocationPicker({ open, spool, onClose, onMoved }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [labels, setLabels] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -105,8 +107,18 @@ export default function LocationPicker({ open, spool, onClose, onMoved }) {
 
   const title = spool ? `Where is ${spool.spool_code}?` : 'Where everything is';
 
+  // A label for the edge of every slot: its name to read, its code to scan.
+  // The shelf comes first because that is the rack she walks along; the AMS
+  // bays are four labels on the printer itself.
+  const slotLabels = [...(data?.shelf || []), ...(data?.ams || [])].map((slot) => ({
+    key: `slot-${slot.code}`,
+    name: slot.code,
+    code: slot.code,
+  }));
+
   return (
-    <Modal open={open} onClose={onClose} title={title} size="lg">
+    <>
+    <Modal open={open && !labels} onClose={onClose} title={title} size="lg">
       {error && !data ? (
         <LoadError message={error} onRetry={load} what="the rack" />
       ) : !data ? (
@@ -175,10 +187,26 @@ export default function LocationPicker({ open, spool, onClose, onMoved }) {
                 Take it off the rack
               </button>
             )}
+            {/* Only when she is looking at the rack rather than putting one
+                spool away — printing labels is a job of its own. */}
+            {!spool && slotLabels.length > 0 && (
+              <button className="btn-secondary" onClick={() => setLabels(true)}>
+                Print slot labels
+              </button>
+            )}
             <button className="btn-ghost" onClick={onClose}>Close</button>
           </div>
         </div>
       )}
     </Modal>
+
+    <LabelSheet
+      open={labels}
+      title="Shelf labels"
+      subtitle="a name and a barcode for each slot"
+      labels={slotLabels}
+      onClose={() => setLabels(false)}
+    />
+    </>
   );
 }

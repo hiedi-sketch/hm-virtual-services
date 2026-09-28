@@ -10,6 +10,7 @@ const inventory = require('../services/inventory-sync');
 const { trackingLink } = require('../utils/tracking');
 const packing = require('../services/packing');
 const bins = require('../services/bins');
+const { kindOf, occupancy } = require('../utils/locations');
 
 const router = express.Router();
 
@@ -30,6 +31,13 @@ function resolve(rawCode) {
   // its own is a question about what is in it.
   const bin = bins.byCode(code);
   if (bin) return { type: 'bin', code, bin };
+
+  // A shelf slot or an AMS bay. These come before the spool and filament
+  // lookups because a slot label carries the slot's own name — "A1" — and
+  // nothing else in the shop is allowed to be called that: the link route
+  // refuses a code that already resolves, and this is what makes it refuse.
+  const slot = locationRow(code);
+  if (slot) return { type: 'location', code, location: slot };
 
   const spool = db.prepare('SELECT * FROM filament_spools WHERE spool_code = ?').get(code);
   if (spool) {
@@ -59,6 +67,24 @@ function resolve(rawCode) {
   if (item) return { type: 'item', code, item: priceItem(item.id) };
 
   return null;
+}
+
+/**
+ * A place a spool lives, and what is in it.
+ *
+ * The rack is a list of names in Settings rather than rows in a table, so this
+ * looks the scanned code up against that list and then asks the occupancy for
+ * what is standing there. A slot no longer on the list is not a location any
+ * more, and a scan of its old label should say it matches nothing rather than
+ * quietly working.
+ */
+function locationRow(rawCode) {
+  const kind = kindOf(rawCode);
+  if (!kind) return null;
+  const code = String(rawCode).trim().toUpperCase();
+  const rack = occupancy();
+  const found = [...rack.shelf, ...rack.ams].find((slot) => slot.code === code);
+  return found || { code, kind, capacity: kind === 'ams' ? 1 : null, spools: [] };
 }
 
 /** Just enough of an order to show on the scan sheet and act on. */
@@ -152,6 +178,9 @@ router.post('/action', (req, res) => {
 
   if (match.type === 'order') {
     return res.status(400).json({ error: 'That is an order ticket — scan it to move it a stage on' });
+  }
+  if (match.type === 'location') {
+    return res.status(400).json({ error: 'That is a shelf label — scan a spool to move it there' });
   }
 
   const qty = Number(quantity);
