@@ -26,6 +26,7 @@ function binRow(bin) {
   if (!bin) return null;
   if (bin.kind === 'mail') return mailBinRow(bin);
   if (bin.kind === 'stock') return stockBinRow(bin);
+  if (bin.kind === 'finishing') return finishingBinRow(bin);
 
   const order = db.prepare(`
     SELECT o.id, o.order_number, o.status, o.customer_name, o.promised_ship_date
@@ -103,6 +104,52 @@ function stockBinRow(bin) {
     units,
     waiting: items.length,
     empty: items.length === 0,
+  };
+}
+
+/**
+ * The Finishing bin: the basket on the bench, holding what is off the printer
+ * and still being worked on.
+ *
+ * This one stores nothing at all. A thing is in the basket exactly when its
+ * job is at the finishing stage, and the queue already says which those are —
+ * so the bin is read from the queue rather than kept beside it. It fills when
+ * a plate comes off the printer and empties when the work is marked done,
+ * through every path that moves a job, without a single hook to forget.
+ *
+ * One row per job rather than per product, because two plates of the same
+ * thing for two different orders are two piles on the bench, and telling them
+ * apart is the reason to look.
+ */
+function finishingBinRow(bin) {
+  const jobs = db.prepare(`
+    SELECT q.id, q.quantity, q.item_id, q.started_at, q.printer,
+           IFNULL(i.name, q.custom_name) AS item_name, i.sku AS item_sku,
+           q.item_id IS NULL AS is_custom,
+           o.id AS order_id, o.order_number, o.customer_name, o.promised_ship_date,
+           b.code AS bin_code, b.label AS bin_label
+      FROM queue_jobs q
+      LEFT JOIN items i ON q.item_id = i.id
+      LEFT JOIN orders o ON q.order_id = o.id
+      LEFT JOIN bins b ON o.bin_id = b.id
+     WHERE q.status = 'post_processing'
+     ORDER BY q.started_at, q.id
+  `).all().map((job) => ({
+    ...job,
+    // Where it goes when the work on it is done: the order's basket, the Stock
+    // bin for a shelf run, or nowhere at all for a one-off.
+    next: job.order_id ? (job.bin_label || 'its order') : (job.is_custom ? null : 'Stock'),
+  }));
+
+  const units = jobs.reduce((sum, j) => sum + (Number(j.quantity) || 0), 0);
+  return {
+    ...bin,
+    order: null,
+    contents: null,
+    jobs,
+    units,
+    waiting: jobs.length,
+    empty: jobs.length === 0,
   };
 }
 
@@ -297,10 +344,13 @@ function assign(orderId, code, { skipStage = false } = {}) {
     throw err;
   }
 
-  // The Stock bin holds loose products for the shelf, not orders. An order
-  // scanned into it is a mis-scan, and taking it would lose the order.
-  if (bin.kind === 'stock') {
-    const err = new Error(`${bin.label} is for finished things going to inventory — it does not hold orders`);
+  // Neither the Stock nor the Finishing bin holds orders: one is a pile for
+  // the shelf, the other a pile on the bench. An order scanned into either is
+  // a mis-scan, and taking it would lose the order.
+  if (bin.kind === 'stock' || bin.kind === 'finishing') {
+    const err = new Error(bin.kind === 'stock'
+      ? `${bin.label} is for finished things going to inventory — it does not hold orders`
+      : `${bin.label} holds what is off the printer and still being worked on — it does not hold orders`);
     err.status = 400;
     throw err;
   }

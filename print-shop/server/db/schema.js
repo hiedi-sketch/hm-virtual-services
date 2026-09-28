@@ -235,7 +235,9 @@ function createSchema() {
       -- holds every parcel waiting for the post office, so it takes many. The
       -- 'stock' bin holds loose finished things rather than orders at all —
       -- what has come off the printer for the shelf and not been put away yet.
-      kind TEXT NOT NULL DEFAULT 'order' CHECK(kind IN ('order','mail','stock')),
+      -- The 'finishing' bin holds what is off the printer and still being
+      -- worked on, which the queue already knows, so it stores nothing.
+      kind TEXT NOT NULL DEFAULT 'order' CHECK(kind IN ('order','mail','stock','finishing')),
       position INTEGER NOT NULL DEFAULT 0,
       notes TEXT,
       is_active INTEGER NOT NULL DEFAULT 1,
@@ -412,6 +414,7 @@ function createSchema() {
   seedBins(6);
   seedMailBin();
   seedStockBin();
+  seedFinishingBin();
   backfillOrderBarcodes();
 
   // Indexes over the columns added above, once they are guaranteed to exist.
@@ -706,7 +709,7 @@ function allowCustomQueueJobs() {
 }
 
 /**
- * Let a bin be a Stock bin.
+ * Let a bin be a Stock or Finishing bin.
  *
  * Only some databases need this. `kind` arrived as a plain ALTER, which SQLite
  * cannot attach a CHECK to, so a shop upgraded through that path has no
@@ -718,14 +721,14 @@ function allowStockBin() {
   const current = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='bins'").get()?.sql;
   if (!current) return;
   // No constraint to widen, or already wide enough.
-  if (!/CHECK\s*\(\s*kind\s+IN/i.test(current) || current.includes("'stock'")) return;
+  if (!/CHECK\s*\(\s*kind\s+IN/i.test(current) || current.includes("'finishing'")) return;
 
   const rebuilt = current
     .replace(/CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?["'`[]?bins["'`\]]?/i, 'CREATE TABLE bins_migrating')
-    .replace(/CHECK\s*\(\s*kind\s+IN\s*\([^)]*\)\s*\)/i, "CHECK(kind IN ('order','mail','stock'))");
+    .replace(/CHECK\s*\(\s*kind\s+IN\s*\([^)]*\)\s*\)/i, "CHECK(kind IN ('order','mail','stock','finishing'))");
 
-  if (!rebuilt.includes('bins_migrating') || !rebuilt.includes("'stock'")) {
-    console.error('Could not add the Stock bin kind — leaving the bins table as it is.');
+  if (!rebuilt.includes('bins_migrating') || !rebuilt.includes("'finishing'")) {
+    console.error('Could not widen the bin kinds — leaving the bins table as it is.');
     return;
   }
 
@@ -741,7 +744,7 @@ function allowStockBin() {
       db.exec('DROP TABLE bins');
       db.exec('ALTER TABLE bins_migrating RENAME TO bins');
     })();
-    console.log('Bins can now be Stock bins.');
+    console.log('Bins can now be Stock and Finishing bins.');
   } finally {
     db.pragma('legacy_alter_table = OFF');
     if (hadForeignKeys) db.pragma('foreign_keys = ON');
@@ -766,6 +769,27 @@ function seedStockBin() {
     console.log('Stock bin created — print its label from the Bins panel.');
   } catch (err) {
     console.error('Could not create the Stock bin:', err.message);
+  }
+}
+
+/**
+ * The Finishing bin: the basket on the bench, holding what is off the printer
+ * and not done with yet.
+ *
+ * Five characters like the others, so its barcode is as coarse on the same
+ * 2" label and reads first time.
+ */
+function seedFinishingBin() {
+  const existing = db.prepare("SELECT id FROM bins WHERE kind = 'finishing' OR code = 'BIN-F'").get();
+  if (existing) return;
+
+  const after = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM bins').get().max;
+  try {
+    db.prepare("INSERT INTO bins (code, label, kind, position) VALUES ('BIN-F', 'Finishing', 'finishing', ?)")
+      .run(after + 1);
+    console.log('Finishing bin created — print its label from the Bins panel.');
+  } catch (err) {
+    console.error('Could not create the Finishing bin:', err.message);
   }
 }
 

@@ -4,6 +4,7 @@ import BinLabels from './BinLabels';
 import BinContents from './BinContents';
 import ScanMailBin from './ScanMailBin';
 import ScanStockBin from './ScanStockBin';
+import ScanFinishingBin from './ScanFinishingBin';
 import printApi, { describeError, shortDate } from '../api/print';
 import { Pill } from './ui';
 import { useScanner } from './ScanContext';
@@ -16,9 +17,10 @@ import { useScanner } from './ScanContext';
  * bin's name and the order in it, and says how much of that order has been
  * made. A full bin is an order ready to pack.
  *
- * Two baskets hold something other than one order, and say so in their own way:
- * the Mail Bin names the parcels waiting for the post, and the Stock bin names
- * the finished things waiting to be carried to the inventory shelves.
+ * Three baskets hold something other than one order, and each says so in its
+ * own way: the Mail Bin names the parcels waiting for the post, the Stock bin
+ * the finished things waiting to be carried to the inventory shelves, and the
+ * Finishing bin what is off the printer and still being worked on.
  */
 export default function BinsPanel({ open, onClose, onChanged }) {
   const { scan } = useScanner();
@@ -61,6 +63,8 @@ export default function BinsPanel({ open, onClose, onChanged }) {
               <ScanMailBin bin={chosen} onChanged={load} />
             ) : chosen.kind === 'stock' ? (
               <ScanStockBin bin={chosen} onChanged={async () => { await load(); onChanged?.(); }} />
+            ) : chosen.kind === 'finishing' ? (
+              <ScanFinishingBin bin={chosen} onChanged={async () => { await load(); onChanged?.(); }} />
             ) : chosen.order ? (
               <>
                 <p className="text-sm">
@@ -110,6 +114,10 @@ export default function BinsPanel({ open, onClose, onChanged }) {
                     <Pill tone={bin.units ? 'amber' : 'gray'}>
                       {bin.units ? `${bin.units} to put away` : 'Empty'}
                     </Pill>
+                  ) : bin.kind === 'finishing' ? (
+                    <Pill tone={bin.units ? 'violet' : 'gray'}>
+                      {bin.units ? `${bin.units} to finish` : 'Empty'}
+                    </Pill>
                   ) : bin.empty ? (
                     <Pill tone="gray">Empty</Pill>
                   ) : (
@@ -139,6 +147,11 @@ export default function BinsPanel({ open, onClose, onChanged }) {
                 {bin.kind === 'stock' && bin.items?.length > 0 && (
                   <p className="text-sm mt-0.5 text-gray-500 truncate">
                     {bin.items.map((r) => `${r.quantity} × ${r.item_name}`).join(', ')}
+                  </p>
+                )}
+                {bin.kind === 'finishing' && bin.jobs?.length > 0 && (
+                  <p className="text-sm mt-0.5 text-gray-500 truncate">
+                    {bin.jobs.map((j) => `${j.quantity} × ${j.item_name}`).join(', ')}
                   </p>
                 )}
               </button>

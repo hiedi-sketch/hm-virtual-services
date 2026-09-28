@@ -2,6 +2,7 @@ import { Pill } from './ui';
 import { shortDate } from '../api/print';
 import ScanMailBin from './ScanMailBin';
 import ScanStockBin from './ScanStockBin';
+import ScanFinishingBin from './ScanFinishingBin';
 import BinContents from './BinContents';
 
 /**
@@ -11,11 +12,13 @@ import BinContents from './BinContents';
  * it ready to go?" — so that is what the sheet leads with.
  */
 export default function ScanBinCard({ bin, onChanged }) {
-  // Two baskets hold something other than one order being made, so they answer
-  // different questions and get their own cards: the Mail Bin a pile going out,
-  // the Stock bin a pile to be carried to the inventory shelves.
+  // Three baskets hold something other than one order being made, so they
+  // answer different questions and get their own cards: the Mail Bin a pile
+  // going out, the Stock bin a pile for the inventory shelves, the Finishing
+  // bin a pile still being worked on.
   if (bin.kind === 'mail') return <ScanMailBin bin={bin} onChanged={onChanged} />;
   if (bin.kind === 'stock') return <ScanStockBin bin={bin} onChanged={onChanged} />;
+  if (bin.kind === 'finishing') return <ScanFinishingBin bin={bin} onChanged={onChanged} />;
 
   const order = bin.order;
   const contents = bin.contents;
