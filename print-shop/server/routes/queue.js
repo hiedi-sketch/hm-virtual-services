@@ -270,6 +270,89 @@ router.get('/:id/picklist', (req, res) => {
   res.json({ data: pickListPayload(wholeRun(entry)) });
 });
 
+/**
+ * Print that again.
+ *
+ * A finished job is the best description of a plate she is about to set up a
+ * second time — the product, how many fitted, the colour, the time it really
+ * took — so making another one is a copy of it rather than a form to fill in.
+ *
+ * The copy is a stock build. Whatever order the original was for has been made
+ * and is gone; wanting more of the same thing is a different job, and hanging
+ * it off the old order would put units against a line that is already covered.
+ *
+ * Two things are copied only when the quantity is unchanged, because both are
+ * figures about a particular plate rather than about one unit: her corrected
+ * print time, and a one-off's minutes. Ask for a different number and the time
+ * is worked out afresh from the recipe, or left for her to correct.
+ */
+router.post('/:id/again', (req, res) => {
+  const source = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
+  if (!source) return res.status(404).json({ error: 'That job is not here any more' });
+
+  const quantity = req.body?.quantity === undefined ? Number(source.quantity) : Number(req.body.quantity);
+  if (!(quantity > 0)) return res.status(400).json({ error: 'How many?' });
+
+  const custom = !source.item_id;
+  const name = custom
+    ? source.custom_name
+    : db.prepare('SELECT name FROM items WHERE id = ?').get(source.item_id)?.name;
+  if (!custom && !name) {
+    return res.status(400).json({ error: 'That product is not in the catalog any more' });
+  }
+
+  const samePlate = quantity === Number(source.quantity);
+  const maxPosition = db.prepare('SELECT IFNULL(MAX(position), 0) AS max FROM queue_jobs').get().max;
+
+  const created = db.prepare(`
+    INSERT INTO queue_jobs
+      (item_id, custom_name, quantity, priority, position, printer, notes,
+       filament_id, filament_grams, spool_id, estimated_minutes, print_minutes_override)
+    VALUES (?, ?, ?, 'normal', ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    source.item_id,
+    source.custom_name,
+    quantity,
+    maxPosition + 1,
+    source.printer,
+    source.notes,
+    source.filament_id,
+    // A one-off's grams are for the whole plate, so a different plate needs a
+    // different figure — hers to give, not ours to scale.
+    custom && samePlate ? source.filament_grams : null,
+    source.spool_id,
+    custom
+      ? (samePlate ? source.estimated_minutes : 0)
+      : estimatedMinutes({ item_id: source.item_id, quantity, estimated_minutes: null }),
+    samePlate ? source.print_minutes_override : null,
+  );
+
+  // A one-off's list is the only record of what it is made of, so it is copied
+  // across rather than left to be worked out from a recipe it does not have.
+  if (custom) {
+    const job = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(created.lastInsertRowid);
+    ensurePicks(job);
+    if (samePlate) {
+      const extras = db.prepare(`
+        SELECT line_type, ref_id, quantity, unit FROM queue_picks
+         WHERE queue_id = ? AND line_type IN ('material','item')
+      `).all(source.id);
+      const insert = db.prepare(`
+        INSERT INTO queue_picks (queue_id, line_type, ref_id, quantity, unit, spool_id)
+        VALUES (?, ?, ?, ?, ?, NULL)
+      `);
+      db.transaction(() => {
+        for (const line of extras) insert.run(job.id, line.line_type, line.ref_id, line.quantity, line.unit);
+      })();
+    }
+  }
+
+  res.status(201).json({
+    data: queuePayload(),
+    message: `${quantity} × ${name} back on the queue`,
+  });
+});
+
 /** The primary job of a run, carrying the run's whole quantity. */
 function wholeRun(entry) {
   const members = runJobs(entry);

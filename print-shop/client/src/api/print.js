@@ -127,6 +127,9 @@ export const printApi = {
   removeFromQueue: (id) => unwrap(api.delete(`/queue/${id}`)),
   reorderQueue: (ids) => unwrap(api.put('/queue/reorder/positions', { ids })),
   shortages: () => unwrap(api.get('/queue/shortages')),
+  // Set the same plate up again: a finished job copied back onto the queue.
+  queueAgain: (id, quantity) => api.post(`/queue/${id}/again`, quantity === undefined ? {} : { quantity })
+    .then((r) => r.data),
   productionBoard: () => unwrap(api.get('/queue/board')),
   printingNow: () => unwrap(api.get('/queue/printing')),
   inQueue: () => unwrap(api.get('/queue/in-queue')),

@@ -15,6 +15,9 @@ const NEXT_LABEL = { queued: 'Start print', printing: 'Move to finishing', post_
 const spoolsFor = (spools, filamentId) =>
   (spools || []).filter((s) => !filamentId || s.filament_id === Number(filamentId));
 
+/** Whether the finished list is folded open, remembered per browser. */
+const DONE_OPEN = 'printshop.queue.doneOpen';
+
 const BLANK_JOB = {
   item_id: '', custom_name: '', quantity: 1, priority: 'normal', filament_id: '',
   filament_grams: '', spool_id: '', minutes: '', printer: '', order_id: '', notes: '',
@@ -36,6 +39,13 @@ export default function Queue() {
   // What else a one-off needs: a material, or a part already on the shelf.
   const [extras, setExtras] = useState([]);
   const [picking, setPicking] = useState(null);
+  // Recently finished is history, not work, so it folds away — and stays
+  // folded, because a preference that resets on every visit is not one.
+  const [showDone, setShowDone] = useState(() => {
+    try { return localStorage.getItem(DONE_OPEN) !== '0'; } catch { return true; }
+  });
+  // The finished job she is setting up again, and how many this time.
+  const [again, setAgain] = useState(null);
   // The job whose print time is being corrected.
   const [timing, setTiming] = useState(null);
 
@@ -120,6 +130,30 @@ export default function Queue() {
     setForm(BLANK_JOB);
     setExtras([]);
     setKind('catalog');
+  }
+
+  function toggleDone() {
+    setShowDone((open) => {
+      const next = !open;
+      try { localStorage.setItem(DONE_OPEN, next ? '1' : '0'); } catch { /* private window */ }
+      return next;
+    });
+  }
+
+  /** Set the same plate up again — the whole point of keeping the list. */
+  async function printAgain(e) {
+    e.preventDefault();
+    const quantity = Number(again.quantity);
+    if (!(quantity > 0)) return;
+    try {
+      const { data: fresh, message } = await printApi.queueAgain(again.job.id, quantity);
+      setData(fresh);
+      toast.success(message);
+      setAgain(null);
+      refresh();
+    } catch (err) {
+      toast.error(describeError(err, 'Could not queue that again'));
+    }
   }
 
   async function addJob(e) {
@@ -310,17 +344,43 @@ export default function Queue() {
 
       {data.done.length > 0 && (
         <div className="card !p-4">
-          <p className="font-bold text-primary text-sm mb-2">Recently finished</p>
-          <div className="space-y-1 text-xs text-gray-600">
-            {data.done.map((d) => (
-              <div key={d.id} className="flex items-center gap-2">
-                <Pill tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Pill>
-                <span>{d.quantity} × {d.item_name}</span>
-                {d.order_number && <span className="text-gray-400">{d.order_number}</span>}
-                <span className="ml-auto text-gray-400">{d.completed_at ? new Date(d.completed_at).toLocaleDateString() : ''}</span>
-              </div>
-            ))}
-          </div>
+          <button
+            type="button"
+            onClick={toggleDone}
+            className="w-full flex items-center gap-2 text-left"
+            aria-expanded={showDone}
+          >
+            <span className="font-bold text-primary text-sm">Recently finished</span>
+            <span className="text-xs text-gray-400">{data.done.length}</span>
+            <span className={`ml-auto text-gray-400 text-xs transition-transform ${showDone ? 'rotate-90' : ''}`}>
+              ▶
+            </span>
+          </button>
+
+          {showDone && (
+            <div className="space-y-1 text-xs text-gray-600 mt-2">
+              {/* Each one is a plate she has already set up once, so clicking
+                  it is the fastest way to set it up again. */}
+              {data.done.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => setAgain({ job: d, quantity: d.quantity })}
+                  title={`Print ${d.item_name} again`}
+                  className="w-full flex items-center gap-2 text-left rounded-lg px-1.5 py-1 -mx-1.5 hover:bg-linen transition-colors"
+                >
+                  <Pill tone={STATUS_TONE[d.status]}>{STATUS_LABEL[d.status]}</Pill>
+                  <span>{d.quantity} × {d.item_name}</span>
+                  {!d.item_id && <Pill tone="violet">One-off</Pill>}
+                  {d.order_number && <span className="text-gray-400">{d.order_number}</span>}
+                  <span className="ml-auto text-gray-400 shrink-0">
+                    {d.completed_at ? new Date(d.completed_at).toLocaleDateString() : ''}
+                  </span>
+                  <span className="text-primary font-semibold shrink-0">Print again</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -332,6 +392,48 @@ export default function Queue() {
           if (picking.status === 'queued') await setStatus(picking, 'printing');
         }}
       />
+
+      <Modal open={!!again} onClose={() => setAgain(null)} title="Print it again">
+        {again && (
+          <form onSubmit={printAgain} className="space-y-4">
+            <div>
+              <p className="font-bold text-primary">{again.job.item_name}</p>
+              <p className="text-xs text-gray-500">
+                {again.job.quantity} finished
+                {again.job.completed_at && ` on ${new Date(again.job.completed_at).toLocaleDateString()}`}
+                {again.job.order_number && ` for ${again.job.order_number}`}
+              </p>
+            </div>
+
+            <Field label="How many this time" hint="It goes on the end of the queue as a stock build.">
+              <input
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                autoFocus
+                className="input text-lg"
+                value={again.quantity}
+                onChange={(e) => setAgain({ ...again, quantity: e.target.value })}
+              />
+            </Field>
+
+            {/* A figure about one particular plate does not survive a change
+                of plate, and saying so beats her finding out later. */}
+            {Number(again.quantity) !== Number(again.job.quantity) && (
+              <p className="text-xs text-amber-700">
+                A different number from last time, so the print time
+                {!again.job.item_id && ', the filament'} will need setting again.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setAgain(null)}>Cancel</button>
+              <button type="submit" className="btn-primary">Add to the queue</button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       <Modal open={adding} onClose={closeAdding} title="Add to the queue">
         <form onSubmit={addJob} className="space-y-4">
