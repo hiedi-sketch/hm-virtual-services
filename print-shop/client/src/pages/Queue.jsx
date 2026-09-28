@@ -24,7 +24,6 @@ export default function Queue() {
   const { refreshKey, refresh } = useOutletContext();
 
   const [data, setData] = useState(null);
-  const [shortages, setShortages] = useState({ filament: [], materials: [] });
   const [options, setOptions] = useState({ items: [], filaments: [], materials: [], spools: [] });
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,11 +43,10 @@ export default function Queue() {
     setLoading(true);
     setError('');
     try {
-      const [queue, short, opts, orderList] = await Promise.all([
-        printApi.queue(), printApi.shortages(), printApi.catalogOptions(), printApi.orders(),
+      const [queue, opts, orderList] = await Promise.all([
+        printApi.queue(), printApi.catalogOptions(), printApi.orders(),
       ]);
       setData(queue);
-      setShortages(short);
       setOptions(opts);
       setOrders(orderList.filter((o) => ['new', 'in_production'].includes(o.status)));
     } catch (err) {
@@ -169,7 +167,6 @@ export default function Queue() {
   }
 
   const atRisk = data.projections.filter((p) => p.at_risk);
-  const hasShortage = shortages.filament.length || shortages.materials.length;
 
   return (
     <div className="space-y-4">
@@ -191,24 +188,6 @@ export default function Queue() {
         <StatCard label="Queue clears in" value={`${data.queue_days} day${data.queue_days === 1 ? '' : 's'}`} />
         <StatCard label="Orders at risk" value={atRisk.length} tone={atRisk.length ? 'danger' : 'good'} sub={atRisk.length ? 'Past the turnaround window' : 'All inside turnaround'} />
       </div>
-
-      {hasShortage ? (
-        <div className="card !p-4 border-l-4 border-amber-400">
-          <p className="font-bold text-primary text-sm mb-2">Stock this queue will run into</p>
-          <div className="flex flex-wrap gap-2 text-xs">
-            {shortages.filament.map((f) => (
-              <Pill key={`f${f.id}`} tone={f.short_by_grams > 0 ? 'red' : 'amber'}>
-                {f.brand} {f.color_name}: {f.short_by_grams > 0 ? `short ${grams(f.short_by_grams)}` : `${grams(f.grams_projected)} left after`}
-              </Pill>
-            ))}
-            {shortages.materials.map((m) => (
-              <Pill key={`m${m.id}`} tone={m.short_by > 0 ? 'red' : 'amber'}>
-                {m.name}: {m.short_by > 0 ? `short ${m.short_by}` : `${m.qty_projected} left after`}
-              </Pill>
-            ))}
-          </div>
-        </div>
-      ) : null}
 
       {!data.queue.length ? (
         <EmptyState
