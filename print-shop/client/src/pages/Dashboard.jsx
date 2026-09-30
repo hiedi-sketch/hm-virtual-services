@@ -49,7 +49,7 @@ export default function PrintDashboard() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Open orders" value={orders.open} sub={`${orders.at_risk.length} past turnaround`} tone={orders.at_risk.length ? 'warn' : 'default'} />
+        <StatCard label="Open orders" value={orders.open} sub={`${orders.at_risk.length} past promised`} tone={orders.at_risk.length ? 'warn' : 'default'} />
         <StatCard label="Queue" value={`${queue.hours}h`} sub={`clears in ${queue.days} day${queue.days === 1 ? '' : 's'}`} />
         <StatCard label="Needs reordering" value={reorderCount} tone={reorderCount ? 'danger' : 'good'} />
         <StatCard label="Inventory value" value={money(inventory.value)} sub={`${inventory.counts.filaments} colours · ${inventory.counts.products} products`} />

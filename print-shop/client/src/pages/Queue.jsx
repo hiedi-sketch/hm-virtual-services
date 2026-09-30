@@ -286,7 +286,7 @@ export default function Queue() {
           value={data.queue_clear_at ? clockWhen(data.queue_clear_at) : '—'}
           sub={`${data.queue_days} day${data.queue_days === 1 ? '' : 's'} at ${data.capacity_hours_per_day}h/day`}
         />
-        <StatCard label="Orders at risk" value={atRisk.length} tone={atRisk.length ? 'danger' : 'good'} sub={atRisk.length ? 'Past the turnaround window' : 'All inside turnaround'} />
+        <StatCard label="Orders at risk" value={atRisk.length} tone={atRisk.length ? 'danger' : 'good'} sub={atRisk.length ? 'Projected past the date promised' : 'All inside their promise'} />
       </div>
 
       {!data.queue.length ? (

@@ -412,7 +412,7 @@ export default function Orders() {
         <StatCard label="Open orders" value={open.length} />
         <StatCard label="Open value" value={money(openValue)} />
         <StatCard label="Ready to ship" value={orders.filter((o) => o.status === 'packing').length} tone="good" />
-        <StatCard label="Past turnaround" value={atRisk.length} tone={atRisk.length ? 'danger' : 'good'} />
+        <StatCard label="Past promised" value={atRisk.length} tone={atRisk.length ? 'danger' : 'good'} />
       </div>
 
       <div className="card !p-3 flex flex-wrap gap-1">

@@ -293,7 +293,17 @@ function orderProjections(settings = getSettings()) {
     const projected = addDays(printsDone, settings.finishing_days);
     const base = o.order_date ? new Date(o.order_date + 'T00:00:00') : today();
     const floor = addDays(base, settings.turnaround_min_days);
-    const deadline = addDays(base, settings.turnaround_max_days);
+    // Late against what the customer was told.
+    //
+    // This used to be the turnaround window off the order date, which meant
+    // moving a promised date changed nothing: an order promised the 30th and
+    // shipping the 2nd read as four days late because the window had run out
+    // on the 28th. The promise is the thing that was given, and moving it is
+    // how she agrees a new one, so it is what lateness is measured from. An
+    // order with no promised date has only the window to go on.
+    const deadline = o.promised_ship_date
+      ? new Date(o.promised_ship_date + 'T00:00:00')
+      : addDays(base, settings.turnaround_max_days);
     const projectedShip = projected > floor ? projected : floor;
 
     return {
