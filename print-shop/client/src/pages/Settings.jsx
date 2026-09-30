@@ -69,6 +69,7 @@ const GROUPS = [
       { key: 'print_hours_per_day', label: 'Print hours per day, per printer', type: 'number', step: '0.5' },
       { key: 'printer_count', label: 'Printers running', type: 'number', step: '1' },
       { key: 'finishing_days', label: 'Days for finishing & packing', type: 'number', step: '1' },
+      { key: 'changeover_minutes', label: 'Minutes between plates', type: 'number', step: '5', hint: 'Clearing the bed and setting the next one going. The queue strings its clock times together with this.' },
     ],
   },
 ];

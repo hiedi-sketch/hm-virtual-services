@@ -27,6 +27,22 @@ const ACTIVE_QUEUE_STATUSES = ['queued', 'printing', 'post_processing'];
  */
 const PRINTER_QUEUE_STATUSES = ['queued', 'printing'];
 
+/**
+ * A stamp out of the database as a real moment.
+ *
+ * SQLite writes CURRENT_TIMESTAMP as UTC with no zone on the end, and JavaScript
+ * reads a string like that as local time. On a server in one place and a shop in
+ * another that is hours of error in every clock time on the page, so the zone is
+ * put back before anything is worked out from it.
+ */
+function parseStamp(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  const withZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(text) ? text : `${text.replace(' ', 'T')}Z`;
+  const when = new Date(withZone);
+  return Number.isNaN(when.getTime()) ? null : when;
+}
+
 function addDays(date, days) {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
@@ -169,6 +185,16 @@ function scheduleQueue(settings = getSettings()) {
   const all = activeQueue();
   const rows = all.filter((row) => PRINTER_QUEUE_STATUSES.includes(row.status));
 
+  // When each plate goes on and comes off, as a clock rather than a date.
+  //
+  // One plate at a time, in the order she works the list: a plate starts when
+  // the one before it came off, plus the minutes it takes to clear the bed and
+  // set the next going. A plate already printing keeps the time it really
+  // started — an estimate is no use for something she can see happening.
+  const now = Date.now();
+  const changeover = Math.max(0, settings.changeover_minutes) * 60000;
+  let free = now;
+
   let cumulativeMinutes = 0;
   const scheduled = rows.map((row, index) => {
     const minutes = estimatedMinutes(row);
@@ -176,11 +202,36 @@ function scheduleQueue(settings = getSettings()) {
     cumulativeMinutes += minutes;
     const finishHours = cumulativeMinutes / 60;
 
+    const startedAt = row.status === 'printing' ? parseStamp(row.started_at) : null;
+    // Nothing can start before now. A plate that has run over its estimate
+    // would otherwise hand the rest of the queue a time in the past, and the
+    // whole list would read as due an hour ago.
+    const beginsAt = startedAt ? startedAt.getTime() : Math.max(free, now);
+    const endsAt = beginsAt + minutes * 60000;
+    // When the bed is clear again.
+    //
+    // Never backwards: two plates can be on two beds at once, and the one
+    // started later can come off first — the next plate waits for the whole
+    // shop to be clear, not for whichever row came last.
+    //
+    // And never before now. A plate that has run past its estimate is still on
+    // the bed, whatever the estimate said, so the soonest the next one can go
+    // on is the changeover from this moment rather than from a time that has
+    // already passed.
+    free = Math.max(free, Math.max(endsAt, now) + changeover);
+
     return {
       ...row,
       sequence: index + 1,
       estimated_minutes: round2(minutes),
       estimated_hours: round2(minutes / 60),
+      // The clock. Sent as proper instants so they read in her time, not the
+      // server's.
+      estimated_start: new Date(beginsAt).toISOString(),
+      estimated_finish: new Date(endsAt).toISOString(),
+      started_at_iso: startedAt ? startedAt.toISOString() : null,
+      // Whether the plate is already past the time it was meant to come off.
+      running_late: !!startedAt && endsAt < now,
       starts_on: toISODate(addDays(start, Math.floor(startHours / capacityPerDay))),
       prints_done_on: toISODate(addDays(start, Math.ceil(finishHours / capacityPerDay))),
       cumulative_hours: round2(finishHours),
@@ -198,6 +249,9 @@ function scheduleQueue(settings = getSettings()) {
     })),
     capacity_hours_per_day: capacityPerDay,
     queue_hours: round2(cumulativeMinutes / 60),
+    changeover_minutes: settings.changeover_minutes,
+    // When the last plate on the queue comes off, if it all runs to estimate.
+    queue_clear_at: scheduled.length ? scheduled[scheduled.length - 1].estimated_finish : null,
   };
 }
 

@@ -207,4 +207,31 @@ export const hoursMinutes = (minutes) => {
 export const shortDate = (value) =>
   value ? new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
 
+/**
+ * A clock time in her time, from an instant the server worked out.
+ *
+ * The server sends proper instants, so this is the only place the shop's own
+ * clock comes into it — the browser knows where she is and the server does not.
+ */
+export const clockTime = (value) => (value
+  ? new Date(value).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  : '—');
+
+/**
+ * The same, but saying which day when it is not today — a plate coming off at
+ * 2am is a different thing from one coming off at 2pm, and "2:00 AM" alone
+ * does not say which.
+ */
+export const clockWhen = (value) => {
+  if (!value) return '—';
+  const when = new Date(value);
+  const today = new Date();
+  const sameDay = when.toDateString() === today.toDateString();
+  const tomorrow = new Date(today.getTime() + 86400000).toDateString() === when.toDateString();
+  const time = clockTime(value);
+  if (sameDay) return time;
+  if (tomorrow) return `${time} tomorrow`;
+  return `${time} ${when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+};
+
 export default printApi;

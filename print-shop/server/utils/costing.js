@@ -15,6 +15,10 @@ const NUMERIC_DEFAULTS = {
   print_hours_per_day: 18,
   finishing_days: 1,
   printer_count: 1,
+  // Clearing the bed and setting the next plate going. It is the gap between
+  // one plate coming off and the next starting, which is what the queue's
+  // clock times are strung together with.
+  changeover_minutes: 15,
 };
 
 function getSettings() {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Modal from '../components/Modal';
-import printApi, { describeError, grams, hoursMinutes, shortDate } from '../api/print';
+import printApi, { clockWhen, describeError, grams, hoursMinutes, shortDate } from '../api/print';
 import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
 import PickList from '../components/PickList';
 import ShareEditor from '../components/ShareEditor';
@@ -279,7 +279,13 @@ export default function Queue() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Jobs waiting" value={data.queue.length} sub={`${data.queue.filter((q) => q.status === 'printing').length} printing now`} />
         <StatCard label="Print hours queued" value={`${data.queue_hours}h`} sub={`${data.capacity_hours_per_day}h/day capacity`} />
-        <StatCard label="Queue clears in" value={`${data.queue_days} day${data.queue_days === 1 ? '' : 's'}`} />
+        {/* When the last plate comes off, if it all runs to estimate — the
+            clock answer to the same question the day count gives roughly. */}
+        <StatCard
+          label="Last plate off"
+          value={data.queue_clear_at ? clockWhen(data.queue_clear_at) : '—'}
+          sub={`${data.queue_days} day${data.queue_days === 1 ? '' : 's'} at ${data.capacity_hours_per_day}h/day`}
+        />
         <StatCard label="Orders at risk" value={atRisk.length} tone={atRisk.length ? 'danger' : 'good'} sub={atRisk.length ? 'Past the turnaround window' : 'All inside turnaround'} />
       </div>
 
@@ -362,8 +368,30 @@ export default function Queue() {
                   </ul>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-xs text-gray-500">Off the printer</p>
-                  <p className="font-bold text-primary leading-tight">{shortDate(entry.prints_done_on)}</p>
+                  {/* When this plate goes on and comes off. A plate already
+                      running shows the time it really started; everything
+                      after it is strung off the one before, plus the minutes
+                      it takes to clear the bed. */}
+                  <p className="text-[11px] text-gray-500 leading-tight">
+                    {entry.started_at_iso ? 'Started' : 'Starts'}
+                  </p>
+                  <p className="text-sm font-semibold text-gray-700 leading-tight tabular-nums">
+                    {clockWhen(entry.estimated_start)}
+                  </p>
+                  <p className="text-[11px] text-gray-500 leading-tight mt-1">
+                    {entry.running_late ? 'Was due off' : 'Off at'}
+                  </p>
+                  <p className={`font-bold leading-tight tabular-nums ${entry.running_late ? 'text-amber-600' : 'text-primary'}`}>
+                    {clockWhen(entry.estimated_finish)}
+                  </p>
+                  {entry.running_late && (
+                    <p className="text-[10px] text-amber-600 leading-tight">running over</p>
+                  )}
+                  {/* The day-level date this plate used to show has gone: the
+                      clock above says when it comes off, and to the day it
+                      rounded every plate up to a whole one — three hours of
+                      work read as tomorrow. What is left is the date she acts
+                      on, which is when the order ships. */}
                   {entry.projection && (
                     <p className={`text-[11px] ${entry.projection.at_risk ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
                       Ships {shortDate(entry.projection.projected_ship_date)}

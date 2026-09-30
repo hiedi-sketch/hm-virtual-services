@@ -19,7 +19,7 @@ const EDITABLE = [
 
 function queuePayload() {
   const settings = getSettings();
-  const { scheduled, capacity_hours_per_day, queue_hours } = scheduleQueue(settings);
+  const { scheduled, capacity_hours_per_day, queue_hours, queue_clear_at, changeover_minutes } = scheduleQueue(settings);
   const { projections } = orderProjections(settings);
   const byOrder = new Map(projections.map((p) => [p.order_id, p]));
 
@@ -29,6 +29,9 @@ function queuePayload() {
     capacity_hours_per_day,
     queue_hours,
     queue_days: Math.ceil(queue_hours / capacity_hours_per_day),
+    // When the last plate comes off, and the gap the clock is strung with.
+    queue_clear_at,
+    changeover_minutes,
     settings,
     done: db.prepare(`
       SELECT q.*, IFNULL(i.name, q.custom_name) AS item_name, o.order_number FROM queue_jobs q
