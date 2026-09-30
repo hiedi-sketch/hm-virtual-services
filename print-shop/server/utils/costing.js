@@ -21,6 +21,18 @@ const NUMERIC_DEFAULTS = {
   changeover_minutes: 15,
 };
 
+/**
+ * Settings that are words rather than numbers.
+ *
+ * The shop's own clock. Everything the app dates — when a plate comes off, what
+ * counts as today, when an order ships — is dated in her day, and the server is
+ * somewhere else entirely. Central to begin with, because that is where the shop
+ * is; it is hers to change.
+ */
+const TEXT_DEFAULTS = {
+  shop_timezone: 'America/Chicago',
+};
+
 function getSettings() {
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const raw = Object.fromEntries(rows.map((r) => [r.key, r.value]));
@@ -28,6 +40,10 @@ function getSettings() {
   for (const [key, fallback] of Object.entries(NUMERIC_DEFAULTS)) {
     const n = parseFloat(raw[key]);
     settings[key] = Number.isFinite(n) ? n : fallback;
+  }
+  for (const [key, fallback] of Object.entries(TEXT_DEFAULTS)) {
+    const value = String(raw[key] ?? '').trim();
+    settings[key] = value || fallback;
   }
   return settings;
 }
@@ -344,4 +360,5 @@ module.exports = {
   roundPrice,
   round2,
   NUMERIC_DEFAULTS,
+  TEXT_DEFAULTS,
 };

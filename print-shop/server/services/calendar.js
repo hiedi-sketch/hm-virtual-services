@@ -1,4 +1,5 @@
 const db = require('../db/database');
+const { shopToday } = require('../utils/planning');
 
 /**
  * The next fortnight of promises, by the day they are due.
@@ -38,8 +39,10 @@ function rows() {
  * buckets a fortnight cannot hold: what is already late, and what is promised
  * beyond the end of the sheet.
  */
-function fortnight(days = 14, from = new Date()) {
-  const start = new Date(`${toISO(from)}T00:00:00`);
+function fortnight(days = 14, from = null) {
+  // Her today, not the server's. A sheet that turns over at six in the evening
+  // because the server is already on tomorrow is a sheet she cannot trust.
+  const start = from ? new Date(`${toISO(from)}T00:00:00Z`) : shopToday();
   const today = toISO(start);
   const last = toISO(addDays(start, days - 1));
 

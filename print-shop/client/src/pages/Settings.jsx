@@ -5,6 +5,28 @@ import { Field, LoadError } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import ShopifyCard from '../components/ShopifyCard';
 
+/**
+ * Timezones to choose the shop's clock from.
+ *
+ * The browser knows the whole list, so it is asked first — any shop anywhere
+ * finds itself in it. An older one that cannot answer gets the US zones plus
+ * UTC, which covers where this shop is. The browser's own guess is put at the
+ * top either way, since that is very nearly always the right answer.
+ */
+const TIMEZONES = (() => {
+  const here = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  let all = [];
+  try {
+    all = Intl.supportedValuesOf('timeZone');
+  } catch {
+    all = [
+      'America/New_York', 'America/Chicago', 'America/Denver', 'America/Phoenix',
+      'America/Los_Angeles', 'America/Anchorage', 'Pacific/Honolulu', 'UTC',
+    ];
+  }
+  return here && all.includes(here) ? [here, ...all.filter((z) => z !== here)] : all;
+})();
+
 const GROUPS = [
   {
     title: 'Shop',
@@ -70,6 +92,7 @@ const GROUPS = [
       { key: 'printer_count', label: 'Printers running', type: 'number', step: '1' },
       { key: 'finishing_days', label: 'Days for finishing & packing', type: 'number', step: '1' },
       { key: 'changeover_minutes', label: 'Minutes between plates', type: 'number', step: '5', hint: 'Clearing the bed and setting the next one going. The queue strings its clock times together with this.' },
+      { key: 'shop_timezone', label: 'Your timezone', type: 'timezone', hint: 'The server keeps UTC. This is what the app calls today, and what day a plate coming off in the evening belongs to.' },
     ],
   },
 ];
@@ -231,13 +254,31 @@ export default function PrintSettings() {
             <div className="grid sm:grid-cols-2 gap-3">
               {group.fields.map((f) => (
                 <Field key={f.key} label={f.label} hint={f.hint}>
-                  <input
-                    type={f.type}
-                    step={f.step}
-                    className="input"
-                    value={form[f.key] ?? ''}
-                    onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
-                  />
+                  {f.type === 'timezone' ? (
+                    <select
+                      className="input"
+                      value={form[f.key] ?? ''}
+                      onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                    >
+                      {/* Whatever is stored comes first even if this browser has
+                          never heard of it, so opening Settings cannot quietly
+                          change the shop's clock to something else. */}
+                      {form[f.key] && !TIMEZONES.includes(form[f.key]) && (
+                        <option value={form[f.key]}>{form[f.key]}</option>
+                      )}
+                      {TIMEZONES.map((zone) => (
+                        <option key={zone} value={zone}>{zone.replace(/_/g, ' ')}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type={f.type}
+                      step={f.step}
+                      className="input"
+                      value={form[f.key] ?? ''}
+                      onChange={(e) => setForm({ ...form, [f.key]: e.target.value })}
+                    />
+                  )}
                 </Field>
               ))}
             </div>

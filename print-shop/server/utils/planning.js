@@ -43,14 +43,53 @@ function parseStamp(value) {
   return Number.isNaN(when.getTime()) ? null : when;
 }
 
+/**
+ * What day it is where the shop is.
+ *
+ * The server keeps UTC and she does not, so a plate coming off at eight in the
+ * evening is already tomorrow by the server's reckoning. Every date the app
+ * decides — when a plate comes off, what counts as today, when an order ships —
+ * is worked out in her day instead, from the timezone in Settings.
+ *
+ * Formatters are not cheap to build and these run once per row, so they are
+ * kept. A zone the browser has and Node does not would throw on every call,
+ * which is a blank page rather than a wrong date, so an unknown one falls back
+ * to UTC and carries on.
+ */
+const zoneFormatters = new Map();
+function dayFormatter(zone) {
+  if (zoneFormatters.has(zone)) return zoneFormatters.get(zone);
+  let fmt;
+  try {
+    fmt = new Intl.DateTimeFormat('en-CA', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  } catch {
+    console.error(`Unknown shop timezone "${zone}" — dating everything in UTC until it is set.`);
+    fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' });
+  }
+  zoneFormatters.set(zone, fmt);
+  return fmt;
+}
+
+/** The day a moment falls on, where the shop is. */
+const dayIn = (instant, zone) => dayFormatter(zone).format(new Date(instant));
+
+/**
+ * A bare date as a moment, always UTC midnight.
+ *
+ * Dates here are days, not times, and every one of them is anchored the same
+ * way so that adding a day and reading it back cannot drift with the server's
+ * own zone or its summer time.
+ */
+const dateOnly = (value) => new Date(`${String(value).slice(0, 10)}T00:00:00Z`);
+
 function addDays(date, days) {
   const d = new Date(date);
-  d.setDate(d.getDate() + days);
+  d.setUTCDate(d.getUTCDate() + days);
   return d;
 }
 
 const toISODate = (d) => new Date(d).toISOString().slice(0, 10);
-const today = () => new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00');
+const today = (settings = getSettings()) => dateOnly(dayIn(new Date(), settings.shop_timezone));
 
 function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000);
@@ -181,7 +220,6 @@ function estimatedMinutes(row) {
 function scheduleQueue(settings = getSettings()) {
   const capacityPerDay =
     Math.max(1, settings.print_hours_per_day) * Math.max(1, settings.printer_count);
-  const start = today();
   const all = activeQueue();
   const rows = all.filter((row) => PRINTER_QUEUE_STATUSES.includes(row.status));
 
@@ -192,6 +230,7 @@ function scheduleQueue(settings = getSettings()) {
   // set the next going. A plate already printing keeps the time it really
   // started — an estimate is no use for something she can see happening.
   const now = Date.now();
+  const zone = settings.shop_timezone;
   const changeover = Math.max(0, settings.changeover_minutes) * 60000;
   let free = now;
 
@@ -232,8 +271,13 @@ function scheduleQueue(settings = getSettings()) {
       started_at_iso: startedAt ? startedAt.toISOString() : null,
       // Whether the plate is already past the time it was meant to come off.
       running_late: !!startedAt && endsAt < now,
-      starts_on: toISODate(addDays(start, Math.floor(startHours / capacityPerDay))),
-      prints_done_on: toISODate(addDays(start, Math.ceil(finishHours / capacityPerDay))),
+      // The day it goes on and the day it comes off, off the clock above and in
+      // her day. This used to be the hours divided by a day's capacity and
+      // rounded up, which made every plate land on a whole day boundary —
+      // three hours of work read as tomorrow, and every ship date behind it
+      // was a day pessimistic.
+      starts_on: dayIn(beginsAt, zone),
+      prints_done_on: dayIn(endsAt, zone),
       cumulative_hours: round2(finishHours),
     };
   });
@@ -245,7 +289,7 @@ function scheduleQueue(settings = getSettings()) {
     finishing: all.filter((row) => row.status === 'post_processing').map((row) => ({
       ...row,
       estimated_minutes: round2(estimatedMinutes(row)),
-      prints_done_on: toISODate(start),
+      prints_done_on: dayIn(now, zone),
     })),
     capacity_hours_per_day: capacityPerDay,
     queue_hours: round2(cumulativeMinutes / 60),
@@ -289,9 +333,9 @@ function orderProjections(settings = getSettings()) {
   }
 
   const projections = [...byOrder.values()].map((o) => {
-    const printsDone = new Date(o.prints_done_on + 'T00:00:00');
+    const printsDone = dateOnly(o.prints_done_on);
     const projected = addDays(printsDone, settings.finishing_days);
-    const base = o.order_date ? new Date(o.order_date + 'T00:00:00') : today();
+    const base = o.order_date ? dateOnly(o.order_date) : today(settings);
     const floor = addDays(base, settings.turnaround_min_days);
     // Late against what the customer was told.
     //
@@ -302,7 +346,7 @@ function orderProjections(settings = getSettings()) {
     // how she agrees a new one, so it is what lateness is measured from. An
     // order with no promised date has only the window to go on.
     const deadline = o.promised_ship_date
-      ? new Date(o.promised_ship_date + 'T00:00:00')
+      ? dateOnly(o.promised_ship_date)
       : addDays(base, settings.turnaround_max_days);
     const projectedShip = projected > floor ? projected : floor;
 
@@ -310,7 +354,7 @@ function orderProjections(settings = getSettings()) {
       ...o,
       projected_ship_date: toISODate(projectedShip),
       turnaround_deadline: toISODate(deadline),
-      days_out: daysBetween(today(), projectedShip),
+      days_out: daysBetween(today(settings), projectedShip),
       at_risk: projectedShip > deadline,
       late_by_days: projectedShip > deadline ? daysBetween(deadline, projectedShip) : 0,
     };
@@ -325,10 +369,10 @@ function orderProjections(settings = getSettings()) {
  */
 function suggestShipDate(orderDate, extraMinutes = 0, settings = getSettings()) {
   const { queue_hours, capacity_hours_per_day } = scheduleQueue(settings);
-  const base = orderDate ? new Date(orderDate + 'T00:00:00') : today();
+  const base = orderDate ? dateOnly(orderDate) : today(settings);
   const floor = addDays(base, settings.turnaround_min_days);
   const queueDays = Math.ceil((queue_hours + extraMinutes / 60) / capacity_hours_per_day);
-  const fromQueue = addDays(today(), queueDays + settings.finishing_days);
+  const fromQueue = addDays(today(settings), queueDays + settings.finishing_days);
   const suggested = fromQueue > floor ? fromQueue : floor;
 
   return {
@@ -479,6 +523,9 @@ function materialSummary(materialId = null) {
 }
 
 module.exports = {
+  // The shop's own day, for anything outside this file that has to agree with it.
+  shopToday: today,
+  dayIn,
   activeQueue,
   scheduleQueue,
   orderProjections,
