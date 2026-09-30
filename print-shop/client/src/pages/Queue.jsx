@@ -387,15 +387,15 @@ export default function Queue() {
                   {entry.running_late && (
                     <p className="text-[10px] text-amber-600 leading-tight">running over</p>
                   )}
-                  {/* The day-level date this plate used to show has gone: the
-                      clock above says when it comes off, and to the day it
-                      rounded every plate up to a whole one — three hours of
-                      work read as tomorrow. What is left is the date she acts
-                      on, which is when the order ships. */}
-                  {entry.projection && (
-                    <p className={`text-[11px] ${entry.projection.at_risk ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                      Ships {shortDate(entry.projection.projected_ship_date)}
-                      {entry.projection.at_risk && ` · ${entry.projection.late_by_days}d late`}
+                  {/* The dates a plate used to carry have gone: the clock
+                      above says when it comes off, which is what is asked at
+                      the printer, and the days each order is due are on its
+                      own line under the name. What is kept is the warning —
+                      not a date, and the one thing here she would want to act
+                      on rather than read past. */}
+                  {entry.projection?.at_risk && (
+                    <p className="text-[11px] text-red-600 font-semibold leading-tight">
+                      {entry.projection.late_by_days}d late
                     </p>
                   )}
                 </div>
