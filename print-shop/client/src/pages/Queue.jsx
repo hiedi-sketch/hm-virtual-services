@@ -5,6 +5,7 @@ import Modal from '../components/Modal';
 import printApi, { describeError, grams, hoursMinutes, shortDate } from '../api/print';
 import { EmptyState, Field, LoadError, Pill, StatCard } from '../components/ui';
 import PickList from '../components/PickList';
+import ShareEditor from '../components/ShareEditor';
 
 const STATUS_TONE = { queued: 'gray', printing: 'blue', post_processing: 'violet', done: 'green', cancelled: 'gray' };
 const STATUS_LABEL = { queued: 'Queued', printing: 'Printing', post_processing: 'Finishing', done: 'Done', cancelled: 'Cancelled' };
@@ -50,6 +51,10 @@ export default function Queue() {
   const [again, setAgain] = useState(null);
   // The job whose print time is being corrected.
   const [timing, setTiming] = useState(null);
+  // The plate whose shares are being changed: who its units are for, once it
+  // is already on the queue.
+  const [sharing, setSharing] = useState(null);
+  const [savingShares, setSavingShares] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -207,6 +212,41 @@ export default function Queue() {
     }
   }
 
+  /**
+   * Open the share editor on a plate already on the queue, filled in with who
+   * it is for now. A one-off is left out: it belongs to nobody by definition.
+   */
+  function editShares(entry) {
+    setSharing({
+      entry,
+      total: entry.quantity,
+      shares: (entry.parts || [])
+        .filter((part) => part.order_id)
+        .map((part) => ({ order_id: String(part.order_id), quantity: String(part.quantity) })),
+    });
+  }
+
+  async function saveShares() {
+    setSavingShares(true);
+    try {
+      const body = {
+        total: Number(sharing.total),
+        shares: sharing.shares
+          .filter((sh) => sh.order_id && Number(sh.quantity) > 0)
+          .map((sh) => ({ order_id: Number(sh.order_id), quantity: Number(sh.quantity) })),
+      };
+      const res = await printApi.setQueueShares(sharing.entry.id, body);
+      setData(res.data);
+      setSharing(null);
+      toast.success(res.message || 'Shares changed');
+      refresh();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Could not change who the plate is for');
+    } finally {
+      setSavingShares(false);
+    }
+  }
+
   // What the orders on this plate have claimed, and what is left for stock.
   const spokenFor = shares.reduce((sum, sh) => sum + (Number(sh.quantity) || 0), 0);
   const leftover = (Number(form.quantity) || 0) - spokenFor;
@@ -344,6 +384,14 @@ export default function Queue() {
                   </button>
                 ) : null}
                 <button className="btn-ghost !py-1 !px-2" onClick={() => setPicking(entry)}>Pick list</button>
+                {/* A plate's units change hands while it is on the bed: an
+                    order turns up for the two that were going to the shelf.
+                    A one-off has nobody to share out to. */}
+                {entry.item_id && (
+                  <button className="btn-ghost !py-1 !px-2" onClick={() => editShares(entry)}>
+                    Who it is for
+                  </button>
+                )}
                 <select
                   className="input !w-auto !py-1 !px-2 text-xs"
                   value={entry.priority}
@@ -412,6 +460,65 @@ export default function Queue() {
           if (picking.status === 'queued') await setStatus(picking, 'printing');
         }}
       />
+
+      {/* Who a plate is for, changed after it is on the queue. The plate does
+          not move: it is the labels on what comes off it that change. */}
+      <Modal open={!!sharing} onClose={() => setSharing(null)} title="Who the plate is for">
+        {sharing && (
+          <form
+            onSubmit={(e) => { e.preventDefault(); saveShares(); }}
+            className="space-y-4"
+          >
+            <div className="rounded-xl bg-linen p-3">
+              <p className="font-bold text-primary">{sharing.entry.item_name}</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {STATUS_LABEL[sharing.entry.status]}
+                {sharing.entry.printer && ` · ${sharing.entry.printer}`}
+                {' · '}
+                {hoursMinutes(sharing.entry.estimated_minutes)} of print time
+              </p>
+            </div>
+
+            <Field
+              label="How many the plate makes"
+              hint="Leave it as it is to move units between orders without changing the print."
+            >
+              <input
+                type="number"
+                min="1"
+                step="1"
+                inputMode="numeric"
+                className="input"
+                value={sharing.total}
+                onChange={(e) => setSharing({ ...sharing, total: e.target.value })}
+              />
+            </Field>
+
+            <ShareEditor
+              shares={sharing.shares}
+              onChange={(next) => setSharing({ ...sharing, shares: next })}
+              orders={orders}
+              total={sharing.total}
+            />
+
+            <p className="text-xs text-gray-400">
+              Only orders with {sharing.entry.item_name} on them can take a share of it.
+            </p>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <button type="button" className="btn-ghost" onClick={() => setSharing(null)}>Cancel</button>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={savingShares
+                  || (Number(sharing.total) || 0) < sharing.shares.reduce((sum, sh) => sum + (Number(sh.quantity) || 0), 0)}
+              >
+                {savingShares ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
 
       <Modal open={!!again} onClose={() => setAgain(null)} title="Print it again">
         {again && (
@@ -596,74 +703,12 @@ export default function Queue() {
               orders at once and whatever is left over is stock. */}
           {kind === 'catalog' && (
             <div className="border-t border-linen pt-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="label !mb-0">Who it is for</p>
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-primary hover:underline"
-                  onClick={() => setShares([...shares, { order_id: '', quantity: '' }])}
-                >
-                  + Add an order
-                </button>
-              </div>
-
-              {shares.length === 0 ? (
-                <p className="text-xs text-gray-400">
-                  Nobody yet — the whole plate goes to stock. Add an order to put some of it against one.
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {shares.map((share, i) => (
-                    <li key={i} className="flex gap-2">
-                      <select
-                        className="input min-w-0 flex-1"
-                        value={share.order_id}
-                        onChange={(e) => setShares(shares.map((x, j) => (j === i ? { ...x, order_id: e.target.value } : x)))}
-                      >
-                        <option value="">Choose an order…</option>
-                        {/* An order already on the plate is not offered twice:
-                            one share each, for the whole amount. */}
-                        {orders
-                          .filter((o) => o.id === Number(share.order_id)
-                            || !shares.some((x, j) => j !== i && Number(x.order_id) === o.id))
-                          .map((o) => (
-                            <option key={o.id} value={o.id}>{o.order_number} — {o.customer_name}</option>
-                          ))}
-                      </select>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        inputMode="numeric"
-                        className="input !w-20 shrink-0"
-                        placeholder="Qty"
-                        value={share.quantity}
-                        onChange={(e) => setShares(shares.map((x, j) => (j === i ? { ...x, quantity: e.target.value } : x)))}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShares(shares.filter((_, j) => j !== i))}
-                        className="text-silver hover:text-red-600 px-1 text-lg leading-none shrink-0"
-                        title="Take this order off the plate"
-                      >
-                        ×
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              {/* What is left after the orders have had their share, said out
-                  loud rather than left for her to work out. */}
-              {shares.length > 0 && (
-                <p className={`text-xs mt-2 ${leftover < 0 ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                  {leftover < 0
-                    ? `The orders want ${spokenFor} but the plate is ${Number(form.quantity) || 0} — raise the quantity or lower a share.`
-                    : leftover > 0
-                      ? `${spokenFor} spoken for, ${leftover} for stock.`
-                      : 'The whole plate is spoken for.'}
-                </p>
-              )}
+              <ShareEditor
+                shares={shares}
+                onChange={setShares}
+                orders={orders}
+                total={form.quantity}
+              />
             </div>
           )}
 

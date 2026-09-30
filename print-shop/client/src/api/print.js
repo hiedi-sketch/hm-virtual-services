@@ -130,6 +130,8 @@ export const printApi = {
   addToQueue: (body) => api.post('/queue', body).then((r) => r.data),
   updateQueue: (id, body) => unwrap(api.put(`/queue/${id}`, body)),
   removeFromQueue: (id) => unwrap(api.delete(`/queue/${id}`)),
+  // Who a plate's units are for, changed after it is already on the queue.
+  setQueueShares: (id, body) => api.put(`/queue/${id}/shares`, body).then((r) => r.data),
   reorderQueue: (ids) => unwrap(api.put('/queue/reorder/positions', { ids })),
   shortages: () => unwrap(api.get('/queue/shortages')),
   // Set the same plate up again: a finished job copied back onto the queue.

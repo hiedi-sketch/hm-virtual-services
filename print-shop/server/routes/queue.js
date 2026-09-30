@@ -155,57 +155,55 @@ router.post('/', (req, res) => {
  * job with no line behind it cannot count towards what the order still needs
  * — it would print and the order would still be asking for them.
  */
-function queueShared(itemId, total, body) {
+const bad = (message, status = 400) => Object.assign(new Error(message), { status });
+
+/**
+ * Who a plate is for, checked before anything is written.
+ *
+ * Shared by queuing a plate and by changing one already on the queue, so the
+ * two cannot drift into disagreeing about what a share is allowed to be.
+ */
+function readShares(itemId, raw) {
   const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId);
   const shares = [];
 
-  for (const raw of body.shares) {
-    const orderId = Number(raw.order_id);
-    const quantity = Number(raw.quantity);
+  for (const line of raw || []) {
+    const orderId = Number(line.order_id);
+    const quantity = Number(line.quantity);
     if (!orderId) continue;
-    if (!(quantity > 0)) {
-      const err = new Error('Say how many of the plate are for each order');
-      err.status = 400;
-      throw err;
-    }
+    if (!(quantity > 0)) throw bad('Say how many of the plate are for each order');
 
     const order = db.prepare('SELECT id, order_number FROM orders WHERE id = ?').get(orderId);
-    if (!order) {
-      const err = new Error('One of those orders is not here any more');
-      err.status = 404;
-      throw err;
-    }
+    if (!order) throw bad('One of those orders is not here any more', 404);
     if (shares.some((sh) => sh.order_id === orderId)) {
-      const err = new Error(`${order.order_number} is on the plate twice — put it on once for the whole amount`);
-      err.status = 400;
-      throw err;
+      throw bad(`${order.order_number} is on the plate twice — put it on once for the whole amount`);
     }
 
-    const line = db.prepare(
+    const row = db.prepare(
       'SELECT id FROM order_items WHERE order_id = ? AND item_id = ? ORDER BY id LIMIT 1'
     ).get(orderId, itemId);
-    if (!line) {
-      const err = new Error(`${order.order_number} does not have ${item.name} on it`);
-      err.status = 400;
-      throw err;
-    }
+    if (!row) throw bad(`${order.order_number} does not have ${item.name} on it`);
 
-    shares.push({ order_id: orderId, order_number: order.order_number, order_item_id: line.id, quantity });
+    shares.push({ order_id: orderId, order_number: order.order_number, order_item_id: row.id, quantity });
   }
 
-  if (!shares.length) {
-    const err = new Error('Choose an order, or leave the plate for stock');
-    err.status = 400;
-    throw err;
-  }
+  return shares;
+}
 
+/** What the orders have claimed, and what is left over for the shelf. */
+function splitPlate(shares, total) {
   const claimed = shares.reduce((sum, sh) => sum + sh.quantity, 0);
-  if (claimed > total) {
-    const err = new Error(`The orders want ${claimed} but the plate is ${total}`);
-    err.status = 400;
-    throw err;
-  }
-  const forStock = total - claimed;
+  if (claimed > total) throw bad(`The orders want ${claimed} but the plate is ${total}`);
+  return { claimed, forStock: total - claimed };
+}
+
+function queueShared(itemId, total, body) {
+  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId);
+  const shares = readShares(itemId, body.shares);
+
+  if (!shares.length) throw bad('Choose an order, or leave the plate for stock');
+
+  const { forStock } = splitPlate(shares, total);
 
   const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const insert = db.prepare(`
@@ -335,6 +333,134 @@ router.put('/:id', (req, res) => {
   update();
 
   res.json({ data: queuePayload() });
+});
+
+/**
+ * Who a plate's units are for, changed after it is already on the queue.
+ *
+ * Seven Highland Calf openers are seven on the bed whether four are Pam's and
+ * two are for the shelf or all seven are spoken for. What changes while it
+ * prints is who is waiting for them: an order comes in for the two that were
+ * headed to stock, or a customer adds to theirs. The plate has not changed —
+ * only the labels on what comes off it.
+ *
+ * So this rewrites the run's shares in place rather than making her remove the
+ * plate and queue it again. An order that is staying keeps its row, and with it
+ * its pick list, the time it started and its place in the queue.
+ */
+function reshare(entry, body) {
+  if (!entry.item_id) throw bad('A one-off belongs to nobody — there is nothing to share out');
+  if (['done', 'cancelled'].includes(entry.status)) throw bad('That plate is finished — it cannot be shared out again');
+
+  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(entry.item_id);
+  const members = runJobs(entry);
+  const plate = members.reduce((sum, job) => sum + (Number(job.quantity) || 0), 0);
+
+  const total = body.total === undefined ? plate : Number(body.total);
+  if (!(total > 0)) throw bad('A plate has to make at least one');
+
+  const shares = readShares(entry.item_id, body.shares);
+  const { forStock } = splitPlate(shares, total);
+
+  // Everything a new row inherits so the plate stays one plate: it prints on
+  // the same printer, off the same spool, in the same place in the queue, and
+  // at the same stage as the rest of it.
+  const [first] = members;
+  const insert = db.prepare(`
+    INSERT INTO queue_jobs
+      (order_id, order_item_id, item_id, quantity, status, priority, position, printer, filament_id,
+       spool_id, estimated_minutes, print_minutes_override, started_at, run_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const addRow = (orderId, orderItemId, quantity) => insert.run(
+    orderId, orderItemId, entry.item_id, quantity, first.status, first.priority, first.position,
+    first.printer, first.filament_id, first.spool_id,
+    estimatedMinutes({ item_id: entry.item_id, quantity, estimated_minutes: null }),
+    first.print_minutes_override, first.started_at, first.run_id,
+  );
+  const setQuantity = db.prepare(`
+    UPDATE queue_jobs SET quantity = ?, order_item_id = ?,
+           estimated_minutes = ?, updated_at = CURRENT_TIMESTAMP
+     WHERE id = ?
+  `);
+
+  const byOrder = new Map(members.filter((j) => j.order_id).map((j) => [j.order_id, j]));
+  const stockRow = members.find((j) => !j.order_id) || null;
+  const added = [];
+
+  db.transaction(() => {
+    // A plate queued before runs existed has no run id, and sharing it out is
+    // what makes it a run. It needs one before any row is added against it, or
+    // the new rows would have nothing to belong to and the plate would split.
+    if (!first.run_id) {
+      const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      db.prepare('UPDATE queue_jobs SET run_id = ? WHERE id = ?').run(runId, first.id);
+      first.run_id = runId;
+    }
+
+    for (const share of shares) {
+      const existing = byOrder.get(share.order_id);
+      if (existing) {
+        setQuantity.run(
+          share.quantity, share.order_item_id,
+          estimatedMinutes({ item_id: entry.item_id, quantity: share.quantity, estimated_minutes: null }),
+          existing.id,
+        );
+        byOrder.delete(share.order_id);
+      } else {
+        addRow(share.order_id, share.order_item_id, share.quantity);
+        added.push(share);
+      }
+    }
+
+    // What is left over. A plate with nothing spare loses its stock row rather
+    // than keeping one for nought, which would read as a stock build on the
+    // queue and have her looking for it on the shelf afterwards.
+    if (forStock > 0 && stockRow) {
+      setQuantity.run(
+        forStock, null,
+        estimatedMinutes({ item_id: entry.item_id, quantity: forStock, estimated_minutes: null }),
+        stockRow.id,
+      );
+    } else if (forStock > 0) {
+      addRow(null, null, forStock);
+    } else if (stockRow) {
+      db.prepare('DELETE FROM queue_jobs WHERE id = ?').run(stockRow.id);
+    }
+
+    // Orders taken off the plate. Their row goes, and its pick list with it;
+    // the order itself is untouched, because it still wants the thing — it is
+    // simply not coming off this plate any more.
+    for (const job of byOrder.values()) {
+      db.prepare('DELETE FROM queue_jobs WHERE id = ?').run(job.id);
+    }
+  })();
+
+  // Agreeing to make it is what confirming an order means, the same as queuing
+  // it. Forward only, so an order already further on stays where it is — and a
+  // plate already running puts its new orders straight into production.
+  const stage = ['printing', 'post_processing'].includes(first.status) ? 'in_production' : 'confirmed';
+  for (const share of added) {
+    flow.advanceTo(share.order_id, stage, { source: 'queue', note: `${item.name} shared out` });
+  }
+
+  const named = shares.map((sh) => `${sh.quantity} for ${sh.order_number}`).join(', ');
+  return {
+    data: queuePayload(),
+    message: shares.length
+      ? `${total} × ${item.name} — ${named}${forStock > 0 ? `, ${forStock} for stock` : ''}`
+      : `${total} × ${item.name}, all for stock`,
+  };
+}
+
+router.put('/:id/shares', (req, res) => {
+  const entry = db.prepare('SELECT * FROM queue_jobs WHERE id = ?').get(req.params.id);
+  if (!entry) return res.status(404).json({ error: 'Queue entry not found' });
+  try {
+    res.json(reshare(entry, req.body || {}));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
 });
 
 router.delete('/:id', (req, res) => {
