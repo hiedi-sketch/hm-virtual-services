@@ -126,4 +126,86 @@ function assign(itemId, code) {
   };
 }
 
-module.exports = { drawerList, occupancy, find, assign, normalise, isKnown, DEFAULT_DRAWERS };
+/**
+ * The product a scanned code belongs to.
+ *
+ * At a drawer she scans what is in her hand, and what is in her hand is a
+ * product label. Anything else — a spool, an order ticket, a bin — is said so
+ * by name, because "not found" at a drawer with a spool in your hand is a
+ * puzzle and "that is a spool" is not.
+ */
+function itemByCode(code) {
+  const text = String(code || '').trim();
+  if (!text) return null;
+  return db.prepare(
+    'SELECT id, name, sku FROM items WHERE barcode = ? OR sku = ? OR vendor_barcode = ?'
+  ).get(text, text, text) || null;
+}
+
+/**
+ * Put something in a drawer, by what was scanned at it or by what was picked
+ * from the list. Answers with the drawer as it now stands, so the sheet she is
+ * looking at can redraw itself without asking again.
+ */
+function fileInDrawer(code, { item_id: itemId, code: scanned }) {
+  const at = normalise(code);
+  if (!isKnown(at)) {
+    const err = new Error(`${at || 'That'} is not one of the drawers`);
+    err.status = 404;
+    throw err;
+  }
+
+  let item = null;
+  if (itemId) {
+    item = db.prepare('SELECT id, name FROM items WHERE id = ?').get(Number(itemId));
+    if (!item) {
+      const err = new Error('That is not in the catalog');
+      err.status = 404;
+      throw err;
+    }
+  } else {
+    item = itemByCode(scanned);
+    if (!item) {
+      const err = new Error(`Nothing in the catalog carries ${String(scanned || '').trim()}`);
+      err.status = 404;
+      throw err;
+    }
+  }
+
+  const was = db.prepare('SELECT drawer FROM items WHERE id = ?').get(item.id)?.drawer;
+  const from = normalise(was);
+  db.prepare('UPDATE items SET drawer = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(at, item.id);
+
+  return {
+    drawer: find(at),
+    // Moving something is worth saying out loud: a product lives in one drawer,
+    // so filing it here is taking it out of wherever it was.
+    message: from && from !== at
+      ? `${item.name} moved from ${from} to ${at}`
+      : from === at ? `${item.name} was already in ${at}` : `${item.name} filed in ${at}`,
+  };
+}
+
+/** Take something out of a drawer, leaving it with no drawer at all. */
+function clearFromDrawer(code, itemId) {
+  const at = normalise(code);
+  const item = db.prepare('SELECT id, name, drawer FROM items WHERE id = ?').get(Number(itemId));
+  if (!item) {
+    const err = new Error('That is not in the catalog');
+    err.status = 404;
+    throw err;
+  }
+  if (normalise(item.drawer) !== at) {
+    const err = new Error(`${item.name} is not in ${at}`);
+    err.status = 400;
+    throw err;
+  }
+
+  db.prepare('UPDATE items SET drawer = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(item.id);
+  return { drawer: find(at), message: `${item.name} taken out of ${at}` };
+}
+
+module.exports = {
+  drawerList, occupancy, find, assign, normalise, isKnown, DEFAULT_DRAWERS,
+  itemByCode, fileInDrawer, clearFromDrawer,
+};

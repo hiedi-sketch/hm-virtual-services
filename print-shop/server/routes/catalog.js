@@ -186,6 +186,31 @@ router.get('/options', (req, res) => {
  */
 router.get('/drawers', (req, res) => res.json({ data: drawers.occupancy() }));
 
+/**
+ * Filing something in a drawer, from the drawer's side.
+ *
+ * The drawer is the thing in front of her — she has scanned its label and is
+ * standing at it with something in her hand — so it takes either the code she
+ * scans off that thing or the product she picks from the list, and answers
+ * with the drawer as it now stands.
+ */
+router.post('/drawers/:code/items', (req, res) => {
+  try {
+    res.json(drawers.fileInDrawer(req.params.code, req.body || {}));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+/** Take something out of a drawer. It keeps its stock; it just has no home. */
+router.delete('/drawers/:code/items/:itemId', (req, res) => {
+  try {
+    res.json(drawers.clearFromDrawer(req.params.code, req.params.itemId));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 /** File a product in a drawer, or take it out of one with a blank. */
 router.post('/:id/drawer', (req, res) => {
   try {

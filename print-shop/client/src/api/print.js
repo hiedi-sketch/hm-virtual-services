@@ -73,6 +73,11 @@ export const printApi = {
   // The inventory drawers, and what is kept in each.
   drawers: () => unwrap(api.get('/catalog/drawers')),
   setDrawer: (id, drawer) => api.post(`/catalog/${id}/drawer`, { drawer }).then((r) => r.data),
+  // Filing from the drawer's side: what she scanned at it, or what she picked.
+  fileInDrawer: (code, body) => api.post(`/catalog/drawers/${encodeURIComponent(code)}/items`, body)
+    .then((r) => r.data),
+  takeFromDrawer: (code, itemId) =>
+    api.delete(`/catalog/drawers/${encodeURIComponent(code)}/items/${itemId}`).then((r) => r.data),
   previewCatalogImport: (csv, options) => unwrap(api.post('/catalog/import', { csv, apply: false, ...options })),
   applyCatalogImport: (csv, options) => api.post('/catalog/import', { csv, apply: true, ...options }).then((r) => r.data),
   item: (id) => unwrap(api.get(`/catalog/${id}`)),

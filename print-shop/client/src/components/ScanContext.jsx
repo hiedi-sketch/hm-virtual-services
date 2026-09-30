@@ -36,7 +36,7 @@ function ResultCard({ match, onChanged }) {
   if (match.type === 'order') return <OrderResultCard order={match.order} />;
   if (match.type === 'bin') return <ScanBinCard bin={match.bin} onChanged={onChanged} />;
   if (match.type === 'location') return <ScanLocationCard location={match.location} />;
-  if (match.type === 'drawer') return <ScanDrawerCard drawer={match.drawer} />;
+  if (match.type === 'drawer') return <ScanDrawerCard drawer={match.drawer} onChanged={onChanged} />;
 
   if (match.type === 'filament' || match.type === 'filament_spool') {
     const f = match.filament;
