@@ -17,9 +17,16 @@ import { LoadError } from './ui';
  * is one fact about where a thing is, and moving it is one write.
  */
 
-/** A drawer's label size: what fits on the front of one. */
-const LABEL_W = 1.5;
-const LABEL_H = 0.25;
+/**
+ * The stock the labels are printed on — ordinary 2" × 1", two drawers to a
+ * label, cut apart down the middle.
+ *
+ * They used to be printed at the size of the drawer front itself, an inch and
+ * a half by a quarter, which is a page size most printers will not take: the
+ * job either came out blank, on a whole sheet of paper, or not at all.
+ */
+const LABEL_W = 2;
+const LABEL_H = 1;
 
 function Drawer({ drawer, currentItemId, onPick, pickable }) {
   const items = drawer.items || [];
@@ -171,7 +178,7 @@ export default function DrawerRack({ open, item, onClose, onMoved }) {
         labels={drawerLabels}
         width={LABEL_W}
         height={LABEL_H}
-        layout="inline"
+        layout="split"
         onClose={() => setLabels(false)}
       />
     </>

@@ -63,7 +63,7 @@ function Label({ children, style, width = DEFAULT_W, height = DEFAULT_H }) {
  * one side still looks like a barcode and still fails to read, which is why
  * the width is arithmetic here rather than padding.
  */
-function InlineLabel({ thing, width, height }) {
+function InlineRow({ thing, width, height }) {
   const nameWidth = Math.max(0.2, width * 0.2);
   const barWidth = width - nameWidth;                       // symbol + both quiet zones
   const modules = moduleCount(thing.code) + 20;
@@ -71,7 +71,10 @@ function InlineLabel({ thing, width, height }) {
   const nameSizeIn = Math.min(height * 0.62, (nameWidth * 1.5) / Math.max(1, String(thing.name).length));
 
   return (
-    <Label width={width} height={height} style={{ border: '1px dashed #9ca3af', flexDirection: 'row' }}>
+    <div
+      className="flex items-center justify-center overflow-hidden"
+      style={{ width: `${width}in`, height: `${height}in`, boxSizing: 'border-box', color: '#111' }}
+    >
       <span
         className="font-bold leading-none whitespace-nowrap text-center shrink-0"
         style={{ width: `${nameWidth}in`, fontSize: `${nameSizeIn.toFixed(3)}in` }}
@@ -88,8 +91,64 @@ function InlineLabel({ thing, width, height }) {
           showText={false}
         />
       </span>
+    </div>
+  );
+}
+
+function InlineLabel({ thing, width, height }) {
+  return (
+    <Label width={width} height={height} style={{ border: '1px dashed #9ca3af', flexDirection: 'row' }}>
+      <InlineRow thing={thing} width={width} height={height} />
     </Label>
   );
+}
+
+/**
+ * Two labels on one, to be cut apart.
+ *
+ * A drawer front is an inch and a half by a quarter, and a page that size is a
+ * size most printers will not take — which is the whole of why the drawer
+ * labels would not come out. So the page is ordinary 2" × 1" stock and it
+ * carries two, one above the other, with a line across the middle to cut on.
+ *
+ * Each half is far roomier than the drawer front it ends up on, which is the
+ * point twice over: the printer gets a page size it knows, and the barcode
+ * gets the width to be drawn coarse enough to read.
+ *
+ * An odd number leaves the bottom half of the last one blank rather than
+ * starting a thing on a label it cannot finish.
+ */
+function SplitLabel({ pair, width, height }) {
+  const half = height / 2;
+
+  return (
+    <Label width={width} height={height} style={{ border: '1px dashed #9ca3af', justifyContent: 'flex-start' }}>
+      {pair.map((thing, index) => (
+        <div
+          key={thing.key}
+          className="shrink-0"
+          style={{
+            width: `${width}in`,
+            height: `${half}in`,
+            // The cut line. It sits on the halves rather than the label so it
+            // survives into print, where the label's own dashed edge — a guide
+            // for the screen — is taken off.
+            borderTop: index ? '1px dashed #9ca3af' : undefined,
+            boxSizing: 'border-box',
+          }}
+        >
+          <InlineRow thing={thing} width={width} height={half} />
+        </div>
+      ))}
+    </Label>
+  );
+}
+
+/** Things two at a time, for a label that carries two. */
+function inPairs(things) {
+  const pairs = [];
+  for (let i = 0; i < things.length; i += 2) pairs.push(things.slice(i, i + 2));
+  return pairs;
 }
 
 export default function LabelSheet({
@@ -100,14 +159,18 @@ export default function LabelSheet({
 
   // A pair per thing — the name to read, the barcode to scan — kept next to
   // each other so both come off the roll together rather than every name and
-  // then every barcode. On stock too small for two, they share one label.
+  // then every barcode. On stock too small for two, they share one label; on
+  // stock too big for one, two share a label and are cut apart.
   const inline = layout === 'inline';
-  const labels = inline
-    ? things.map((thing) => ({ key: thing.key, kind: 'inline', thing }))
-    : things.flatMap((thing) => [
-      { key: `${thing.key}-name`, kind: 'name', thing },
-      { key: `${thing.key}-code`, kind: 'code', thing },
-    ]);
+  const split = layout === 'split';
+  const labels = split
+    ? inPairs(things).map((pair) => ({ key: pair[0].key, kind: 'split', pair }))
+    : inline
+      ? things.map((thing) => ({ key: thing.key, kind: 'inline', thing }))
+      : things.flatMap((thing) => [
+        { key: `${thing.key}-name`, kind: 'name', thing },
+        { key: `${thing.key}-code`, kind: 'code', thing },
+      ]);
 
   return createPortal(
     <div className="print-portal fixed inset-0 z-50 flex items-start justify-center p-4 overflow-y-auto print:p-0 print:static print:overflow-visible">
@@ -133,16 +196,21 @@ export default function LabelSheet({
           <div>
             <h2 className="text-lg font-bold text-primary">{title}</h2>
             <p className="text-xs text-gray-500">
-              {labels.length} labels on {width}″ × {height}″ stock — {subtitle}
+              {split
+                ? `${things.length} on ${labels.length} label${labels.length === 1 ? '' : 's'} of ${width}″ × ${height}″ stock, two per label`
+                : `${labels.length} labels on ${width}″ × ${height}″ stock`}
+              {' — '}{subtitle}
             </p>
           </div>
           <button onClick={onClose} className="text-silver hover:text-gray-600 text-2xl leading-none">×</button>
         </div>
 
         <div id="print-area" className="max-h-[70vh] overflow-y-auto p-5 print:max-h-none print:overflow-visible print:p-0">
-          <div className={`label-grid grid gap-3 justify-items-center print:block ${inline ? 'grid-cols-1' : 'grid-cols-2'}`}>
-            {labels.map(({ key, kind, thing }) => (
-              kind === 'inline' ? (
+          <div className={`label-grid grid gap-3 justify-items-center print:block ${inline || split ? 'grid-cols-1' : 'grid-cols-2'}`}>
+            {labels.map(({ key, kind, thing, pair }) => (
+              kind === 'split' ? (
+                <SplitLabel key={key} pair={pair} width={width} height={height} />
+              ) : kind === 'inline' ? (
                 <InlineLabel key={key} thing={thing} width={width} height={height} />
               ) : kind === 'name' ? (
                 <Label key={key} width={width} height={height} style={{ border: '1px dashed #9ca3af' }}>
@@ -181,6 +249,7 @@ export default function LabelSheet({
           <p className="text-xs text-gray-500 mb-3">
             Set the printer to the {width}″ × {height}″ label and leave scaling at 100% — each label is
             its own page, so one label comes out per label.
+            {split && ' Two go on each one: cut along the dashed line across the middle.'}
           </p>
           <div className="flex gap-2 justify-end">
             <button onClick={onClose} className="btn-secondary">Close</button>
