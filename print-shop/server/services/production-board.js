@@ -103,10 +103,16 @@ function inQueue() {
     to_print: item.needs_printing,
     unqueued: item.to_print,
     covered: item.needs_printing === 0,
-    order_count: item.order_ids.size,
+    // Orders still waiting for a print of this, not every order that has it.
+    order_count: item.printing_orders.size,
+    // How many orders it touches in all, printed or not, for the wider view.
+    order_count_all: item.order_ids.size,
     earliest_due: item.earliest_due,
-    // Every date this product is wanted on, with how many for each.
-    due: item.due,
+    // The days this still has to be printed for, with how many on each. A day
+    // whose units are already made — boxed, on the shelf, or on a plate — is
+    // not a day's printing, so it is left off rather than shown at nought:
+    // this is the list of what to print, and everything on it should be work.
+    due: item.due.filter((day) => day.to_print > 0),
   }));
 
   // Soonest promise first; within a day, the biggest run first, because that

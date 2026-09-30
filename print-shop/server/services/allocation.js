@@ -144,6 +144,10 @@ function plan() {
       to_print: 0,
       needs_printing: 0,
       order_ids: new Set(),
+      // Only the orders still waiting for a print of this. An order whose
+      // units are already made and boxed is not work, and counting it would
+      // have the To Print list promising a plate nobody is waiting for.
+      printing_orders: new Set(),
       earliest_due: null,
       // What is wanted on each promised date. A product ordered by four
       // customers for four different days is four days of work, not one.
@@ -159,7 +163,11 @@ function plan() {
     item.to_print += outstanding;
     item.needs_printing += queued + outstanding;
     item.order_ids.add(line.order_id);
-    if (line.promised_ship_date && (!item.earliest_due || line.promised_ship_date < item.earliest_due)) {
+    if (queued + outstanding > 0) item.printing_orders.add(line.order_id);
+    // The soonest day something still has to be printed for. A day already
+    // covered is not the next thing to print, whatever its date.
+    if (line.promised_ship_date && queued + outstanding > 0
+        && (!item.earliest_due || line.promised_ship_date < item.earliest_due)) {
       item.earliest_due = line.promised_ship_date;
     }
 

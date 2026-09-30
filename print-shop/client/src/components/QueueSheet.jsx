@@ -21,7 +21,14 @@ export default function QueueSheet({ open, rows, summary, shopName = 'Print Shop
   const cards = [
     { label: 'To print', value: units, sub: `${rows.length} product${rows.length === 1 ? '' : 's'}` },
     { label: 'Pull from stock', value: summary?.units_from_stock ?? 0, sub: 'already made' },
-    { label: 'Ordered', value: summary?.units_ordered ?? rows.reduce((t, r) => t + r.ordered, 0), sub: 'across open orders' },
+    // How many customers are waiting on a print, rather than how many units
+    // are on order in all — a sheet carried to the printer is a list of work,
+    // and a bigger number on it that is not work is the one she reads first.
+    {
+      label: 'Orders waiting',
+      value: rows.reduce((t, r) => t + (r.order_count || 0), 0),
+      sub: 'on a print of these',
+    },
     { label: 'No product', value: summary?.unmatched_lines ?? 0, sub: 'lines unmatched' },
   ];
 
@@ -65,7 +72,7 @@ export default function QueueSheet({ open, rows, summary, shopName = 'Print Shop
                 <tr className="text-left text-[11px] uppercase tracking-wide text-gray-500 border-b border-gray-300">
                   <th className="py-1 w-16 text-center">Print</th>
                   <th className="py-1">Product</th>
-                  <th className="py-1 w-20 text-right">Ordered</th>
+                  <th className="py-1 w-20 text-right">Waiting</th>
                   <th className="py-1 w-20 text-right">On hand</th>
                   <th className="py-1 w-28 text-right">Due</th>
                 </tr>
@@ -86,9 +93,12 @@ export default function QueueSheet({ open, rows, summary, shopName = 'Print Shop
                       <span className="block font-mono text-[10px] text-gray-500">{row.sku}</span>
                     </td>
                     <td className="py-2 text-right">
-                      {row.ordered}
+                      {/* The orders still waiting on a print of this, not
+                          every order that has it on. One whose units are
+                          already boxed is not work left at the printer. */}
+                      {row.order_count}
                       <span className="block text-[10px] text-gray-500">
-                        {row.order_count} order{row.order_count === 1 ? '' : 's'}
+                        order{row.order_count === 1 ? '' : 's'}
                       </span>
                     </td>
                     <td className="py-2 text-right">
@@ -98,13 +108,14 @@ export default function QueueSheet({ open, rows, summary, shopName = 'Print Shop
                       )}
                     </td>
                     <td className="py-2 text-right">
-                      {/* Every date it is wanted on, so the sheet by the
-                          printer shows the shape of the week rather than just
-                          the next deadline. */}
+                      {/* Every date it still has to be printed for, so the
+                          sheet by the printer shows the shape of the week
+                          rather than just the next deadline. A day already
+                          made is not on it — this is a list of work. */}
                       {row.due?.length ? row.due.map((day) => (
                         <span key={day.date || 'none'} className="block whitespace-nowrap">
                           {day.date ? shortDate(day.date) : 'No date'}
-                          <span className="font-bold ml-1">({day.to_print > 0 ? day.to_print : day.ordered})</span>
+                          <span className="font-bold ml-1">({day.to_print})</span>
                         </span>
                       )) : '—'}
                     </td>
