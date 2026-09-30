@@ -263,6 +263,71 @@ function createSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- The machines themselves.
+    --
+    -- A job's printer has always been free text — "P1S #2" is a label, and
+    -- nothing can be sent to a label. These are the devices, which is what a
+    -- plate is printed on and what a later phase would talk to.
+    CREATE TABLE IF NOT EXISTS printers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      model TEXT,
+      ams_units INTEGER NOT NULL DEFAULT 0,
+      position INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- A plate: one product, at one plate size, as it was actually sliced.
+    --
+    -- The queue has always worked a plate out as per-unit minutes times how
+    -- many — which is not how a printer behaves, and is the figure she has
+    -- been correcting by hand on every job. A plate carries what the slicer
+    -- said instead: nine on the bed takes what nine on the bed takes.
+    --
+    -- The file is the sliced 3mf, kept on disk rather than in here; this row
+    -- holds where it is and how big, so a missing one can be noticed rather
+    -- than discovered at the printer.
+    CREATE TABLE IF NOT EXISTS plates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      -- How many of the product come off one run of this plate.
+      units REAL NOT NULL DEFAULT 1,
+      -- What it was sliced for. Null means it is good on anything she has.
+      printer_model TEXT,
+      -- What the slicer said, for the whole plate rather than per unit.
+      print_minutes REAL,
+      file_name TEXT,
+      file_path TEXT,
+      file_bytes INTEGER,
+      -- Whether the figures above were read out of the file or typed in, so a
+      -- parser that was wrong once can be told from her own numbers.
+      source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual','file')),
+      is_default INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (item_id, name)
+    );
+
+    -- What a plate eats, and out of which bay.
+    --
+    -- Grams are for the whole plate, not per unit — the same rule a one-off's
+    -- grams follow. The slot is what a later phase would check against the
+    -- spool actually loaded before letting a print start.
+    CREATE TABLE IF NOT EXISTS plate_filaments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      plate_id INTEGER NOT NULL REFERENCES plates(id) ON DELETE CASCADE,
+      slot INTEGER,
+      filament_id INTEGER REFERENCES filaments(id),
+      grams REAL NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (plate_id, slot)
+    );
+
     -- Loose things in a bin, belonging to no order.
     --
     -- The order bins hold orders, which is why an order carries its bin_id and
@@ -407,6 +472,12 @@ function createSchema() {
     'ALTER TABLE queue_jobs ADD COLUMN spool_id INTEGER REFERENCES filament_spools(id)',
     // Which inventory drawer a finished product is kept in.
     'ALTER TABLE items ADD COLUMN drawer TEXT',
+    // The machine a job is on, as a device rather than a label. The old text
+    // column stays beside it for now: it is what the queue still writes, and
+    // dropping it would mean changing every screen at once.
+    'ALTER TABLE queue_jobs ADD COLUMN printer_id INTEGER REFERENCES printers(id)',
+    // The plate a job was queued from, so its figures can be traced back.
+    'ALTER TABLE queue_jobs ADD COLUMN plate_id INTEGER REFERENCES plates(id)',
   ];
   for (const sql of alterations) {
     try { db.exec(sql); } catch { /* column already exists */ }
@@ -422,6 +493,7 @@ function createSchema() {
   seedMailBin();
   seedStockBin();
   seedFinishingBin();
+  seedPrinters();
   backfillOrderBarcodes();
 
   // Indexes over the columns added above, once they are guaranteed to exist.
@@ -437,6 +509,10 @@ function createSchema() {
   for (const sql of [
     // Which drawer a product is in gets asked of every drawer label scanned.
     'CREATE INDEX IF NOT EXISTS idx_items_drawer ON items(drawer) WHERE drawer IS NOT NULL',
+    // A product's plates are read whenever its time or filament is worked out.
+    'CREATE INDEX IF NOT EXISTS idx_plates_item ON plates(item_id)',
+    // Only one plate per product can be the one used when none is named.
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_plates_default ON plates(item_id) WHERE is_default = 1',
     // Exclusivity applies to AMS bays only — a shelf slot holds a stack.
     'DROP INDEX IF EXISTS idx_spool_location',
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_spool_ams_bay ON filament_spools(location) WHERE location_kind = 'ams' AND location IS NOT NULL",
@@ -788,6 +864,52 @@ function seedStockBin() {
  * Five characters like the others, so its barcode is as coarse on the same
  * 2" label and reads first time.
  */
+/**
+ * The machines she already has, from the labels she has been typing.
+ *
+ * A job's printer has been free text since the beginning, so the shop's real
+ * machines are sitting in that column as strings — "P1S #2" and whatever else
+ * she wrote. Those become the first rows rather than asking her to type them
+ * again, and the jobs are pointed at them. A shop that has never named one
+ * gets a single printer, because every shop has at least the one.
+ *
+ * Runs once. A printer deleted on purpose should stay deleted, so a marker
+ * records that the labels have been read rather than reading them each boot.
+ */
+function seedPrinters() {
+  const done = db.prepare("SELECT value FROM settings WHERE key = 'printers_seeded'").get()?.value;
+  if (done === '1') return;
+
+  const labels = db.prepare(`
+    SELECT DISTINCT TRIM(printer) AS name FROM queue_jobs
+     WHERE printer IS NOT NULL AND TRIM(printer) <> ''
+     ORDER BY name
+  `).all().map((r) => r.name);
+
+  const insert = db.prepare('INSERT OR IGNORE INTO printers (name, position) VALUES (?, ?)');
+  const link = db.prepare(`
+    UPDATE queue_jobs SET printer_id = (SELECT id FROM printers WHERE name = ?)
+     WHERE TRIM(printer) = ? AND printer_id IS NULL
+  `);
+
+  try {
+    db.transaction(() => {
+      labels.forEach((name, index) => {
+        insert.run(name, index + 1);
+        link.run(name, name);
+      });
+      // Never named one, and nothing has been printed yet either.
+      if (!labels.length && !db.prepare('SELECT COUNT(*) AS n FROM printers').get().n) {
+        insert.run('Printer 1', 1);
+      }
+      db.prepare("INSERT INTO settings (key, value) VALUES ('printers_seeded', '1') ON CONFLICT(key) DO UPDATE SET value = '1'").run();
+    })();
+    if (labels.length) console.log(`${labels.length} printer${labels.length === 1 ? '' : 's'} taken from the job labels.`);
+  } catch (err) {
+    console.error('Could not set the printers up:', err.message);
+  }
+}
+
 function seedFinishingBin() {
   const existing = db.prepare("SELECT id FROM bins WHERE kind = 'finishing' OR code = 'BIN-F'").get();
   if (existing) return;
