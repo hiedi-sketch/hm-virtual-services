@@ -83,8 +83,12 @@ export default function Calendar() {
   if (error && !data) return <LoadError message={error} onRetry={load} what="the calendar" />;
   if (!data) return <div className="card text-center py-12 text-sm text-gray-500">Loading…</div>;
 
+  // The buckets a fortnight cannot hold. What is with the carrier sits in its
+  // own, in a colour that is not an alarm: it is past its date, but it is not
+  // a thing she can do anything about.
   const spill = [
     ['Overdue', data.overdue, 'red'],
+    ['Waiting for the carrier', data.with_carrier, 'teal'],
     ['No promised date', data.undated, 'gray'],
     [`Promised after ${shortDate(data.to)}`, data.later, 'gray'],
   ].filter(([, list]) => list?.length);
@@ -108,7 +112,9 @@ export default function Calendar() {
           label="Overdue"
           value={data.overdue.length}
           tone={data.overdue.length ? 'warn' : 'good'}
-          sub={data.overdue.length ? 'promised before today' : 'nothing late'}
+          sub={data.overdue.length
+            ? 'past their date, still on you'
+            : data.with_carrier?.length ? 'nothing waiting on you' : 'nothing late'}
         />
         <StatCard
           label="No date"

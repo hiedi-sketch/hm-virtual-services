@@ -69,6 +69,7 @@ export default function CalendarSheet({ open, data, shopName = 'Print Shop', onC
 
   const spill = [
     ['Overdue', data.overdue],
+    ['Waiting for the carrier', data.with_carrier],
     ['No date', data.undated],
     [`After ${shortDate(data.to)}`, data.later],
   ].filter(([, list]) => list?.length);

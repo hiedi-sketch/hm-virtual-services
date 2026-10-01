@@ -54,13 +54,21 @@ function fortnight(days = 14, from = null) {
   }
 
   const overdue = [];
+  const withCarrier = [];
   const later = [];
   const undated = [];
 
   for (const order of all) {
     const due = order.promised_ship_date;
     if (!due) { undated.push(order); continue; }
-    if (due < today) { overdue.push(order); continue; }
+    if (due < today) {
+      // Boxed, labelled and in the Mail Bin: late by the calendar, but not
+      // late in any way she can do something about — it is the carrier's turn.
+      // Listing it as overdue beside work that really is waiting on her buries
+      // the orders that need her under ones that do not.
+      (order.status === 'mail_bin' ? withCarrier : overdue).push(order);
+      continue;
+    }
     if (due > last) { later.push(order); continue; }
     const day = byDay.get(due);
     day.orders.push(order);
@@ -73,10 +81,15 @@ function fortnight(days = 14, from = null) {
     to: last,
     days: inWindow,
     overdue,
+    // Past its date and gone as far as she can take it. Kept rather than
+    // dropped: a parcel the carrier has not collected in three days is worth
+    // noticing, and nothing else on the page would say so.
+    with_carrier: withCarrier,
     later,
     undated,
     // What the sheet is actually promising, so the header can say it without
-    // the reader adding up fourteen boxes.
+    // the reader adding up fourteen boxes. What is waiting on a carrier is not
+    // counted — these are the numbers for what she still has to do.
     order_count: inWindow.reduce((n, d) => n + d.orders.length, 0) + overdue.length,
     unit_count: inWindow.reduce((n, d) => n + d.units, 0)
       + overdue.reduce((n, o) => n + o.units, 0),
