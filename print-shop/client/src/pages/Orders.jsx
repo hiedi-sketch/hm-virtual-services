@@ -15,10 +15,17 @@ import { useScanner } from '../components/ScanContext';
  * is to know standing at the bench — and each one is a place she can put it,
  * not just a word the shop chose.
  */
+/**
+ * Where one product on one order has got to.
+ *
+ * Finishing is the same violet the Print Queue uses for a plate on the bench,
+ * because it is the same moment: off the printer, not yet done.
+ */
 const LINE_STATUSES = [
   { key: 'waiting', label: 'Waiting', tone: 'gray' },
   { key: 'queued', label: 'Queued', tone: 'blue' },
   { key: 'printing', label: 'Printing', tone: 'amber' },
+  { key: 'finishing', label: 'Finishing', tone: 'violet' },
   { key: 'printed', label: 'Printed', tone: 'green' },
 ];
 
@@ -30,6 +37,7 @@ const PILL_CLASS = {
   gray: 'bg-linen text-gray-600',
   blue: 'bg-blue-100 text-blue-800',
   amber: 'bg-amber-100 text-amber-800',
+  violet: 'bg-violet-100 text-violet-800',
   green: 'bg-emerald-100 text-emerald-800',
 };
 

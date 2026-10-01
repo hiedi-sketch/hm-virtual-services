@@ -4,12 +4,18 @@ const allocation = require('./allocation');
 /**
  * Where one product on one order has got to, and moving it by hand.
  *
- * Four states, because four is what there is to know standing at the bench:
+ * Five states, because five is what there is to know standing at the bench:
  *
- *   Waiting   nothing made, nothing queued — it is on the To Print list
- *   Queued    it has a job on the Print Queue, waiting its turn
- *   Printing  it is on a printer, or off it and being finished
- *   Printed   its units exist: the job is done, or the shelf already had them
+ *   Waiting    nothing made, nothing queued — it is on the To Print list
+ *   Queued     it has a job on the Print Queue, waiting its turn
+ *   Printing   it is on a printer now
+ *   Finishing  off the printer, being cleaned up, trimmed, assembled
+ *   Printed    its units exist: the job is done, or the shelf already had them
+ *
+ * Finishing is not a new idea, only a newly visible one. A print job has had a
+ * post-processing state since the Print Queue learned to move a plate to the
+ * bench, and this read it as still printing — so a line said Printing with a
+ * printer beside it while the thing was sitting on the bench being sanded.
  *
  * The status is not stored. It is read off the job and the allocation, so it
  * cannot disagree with the queue or the shelf — and setting it does the thing
@@ -17,8 +23,11 @@ const allocation = require('./allocation');
  */
 
 const ACTIVE = "('queued','printing','post_processing')";
-const STATUSES = ['waiting', 'queued', 'printing', 'printed'];
-const LABEL = { waiting: 'waiting', queued: 'queued', printing: 'printing', printed: 'printed' };
+const STATUSES = ['waiting', 'queued', 'printing', 'finishing', 'printed'];
+const LABEL = {
+  waiting: 'waiting', queued: 'queued', printing: 'printing',
+  finishing: 'being finished', printed: 'printed',
+};
 
 function lineRow(orderItemId) {
   return db.prepare(`
@@ -38,7 +47,10 @@ function jobsFor(orderItemId) {
 /** What this line reads as right now. */
 function statusOf(line, plan = null) {
   const jobs = jobsFor(line.id);
-  if (jobs.some((j) => j.status === 'printing' || j.status === 'post_processing')) return 'printing';
+  // On a printer beats off it: a line split across two plates, one still
+  // running and one on the bench, is a line that is still printing.
+  if (jobs.some((j) => j.status === 'printing')) return 'printing';
+  if (jobs.some((j) => j.status === 'post_processing')) return 'finishing';
   if (jobs.length) return 'queued';
 
   const where = (plan || allocation.plan()).byLine.get(line.id);
@@ -67,7 +79,7 @@ function setLineStatus(orderItemId, want) {
   // What was asked for, before what is allowed: a word that is not one of the
   // four is a mistake worth naming as one.
   if (!STATUSES.includes(want)) {
-    const err = new Error(`"${want}" is not one of Waiting, Queued, Printing or Printed`);
+    const err = new Error(`"${want}" is not one of Waiting, Queued, Printing, Finishing or Printed`);
     err.status = 400;
     throw err;
   }
@@ -106,6 +118,22 @@ function setLineStatus(orderItemId, want) {
     }
   } else if (want === 'printing') {
     flow.startProduction(line.order_id, { orderItemId, source: 'order' });
+  } else if (want === 'finishing') {
+    // Off the printer and onto the bench. Only this line's share moves: the
+    // rest of the plate belongs to other orders, the same way putting a line
+    // back in the queue leaves its runmates where they are.
+    let existing = jobsFor(orderItemId);
+    if (!existing.length) {
+      flow.enqueueOrder(line.order_id, 'normal', {
+        skipCovered: true, forceLineId: orderItemId, onlyLineId: orderItemId,
+      });
+      existing = jobsFor(orderItemId);
+    }
+    for (const job of existing) {
+      if (job.status !== 'post_processing') {
+        jobs.advanceJob(job.id, { to: 'post_processing', source: 'order' });
+      }
+    }
   } else if (want === 'printed') {
     const existing = jobsFor(orderItemId);
     if (!existing.length) {
