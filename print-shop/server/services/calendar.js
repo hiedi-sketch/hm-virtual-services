@@ -59,16 +59,14 @@ function fortnight(days = 14, from = null) {
   const undated = [];
 
   for (const order of all) {
+    // Boxed, labelled and in the Mail Bin. Off the day grid whatever its date:
+    // a day box is what she still has to do that day, and this is done — the
+    // next move is the carrier's. Early or late makes no difference to that.
+    if (order.status === 'mail_bin') { withCarrier.push(order); continue; }
+
     const due = order.promised_ship_date;
     if (!due) { undated.push(order); continue; }
-    if (due < today) {
-      // Boxed, labelled and in the Mail Bin: late by the calendar, but not
-      // late in any way she can do something about — it is the carrier's turn.
-      // Listing it as overdue beside work that really is waiting on her buries
-      // the orders that need her under ones that do not.
-      (order.status === 'mail_bin' ? withCarrier : overdue).push(order);
-      continue;
-    }
+    if (due < today) { overdue.push(order); continue; }
     if (due > last) { later.push(order); continue; }
     const day = byDay.get(due);
     day.orders.push(order);
@@ -81,9 +79,10 @@ function fortnight(days = 14, from = null) {
     to: last,
     days: inWindow,
     overdue,
-    // Past its date and gone as far as she can take it. Kept rather than
-    // dropped: a parcel the carrier has not collected in three days is worth
-    // noticing, and nothing else on the page would say so.
+    // Gone as far as she can take it. Kept rather than dropped: a parcel the
+    // carrier has not collected in three days is worth noticing, and nothing
+    // else on the page would say so. Shipped ones are not here at all — they
+    // have left, and the calendar is about what has not.
     with_carrier: withCarrier,
     later,
     undated,
