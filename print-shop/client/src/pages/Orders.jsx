@@ -66,6 +66,73 @@ const ORDER_SOURCES = ['Shopify', 'Etsy', 'Faire', 'TikTok', 'Amazon'];
 const sourcesFor = (channel, known = ORDER_SOURCES) =>
   [...new Set([...(channel ? [channel] : []), ...known])];
 
+/** Which way she has the list sorted, remembered per browser. */
+const SORT_KEY = 'printshop.orders.sort';
+
+/**
+ * Orders that are finished with. However she sorts the list, these go to the
+ * bottom: a parcel that went out last week is not work, and letting it sort by
+ * its promised date would float it above everything still to do.
+ */
+const FINISHED = ['shipped', 'completed', 'cancelled'];
+
+/**
+ * A missing value sorts last, not first.
+ *
+ * An order with no promised date is the one case this matters: an empty string
+ * compares before every real date, so without this the orders nobody has
+ * promised anything about would head the list of what is most urgent.
+ */
+const orLast = (value) => value || '\uffff';
+
+/**
+ * How the list can be ordered.
+ *
+ * Soonest promise first to begin with, because the question the page answers
+ * most mornings is what has to go out next. The rest are ways of grouping the
+ * same list — by where the work is, who it is for, where it came from — and
+ * every one of them falls back to the promise, so inside any group the most
+ * urgent is still at the top.
+ */
+const SORTS = [
+  {
+    key: 'promised',
+    label: 'Due soonest',
+    compare: (a, b) => orLast(a.promised_ship_date).localeCompare(orLast(b.promised_ship_date)),
+  },
+  {
+    key: 'ordered',
+    label: 'Newest first',
+    compare: (a, b) => orLast(b.order_date).localeCompare(orLast(a.order_date)),
+  },
+  {
+    key: 'late',
+    label: 'Most late first',
+    compare: (a, b) => (b.projection?.late_by_days || 0) - (a.projection?.late_by_days || 0),
+  },
+  {
+    key: 'stage',
+    // Pipeline order, so the list reads the way the work flows.
+    label: 'Where it is',
+    compare: (a, b, { rank }) => rank(a.status) - rank(b.status),
+  },
+  {
+    key: 'type',
+    label: 'Wholesale first',
+    compare: (a, b) => (a.order_type === 'wholesale' ? 0 : 1) - (b.order_type === 'wholesale' ? 0 : 1),
+  },
+  {
+    key: 'channel',
+    label: 'Where it came from',
+    compare: (a, b) => (a.channel || 'direct').localeCompare(b.channel || 'direct'),
+  },
+  {
+    key: 'value',
+    label: 'Biggest first',
+    compare: (a, b) => (b.revenue || 0) - (a.revenue || 0),
+  },
+];
+
 const BLANK = {
   customer_name: '', customer_email: '', channel: 'Shopify', order_type: 'retail',
   order_date: new Date().toISOString().slice(0, 10), promised_ship_date: '', notes: '',
@@ -96,7 +163,20 @@ export default function Orders() {
   const [ticket, setTicket] = useState(null);
   const [shopName, setShopName] = useState('Print Shop');
   const [sources, setSources] = useState(ORDER_SOURCES);
+  // How she last had the list sorted. A preference that resets on every visit
+  // is not one.
+  const [sort, setSort] = useState(() => {
+    try {
+      const saved = localStorage.getItem(SORT_KEY);
+      return SORTS.some((s) => s.key === saved) ? saved : 'promised';
+    } catch { return 'promised'; }
+  });
   const { scan } = useScanner();
+
+  const chooseSort = (key) => {
+    setSort(key);
+    try { localStorage.setItem(SORT_KEY, key); } catch { /* a locked-down browser still sorts */ }
+  };
 
   // The pipeline is defined once, on the server.
   useEffect(() => {
@@ -380,6 +460,25 @@ export default function Orders() {
 
   const chain = stages.map((s) => s.key);
   const open = orders.filter((o) => chain.includes(o.status) && o.status !== 'shipped');
+
+  /**
+   * The list in the order she asked for.
+   *
+   * Finished orders sink first whatever the sort, then the chosen comparison,
+   * then the promise, then the order number — so the list is the same every
+   * time it is drawn rather than shuffling among orders that tie.
+   */
+  const chosen = SORTS.find((s) => s.key === sort) || SORTS[0];
+  const stageRank = (key) => {
+    const at = chain.indexOf(key);
+    return at === -1 ? chain.length : at;
+  };
+  const shown = [...orders].sort((a, b) => (
+    (FINISHED.includes(a.status) ? 1 : 0) - (FINISHED.includes(b.status) ? 1 : 0)
+      || chosen.compare(a, b, { rank: stageRank })
+      || orLast(a.promised_ship_date).localeCompare(orLast(b.promised_ship_date))
+      || String(a.order_number || '').localeCompare(String(b.order_number || ''))
+  ));
   const stageOf = (key) => [...stages, ...offChain].find((s) => s.key === key);
   const labelOf = (key) => stageOf(key)?.label || key;
   const atRisk = orders.filter((o) => o.projection?.at_risk);
@@ -433,6 +532,19 @@ export default function Orders() {
             )}
           </button>
         ))}
+
+        {/* Which way the list runs. Beside the stage tabs because the two
+            together are how she narrows a long day down to the next thing. */}
+        <label className="ml-auto flex items-center gap-1.5 text-xs text-gray-500">
+          Sort
+          <select
+            className="input !w-auto !py-1 !px-2 text-sm"
+            value={sort}
+            onChange={(e) => chooseSort(e.target.value)}
+          >
+            {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+          </select>
+        </label>
       </div>
 
       {error && !orders.length ? (
@@ -445,7 +557,7 @@ export default function Orders() {
         </EmptyState>
       ) : (
         <div className="space-y-2">
-          {orders.map((o) => (
+          {shown.map((o) => (
             <div key={o.id} className={`card !p-4 ${o.projection?.at_risk ? 'border-l-4 border-red-400' : ''}`}>
               <div className="flex flex-wrap items-start gap-3">
                 <div className="min-w-0 flex-1">
