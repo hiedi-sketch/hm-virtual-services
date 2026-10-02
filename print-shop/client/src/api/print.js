@@ -45,6 +45,10 @@ export const printApi = {
   saveShopifyInventory: (body) => api.put('/shopify/inventory', body).then((r) => r.data),
   pushShopifyInventory: (body) => api.post('/shopify/inventory/push', body || {}).then((r) => r.data),
   saveSettings: (body) => unwrap(api.put('/settings', body)),
+  // The key Claude connects with. Kept off the settings payload: everything
+  // there is a number she tunes, and this is a credential.
+  mcpKey: () => unwrap(api.get('/settings/mcp')),
+  rotateMcpKey: () => api.post('/settings/mcp/rotate').then((r) => r.data),
 
   filaments: (params) => unwrap(api.get('/filaments', { params })),
   filament: (id) => unwrap(api.get(`/filaments/${id}`)),

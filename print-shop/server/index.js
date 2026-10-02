@@ -50,6 +50,12 @@ app.use('/api/shopify/webhook', require('./routes/shopify-webhook'));
 // nonce and Shopify's signature instead.
 app.use('/api/shopify/oauth', require('./routes/shopify-oauth'));
 
+// Claude's way in. Outside the sign-in because a chat has no browser session
+// to carry one; it proves itself with the shop's own key instead, which is in
+// Settings. Mounted before the catch-all so /mcp is not read as an endpoint
+// that does not exist.
+app.use('/mcp', require('./mcp').router);
+
 app.use('/api', require('./routes'));
 app.use('/api', (req, res) => res.status(404).json({ error: 'No such endpoint' }));
 

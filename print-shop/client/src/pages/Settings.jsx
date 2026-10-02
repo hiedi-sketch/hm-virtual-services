@@ -4,6 +4,7 @@ import printApi, { describeError, money } from '../api/print';
 import { Field, LoadError } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import ShopifyCard from '../components/ShopifyCard';
+import ClaudeCard from '../components/ClaudeCard';
 
 /**
  * Timezones to choose the shop's clock from.
@@ -296,6 +297,8 @@ export default function PrintSettings() {
           <button type="submit" className="btn-primary" disabled={saving}>{saving ? 'Saving…' : 'Save settings'}</button>
         </div>
       </form>
+
+      <ClaudeCard />
 
       <ShopifyCard />
       <AccountCard />
