@@ -1,0 +1,659 @@
+//@version=6
+indicator("MNQ Playbook Coach", shorttitle = "MNQ Coach", overlay = true, max_labels_count = 500, max_lines_count = 100)
+
+// =====================================================================
+// MNQ Playbook Coach (1-minute chart)
+//
+// DISPLAY AND ALERTS ONLY. This script never places, routes or
+// automates orders. The "assumed trade" inside the code only means
+// "if you had taken the setup", so exit warnings have something to
+// refer to. It is a learning tool: every row shows WHY.
+//
+// Non-repainting: 5-min and 15-min values come from the last CLOSED
+// candle (close[1] with lookahead on). Bias lags by up to one HTF bar.
+// Intrabar: rules marked "forming" are only confirmed at the 1-min
+// close. The trigger (break of the reclaim candle) can fire mid-bar.
+// =====================================================================
+
+const string TZ = "America/Chicago"
+
+// ---------- Colors (kept away from EMA 9 purple, EMA 21 green, VWAP pink)
+const color C_LONG  = #2962FF
+const color C_PASS  = #42A5F5
+const color C_SHORT = #FF9800
+const color C_WARN  = #FFD600
+const color C_NEUT  = #9E9E9E
+const color C_TXT   = #ECEFF1
+const color C_BG    = #1E222D
+const color C_HEAD  = #2A2E39
+const color C_TGT   = #00E5FF
+
+// ---------- Inputs
+string G1 = "Coach"
+bool   learningMode = input.bool(true, "Learning mode: hide the verdict so you decide first", group = G1)
+bool   fedDay       = input.bool(false, "Today is a Fed day (check that morning, uncheck after)", group = G1)
+string vwapMode     = input.string("Globex open (TradingView default)", "VWAP resets at", options = ["Globex open (TradingView default)", "NY open 8:30 CT"], group = G1)
+
+string G2 = "Risk helper"
+float dollarRisk = input.float(100.0, "Dollar risk per trade ($)", minval = 1.0, step = 25.0, group = G2)
+float pointValue = input.float(2.0, "Dollars per point per contract (MNQ = $2)", minval = 0.1, group = G2)
+float stopMult   = input.float(1.25, "Stop buffer beyond pullback extreme (x ATR)", minval = 1.0, maxval = 1.5, step = 0.05, group = G2)
+
+string G3 = "Rule thresholds"
+float tangleMult   = input.float(0.15, "Tangled: EMA 9/21 gap under (x 5-min ATR)", minval = 0.0, step = 0.05, group = G3)
+float flatMult     = input.float(0.10, "Flat: EMA 9 move over 3 bars under (x 5-min ATR)", minval = 0.0, step = 0.05, group = G3)
+int   chopCrosses  = input.int(3, "VWAP chop: crosses needed", minval = 1, group = G3)
+int   chopLookback = input.int(20, "VWAP chop: lookback (1-min bars)", minval = 5, group = G3)
+int   pbLookback   = input.int(10, "Pullback lookback (1-min bars)", minval = 2, group = G3)
+int   trigExpiry   = input.int(5, "Trigger expires after (bars)", minval = 1, group = G3)
+int   noProgBars   = input.int(5, "No-progress warning after (bars)", minval = 3, maxval = 10, group = G3)
+float stretchMult  = input.float(2.0, "Stretched: distance from EMA 9 (x ATR)", minval = 0.5, step = 0.25, group = G3)
+float wickPct      = input.float(0.6, "Long wick: wick share of candle range", minval = 0.3, maxval = 0.95, step = 0.05, group = G3)
+float levelProx    = input.float(0.25, "Near a key level: within (x ATR)", minval = 0.05, step = 0.05, group = G3)
+float roundStep    = input.float(100.0, "Round number spacing (points)", minval = 10.0, group = G3)
+
+string G4 = "Display"
+bool   showLines   = input.bool(true, "Draw EMA 9 / EMA 21 / VWAP (turn off if you already have them)", group = G4)
+bool   showLevels  = input.bool(true, "Draw key levels", group = G4)
+bool   showSess    = input.bool(true, "Tint session windows", group = G4)
+bool   showWarn    = input.bool(true, "Exit warning markers", group = G4)
+bool   showSetup   = input.bool(true, "Setup trigger labels", group = G4)
+string tPosIn      = input.string("Top right", "Checklist position", options = ["Top right", "Top left", "Bottom right", "Bottom left"], group = G4)
+string tSizeIn     = input.string("Small", "Checklist text size", options = ["Tiny", "Small", "Normal"], group = G4)
+int    wrapWidth   = input.int(46, "Checklist reason width (characters)", minval = 20, maxval = 120, group = G4)
+
+string G5 = "Alerts (notifications only)"
+bool dynAlerts = input.bool(true, "Detailed alerts with reasons (use 'Any alert() function call')", group = G5)
+
+bool   useNyVwap = vwapMode == "NY open 8:30 CT"
+string tPos  = tPosIn == "Top left" ? position.top_left : tPosIn == "Bottom left" ? position.bottom_left : tPosIn == "Bottom right" ? position.bottom_right : position.top_right
+string tSize = tSizeIn == "Tiny" ? size.tiny : tSizeIn == "Normal" ? size.normal : size.small
+
+// ---------- Helpers
+f_fmt(float v) =>
+    na(v) ? "n/a" : str.tostring(v, format.mintick)
+
+f_pts(float v) =>
+    na(v) ? "n/a" : str.tostring(v, "#.##")
+
+f_hhmm(int t) =>
+    na(t) ? "--:--" : str.format_time(t, "HH:mm", TZ)
+
+f_ctMins(int t) =>
+    hour(t, TZ) * 60 + minute(t, TZ)
+
+f_isRth(int t) =>
+    int mm = f_ctMins(t)
+    mm >= 510 and mm < 900
+
+f_vwap() =>
+    bool nyStart = f_isRth(time) and not f_isRth(time[1])
+    float vSess = ta.vwap(hlc3)
+    float vNy = ta.vwap(hlc3, nyStart)
+    useNyVwap ? vNy : vSess
+
+// Values from the last CLOSED higher-timeframe candle
+f_htf() =>
+    float e9  = ta.ema(close, 9)
+    float e21 = ta.ema(close, 21)
+    float vw  = f_vwap()
+    float a   = ta.atr(14)
+    [close[1], e9[1], e21[1], vw[1], a[1], e9[1] - e9[4], time[1]]
+
+f_tfBias(string tf, float c, float e9, float e21, float vw) =>
+    int dir = 0
+    string txt = ""
+    if na(c) or na(e9) or na(e21) or na(vw)
+        txt := tf + " bias: not enough data yet."
+    else
+        bool aboveV = c > vw
+        bool belowV = c < vw
+        bool up = e9 > e21
+        bool dn = e9 < e21
+        if aboveV and up
+            dir := 1
+            txt := tf + " bias: LONG. Price above VWAP and EMA 9 above 21, so buyers control the " + tf + " trend."
+        else if belowV and dn
+            dir := -1
+            txt := tf + " bias: SHORT. Price below VWAP and EMA 9 below 21, so sellers control the " + tf + " trend."
+        else
+            string vT = aboveV ? "above" : belowV ? "below" : "right at"
+            string eT = up ? "above" : dn ? "below" : "level with"
+            txt := tf + " bias: MIXED. Price " + vT + " VWAP but EMA 9 " + eT + " 21. The signals conflict, so neither side is in control."
+    [dir, txt]
+
+// Nearest level beyond px in direction d (1 = above, -1 = below)
+f_nearest(float px, int d, float[] lv, string[] nm) =>
+    float best = na
+    string bestNm = ""
+    for i = 0 to array.size(lv) - 1
+        float v = array.get(lv, i)
+        if not na(v) and not na(px)
+            bool ok = d == 1 ? v > px : v < px
+            if ok and (na(best) or math.abs(v - px) < math.abs(best - px))
+                best := v
+                bestNm := array.get(nm, i)
+    [best, bestNm]
+
+// Name of the closest level within tol of px, or ""
+f_nearLevel(float px, float tol, float[] lv, string[] nm) =>
+    string hit = ""
+    float bestD = na
+    for i = 0 to array.size(lv) - 1
+        float v = array.get(lv, i)
+        if not na(v) and not na(px)
+            float dd = math.abs(v - px)
+            if dd <= tol and (na(bestD) or dd < bestD)
+                bestD := dd
+                hit := array.get(nm, i)
+    hit
+
+f_contracts(float stopPts) =>
+    stopPts > 0 ? int(math.floor(dollarRisk / (stopPts * pointValue))) : 0
+
+f_wrap(string s, int w) =>
+    string[] words = str.split(s, " ")
+    string out = ""
+    string cur = ""
+    for word in words
+        if str.length(cur) == 0
+            cur := word
+        else if str.length(cur) + 1 + str.length(word) > w
+            out := out + cur + "\n"
+            cur := word
+        else
+            cur := cur + " " + word
+    out + cur
+
+// st: 1 = pass, -1 = fail, 2 = forming / caution, 0 = not applicable
+f_row(table t, int r, string rule, int st, string why) =>
+    string mark = st == 1 ? "✓" : st == -1 ? "✗" : st == 2 ? "…" : "•"
+    color mc = st == 1 ? C_PASS : st == -1 ? C_SHORT : st == 2 ? C_WARN : C_NEUT
+    table.cell(t, 0, r, rule, text_color = C_TXT, text_halign = text.align_left, text_size = tSize, bgcolor = C_BG)
+    table.cell(t, 1, r, mark, text_color = mc, text_size = tSize, bgcolor = C_BG)
+    table.cell(t, 2, r, f_wrap(why, wrapWidth), text_color = C_TXT, text_halign = text.align_left, text_size = tSize, bgcolor = C_BG, tooltip = why)
+
+// =====================================================================
+// 1-minute calculations
+// =====================================================================
+float ema9  = ta.ema(close, 9)
+float ema21 = ta.ema(close, 21)
+float atr1  = ta.atr(14)          // ta.atr uses RMA smoothing
+float vwap1 = f_vwap()
+
+plot(showLines ? ema9 : na, "EMA 9", color = #9C27B0)
+plot(showLines ? ema21 : na, "EMA 21", color = #4CAF50)
+plot(showLines ? vwap1 : na, "VWAP", color = #E91E63, linewidth = 2)
+
+bool sigOn = timeframe.period == "1"
+
+// ---------- Sessions (Central time)
+int  ctMins  = f_ctMins(time)
+bool isRth   = ctMins >= 510 and ctMins < 900       // 8:30 to 3:00 CT (NYSE hours)
+bool isOn    = ctMins >= 1020 or ctMins < 510       // 5:00pm to 8:30am CT
+bool isToday = year(time, TZ) == year(timenow, TZ) and month(time, TZ) == month(timenow, TZ) and dayofmonth(time, TZ) == dayofmonth(timenow, TZ)
+bool inData  = ctMins >= 445 and ctMins < 465       // 7:25 to 7:45 CT
+bool inNy    = ctMins >= 510 and ctMins < 630       // 8:30 to 10:30 CT
+bool inLunch = ctMins >= 660 and ctMins < 780       // 11:00 to 1:00 CT
+bool inFed   = fedDay and isToday and ctMins >= 775 and ctMins < 870   // 12:55 to 2:30 CT, today only
+bool blocked = inData or inFed
+
+bgcolor(showSess and inFed ? color.new(#FF5722, 85) : showSess and inData ? color.new(C_WARN, 85) : showSess and inNy ? color.new(#2196F3, 94) : showSess and inLunch ? color.new(C_NEUT, 88) : na, title = "Session tint")
+
+// ---------- Key levels
+var float dayH = na
+var float dayL = na
+var float pdH = na
+var float pdL = na
+var float pdC = na
+var float onH = na
+var float onL = na
+
+bool rthStart = isRth and not isRth[1]
+bool rthEnd   = not isRth and isRth[1]
+bool onStart  = isOn and not isOn[1]
+
+if rthEnd
+    pdH := dayH
+    pdL := dayL
+    pdC := close[1]
+    dayH := na
+    dayL := na
+if isRth
+    dayH := rthStart or na(dayH) ? high : math.max(dayH, high)
+    dayL := rthStart or na(dayL) ? low : math.min(dayL, low)
+if isOn
+    onH := onStart or na(onH) ? high : math.max(onH, high)
+    onL := onStart or na(onL) ? low : math.min(onL, low)
+
+float rDn = math.floor(close / roundStep) * roundStep
+float rUp = rDn + roundStep
+// Today's high/low use the previous bar so a fresh high is not its own target
+float[]  lv = array.from(pdH, pdL, pdC, onH, onL, dayH[1], dayL[1], rDn, rUp)
+string[] nm = array.from("PDH", "PDL", "PDC", "ON High", "ON Low", "Day High", "Day Low", "Round " + str.tostring(rDn, "#"), "Round " + str.tostring(rUp, "#"))
+
+// =====================================================================
+// Bias engine (5-min and 15-min, last CLOSED candle only)
+// =====================================================================
+string tf5  = timeframe.in_seconds() <= 300 ? "5" : timeframe.period
+string tf15 = timeframe.in_seconds() <= 900 ? "15" : timeframe.period
+[c5, e9_5, e21_5, vw5, atr5, slope5, t5]       = request.security(syminfo.tickerid, tf5, f_htf(), lookahead = barmerge.lookahead_on)
+[c15, e9_15, e21_15, vw15, atr15, slope15, t15] = request.security(syminfo.tickerid, tf15, f_htf(), lookahead = barmerge.lookahead_on)
+
+[dir5, txt5]   = f_tfBias("5-min", c5, e9_5, e21_5, vw5)
+[dir15, txt15] = f_tfBias("15-min", c15, e9_15, e21_15, vw15)
+
+float gap5     = math.abs(e9_5 - e21_5)
+bool  flat5    = math.abs(slope5) < flatMult * atr5
+bool  tangled5 = gap5 < tangleMult * atr5 and flat5
+bool  crossV   = ta.cross(close, vwap1)
+int   vwapX    = int(math.sum(crossV ? 1 : 0, chopLookback))
+bool  chop     = vwapX >= chopCrosses
+bool  agree    = dir5 != 0 and dir5 == dir15
+int   bias     = agree and not tangled5 and not chop ? dir5 : 0
+bool  trendL5  = dir5 == 1 and slope5 > 0 and not tangled5
+bool  trendS5  = dir5 == -1 and slope5 < 0 and not tangled5
+
+string biasWhy = not agree ? (dir5 == 0 or dir15 == 0 ? "a higher timeframe is MIXED" : "5-min and 15-min disagree") : tangled5 ? "5-min EMAs are tangled and flat" : chop ? "price is chopping back and forth across VWAP" : dir5 == 1 ? "5 and 15 both LONG" : "5 and 15 both SHORT"
+
+bool new5  = t5 != t5[1]
+bool new15 = t15 != t15[1]
+var bool prevFlat5 = false
+bool flatStarted5 = new5 and flat5 and not prevFlat5
+if new5
+    prevFlat5 := flat5
+
+// =====================================================================
+// Setup building blocks (1-min)
+// =====================================================================
+float tol     = 0.1 * atr1
+float zoneTop = math.max(ema9, ema21)
+float zoneBot = math.min(ema9, ema21)
+bool  pbTouchL = low <= zoneTop + tol or low <= vwap1 + tol
+bool  pbTouchS = high >= zoneBot - tol or high >= vwap1 - tol
+int   bsPbL = ta.barssince(pbTouchL)
+int   bsPbS = ta.barssince(pbTouchS)
+bool  recentPbL = not na(bsPbL) and bsPbL <= pbLookback
+bool  recentPbS = not na(bsPbS) and bsPbS <= pbLookback
+float pbLowL  = ta.lowest(low, pbLookback)
+float pbHighS = ta.highest(high, pbLookback)
+
+var string pbWhatL = ""
+var string pbWhatS = ""
+if pbTouchL
+    pbWhatL := low <= zoneTop + tol ? "the EMA 9/21 zone" : "VWAP"
+if pbTouchS
+    pbWhatS := high >= zoneBot - tol ? "the EMA 9/21 zone" : "VWAP"
+
+bool reclaimL = close > open and close > ema9 and (low <= ema9 or close[1] <= ema9[1])
+bool reclaimS = close < open and close < ema9 and (high >= ema9 or close[1] >= ema9[1])
+
+// Exit warning building blocks
+float rng       = high - low
+bool  cl21Dn    = close < ema21 and close[1] >= ema21[1]
+bool  cl21Up    = close > ema21 and close[1] <= ema21[1]
+bool  emaXDn    = ta.crossunder(ema9, ema21)
+bool  emaXUp    = ta.crossover(ema9, ema21)
+bool  upWick    = rng > 0 and (high - math.max(open, close)) >= wickPct * rng
+bool  dnWick    = rng > 0 and (math.min(open, close) - low) >= wickPct * rng
+bool  strUp     = close - ema9 >= stretchMult * atr1
+bool  strDn     = ema9 - close >= stretchMult * atr1
+bool  newStrUp  = strUp and not strUp[1]
+bool  newStrDn  = strDn and not strDn[1]
+
+// =====================================================================
+// State
+// =====================================================================
+var int    armDir = 0
+var int    armBar = na
+var int    armTime = na
+var float  armTrig = na
+var float  armStop = na
+var float  armExt = na
+var float  armAtr = na
+var string armWhat = ""
+
+var int    tradeDir = 0
+var int    entryBar = na
+var int    entryTime = na
+var float  entryPx = na
+var float  stopPx = na
+var float  tgtPx = na
+var string tgtName = ""
+var float  bestPx = na
+var float  tradeExt = na
+var float  tradeAtr = na
+var string lastWarn = ""
+var int    lastWarnTime = na
+var string lastEvent = ""
+
+bool   evArmL  = false
+bool   evArmS  = false
+bool   evTrigL = false
+bool   evTrigS = false
+bool   evStop  = false
+string warnNow = ""
+
+// ---------- A. Manage the assumed trade: stop, target, session end
+if tradeDir != 0 and bar_index > entryBar
+    bool hitStop = tradeDir == 1 ? low <= stopPx : high >= stopPx
+    bool hitTgt  = not na(tgtPx) and (tradeDir == 1 ? high >= tgtPx : low <= tgtPx)
+    if hitStop
+        evStop := true
+        lastEvent := "Stop " + f_fmt(stopPx) + " hit at " + f_hhmm(time) + ". Assumed trade closed."
+        if showWarn
+            label.new(bar_index, stopPx, "✗ Stop hit", style = tradeDir == 1 ? label.style_label_up : label.style_label_down, color = C_NEUT, textcolor = color.white, size = size.tiny, tooltip = lastEvent)
+        tradeDir := 0
+    else if hitTgt
+        lastEvent := "Target " + tgtName + " " + f_fmt(tgtPx) + " reached at " + f_hhmm(time) + "."
+        if showWarn
+            label.new(bar_index, tgtPx, "✓ Target " + tgtName, style = tradeDir == 1 ? label.style_label_down : label.style_label_up, color = C_TGT, textcolor = color.black, size = size.tiny, tooltip = lastEvent)
+        tradeDir := 0
+    else if rthEnd or onStart
+        lastEvent := "Session ended at " + f_hhmm(time) + ", so the assumed trade was closed."
+        tradeDir := 0
+
+// ---------- B. Exit warnings (confirmed 1-min bars only)
+if tradeDir != 0 and barstate.isconfirmed and bar_index > entryBar
+    int d = tradeDir
+    string[] wl = array.new_string()
+    bestPx := d == 1 ? math.max(bestPx, high) : math.min(bestPx, low)
+    if d == 1 ? cl21Dn : cl21Up
+        wl.push("1m closed back " + (d == 1 ? "below" : "above") + " EMA 21: pullback may be turning into a reversal")
+    if d == 1 ? emaXDn : emaXUp
+        wl.push("1m EMA 9 crossed " + (d == 1 ? "below" : "above") + " 21: short-term momentum flipped")
+    if d == 1 and upWick
+        string lvHit = f_nearLevel(high, levelProx * atr1, lv, nm)
+        if lvHit != ""
+            wl.push("Long upper wick at " + lvHit + ": sellers rejected that level")
+    if d == -1 and dnWick
+        string lvHit = f_nearLevel(low, levelProx * atr1, lv, nm)
+        if lvHit != ""
+            wl.push("Long lower wick at " + lvHit + ": buyers defended that level")
+    if d == 1 ? newStrUp : newStrDn
+        wl.push("Stretched " + str.tostring(stretchMult) + "x ATR from EMA 9: snap-back risk is high")
+    if bar_index - entryBar == noProgBars and (d == 1 ? bestPx - entryPx : entryPx - bestPx) < 0.5 * atr1
+        wl.push(str.tostring(noProgBars) + " bars with little progress: momentum isn't there")
+    if new5 and (d == 1 ? c5 < e9_5 : c5 > e9_5)
+        wl.push("5m closed back " + (d == 1 ? "below" : "above") + " EMA 9: 5-min trend is weakening")
+    if flatStarted5
+        wl.push("5m EMAs flattening: trend is losing steam")
+    if new15 and (d == 1 ? (c15 < e21_15 or c15 < vw15) : (c15 > e21_15 or c15 > vw15))
+        wl.push("15m closed " + (d == 1 ? "below" : "above") + " EMA 21 or VWAP: BIAS HAS CHANGED")
+    if wl.size() > 0
+        warnNow := wl.join("\n")
+        lastWarn := warnNow
+        lastWarnTime := time
+        if showWarn
+            label.new(bar_index, d == 1 ? high : low, "⚠ " + warnNow, style = d == 1 ? label.style_label_down : label.style_label_up, color = C_WARN, textcolor = color.black, size = size.tiny, textalign = text.align_left, tooltip = warnNow)
+
+// ---------- C. Trigger: break of the reclaim candle (can fire mid-bar)
+if sigOn and armDir != 0 and bar_index > armBar and bar_index - armBar <= trigExpiry
+    int d = armDir
+    bool brk = d == 1 ? high > armTrig : low < armTrig
+    if brk
+        if tradeDir == -d
+            lastEvent := "Opposite setup triggered, so the assumed " + (tradeDir == 1 ? "LONG" : "SHORT") + " was closed."
+        float ent = d == 1 ? math.max(open, armTrig) : math.min(open, armTrig)
+        float stpDist = math.abs(ent - armStop)
+        [tg, tgN] = f_nearest(ent, d, lv, nm)
+        tradeDir  := d
+        entryBar  := bar_index
+        entryTime := time
+        entryPx   := ent
+        stopPx    := armStop
+        tgtPx     := tg
+        tgtName   := tgN
+        bestPx    := ent
+        tradeExt  := armExt
+        tradeAtr  := armAtr
+        lastWarn  := ""
+        armDir    := 0
+        if d == 1
+            evTrigL := true
+        else
+            evTrigS := true
+        int   cts = f_contracts(stpDist)
+        float rr  = na(tg) or stpDist <= 0 ? na : math.abs(tg - ent) / stpDist
+        string s = (d == 1 ? "LONG SETUP ▲" : "SHORT SETUP ▼") + " triggered " + f_hhmm(time)
+        s += "\nWhy:"
+        s += "\n• 5 and 15-min bias " + (d == 1 ? "LONG" : "SHORT")
+        s += "\n• 5-min trend " + (d == 1 ? "rising" : "falling") + ", EMAs not tangled"
+        s += "\n• Pulled back to " + armWhat
+        s += "\n• " + (d == 1 ? "Green candle closed back above" : "Red candle closed back below") + " EMA 9"
+        s += "\n• Broke its " + (d == 1 ? "high " : "low ") + f_fmt(armTrig)
+        s += "\nStop " + f_fmt(armStop) + " (pullback " + (d == 1 ? "low - " : "high + ") + str.tostring(stopMult) + " x ATR)"
+        s += "\nTarget " + (na(tg) ? "none found" : tgN + " " + f_fmt(tg)) + (na(rr) ? "" : " (" + str.tostring(rr, "#.#") + "R)")
+        s += "\nContracts " + str.tostring(cts) + " at $" + str.tostring(dollarRisk, "#") + " risk"
+        if inLunch
+            s += "\nCaution: lunch hours, chop is common"
+        else if not inNy
+            s += "\nNote: outside NY open, moves are often weaker"
+        if showSetup
+            label.new(bar_index, d == 1 ? low : high, s, style = d == 1 ? label.style_label_up : label.style_label_down, color = d == 1 ? C_LONG : C_SHORT, textcolor = d == 1 ? color.white : color.black, size = size.small, textalign = text.align_left, tooltip = s)
+        if dynAlerts
+            alert("MNQ Coach (notification only): " + s, alert.freq_once_per_bar)
+
+// ---------- D. Expire or cancel an armed setup
+if armDir != 0 and barstate.isconfirmed
+    bool expired  = bar_index - armBar >= trigExpiry
+    bool lostBias = bias != armDir
+    bool brokeStp = armDir == 1 ? low <= armStop : high >= armStop
+    if expired or lostBias or brokeStp
+        lastEvent := "Setup from " + f_hhmm(armTime) + (expired ? " expired: no break within " + str.tostring(trigExpiry) + " bars." : lostBias ? " cancelled: the bias no longer agrees." : " cancelled: price hit the stop level before triggering.")
+        armDir := 0
+
+// ---------- E. Arm a new setup on a confirmed reclaim candle
+if sigOn and barstate.isconfirmed and not blocked
+    if bias == 1 and trendL5 and recentPbL and reclaimL and tradeDir != 1
+        armDir  := 1
+        armBar  := bar_index
+        armTime := time
+        armTrig := high
+        armExt  := pbLowL
+        armAtr  := atr1
+        armStop := pbLowL - stopMult * atr1
+        armWhat := pbWhatL
+        evArmL  := true
+    else if bias == -1 and trendS5 and recentPbS and reclaimS and tradeDir != -1
+        armDir  := -1
+        armBar  := bar_index
+        armTime := time
+        armTrig := low
+        armExt  := pbHighS
+        armAtr  := atr1
+        armStop := pbHighS + stopMult * atr1
+        armWhat := pbWhatS
+        evArmS  := true
+
+if dynAlerts and (evArmL or evArmS)
+    alert("MNQ Coach (notification only): " + (evArmL ? "LONG" : "SHORT") + " setup forming at " + f_hhmm(time) + ". Reclaim candle closed " + (evArmL ? "above" : "below") + " EMA 9 after a pullback to " + armWhat + ". Trigger is a break " + (evArmL ? "above " : "below ") + f_fmt(armTrig) + ". Stop idea " + f_fmt(armStop) + ".", alert.freq_once_per_bar_close)
+if dynAlerts and warnNow != ""
+    alert("MNQ Coach exit warning (notification only): " + str.replace_all(warnNow, "\n", " | "), alert.freq_once_per_bar_close)
+
+// ---------- Chart marks
+plotshape(evArmL, "Long setup forming", shape.diamond, location.belowbar, C_LONG, size = size.tiny)
+plotshape(evArmS, "Short setup forming", shape.diamond, location.abovebar, C_SHORT, size = size.tiny)
+plot(armDir != 0 ? armTrig : na, "Trigger level", color = C_NEUT, style = plot.style_circles, linewidth = 2)
+plot(tradeDir != 0 ? stopPx : na, "Assumed stop", color = C_WARN, style = plot.style_linebr)
+plot(tradeDir != 0 ? tgtPx : na, "Target level", color = C_TGT, style = plot.style_linebr)
+
+// ---------- Alert conditions (fixed text; notifications only)
+alertcondition(evArmL, "Long setup forming", "MNQ Coach: LONG setup forming. Reclaim candle closed above EMA 9 after a pullback. Watch for a break of its high. Notification only.")
+alertcondition(evArmS, "Short setup forming", "MNQ Coach: SHORT setup forming. Reclaim candle closed below EMA 9 after a pullback. Watch for a break of its low. Notification only.")
+alertcondition(evTrigL, "Long setup triggered", "MNQ Coach: LONG setup triggered (reclaim candle high broke). Check the chart label for stop and target. Notification only.")
+alertcondition(evTrigS, "Short setup triggered", "MNQ Coach: SHORT setup triggered (reclaim candle low broke). Check the chart label for stop and target. Notification only.")
+alertcondition(warnNow != "", "Exit warning", "MNQ Coach: exit warning on the assumed trade. Check the chart marker for the reason. Notification only.")
+alertcondition(evStop, "Assumed stop hit", "MNQ Coach: price reached the suggested stop level. Notification only.")
+
+// ---------- Key level drawings (last bar only)
+var line[]  lvLines  = array.new_line()
+var label[] lvLabels = array.new_label()
+if barstate.islast
+    for l in lvLines
+        line.delete(l)
+    for lb in lvLabels
+        label.delete(lb)
+    array.clear(lvLines)
+    array.clear(lvLabels)
+    if showLevels
+        float[]  dv = array.from(pdH, pdL, pdC, onH, onL, dayH, dayL, rDn, rUp)
+        color[]  dc = array.from(#90A4AE, #90A4AE, #90A4AE, #A1887F, #A1887F, #B0BEC5, #B0BEC5, #757575, #757575)
+        string[] ds = array.from(line.style_dashed, line.style_dashed, line.style_dotted, line.style_dashed, line.style_dashed, line.style_dotted, line.style_dotted, line.style_dotted, line.style_dotted)
+        for i = 0 to array.size(dv) - 1
+            float v = array.get(dv, i)
+            if not na(v)
+                color c = array.get(dc, i)
+                array.push(lvLines, line.new(bar_index - 60, v, bar_index + 20, v, color = c, style = array.get(ds, i)))
+                array.push(lvLabels, label.new(bar_index + 20, v, array.get(nm, i) + " " + f_fmt(v), style = label.style_label_left, color = color.new(c, 100), textcolor = c, size = size.small))
+
+// =====================================================================
+// Checklist table
+// =====================================================================
+var table tbl = table.new(tPos, 3, 15, bgcolor = C_BG, border_color = C_HEAD, border_width = 1)
+
+if barstate.isfirst
+    table.cell(tbl, 0, 0, "MNQ Playbook Coach  |  display only, no orders  |  " + (learningMode ? "Learning mode ON" : "Learning mode OFF"), text_color = C_TXT, text_size = tSize, bgcolor = C_HEAD, text_halign = text.align_left)
+    table.merge_cells(tbl, 0, 0, 2, 0)
+
+if barstate.islast
+    // 1. Chart
+    f_row(tbl, 1, "Chart", sigOn ? 1 : -1, sigOn ? "1-min chart: the rules are built for this timeframe." : "Chart is " + timeframe.period + ". Switch to 1-min; setups are turned off until you do.")
+
+    // 2. Session
+    string sessTxt = inFed ? "Fed day, 1pm CT window: the announcement can whip price both ways. Sitting out is a valid choice." : inData ? "7:30 CT data window: economic reports can spike price both ways. Let the first move settle." : inNy ? "NY open (8:30 to 10:30 CT): best volume and the cleanest trends of the day." : inLunch ? "Lunch (11am to 1pm CT): volume dries up and price chops. Expect fakeouts." : isRth ? "Regular hours, outside the best window: be pickier than usual." : "Overnight session: thinner volume, so moves are less reliable."
+    if fedDay and isToday and ctMins < 775
+        sessTxt += " Fed day: expect a spike at 1pm CT."
+    int sessSt = inFed or inData ? -1 : inNy ? 1 : inLunch ? 2 : 0
+    f_row(tbl, 2, "Session (" + f_hhmm(time) + " CT)", sessSt, sessTxt)
+
+    // 3-4. Bias per timeframe
+    f_row(tbl, 3, "15-min bias", dir15 != 0 ? 1 : -1, txt15)
+    f_row(tbl, 4, "5-min bias", dir5 != 0 ? 1 : -1, txt5)
+
+    // 5. Agreement
+    string dirName5 = dir5 == 1 ? "LONG" : dir5 == -1 ? "SHORT" : "MIXED"
+    string dirName15 = dir15 == 1 ? "LONG" : dir15 == -1 ? "SHORT" : "MIXED"
+    f_row(tbl, 5, "5 and 15 agree", agree ? 1 : -1, agree ? "Both timeframes say " + dirName5 + ". The bigger picture points one way, so you only look for " + dirName5 + " trades." : "5-min is " + dirName5 + " but 15-min is " + dirName15 + ". When timeframes disagree, there is no edge. No trade.")
+
+    // 6. 5-min trend
+    int trSt = tangled5 ? -1 : (trendL5 or trendS5) ? 1 : 2
+    string trTxt = tangled5 ? "5-min EMAs tangled: 9 and 21 only " + f_pts(gap5) + " pts apart (limit " + f_pts(tangleMult * atr5) + ") and flat. No trend to ride." : (trendL5 or trendS5) ? "5-min EMA 9 is sloping " + (trendL5 ? "up" : "down") + " and " + f_pts(gap5) + " pts from EMA 21: the trend has room to run." : "5-min EMAs are separated but EMA 9 is not sloping with the bias, so the trend is stalling. Wait."
+    f_row(tbl, 6, "5-min trending", trSt, trTxt)
+
+    // 7. VWAP chop
+    f_row(tbl, 7, "VWAP chop", chop ? -1 : 1, chop ? "Price crossed VWAP " + str.tostring(vwapX) + " times in the last " + str.tostring(chopLookback) + " bars. Nobody controls the session, so stand aside." : str.tostring(vwapX) + " VWAP cross(es) in the last " + str.tostring(chopLookback) + " bars: price is respecting one side of VWAP.")
+
+    // 8. Pullback
+    int pbSt = 0
+    string pbTxt = "No clear bias, so there is no pullback to look for yet."
+    if bias == 1
+        pbSt := recentPbL ? 1 : -1
+        pbTxt := recentPbL ? "Price dipped into " + pbWhatL + (bsPbL == 0 ? " this bar" : " " + str.tostring(bsPbL) + " bar(s) ago") + " (pullback low " + f_fmt(pbLowL) + "). You buy the dip, you don't chase." : "No dip into the EMA 9/21 zone or VWAP in the last " + str.tostring(pbLookback) + " bars. Buying now means chasing. Wait for a pullback."
+    else if bias == -1
+        pbSt := recentPbS ? 1 : -1
+        pbTxt := recentPbS ? "Price popped into " + pbWhatS + (bsPbS == 0 ? " this bar" : " " + str.tostring(bsPbS) + " bar(s) ago") + " (pullback high " + f_fmt(pbHighS) + "). You sell the rip, you don't chase." : "No pop into the EMA 9/21 zone or VWAP in the last " + str.tostring(pbLookback) + " bars. Selling now means chasing. Wait for a pullback."
+    f_row(tbl, 8, "Pullback", pbSt, pbTxt)
+
+    // 9. Reclaim candle
+    int rcSt = 0
+    string rcTxt = "Not needed until there is a bias."
+    if armDir != 0
+        rcSt := 1
+        rcTxt := (armDir == 1 ? "Green candle closed back above EMA 9 at " + f_hhmm(armTime) + ". Buyers stepped back in." : "Red candle closed back below EMA 9 at " + f_hhmm(armTime) + ". Sellers stepped back in.")
+    else if tradeDir != 0
+        rcSt := 1
+        rcTxt := "Reclaim candle already confirmed, and the setup triggered."
+    else if bias != 0 and not barstate.isconfirmed and (bias == 1 ? reclaimL : reclaimS)
+        rcSt := 2
+        rcTxt := "This candle is reclaiming EMA 9 but has not closed yet. A candle only counts once it closes."
+    else if bias == 1
+        rcSt := -1
+        rcTxt := "Waiting for a green candle to close back above EMA 9. That close shows buyers defending the dip."
+    else if bias == -1
+        rcSt := -1
+        rcTxt := "Waiting for a red candle to close back below EMA 9. That close shows sellers defending the rip."
+    f_row(tbl, 9, "Reclaim candle", rcSt, rcTxt)
+
+    // 10. Trigger
+    int tgSt = 0
+    string tgTxt = "No setup armed yet." + (lastEvent != "" ? " Last event: " + lastEvent : "")
+    if tradeDir != 0
+        tgSt := 1
+        tgTxt := "Triggered at " + f_hhmm(entryTime) + ", entry about " + f_fmt(entryPx) + ". Assumed " + (tradeDir == 1 ? "LONG" : "SHORT") + " is open (for exit coaching only)."
+    else if armDir != 0
+        tgSt := 2
+        tgTxt := "Waiting for a break " + (armDir == 1 ? "above " : "below ") + f_fmt(armTrig) + ". Expires in " + str.tostring(trigExpiry - (bar_index - armBar)) + " bar(s). The break proves " + (armDir == 1 ? "buyers" : "sellers") + " are following through."
+    f_row(tbl, 10, "Trigger", tgSt, tgTxt)
+
+    // 11-12. Stop, target and risk
+    int   refDir = tradeDir != 0 ? tradeDir : armDir
+    float refEnt = tradeDir != 0 ? entryPx : armTrig
+    float refStp = tradeDir != 0 ? stopPx : armStop
+    float refExt = tradeDir != 0 ? tradeExt : armExt
+    float refAtr = tradeDir != 0 ? tradeAtr : armAtr
+    float refTg  = tradeDir != 0 ? tgtPx : na
+    string refTgN = tradeDir != 0 ? tgtName : ""
+    if tradeDir == 0 and armDir != 0
+        [t1, t2] = f_nearest(armTrig, armDir, lv, nm)
+        refTg := t1
+        refTgN := t2
+    int stSt = 0
+    string stTxt = "Shown once a setup forms. Stop = pullback extreme plus " + str.tostring(stopMult) + " x ATR. Target = nearest key level."
+    int rkSt = 0
+    string rkTxt = "Shown once a setup forms. Contracts = $" + str.tostring(dollarRisk, "#") + " / (stop points x $" + str.tostring(pointValue, "#.##") + ")."
+    if refDir != 0
+        float sDist = math.abs(refEnt - refStp)
+        float rr = na(refTg) or sDist <= 0 ? na : math.abs(refTg - refEnt) / sDist
+        stSt := na(rr) ? 2 : rr >= 1.5 ? 1 : rr >= 1.0 ? 2 : -1
+        stTxt := "Stop " + f_fmt(refStp) + " = pullback " + (refDir == 1 ? "low " : "high ") + f_fmt(refExt) + (refDir == 1 ? " minus " : " plus ") + str.tostring(stopMult) + " x ATR (" + f_pts(refAtr) + "). Target: " + (na(refTg) ? "no key level found" : refTgN + " " + f_fmt(refTg) + ", about " + str.tostring(rr, "#.#") + "R.") + (not na(rr) and rr < 1.0 ? " Reward is smaller than risk." : "")
+        int cts = f_contracts(sDist)
+        float perCt = sDist * pointValue
+        rkSt := cts >= 1 ? 1 : -1
+        rkTxt := cts >= 1 ? "$" + str.tostring(dollarRisk, "#") + " / (" + f_pts(sDist) + " pts x $" + str.tostring(pointValue, "#.##") + " = $" + str.tostring(perCt, "#.##") + " per contract) = " + str.tostring(cts) + " contract(s). Real risk about $" + str.tostring(cts * perCt, "#.##") + "." : "Stop is " + f_pts(sDist) + " pts x $" + str.tostring(pointValue, "#.##") + " = $" + str.tostring(perCt, "#.##") + " per contract, more than your $" + str.tostring(dollarRisk, "#") + ". Result is 0 contracts: skip it or wait for a tighter setup."
+    f_row(tbl, 11, "Stop and target", stSt, stTxt)
+    f_row(tbl, 12, "Risk helper", rkSt, rkTxt)
+
+    // 13. Exit warnings
+    int wSt = 0
+    string wTxt = "No assumed trade open. Warnings appear after a trigger."
+    if tradeDir != 0
+        bool hasW = lastWarn != "" and lastWarnTime >= entryTime
+        wSt := hasW ? -1 : 1
+        wTxt := hasW ? "Last warning at " + f_hhmm(lastWarnTime) + ": " + str.replace_all(lastWarn, "\n", "; ") + "." : "In assumed " + (tradeDir == 1 ? "LONG" : "SHORT") + " since " + f_hhmm(entryTime) + ". No exit warnings yet: the trade is behaving."
+    f_row(tbl, 13, "Exit warnings", wSt, wTxt)
+
+    // 14. Verdict
+    string verdict = "WAIT"
+    string decided = ""
+    if not sigOn
+        verdict := "NO TRADE"
+        decided := "chart is not on 1-min"
+    else if bias == 0
+        verdict := "NO TRADE"
+        decided := biasWhy
+    else if inFed
+        verdict := "NO TRADE"
+        decided := "Fed day 1pm CT window"
+    else if tradeDir == bias
+        verdict := bias == 1 ? "LONG SETUP" : "SHORT SETUP"
+        decided := "trigger broke; manage it with the exit warnings"
+    else if armDir == bias
+        verdict := bias == 1 ? "LONG SETUP" : "SHORT SETUP"
+        decided := "all rules pass (pullback and reclaim); waiting for the trigger at " + f_fmt(armTrig)
+    else if inData
+        decided := "7:30 CT data window"
+    else if not (bias == 1 ? trendL5 : trendS5)
+        decided := "5-min trend is not sloping with the bias"
+    else if not (bias == 1 ? recentPbL : recentPbS)
+        decided := "no pullback yet, so don't chase"
+    else
+        decided := "pullback done; waiting for a reclaim candle to close"
+    if inLunch and verdict != "NO TRADE"
+        decided += " (lunch: chop warning)"
+    if learningMode
+        f_row(tbl, 14, "Verdict", 0, "Hidden (learning mode). Make your call from the rows above first, then turn Learning mode off in settings to check yourself.")
+    else
+        int vSt = verdict == "NO TRADE" ? -1 : verdict == "WAIT" ? 2 : 1
+        f_row(tbl, 14, "Verdict", vSt, verdict + ". Decided by: " + decided + ".")
+        table.cell_set_text_color(tbl, 2, 14, verdict == "LONG SETUP" ? C_PASS : verdict == "SHORT SETUP" ? C_SHORT : verdict == "WAIT" ? C_WARN : C_TXT)
