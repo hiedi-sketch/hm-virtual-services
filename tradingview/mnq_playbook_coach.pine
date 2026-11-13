@@ -58,6 +58,7 @@ bool   showLevels  = input.bool(true, "Draw key levels", group = G4)
 bool   showSess    = input.bool(true, "Tint session windows", group = G4)
 bool   showWarn    = input.bool(true, "Exit warning markers", group = G4)
 bool   showSetup   = input.bool(true, "Setup trigger labels", group = G4)
+bool   showTable   = input.bool(false, "Show checklist table", group = G4)
 string tPosIn      = input.string("Top right", "Checklist position", options = ["Top right", "Top left", "Bottom right", "Bottom left"], group = G4)
 string tSizeIn     = input.string("Small", "Checklist text size", options = ["Tiny", "Small", "Normal"], group = G4)
 int    wrapWidth   = input.int(46, "Checklist reason width (characters)", minval = 20, maxval = 120, group = G4)
@@ -512,11 +513,11 @@ if barstate.islast
 // =====================================================================
 var table tbl = table.new(tPos, 3, 15, bgcolor = C_BG, border_color = C_HEAD, border_width = 1)
 
-if barstate.isfirst
+if barstate.isfirst and showTable
     table.cell(tbl, 0, 0, "MNQ Playbook Coach  |  display only, no orders  |  " + (learningMode ? "Learning mode ON" : "Learning mode OFF"), text_color = C_TXT, text_size = tSize, bgcolor = C_HEAD, text_halign = text.align_left)
     table.merge_cells(tbl, 0, 0, 2, 0)
 
-if barstate.islast
+if barstate.islast and showTable
     // 1. Chart
     f_row(tbl, 1, "Chart", sigOn ? 1 : -1, sigOn ? "1-min chart: the rules are built for this timeframe." : "Chart is " + timeframe.period + ". Switch to 1-min; setups are turned off until you do.")
 
